@@ -1,0 +1,22 @@
+name: Chore
+description: 프로젝트 설정, 패키지, 폴더 구조, 문서, 빌드처럼 게임 내용이 아닌 관리 작업을 합니다.
+title: "[Chore] "
+labels: ["chore"]
+body:
+  - type: textarea
+    id: work
+    attributes:
+      label: 작업 내용
+      description: 무엇을 추가하거나 바꾸는지 씁니다.
+      placeholder: Cinemachine 패키지를 추가하고, 플레이어를 따라가는 카메라를 설정한다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: team
+    attributes:
+      label: 팀원이 해야 할 일
+      description: 이 작업이 병합된 뒤 다른 팀원이 따로 해야 하는 일이 있으면 씁니다. 없으면 비워 둡니다.
+      placeholder: pull 받은 뒤 Unity를 다시 열어 패키지가 설치되기를 기다린다.
+    validations:
+      required: false

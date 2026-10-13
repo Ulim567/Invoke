@@ -1,0 +1,22 @@
+name: Refactor
+description: 동작은 그대로 두고 코드 구조만 개선합니다.
+title: "[Refactor] "
+labels: ["refactor"]
+body:
+  - type: textarea
+    id: target
+    attributes:
+      label: 대상과 이유
+      description: 어떤 파일이나 클래스를 바꾸는지, 왜 바꿔야 하는지 씁니다.
+      placeholder: PlayerController.cs에 이동, 시전, 메모리 계산이 모두 들어 있어서, 캐릭터를 추가할 때마다 같은 코드를 복사해야 한다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: change
+    attributes:
+      label: 바꿀 내용
+      description: 어떤 구조로 바꿀지 씁니다.
+      placeholder: 메모리 계산을 MemorySystem 클래스로 분리하고, 캐릭터별 회수 방식은 각 캐릭터 클래스가 맡게 한다.
+    validations:
+      required: true

@@ -1,0 +1,22 @@
+name: Enhancement
+description: 이미 있는 기능을 더 좋게 바꿉니다.
+title: "[Enhance] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: 현재 상태
+      description: 지금 이 기능이 어떻게 동작하는지, 무엇이 아쉬운지 씁니다.
+      placeholder: 블록을 끌어다 놓을 때 놓을 수 있는 위치가 표시되지 않아서, 어디에 들어가는지 알기 어렵다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: change
+    attributes:
+      label: 바꿀 내용
+      description: 어떻게 바꿀지 씁니다.
+      placeholder: 블록을 끌고 있는 동안 놓을 수 있는 위치에 강조 표시를 띄운다.
+    validations:
+      required: true

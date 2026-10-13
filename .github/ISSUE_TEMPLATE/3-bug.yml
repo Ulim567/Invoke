@@ -1,0 +1,27 @@
+name: Bug
+description: 의도와 다르게 동작하는 것을 알립니다.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 순서
+      description: 다른 팀원이 그대로 따라 하면 같은 버그를 볼 수 있도록, 처음부터 순서대로 씁니다.
+      placeholder: |
+        1. 연습장 씬을 실행한다.
+        2. C 캐릭터로 malloc 함수를 3번 연속 시전한다.
+        3. 허수아비에게 피격당해 함수가 중단된다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: 기대 결과와 실제 결과
+      description: 원래 어떻게 되어야 하는지와 실제로 어떻게 되었는지를 나눠 씁니다.
+      placeholder: |
+        - 기대 결과: 중단된 함수의 객체가 힙에 남아 메모리 게이지가 그대로 유지된다.
+        - 실제 결과: 메모리 게이지가 0으로 초기화된다.
+    validations:
+      required: true

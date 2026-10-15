@@ -4,9 +4,18 @@ using UnityEngine.InputSystem;
 
 public class PlayerMove : NetworkBehaviour
 {
-    [SerializeField, Min(0f)] private float speed;
+    [SerializeField, Min(0f)] private float walkSpeed;
+	[SerializeField, Min(0f)] private float jumpForce;
+	[SerializeField] private Rigidbody2D rigidbody;
 
-    void Update()
+	public override void OnStartLocalPlayer()
+	{
+		base.OnStartLocalPlayer();
+
+		rigidbody.simulated = true;
+	}
+
+	void Update()
     {
         if (!isLocalPlayer) return;
         Move();
@@ -14,16 +23,8 @@ public class PlayerMove : NetworkBehaviour
 
     void Move()
     {
-        Vector3 direction = Vector3.zero;
-        if (Keyboard.current.wKey.isPressed)
-        {
-            direction = Vector3.up;
-        }
-        else if (Keyboard.current.sKey.isPressed)
-        {
-            direction = Vector3.down;
-		}
-		else if (Keyboard.current.aKey.isPressed)
+		Vector3 direction = Vector3.zero;
+		if (Keyboard.current.aKey.isPressed)
 		{
 			direction = Vector3.left;
 		}
@@ -31,7 +32,12 @@ public class PlayerMove : NetworkBehaviour
 		{
 			direction = Vector3.right;
 		}
+		rigidbody.linearVelocity = new Vector2(direction.x * walkSpeed, rigidbody.linearVelocity.y);
 
-		transform.position += (Vector3)(speed * Time.deltaTime * direction);
+		if (Keyboard.current.spaceKey.wasPressedThisFrame)
+		{
+			rigidbody.linearVelocity = new Vector2(rigidbody.linearVelocity.x, 0f);
+			rigidbody.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+		}
 	}
 }

@@ -12,11 +12,11 @@ TagManager:
   - Water
   - UI
   - Ground
-  - 
-  - 
-  - 
-  - 
-  - 
+  - Platform
+  - Player
+  - Monster
+  - PlayerProjectile
+  - MonsterProjectile
   - 
   - 
   - 
@@ -40,6 +40,39 @@ TagManager:
   m_SortingLayers:
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Sky
+    uniqueID: 2489724515
+    locked: 0
+  - name: FarBackground
+    uniqueID: 1398844003
+    locked: 0
+  - name: BackProps
+    uniqueID: 3437766459
+    locked: 0
+  - name: Terrain
+    uniqueID: 3111853835
+    locked: 0
+  - name: Props
+    uniqueID: 3787491069
+    locked: 0
+  - name: Monster
+    uniqueID: 3589847577
+    locked: 0
+  - name: Player
+    uniqueID: 3190553527
+    locked: 0
+  - name: Projectile
+    uniqueID: 1295403851
+    locked: 0
+  - name: Effect
+    uniqueID: 732924995
+    locked: 0
+  - name: Foreground
+    uniqueID: 2305422277
+    locked: 0
+  - name: WorldUI
+    uniqueID: 2189264165
     locked: 0
   m_RenderingLayers:
   - Default

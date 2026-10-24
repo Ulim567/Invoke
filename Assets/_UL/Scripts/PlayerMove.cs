@@ -7,6 +7,7 @@ public class PlayerMove : NetworkBehaviour
     [SerializeField, Min(0f)] private float walkSpeed;
 	[SerializeField, Min(0f)] private float jumpForce;
 	[SerializeField] private Rigidbody2D rigidbody;
+	[SerializeField] private PlayerInputReader input;
 
 	public override void OnStartLocalPlayer()
 	{
@@ -23,18 +24,9 @@ public class PlayerMove : NetworkBehaviour
 
     void Move()
     {
-		Vector3 direction = Vector3.zero;
-		if (Keyboard.current.aKey.isPressed)
-		{
-			direction = Vector3.left;
-		}
-		else if (Keyboard.current.dKey.isPressed)
-		{
-			direction = Vector3.right;
-		}
-		rigidbody.linearVelocity = new Vector2(direction.x * walkSpeed, rigidbody.linearVelocity.y);
+		rigidbody.linearVelocity = new Vector2(input.MoveX * walkSpeed, rigidbody.linearVelocity.y);
 
-		if (Keyboard.current.spaceKey.wasPressedThisFrame)
+		if (input.JumpPressed)
 		{
 			rigidbody.linearVelocity = new Vector2(rigidbody.linearVelocity.x, 0f);
 			rigidbody.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);

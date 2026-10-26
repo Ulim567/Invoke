@@ -14,7 +14,6 @@ GameObject:
   - component: {fileID: 3775676273824404508}
   - component: {fileID: 6117843773794850283}
   - component: {fileID: 4301682130805217797}
-  - component: {fileID: 3196478873453144884}
   m_Layer: 9
   m_Name: TestMonster
   m_TagString: Untagged
@@ -203,16 +202,3 @@ MonoBehaviour:
   targetLayers:
     serializedVersion: 2
     m_Bits: 256
---- !u!114 &3196478873453144884
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7396410919086133594}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 39a240a01fb08d44796d07601885a298, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MonsterTester
-  testDamage: 30

@@ -16,6 +16,9 @@ GameObject:
   - component: {fileID: 6317378190948175376}
   - component: {fileID: -416637184089795524}
   - component: {fileID: 3376740816470663825}
+  - component: {fileID: 7652546270400690681}
+  - component: {fileID: 4716829823309649097}
+  - component: {fileID: 5524298709705866833}
   m_Layer: 0
   m_Name: Player_UL
   m_TagString: Untagged
@@ -256,3 +259,40 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &7652546270400690681
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4dddf199f0d1b54f98d366873df1567, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutor
+  fixedUpdatesPerTick: 1
+--- !u!114 &4716829823309649097
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab5039b1fcae2b640837a14685a418e5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorTest
+--- !u!114 &5524298709705866833
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 134b623e91090ef4e9bbd8a052475ec0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorLogger

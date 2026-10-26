@@ -45,15 +45,19 @@ public class FunctionTask
 	/// </summary>
 	public string Name { get; }
 
+	// 시전한 캐릭터의 메모리. 함수 블록이 실행을 시작하고 끝날 때 스택을 요청하고 반환한다
+	internal ProcessMemory Memory { get; }
+
 	public FunctionTaskState State { get; private set; } = FunctionTaskState.Running;
 	public FunctionTaskEndReason EndReason { get; private set; } = FunctionTaskEndReason.None;
 
 	public bool IsEnded => State == FunctionTaskState.Ended;
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
-	internal FunctionTask(GameObject caster, FunctionBlock function)
+	internal FunctionTask(GameObject caster, ProcessMemory memory, FunctionBlock function)
 	{
 		Caster = caster;
+		Memory = memory;
 		Name = function.Name;
 		this.function = function;
 	}
@@ -66,8 +70,13 @@ public class FunctionTask
 		// 입력 대기 중이거나 이미 끝난 작업은 틱이 와도 진행하지 않는다
 		if (State != FunctionTaskState.Running) return;
 
-		// 함수 블록이 끝까지 실행됐으면 정상 종료
-		if (function.Execute(this) != BlockResult.Running) End(FunctionTaskEndReason.Completed);
+		BlockResult result = function.Execute(this);
+		if (result == BlockResult.Running) return;
+
+		// 오버플로가 났으면 쌓여 있던 함수들은 Execute 안에서 이미 끊기며 메모리를 돌려줬다
+		// 언어별 처리(C는 모든 작업 중단 등)는 이후 이슈에서 실행기에 추가하고, 지금은 이 작업만 끝낸다
+		if (result == BlockResult.Overflow) End(FunctionTaskEndReason.Overflow);
+		else End(FunctionTaskEndReason.Completed);
 	}
 
 	// 실행 도중에 작업을 끊는다. 외부 중단 기능을 만들 때 실행기가 부른다

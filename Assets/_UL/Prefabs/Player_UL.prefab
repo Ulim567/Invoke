@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 7652546270400690681}
   - component: {fileID: 4716829823309649097}
   - component: {fileID: 5524298709705866833}
+  - component: {fileID: 2654331328506993406}
   m_Layer: 0
   m_Name: Player_UL
   m_TagString: Untagged
@@ -296,3 +297,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 134b623e91090ef4e9bbd8a052475ec0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorLogger
+--- !u!114 &2654331328506993406
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82ce100927077f3479822e99cca0cfdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProcessMemory
+  capacity: 10

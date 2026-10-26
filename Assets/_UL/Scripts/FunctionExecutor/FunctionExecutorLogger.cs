@@ -8,10 +8,12 @@ using UnityEngine;
 public class FunctionExecutorLogger : MonoBehaviour
 {
 	FunctionExecutor executor;
+	ProcessMemory memory;
 
 	void Awake()
 	{
 		executor = GetComponent<FunctionExecutor>();
+		memory = GetComponent<ProcessMemory>();
 	}
 
 	void OnEnable()
@@ -33,6 +35,7 @@ public class FunctionExecutorLogger : MonoBehaviour
 
 	void LogEnded(FunctionTask task)
 	{
-		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 끝 ({task.EndReason})");
+		// 끝난 작업을 모두 진행한 뒤에 불리므로, 이 틱이 끝난 시점의 스택 사용량이 찍힌다
+		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 끝 ({task.EndReason}) / 스택 {memory.StackUsed}/{memory.Capacity}");
 	}
 }

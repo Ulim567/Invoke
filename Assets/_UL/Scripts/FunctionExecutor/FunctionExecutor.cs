@@ -18,6 +18,7 @@ using UnityEngine;
 /// - 끝난 작업은 그 틱의 모든 작업을 진행한 뒤에 한꺼번에 뺀다.
 /// </para>
 /// </summary>
+[RequireComponent(typeof(ProcessMemory))]
 public class FunctionExecutor : MonoBehaviour
 {
 	[SerializeField, Min(1), Tooltip("1틱이 FixedUpdate 몇 번인지")]
@@ -30,6 +31,7 @@ public class FunctionExecutor : MonoBehaviour
 	readonly List<FunctionTask> pendingTasks = new List<FunctionTask>();
 
 	int fixedUpdateCount;
+	ProcessMemory memory;
 
 	/// <summary>
 	/// 지금까지 지난 틱 수. 첫 틱이 1이다.
@@ -52,9 +54,14 @@ public class FunctionExecutor : MonoBehaviour
 	/// </summary>
 	public FunctionTask Cast(FunctionBlock function)
 	{
-		FunctionTask task = new FunctionTask(gameObject, (FunctionBlock)function.Clone());
+		FunctionTask task = new FunctionTask(gameObject, memory, (FunctionBlock)function.Clone());
 		pendingTasks.Add(task);
 		return task;
+	}
+
+	void Awake()
+	{
+		memory = GetComponent<ProcessMemory>();
 	}
 
 	void FixedUpdate()

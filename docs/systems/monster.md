@@ -8,12 +8,16 @@
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 하지 않는 일
   - 데미지 계산(공격력 × 배율, 치명타, 처형)은 하지 않는다. 계산이 끝난 정수 데미지를 받기만 한다.
-  - 연출(이펙트, 소리, 애니메이션)을 하지 않는다. 연출은 `Damaged`, `Died` event를 받은 쪽이 한다.
+  - 연출(이펙트, 소리, 애니메이션)을 하지 않는다. 연출은 `HitEffectPlayed`, `DeathEffectPlayed` event를 받은 쪽이 한다.
   - 상태 이상, AI, 드롭, 스폰은 아직 다루지 않는다. 이후 이슈에서 추가한다.
 
 ## 동작 규칙
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
 - 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 오브젝트를 없앤다.
+- event는 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
+  - 로직(드롭, 스포너, 보스 페이즈, 레이드 판정)은 `Damaged`, `Died`를 받는다.
+  - 연출(이펙트, 소리, 애니메이션, 데미지 숫자)은 `HitEffectPlayed`, `DeathEffectPlayed`를 받는다.
+  - 순서: `Damaged` → `HitEffectPlayed` → (체력 0이면) `Died` → `DeathEffectPlayed`
 - 접촉 피해는 `FixedUpdate`마다 몸 크기의 상자 안을 검사한다. Player와 Monster 레이어는 충돌이 꺼져 있어서 Trigger를 쓸 수 없기 때문이다.
   - 같은 대상에게는 Inspector 값 `Hit Interval`초에 한 번만 피해를 준다.
   - Trigger가 아닌 Collider(몸)에 닿았을 때만 피해를 준다.
@@ -38,8 +42,10 @@
 | `Hp` | - | `int` | 지금 체력. 읽기만 한다. |
 | `MaxHp` | - | `int` | 최대 체력 (Inspector 값) |
 | `IsDead` | - | `bool` | 죽었으면 `true` |
-| `Damaged` (event) | `int` (받은 데미지) | - | 체력이 줄었을 때 불린다. 피격 연출, 데미지 숫자 표시에 쓴다. |
-| `Died` (event) | - | - | 체력이 0이 된 순간 한 번 불린다. 사망 연출, 드롭, 스포너 집계에 쓴다. |
+| `Damaged` (event) | `int` (받은 데미지) | - | [로직] 체력이 줄었을 때 불린다. 보스 페이즈 전환처럼 체력에 따른 로직에 쓴다. |
+| `Died` (event) | - | - | [로직] 체력이 0이 된 순간 한 번 불린다. 드롭, 스포너 집계, 레이드 판정에 쓴다. |
+| `HitEffectPlayed` (event) | `int` (받은 데미지) | - | [연출] 피격 이펙트, 소리, 데미지 숫자 표시에 쓴다. |
+| `DeathEffectPlayed` (event) | - | - | [연출] 사망 이펙트, 소리, 애니메이션에 쓴다. 한 번 불린다. |
 
 ### `ContactDamage`
 
@@ -60,4 +66,4 @@
 - 이우림과 정해야 할 것
   - 네트워크를 붙일 때 서버에서 원격 플레이어의 Collider도 검사되도록 물리 설정(지금 Player의 Rigidbody2D는 내 캐릭터만 Simulated가 켜진다)
 - 임혜원과 정해야 할 것
-  - 피격·사망 연출을 `Damaged`, `Died` event로 붙이는지
+  - 피격·사망 연출을 `HitEffectPlayed`, `DeathEffectPlayed` event로 붙이는지

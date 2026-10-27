@@ -9,13 +9,6 @@ public class PlayerMove : NetworkBehaviour
 	[SerializeField] private Rigidbody2D rigidbody;
 	[SerializeField] private PlayerInputReader input;
 
-	public override void OnStartLocalPlayer()
-	{
-		base.OnStartLocalPlayer();
-
-		rigidbody.simulated = true;
-	}
-
 	void Update()
     {
         if (!isLocalPlayer) return;

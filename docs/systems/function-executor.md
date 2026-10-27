@@ -19,6 +19,7 @@
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
   - `ReturnBlock`: 1 tick
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
+  - 반복문도 문법 `Block`이므로 stack을 쓰지 않는다. 반복문 안의 `FunctionBlock`은 한 번 끝날 때마다 stack을 돌려주므로, 반복 횟수와 상관없이 그 `FunctionBlock`의 `FrameSize`만큼만 쓴다.
   - `PredefinedFunction`의 `FrameSize`: 1 + 파라미터 수 + `LocalVariableCount`
 - stack이 모자라면 그 `FunctionTask`가 `Overflow`로 끝난다. 이미 실행 중이던 바깥 `FunctionBlock`들은 cancel되며 stack을 돌려준다. 지금은 그 `FunctionTask`만 끝나고 다른 `FunctionTask`는 계속 진행된다.
 - memory 전체 칸 수는 `PlayerStats.MemorySize`다.

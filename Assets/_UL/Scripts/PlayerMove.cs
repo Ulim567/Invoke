@@ -1,13 +1,13 @@
 using UnityEngine;
 using Mirror;
-using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(PlayerStats), typeof(PlayerInputReader), typeof(Rigidbody2D))]
 public class PlayerMove : NetworkBehaviour
 {
-    [SerializeField, Min(0f)] private float walkSpeed;
 	[SerializeField, Min(0f)] private float jumpForce;
 	[SerializeField] private Rigidbody2D rigidbody;
 	[SerializeField] private PlayerInputReader input;
+	[SerializeField] private PlayerStats stats;
 
 	void Update()
     {
@@ -17,7 +17,7 @@ public class PlayerMove : NetworkBehaviour
 
     void Move()
     {
-		rigidbody.linearVelocity = new Vector2(input.MoveX * walkSpeed, rigidbody.linearVelocity.y);
+		rigidbody.linearVelocity = new Vector2(input.MoveX * stats.MoveSpeed, rigidbody.linearVelocity.y);
 
 		if (input.JumpPressed)
 		{

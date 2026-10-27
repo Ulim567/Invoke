@@ -69,6 +69,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 381431623457180753}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 663577441786231935}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &7041558310181405839 stripped
 GameObject:
@@ -112,4 +115,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 82ce100927077f3479822e99cca0cfdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProcessMemory
-  capacity: 10
+--- !u!114 &663577441786231935
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7041558310181405839}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab5039b1fcae2b640837a14685a418e5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorTest

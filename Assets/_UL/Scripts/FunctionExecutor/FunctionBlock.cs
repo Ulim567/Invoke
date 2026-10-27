@@ -17,8 +17,8 @@ public abstract class FunctionBlock : Block
 
 	/// <summary>
 	/// 이 함수를 실행할 때 스택에 쌓이는 프레임 크기(칸).<br/>
-	/// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수. 지금은 파라미터와 지역 변수가 없으므로 1이다.<br/>
-	/// C 스킬은 덮어써서 스킬마다 다르게 정할 수 있다.
+	/// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수.<br/>
+	/// 사전 정의 함수는 Parameters, LocalVariableCount로 계산한다. 사용자 정의 함수는 아직 파라미터와 지역 변수가 없으므로 1이다.
 	/// </summary>
 	public virtual int FrameSize => 1;
 

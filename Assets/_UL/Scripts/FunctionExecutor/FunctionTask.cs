@@ -48,15 +48,19 @@ public class FunctionTask
 	// 시전한 캐릭터의 메모리. 함수 블록이 실행을 시작하고 끝날 때 스택을 요청하고 반환한다
 	internal ProcessMemory Memory { get; }
 
+	// 이 작업을 만든 실행기. 사용자 정의 함수가 비동기 함수를 새 작업으로 시전할 때 쓴다
+	internal FunctionExecutor Executor { get; }
+
 	public FunctionTaskState State { get; private set; } = FunctionTaskState.Running;
 	public FunctionTaskEndReason EndReason { get; private set; } = FunctionTaskEndReason.None;
 
 	public bool IsEnded => State == FunctionTaskState.Ended;
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
-	internal FunctionTask(GameObject caster, ProcessMemory memory, FunctionBlock function)
+	internal FunctionTask(FunctionExecutor executor, ProcessMemory memory, FunctionBlock function)
 	{
-		Caster = caster;
+		Executor = executor;
+		Caster = executor.gameObject;
 		Memory = memory;
 		Name = function.Name;
 		this.function = function;
@@ -79,7 +83,7 @@ public class FunctionTask
 		else End(FunctionTaskEndReason.Completed);
 	}
 
-	// 실행 도중에 작업을 끊는다. 외부 중단 기능을 만들 때 실행기가 부른다
+	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다
 	internal void Interrupt()
 	{
 		if (IsEnded) return;

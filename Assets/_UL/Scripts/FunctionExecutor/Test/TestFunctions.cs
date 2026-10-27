@@ -3,6 +3,7 @@
 /// </summary>
 public class TestFunctionA : PredefinedFunction
 {
+	public override string Id => PredefinedFunctionIds.TestFunctionA;
 	public override string Name => "TestFunctionA";
 	public override int TickCount => 30;
 }
@@ -12,6 +13,18 @@ public class TestFunctionA : PredefinedFunction
 /// </summary>
 public class TestFunctionB : PredefinedFunction
 {
+	public override string Id => PredefinedFunctionIds.TestFunctionB;
 	public override string Name => "TestFunctionB";
 	public override int TickCount => 50;
+}
+
+/// <summary>
+/// 실행기 테스트용 비동기 함수. 다른 함수 안에서 불리면 새 작업으로 20틱 동안 진행한다.
+/// </summary>
+public class TestAsyncFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestAsyncFunction;
+	public override string Name => "TestAsyncFunction";
+	public override int TickCount => 20;
+	public override bool IsAsync => true;
 }

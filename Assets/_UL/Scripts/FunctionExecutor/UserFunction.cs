@@ -35,8 +35,23 @@ public class UserFunction : FunctionBlock
 		// 블록이 하나도 없는 함수도 최소 1틱은 쓰게 한다
 		if (Blocks.Count == 0) return BlockResult.Done;
 
-		// 원본은 여러 작업이 함께 쓰므로, 실행을 시작할 때 복사본을 만들어 진행 상황을 따로 갖게 한다
-		if (runningBlock == null) runningBlock = Blocks[blockIndex].Clone();
+		if (runningBlock == null)
+		{
+			Block next = Blocks[blockIndex];
+
+			// 비동기 함수는 끝나기를 기다리지 않는다. 새 작업으로 시전하고, 이 블록은 1틱을 쓴 것으로 보고 다음 블록으로 넘어간다
+			// 원본을 그대로 넘겨도 Cast가 복사본을 만들어 실행한다
+			// 조건문, for, while 블록이 생기면 그 블록들도 안쪽 블록을 실행하므로 같은 처리가 필요하다. 그때 이 처리를 한 함수로 빼서 함께 쓴다
+			if (next is PredefinedFunction function && function.IsAsync)
+			{
+				task.Executor.Cast(function);
+				blockIndex++;
+				return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
+			}
+
+			// 원본은 여러 작업이 함께 쓰므로, 실행을 시작할 때 복사본을 만들어 진행 상황을 따로 갖게 한다
+			runningBlock = next.Clone();
+		}
 
 		BlockResult result = runningBlock.Execute(task);
 		if (result == BlockResult.Running) return BlockResult.Running;

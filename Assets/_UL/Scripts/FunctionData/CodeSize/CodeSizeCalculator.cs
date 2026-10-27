@@ -8,6 +8,7 @@ using System.Linq;
 /// - 슬롯의 사용자 정의 함수와, 그 함수들이 호출로 닿는 모든 사용자 정의 함수의 블록 수를 더한다.<br/>
 /// - 같은 함수는 몇 번 불리든, 여러 함수가 부르든 한 번만 센다. 실제 프로그램에서도 함수 코드는 코드 영역에 한 번만 올라가기 때문이다.<br/>
 /// - 반복 횟수는 곱하지 않는다.<br/>
+/// - C 스킬 블록은 1이 아니라 그 스킬의 CodeSize로 센다.<br/>
 /// - 슬롯에 바로 넣은 C 스킬은 C 스킬 블록 하나만 든 함수와 같게 센다.
 /// </para>
 /// <para>
@@ -82,6 +83,8 @@ public static class CodeSizeCalculator
 	}
 
 	// C 스킬 하나의 크기. 함수 안의 C 스킬 블록과 슬롯에 바로 넣은 C 스킬이 모두 여기서 크기를 가져온다
-	// C 스킬마다 크기를 정하면 이 함수만 고친다. 정하기 전까지는 1
-	static int PredefinedFunctionSize(string functionId) => 1;
+	// 크기는 스킬마다 PredefinedFunction.CodeSize에 정한다
+	// 없는 ID는 구조 검사가 막을 일이므로 멈추지 않고, 블록 하나로 보아 1로 센다
+	static int PredefinedFunctionSize(string functionId) =>
+		PredefinedFunctionRegistry.TryGet(functionId, out PredefinedFunction function) ? function.CodeSize : 1;
 }

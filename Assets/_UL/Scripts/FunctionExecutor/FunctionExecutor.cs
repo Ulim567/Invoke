@@ -54,9 +54,24 @@ public class FunctionExecutor : MonoBehaviour
 	/// </summary>
 	public FunctionTask Cast(FunctionBlock function)
 	{
-		FunctionTask task = new FunctionTask(gameObject, memory, (FunctionBlock)function.Clone());
+		FunctionTask task = new FunctionTask(this, memory, (FunctionBlock)function.Clone());
 		pendingTasks.Add(task);
 		return task;
+	}
+
+	/// <summary>
+	/// 진행 중인 작업과 다음 틱을 기다리는 작업을 모두 끊는다. 실행 중단 공격에 맞았을 때 부른다.<br/>
+	/// 끊긴 작업은 EndReason이 Interrupted가 되고, 실행 중이던 함수들은 OnEnd 대신 OnCancel을 받으며 스택을 돌려준다.<br/>
+	/// 끊긴 작업도 다른 작업처럼 틱이 끝날 때 목록에서 빠지며 TaskEnded가 불린다.
+	/// </summary>
+	public void InterruptAll()
+	{
+		// foreach 대신 번호로 돈다. OnCancel에서 Cast를 부르면 목록이 늘어나는데, foreach는 그때 오류를 내기 때문
+		// 늘어난 작업도 끊어야 하므로 Count를 매번 다시 읽는다
+		for (int i = 0; i < tasks.Count; i++)
+			tasks[i].Interrupt();
+		for (int i = 0; i < pendingTasks.Count; i++)
+			pendingTasks[i].Interrupt();
 	}
 
 	void Awake()
@@ -81,8 +96,9 @@ public class FunctionExecutor : MonoBehaviour
 		int firstNew = tasks.Count;
 		tasks.AddRange(pendingTasks);
 		pendingTasks.Clear();
+		// 진행을 시작하기 전에 끊긴 작업은 시작을 알리지 않는다. 이 틱이 끝날 때 TaskEnded만 불린다
 		for (int i = firstNew; i < tasks.Count; i++)
-			TaskStarted?.Invoke(tasks[i]);
+			if (!tasks[i].IsEnded) TaskStarted?.Invoke(tasks[i]);
 
 		foreach (FunctionTask task in GetTickOrder())
 			task.Step();

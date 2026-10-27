@@ -24,6 +24,10 @@
 - memory 전체 칸 수는 `PlayerStats.MemorySize`다.
   - 레벨업, 버프 등으로 `MemorySize`가 바뀌면 다음 `FunctionBlock`이 stack을 쓸 때부터 바로 반영된다.
   - `MemorySize`가 `StackUsed`보다 작아져도 실행 중인 `FunctionTask`는 cancel되지 않는다. `Free`가 0이 되어, 새로 실행을 시작하는 `FunctionBlock`만 `Overflow`로 끝난다.
+- stack과 heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - StackUsed - HeapUsed`다.
+  - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, stack과 heap은 각각 칸 수만 센다.
+  - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
+  - heap은 아직 없으므로 `HeapUsed`는 항상 0이다.
 - `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
 
@@ -61,7 +65,8 @@
 | --- | --- | --- | --- |
 | `Capacity` | - | `int` | memory 전체 칸 수. `PlayerStats.MemorySize`와 같다. |
 | `StackUsed` | - | `int` | 지금 stack이 쓰는 칸 수. 실행 중인 모든 `FunctionBlock`의 `FrameSize` 합 |
-| `Free` | - | `int` | 남은 칸 수. 0보다 작아지지 않는다. |
+| `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. heap은 아직 없으므로 항상 0 |
+| `Free` | - | `int` | 남은 칸 수. `Capacity - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. |
 
 ### `PredefinedFunction` (C 스킬, 공통 function, 특수 이동 function, 입력 function)
 - 만드는 방법: [predefined-function.md](predefined-function.md)

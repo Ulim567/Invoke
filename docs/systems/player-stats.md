@@ -19,7 +19,7 @@
 | 공격 속도 | 1.0 | 배율 |
 | 메모리 크기 | 10 | 칸 수. `ProcessMemory`의 현재 값과 같다 |
 | 쿨타임 감소 | 0 | 0~1 비율 |
-| 이동 속도 | 5 | 초당 유닛. `PlayerMove`의 현재 `walkSpeed`와 같다 |
+| 이동 속도 | 5 | 초당 유닛. `PlayerMove`가 이 값을 이동 속도로 쓴다 |
 
 - 공격 속도는 함수 동작 시간(틱 수)을 줄인다. 동작 틱 수 = 반올림(원래 틱 수 ÷ 공격 속도), 최소 1틱. 틱 길이와 쿨타임은 바꾸지 않는다.
 - 쿨타임 감소는 쿨타임에 (1 - 쿨타임 감소)를 곱한다.
@@ -52,9 +52,9 @@
 캐릭터 하나의 기본 능력치 데이터 파일. Project 창에서 Create → Invoke → Player Base Stats로 만든다. 게임 중에는 값을 바꾸지 않는다.
 
 ## 맞춘 결과
-- 아직 다른 사람과 정한 것은 없다.
+- 이우림과 정한 것
+  - `PlayerMove`가 `PlayerStats.MoveSpeed`를 이동 속도로 읽는다 (#25)
 - 이우림과 정해야 할 것
-  - `PlayerMove`가 `walkSpeed` 대신 `PlayerStats.MoveSpeed`를 읽는지
   - `ProcessMemory`가 `capacity` 대신 `PlayerStats.MemorySize`를 읽는지
   - 함수 실행기가 `PredefinedFunction.TickCount`에 `ApplyAttackSpeed`를 적용하는지, 쿨타임에 `ApplyCooldownReduction`을 적용하는지
 - 박진우와 정해야 할 것

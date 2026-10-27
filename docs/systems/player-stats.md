@@ -17,7 +17,7 @@
 | 최대 체력 | 100 | |
 | 공격력 | 10 | 데미지 = 공격력 × 배율 |
 | 공격 속도 | 1.0 | 배율 |
-| 메모리 크기 | 10 | 칸 수. `ProcessMemory`의 현재 값과 같다 |
+| 메모리 크기 | 10 | 칸 수. `ProcessMemory`가 이 값을 메모리 전체 칸 수로 쓴다 |
 | 쿨타임 감소 | 0 | 0~1 비율 |
 | 이동 속도 | 5 | 초당 유닛. `PlayerMove`가 이 값을 이동 속도로 쓴다 |
 
@@ -54,8 +54,8 @@
 ## 맞춘 결과
 - 이우림과 정한 것
   - `PlayerMove`가 `PlayerStats.MoveSpeed`를 이동 속도로 읽는다 (#25)
+  - `ProcessMemory`가 `PlayerStats.MemorySize`를 메모리 전체 칸 수로 읽는다 (#35)
 - 이우림과 정해야 할 것
-  - `ProcessMemory`가 `capacity` 대신 `PlayerStats.MemorySize`를 읽는지
   - 함수 실행기가 `PredefinedFunction.TickCount`에 `ApplyAttackSpeed`를 적용하는지, 쿨타임에 `ApplyCooldownReduction`을 적용하는지
 - 박진우와 정해야 할 것
   - 데미지 계산에서 `AttackPower`를 읽는지

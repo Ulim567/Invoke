@@ -112,4 +112,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 82ce100927077f3479822e99cca0cfdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProcessMemory
-  capacity: 10

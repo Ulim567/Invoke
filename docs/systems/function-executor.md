@@ -19,14 +19,23 @@
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
   - `ReturnBlock`: 1 tick
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
+  - 반복문도 문법 `Block`이므로 stack을 쓰지 않는다. 반복문 안의 `FunctionBlock`은 한 번 끝날 때마다 stack을 돌려주므로, 반복 횟수와 상관없이 그 `FunctionBlock`의 `FrameSize`만큼만 쓴다.
   - `PredefinedFunction`의 `FrameSize`: 1 + 파라미터 수 + `LocalVariableCount`
 - stack이 모자라면 그 `FunctionTask`가 `Overflow`로 끝난다. 이미 실행 중이던 바깥 `FunctionBlock`들은 cancel되며 stack을 돌려준다. 지금은 그 `FunctionTask`만 끝나고 다른 `FunctionTask`는 계속 진행된다.
+- memory 전체 칸 수는 `PlayerStats.MemorySize`다.
+  - 레벨업, 버프 등으로 `MemorySize`가 바뀌면 다음 `FunctionBlock`이 stack을 쓸 때부터 바로 반영된다.
+  - `MemorySize`가 `StackUsed`보다 작아져도 실행 중인 `FunctionTask`는 cancel되지 않는다. `Free`가 0이 되어, 새로 실행을 시작하는 `FunctionBlock`만 `Overflow`로 끝난다.
+- stack과 heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - StackUsed - HeapUsed`다.
+  - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, stack과 heap은 각각 칸 수만 센다.
+  - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
+  - heap은 아직 없으므로 `HeapUsed`는 항상 0이다.
 - `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
 
 ## 다른 시스템이 쓰는 것
 
 캐릭터(Player 프리팹)에 `FunctionExecutor`, `ProcessMemory`가 붙어 있다. `GetComponent`로 가져온다.
+- `ProcessMemory`는 같은 오브젝트에 `PlayerStats`가 있어야 한다(`RequireComponent`). memory 전체 칸 수를 `PlayerStats`에서 읽기 때문이다.
 
 ### `FunctionExecutor`
 
@@ -55,9 +64,10 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `Capacity` | - | `int` | memory 전체 칸 수 (Inspector 값) |
+| `Capacity` | - | `int` | memory 전체 칸 수. `PlayerStats.MemorySize`와 같다. |
 | `StackUsed` | - | `int` | 지금 stack이 쓰는 칸 수. 실행 중인 모든 `FunctionBlock`의 `FrameSize` 합 |
-| `Free` | - | `int` | 남은 칸 수 |
+| `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. heap은 아직 없으므로 항상 0 |
+| `Free` | - | `int` | 남은 칸 수. `Capacity - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. |
 
 ### `PredefinedFunction` (C 스킬, 공통 function, 특수 이동 function, 입력 function)
 - 만드는 방법: [predefined-function.md](predefined-function.md)
@@ -78,7 +88,8 @@ executor.Cast(dashThrust);
 ```
 
 ## 맞춘 결과
-- 아직 다른 사람과 정한 것은 없다.
+- 김도훈과 정한 것
+  - `ProcessMemory`가 memory 전체 칸 수로 `PlayerStats.MemorySize`를 읽는다 (#35)
 - 박진우와 정해야 할 것
   - 스킬별로 stack 밖에서 따로 쓰는 memory(예: 검 소환의 heap)를 어떻게 다룰지
   - cooldown을 실행 시간과 같게 둘지, 따로 둘지

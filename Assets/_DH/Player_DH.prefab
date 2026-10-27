@@ -59,25 +59,5 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1085773025529122864}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
---- !u!1 &1350488849343141080 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-  m_PrefabInstance: {fileID: 3159942922205266261}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1085773025529122864
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1350488849343141080}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 653f87ab0ebfd9f4585c11570d81785f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TestDamageReceiver

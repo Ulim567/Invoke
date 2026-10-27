@@ -14,6 +14,8 @@ GameObject:
   - component: {fileID: 3775676273824404508}
   - component: {fileID: 6117843773794850283}
   - component: {fileID: 4301682130805217797}
+  - component: {fileID: 8926670108708325781}
+  - component: {fileID: 3125484816550878907}
   m_Layer: 9
   m_Name: TestMonster
   m_TagString: Untagged
@@ -202,3 +204,31 @@ MonoBehaviour:
   targetLayers:
     serializedVersion: 2
     m_Bits: 256
+--- !u!114 &8926670108708325781
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7396410919086133594}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ed66e26bdb411d409c0e4acf1d11f33, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProjectileAttack
+  attack: {fileID: 11400000, guid: 32740dbd762c0324196285f59677bbd9, type: 2}
+  projectilePrefab: {fileID: 2080740477131302831, guid: abc73a51d2e70b64299cb36326d347fa, type: 3}
+  speed: 6
+  firePointOffset: {x: 0.5, y: 0.5}
+--- !u!114 &3125484816550878907
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7396410919086133594}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1bb1ea5f9f41fa44784175b262763ed5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProjectileAttackTester

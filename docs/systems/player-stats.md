@@ -57,5 +57,5 @@
   - `ProcessMemory`가 `PlayerStats.MemorySize`를 메모리 전체 칸 수로 읽는다 (#35)
 - 이우림과 정해야 할 것
   - 함수 실행기가 `PredefinedFunction.TickCount`에 `ApplyAttackSpeed`를 적용하는지, 쿨타임에 `ApplyCooldownReduction`을 적용하는지
-- 박진우와 정해야 할 것
-  - 데미지 계산에서 `AttackPower`를 읽는지
+- 박진우와 정한 것
+  - 데미지 계산의 공격력은 스킬이 `PlayerStats.AttackPower`를 읽어 `DamageRequest`에 넣는다 (#41)

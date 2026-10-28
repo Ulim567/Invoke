@@ -5,7 +5,9 @@
 ## 하는 일
 - 게임이 통째로 제공하는 function(C 스킬, 공통 function, 특수 이동 function, 입력 function)을 만드는 형식
 - 고정 ID로 사전 정의 함수 찾기
+- 스킬 코드에서 에러로 끝내기(`Fail`), 일찍 끝내기(`Stop`)와 스킬 에러(`SkillError`) 형식
 - 하지 않는 일
+  - 에러가 났을 때의 처리(그 작업만 끝냄, 페널티 등): 캐릭터 언어의 언어 규칙 파일 (`function-executor.md` 「실패 처리」)
   - 실행: `FunctionExecutor` (`function-executor.md`)
   - 실제 대상 입력, 파라미터 값 읽기: 「함수 실행 중 대상 입력 기다리기」 이슈
   - 반환 값을 실제로 넘기기: 블록 실행 이슈
@@ -74,6 +76,7 @@
 | `ReturnType` | `VariableType` | `Void` | `Void`가 아니면 함수 블록을 값 칸에 끼울 수 있음 |
 | `LocalVariableCount` | `int` | 0 | 실행 중에 쓰는 지역 변수 수. stack 프레임 크기 계산에 씀. 스킬마다 stack 부담을 조정하는 값 |
 | `IsAsync` | `bool` | `false` (동기) | 다른 function 안에서 불렸을 때 기다리지 않으면 `true` |
+| `CooldownTicks` | `int` | 0 | 쿨타임(tick 수). 동작 시간(`TickCount`)과 따로 정함. 슬롯에 바로 넣으면 이 값, 사용자 정의 함수 안에 넣으면 그 함수의 쿨타임에 더해짐 |
 
 #### 효과 실행 (몇 번째 tick에 무엇을 하는지)
 
@@ -82,9 +85,12 @@
 | `OnStart(FunctionTask task)` | 아무것도 하지 않음 | 첫 tick에 `OnTick`보다 먼저 한 번 불린다. |
 | `OnTick(FunctionTask task, int tick)` | 아무것도 하지 않음 | 매 tick 불린다. `tick`은 1부터 `TickCount`까지 센다. 몇 번째 tick에 무엇을 할지(예: 자세잡기 → 차징 → 발사) 여기서 정한다. |
 | `OnEnd(FunctionTask task)` | 아무것도 하지 않음 | 마지막 tick에 `OnTick` 다음으로 한 번 불린다. `Completed`일 때만 불린다. |
-| `OnCancel(FunctionTask task)` | 아무것도 하지 않음 | 도중에 cancel됐을 때(`Overflow`, `Interrupted`) `OnEnd` 대신 한 번 불린다. 만들어 둔 오브젝트를 없애는 등의 정리를 한다. |
+| `OnCancel(FunctionTask task)` | 아무것도 하지 않음 | 도중에 cancel됐을 때(실패, `Interrupted`) `OnEnd` 대신 한 번 불린다. 만들어 둔 오브젝트를 없애는 등의 정리를 한다. |
+| `OnFail(FunctionTask task, SkillError error)` | 아무것도 하지 않음 | 이 스킬이 `Fail`로 에러를 냈을 때 `OnCancel`보다 먼저 한 번 불린다. 이 스킬만의 결과(예: 시전자가 피해를 입음)를 적는다. |
 
 - 한 tick에서 부르는 순서: `OnStart`(첫 tick만) → `OnTick` → `OnEnd`(마지막 tick만)
+- 시전한 캐릭터의 정보: `task.Caster`의 컴포넌트 (예: `task.Caster.GetComponent<PlayerStats>()`). 값을 바꿀 때는 그 컴포넌트의 함수를 부른다(`CLAUDE.md` 코드 작성 규칙 2).
+- 애니메이션 길이: `TickCount` × `FunctionExecutor.SecondsPerTick`초. `OnStart`에서 재생 속도를 맞추고, `OnEnd`·`OnCancel`에서 되돌림
 - 실행되는 것은 언제나 복사본이므로, 실행 중에 쓰는 값(예: 차징한 양)을 필드에 저장해도 된다.
   - 다만 `List` 같은 참조 형식 필드는 원본과 복사본이 함께 쓰게 된다. 실행 중에 쓰는 참조 형식 값은 `OnStart`에서 새로 만든다.
 - `OnStart` 등에서 `base`를 부르지 않아도 된다. stack memory는 `FunctionExecutor`가 따로 처리한다.
@@ -106,6 +112,44 @@ public class Thrust : PredefinedFunction
 }
 ```
 
+#### 에러로 끝내기, 일찍 끝내기
+
+`OnStart`, `OnTick` 안에서 부른다.
+
+| 이름 | 하는 일 |
+| --- | --- |
+| `Fail(SkillError error)` | 이 function을 에러로 끝냄. 그 tick 끝에 `OnFail` → `OnCancel` 순서로 불림. 처리는 언어 규칙 파일의 `SkillFailed` 줄을 따름. 여러 번 부르면 처음 에러만 씀 |
+| `Stop()` | 이 function을 에러 없이 일찍 끝냄. 그 tick 끝에 `OnEnd`가 불림. 사용자 정의 함수 안이었다면 다음 `Block`으로 넘어감 |
+
+- `Fail`과 `Stop`을 둘 다 부름: `Fail`을 따름
+- `OnEnd`, `OnCancel` 안에서 부름: 콘솔 오류, 무시
+- `OnFail` 안에서 부름: 무시 (이미 에러로 끝나는 중)
+
+```csharp
+// 예시. TempSwordState는 물리 검 관리가 생기기 전까지 쓰는 테스트용 임시 컴포넌트
+protected override void OnStart(FunctionTask task)
+{
+	if (task.Caster.GetComponent<TempSwordState>().IsUnarmed) Fail(new UnarmedError());
+}
+```
+
+#### `SkillError` (스킬 에러)
+
+스킬 에러 종류 하나가 `SkillError`를 상속한 클래스 하나다.
+- 추가 정보(예: 필요한 소환검 수): 그 에러 클래스의 필드
+- 에러끼리 묶기: 상속 (이후 Java의 try가 묶음 단위로 잡을 수 있게 함)
+- 에러 객체: `Fail`을 부를 때마다 `new`로 새로 만듦 (`SourceName`이 덮어써지지 않게 하기 위함)
+- 처리 방법: 에러 클래스가 정하지 않음. 같은 에러라도 언어마다 다르게 처리하기 위함
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `Message` | `string` | 로그와 화면에 보여 줄 설명. 덮어쓰지 않으면 클래스 이름 |
+| `SourceName` | `string` | 에러를 낸 스킬의 이름. `Fail`이 채움 |
+
+- 있는 에러 (`Assets/_UL/Scripts/FunctionExecutor/SwordErrors.cs`)
+  - `UnarmedError`: 맨손
+  - `NoSummonedSwordError`: 소환검 없음
+
 ### `PredefinedFunctionRegistry` (고정 ID로 function 찾기)
 
 - 필요한 이유: 함수 데이터에는 고정 ID 글자(예: `"c.thrust"`)만 저장됨. 이 글자로 실제 function을 찾는 곳
@@ -126,4 +170,9 @@ public class Thrust : PredefinedFunction
 - 쓰는 곳: 코드 영역 크기 계산(`CodeSize`), 편집 화면(`Parameters`, `ReturnType`), 블록 실행
 
 ## 맞춘 결과
-- 아직 다른 사람과 정한 것 없음
+- 박진우와 확인할 것
+  - 스킬마다 다른 조건(맨손, 소환검)을 스킬 코드에서 `Fail`로 처리 (#38)
+  - 에러 클래스(`UnarmedError` 등)의 위치: 지금은 `_UL`. 박진우 폴더로 옮겨도 실행기 코드는 고치지 않음 (#38)
+  - 쿨타임 `CooldownTicks`를 스킬마다 정함 (#38)
+- 박진우·임혜원과 확인할 것
+  - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)

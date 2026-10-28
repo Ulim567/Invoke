@@ -22,6 +22,13 @@ public abstract class FunctionBlock : Block
 	/// </summary>
 	public virtual int FrameSize => 1;
 
+	/// <summary>
+	/// 쿨타임(tick 수). 슬롯에서 시전한 함수가 끝난 뒤 이만큼 지나야 다시 시전할 수 있다.<br/>
+	/// 사전 정의 함수는 스킬 구현자가 덮어써서 정하고(기본 0), 사용자 정의 함수는 안에 든 함수들의 쿨타임을 더한 값이다.
+	/// </summary>
+	// 동작 시간(TickCount)과 따로 둔다. 짧게 실행되고 오래 기다리는 스킬, 오래 실행되고 바로 다시 쓰는 스킬을 모두 만들기 위함
+	public virtual int CooldownTicks => 0;
+
 	internal sealed override bool AllocateMemory(FunctionTask task)
 	{
 		if (!task.Memory.TryAllocateStack(FrameSize)) return false;

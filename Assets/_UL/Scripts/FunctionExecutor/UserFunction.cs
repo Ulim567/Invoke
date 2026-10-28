@@ -24,6 +24,21 @@ public class UserFunction : FunctionBlock
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
 
+	/// <summary>
+	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.
+	/// </summary>
+	// 반복문 같은 문법 블록 안의 함수는 아직 세지 않는다. 몇 번 실행될지 미리 알 수 없으므로 블록 실행 이슈에서 정한다
+	public override int CooldownTicks
+	{
+		get
+		{
+			int sum = 0;
+			foreach (Block block in Blocks)
+				if (block is FunctionBlock function) sum += function.CooldownTicks;
+			return sum;
+		}
+	}
+
 	public UserFunction(string name, params Block[] blocks)
 	{
 		Name = name;
@@ -44,7 +59,7 @@ public class UserFunction : FunctionBlock
 			// 조건문, for, while 블록이 생기면 그 블록들도 안쪽 블록을 실행하므로 같은 처리가 필요하다. 그때 이 처리를 한 함수로 빼서 함께 쓴다
 			if (next is PredefinedFunction function && function.IsAsync)
 			{
-				task.Executor.Cast(function);
+				task.Executor.CastUnchecked(function);
 				blockIndex++;
 				return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
 			}
@@ -58,8 +73,8 @@ public class UserFunction : FunctionBlock
 
 		runningBlock = null;
 
-		// 안쪽에서 오버플로가 났으면 이 함수도 끝까지 실행하지 못하므로 바깥에 그대로 알린다
-		if (result == BlockResult.Overflow) return BlockResult.Overflow;
+		// 안쪽에서 실패했으면 이 함수도 끝까지 실행하지 못하므로 바깥에 그대로 알린다
+		if (result == BlockResult.Failed) return BlockResult.Failed;
 
 		// 안쪽에서 return을 만났으면 남은 블록을 실행하지 않는다. return은 이 함수에서 멈추므로 바깥에는 Done으로 알린다
 		if (result == BlockResult.Returned) return BlockResult.Done;

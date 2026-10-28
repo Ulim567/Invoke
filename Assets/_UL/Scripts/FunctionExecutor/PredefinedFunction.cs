@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
 /// 게임이 통째로 제공하는 함수(C 스킬, 공통 함수, 특수 이동 함수, 입력 함수)의 기반 클래스.<br/>
@@ -7,9 +8,11 @@ using System.Collections.Generic;
 /// <para>
 /// 사용법 (docs/systems/predefined-function.md)<br/>
 /// - 이 클래스를 상속하고 Id, Name, TickCount를 정한다. Id는 PredefinedFunctionIds의 상수를 쓴다.<br/>
-/// - CodeSize, Parameters, ReturnType, LocalVariableCount, IsAsync는 기본값과 다를 때만 덮어쓴다.<br/>
+/// - CodeSize, Parameters, ReturnType, LocalVariableCount, IsAsync, CooldownTicks는 기본값과 다를 때만 덮어쓴다.<br/>
 /// - OnStart, OnTick, OnEnd, OnCancel 중 필요한 것만 덮어써서, 몇 번째 틱에 무엇을 할지 적는다. (예: 자세잡기 → 차징 → 발사)<br/>
-/// - 실행되는 것은 언제나 복사본이므로, 실행 중에 쓰는 값(예: 차징한 양)을 필드에 그대로 저장해도 된다.
+/// - 실행되는 것은 언제나 복사본이므로, 실행 중에 쓰는 값(예: 차징한 양)을 필드에 그대로 저장해도 된다.<br/>
+/// - OnStart나 OnTick에서 실행할 수 없는 상태를 발견하면 Fail(에러)로 에러를 내고, 에러 없이 일찍 끝내려면 Stop()을 부른다.<br/>
+/// - 에러로 끝날 때 이 스킬만의 결과(예: 시전자가 피해를 입음)가 있으면 OnFail에 적는다.
 /// </para>
 /// <para>
 /// 한 틱에서 부르는 순서: OnStart(첫 틱만) → OnTick → OnEnd(마지막 틱만)<br/>
@@ -20,6 +23,10 @@ using System.Collections.Generic;
 public abstract class PredefinedFunction : FunctionBlock
 {
 	int elapsedTicks;
+	// Fail, Stop은 요청만 기록하고, Step이 이 요청을 보고 이 함수를 끝낸다
+	// OnStart, OnTick 도중에 바로 끝내면 그 뒤의 스킬 코드가 끝난 함수 위에서 계속 실행되기 때문
+	SkillError requestedError;
+	bool stopRequested;
 
 	/// <summary>
 	/// 고정 ID. 함수 데이터의 함수 블록이 이 값으로 이 함수를 가리킨다. 화면 이름(Name)과 따로 둔다.
@@ -67,8 +74,22 @@ public abstract class PredefinedFunction : FunctionBlock
 
 	protected sealed override BlockResult Step(FunctionTask task)
 	{
-		elapsedTicks++;
-		OnTick(task, elapsedTicks);
+		// OnStart에서 이미 Fail이나 Stop을 불렀으면 OnTick을 부르지 않는다
+		if (requestedError == null && !stopRequested)
+		{
+			elapsedTicks++;
+			OnTick(task, elapsedTicks);
+		}
+
+		// Fail과 Stop을 둘 다 불렀으면 에러를 먼저 따른다. 에러를 놓치면 안 되기 때문
+		if (requestedError != null)
+		{
+			task.RecordFailure(FunctionFailure.SkillFailed, requestedError);
+			OnFail(task, requestedError);
+			return BlockResult.Failed;
+		}
+		if (stopRequested) return BlockResult.Done;
+
 		return elapsedTicks >= TickCount ? BlockResult.Done : BlockResult.Running;
 	}
 
@@ -76,4 +97,48 @@ public abstract class PredefinedFunction : FunctionBlock
 	/// 매 틱 불린다. tick은 이번이 몇 번째 틱인지이며 1부터 TickCount까지 센다.
 	/// </summary>
 	protected virtual void OnTick(FunctionTask task, int tick) { }
+
+	/// <summary>
+	/// 이 스킬이 Fail로 에러를 냈을 때 한 번 불린다. 이 스킬만의 결과(예: 시전자가 피해를 입음)를 적는다.<br/>
+	/// 이 다음에 OnCancel이 불리므로, 만들어 둔 오브젝트의 정리는 지금처럼 OnCancel에서 한다.<br/>
+	/// 작업을 끝낼지, 페널티를 줄지 같은 처리는 여기서 하지 않는다. 캐릭터 언어의 언어 규칙 표가 정한다.
+	/// </summary>
+	// OnCancel과 나눈 이유: OnCancel은 실행 중단 공격, Overflow 때도 불리므로 스킬이 스스로 낸 에러만 구분할 수 없기 때문
+	protected virtual void OnFail(FunctionTask task, SkillError error) { }
+
+	/// <summary>
+	/// 이 함수를 에러로 끝낸다. OnStart나 OnTick에서 부른다.<br/>
+	/// 그 틱이 끝날 때 OnEnd 대신 OnCancel이 불리고, 무엇을 할지(그 작업만 끝냄 등)는 캐릭터 언어의 언어 규칙 표가 정한다.<br/>
+	/// 여러 번 부르면 처음 에러만 쓴다.
+	/// </summary>
+	protected void Fail(SkillError error)
+	{
+		if (error == null) throw new ArgumentNullException(nameof(error));
+		// 이미 끝난 함수(OnEnd, OnCancel 안)에서 부르면 되돌릴 수 없으므로 스킬 코드의 실수로 알린다
+		if (HasEnded)
+		{
+			Debug.LogError($"{Name}: 끝난 뒤에 Fail({error.Message})을 불렀습니다. Fail은 OnStart, OnTick에서만 부릅니다.");
+			return;
+		}
+
+		if (requestedError != null) return;
+
+		error.SourceName = Name;
+		requestedError = error;
+	}
+
+	/// <summary>
+	/// 이 함수를 에러 없이 일찍 끝낸다. OnStart나 OnTick에서 부른다.<br/>
+	/// 그 틱이 끝날 때 OnEnd가 불리고, 사용자 정의 함수 안이었다면 다음 블록으로 넘어간다.
+	/// </summary>
+	protected void Stop()
+	{
+		if (HasEnded)
+		{
+			Debug.LogError($"{Name}: 끝난 뒤에 Stop()을 불렀습니다. Stop은 OnStart, OnTick에서만 부릅니다.");
+			return;
+		}
+
+		stopRequested = true;
+	}
 }

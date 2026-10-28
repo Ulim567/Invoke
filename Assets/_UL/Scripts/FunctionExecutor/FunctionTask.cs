@@ -11,14 +11,16 @@ public enum FunctionTaskState
 }
 
 /// <summary>
-/// 작업이 끝난 이유. 외부 중단과 오버플로는 해당 기능을 만들 때 쓴다.
+/// 작업이 끝난 이유. Failed이면 어떤 실패였는지 FunctionTask.Failure로 확인한다.
 /// </summary>
+// 실패 종류마다 값을 두지 않는다. 실패 종류 목록(FunctionFailure)과 두 군데에서 함께 늘려야 하는 일을 막기 위함
 public enum FunctionTaskEndReason
 {
 	None,
 	Completed,
+	// 실행 중단 공격으로 끊겼다. 작업 자신의 실패가 아니므로 Failed와 나눈다
 	Interrupted,
-	Overflow,
+	Failed,
 }
 
 /// <summary>
@@ -34,6 +36,9 @@ public class FunctionTask
 {
 	// 실행 중인 함수 블록의 복사본. 안에 든 블록들도 이 블록이 실행한다
 	readonly FunctionBlock function;
+	// 실패한 블록이 기록한 실패 종류. 바깥에는 Failure로, 실패로 끝났을 때만 보여 준다
+	// null을 쓰는 이유: enum 기본값은 첫 값인 Overflow라서, 기록하지 않았는데도 Overflow로 보이기 때문
+	FunctionFailure? recordedFailure;
 
 	/// <summary>
 	/// 이 작업을 시전한 캐릭터.
@@ -56,6 +61,18 @@ public class FunctionTask
 
 	public bool IsEnded => State == FunctionTaskState.Ended;
 
+	/// <summary>
+	/// 실패로 끝났으면 true. 실패했는지는 이 값으로 확인한다.
+	/// </summary>
+	public bool IsFailed => EndReason == FunctionTaskEndReason.Failed;
+
+	/// <summary>
+	/// 실패로 끝났을 때 어떤 실패였는지. 실패로 끝나지 않았으면 null이다.
+	/// </summary>
+	// 기록한 값을 그대로 보여 주지 않고 IsFailed일 때만 보여 준다
+	// 이후 Java의 try처럼 실패를 잡고 계속 진행해 Completed로 끝나는 경우에도, 이 값만 보고 실패로 오해하지 않게 하기 위함
+	public FunctionFailure? Failure => IsFailed ? recordedFailure : null;
+
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	internal FunctionTask(FunctionExecutor executor, ProcessMemory memory, FunctionBlock function)
 	{
@@ -77,10 +94,19 @@ public class FunctionTask
 		BlockResult result = function.Execute(this);
 		if (result == BlockResult.Running) return;
 
-		// 오버플로가 났으면 쌓여 있던 함수들은 Execute 안에서 이미 끊기며 메모리를 돌려줬다
-		// 언어별 처리(C는 모든 작업 중단 등)는 이후 이슈에서 실행기에 추가하고, 지금은 이 작업만 끝낸다
-		if (result == BlockResult.Overflow) End(FunctionTaskEndReason.Overflow);
+		// 실패했으면 쌓여 있던 함수들은 Execute 안에서 이미 끊기며 메모리를 돌려줬다
+		// 무엇을 할지(이 작업만 끝낼지, C처럼 모든 작업을 끝낼지)는 실행기가 언어 규칙 표를 보고 정한다
+		// Failed를 돌려준 블록은 반드시 RecordFailure를 먼저 부른다. 빠뜨렸으면 Value가 예외를 던져 바로 드러난다
+		if (result == BlockResult.Failed) Executor.HandleFailure(this, recordedFailure.Value);
 		else End(FunctionTaskEndReason.Completed);
+	}
+
+	/// <summary>
+	/// 실패한 블록이 그 자리에서 실패 종류를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.
+	/// </summary>
+	internal void RecordFailure(FunctionFailure failure)
+	{
+		recordedFailure = failure;
 	}
 
 	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다
@@ -93,7 +119,8 @@ public class FunctionTask
 		End(FunctionTaskEndReason.Interrupted);
 	}
 
-	void End(FunctionTaskEndReason reason)
+	// 실행기가 실패를 처리하며 이 작업을 끝낼 때도 부른다
+	internal void End(FunctionTaskEndReason reason)
 	{
 		State = FunctionTaskState.Ended;
 		EndReason = reason;

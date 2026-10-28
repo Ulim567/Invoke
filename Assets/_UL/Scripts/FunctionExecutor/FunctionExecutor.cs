@@ -24,6 +24,9 @@ public class FunctionExecutor : MonoBehaviour
 	[SerializeField, Min(1), Tooltip("1틱이 FixedUpdate 몇 번인지")]
 	int fixedUpdatesPerTick = 1;
 
+	[SerializeField, Tooltip("이 캐릭터 언어의 실패 처리 표")]
+	LanguageRule languageRule;
+
 	// 진행 중인 작업. 틱마다 이 목록의 작업만 진행하며, 시전한 순서대로 쌓인다
 	readonly List<FunctionTask> tasks = new List<FunctionTask>();
 	// 다음 틱이 시작되기를 기다리는 작업. Cast는 항상 여기에 넣고, 다음 틱이 시작될 때 tasks로 옮긴다
@@ -44,7 +47,7 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<FunctionTask> TaskStarted;
 
 	/// <summary>
-	/// 작업이 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 task.EndReason으로 확인한다.
+	/// 작업이 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 task.EndReason으로, 실패했으면 실패 종류는 task.Failure로 확인한다.
 	/// </summary>
 	public event Action<FunctionTask> TaskEnded;
 
@@ -74,9 +77,49 @@ public class FunctionExecutor : MonoBehaviour
 			pendingTasks[i].Interrupt();
 	}
 
+	/// <summary>
+	/// 작업이 실패했을 때 그 작업이 부른다. 언어 규칙 표에서 처리를 찾아 실행한다.
+	/// </summary>
+	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
+	internal void HandleFailure(FunctionTask task, FunctionFailure failure)
+	{
+		switch (FindHandling(task, failure))
+		{
+			case FailureHandling.EndTask:
+				task.End(FunctionTaskEndReason.Failed);
+				break;
+		}
+	}
+
+	FailureHandling FindHandling(FunctionTask task, FunctionFailure failure)
+	{
+		if (languageRule != null && languageRule.TryGetHandling(failure, out FailureHandling handling)) return handling;
+
+		// 파일이 없는 경우는 Awake에서 이미 알렸다. 표에 빠진 줄은 어느 작업에서 났는지 알 수 있도록 실제로 났을 때 한 번 더 알린다
+		if (languageRule != null)
+			Debug.LogError($"{languageRule.name}: 실패 종류 {failure}의 처리가 표에 없습니다. 작업 {task.Name}만 끝냅니다.", languageRule);
+
+		// 예외를 던지지 않고 그 작업만 끝낸다. 예외를 던지면 이번 틱의 나머지 작업이 진행되지 않고, 끝난 작업도 목록에서 빠지지 않기 때문
+		return FailureHandling.EndTask;
+	}
+
 	void Awake()
 	{
 		memory = GetComponent<ProcessMemory>();
+		CheckLanguageRule();
+	}
+
+	// 그 실패가 실제로 나기 전에, Play를 시작하자마자 표의 문제를 알리기 위함
+	void CheckLanguageRule()
+	{
+		if (languageRule == null)
+		{
+			Debug.LogError($"{name}: FunctionExecutor에 언어 규칙 파일이 연결되지 않았습니다. 모든 실패를 그 작업만 끝내는 것으로 처리합니다.", this);
+			return;
+		}
+
+		foreach (FunctionFailure failure in languageRule.FindMissingFailures())
+			Debug.LogError($"{languageRule.name}: 실패 종류 {failure}의 처리가 표에 없습니다.", languageRule);
 	}
 
 	void FixedUpdate()

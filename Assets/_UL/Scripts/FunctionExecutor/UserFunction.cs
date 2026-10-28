@@ -58,8 +58,8 @@ public class UserFunction : FunctionBlock
 
 		runningBlock = null;
 
-		// 안쪽에서 오버플로가 났으면 이 함수도 끝까지 실행하지 못하므로 바깥에 그대로 알린다
-		if (result == BlockResult.Overflow) return BlockResult.Overflow;
+		// 안쪽에서 실패했으면 이 함수도 끝까지 실행하지 못하므로 바깥에 그대로 알린다
+		if (result == BlockResult.Failed) return BlockResult.Failed;
 
 		// 안쪽에서 return을 만났으면 남은 블록을 실행하지 않는다. return은 이 함수에서 멈추므로 바깥에는 Done으로 알린다
 		if (result == BlockResult.Returned) return BlockResult.Done;

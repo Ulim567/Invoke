@@ -9,8 +9,9 @@ public enum BlockResult
 	Done,
 	// return을 만나 끝났다. 이 블록을 담은 함수도 남은 블록을 실행하지 않고 끝나야 한다
 	Returned,
-	// 스택이 모자라 실행하지 못했다. 바깥 함수들도 끝까지 실행하지 못하고 끝난다
-	Overflow,
+	// 실패해서 실행하지 못했다. 바깥 함수들도 끝까지 실행하지 못하고 끝난다
+	// 실패 종류마다 값을 따로 두지 않는다. 종류는 실패한 블록이 FunctionTask.RecordFailure로 기록하므로, 종류가 늘어도 블록 결과를 받는 쪽은 고치지 않는다
+	Failed,
 }
 
 /// <summary>
@@ -18,7 +19,7 @@ public enum BlockResult
 /// <para>
 /// 실행 방법<br/>
 /// - 실행기가 틱마다 Execute를 한 번 부른다. Execute 한 번이 1틱이다.<br/>
-/// - 처음 실행될 때 OnStart, 끝까지 실행했을 때 OnEnd, 도중에 끊겼을 때(오버플로 포함) OnCancel이 한 번씩 불린다.
+/// - 처음 실행될 때 OnStart, 끝까지 실행했을 때 OnEnd, 도중에 끊겼을 때(실패 포함) OnCancel이 한 번씩 불린다.
 /// </para>
 /// <para>
 /// 복사<br/>
@@ -42,7 +43,8 @@ public abstract class Block
 			if (!AllocateMemory(task))
 			{
 				ended = true;
-				return BlockResult.Overflow;
+				task.RecordFailure(FunctionFailure.Overflow);
+				return BlockResult.Failed;
 			}
 
 			started = true;
@@ -53,8 +55,8 @@ public abstract class Block
 		if (result == BlockResult.Running) return result;
 
 		ended = true;
-		// 안쪽에서 오버플로가 나면 이 블록도 끝까지 실행하지 못한 것이므로 끊긴 것으로 정리한다
-		if (result == BlockResult.Overflow) OnCancel(task);
+		// 안쪽에서 실패하면 이 블록도 끝까지 실행하지 못한 것이므로 끊긴 것으로 정리한다
+		if (result == BlockResult.Failed) OnCancel(task);
 		else OnEnd(task);
 
 		// 함수가 끝나는 즉시 프레임을 반환한다. 실제 프로그램에서 return하는 순간 프레임이 빠지는 것과 같다

@@ -46,8 +46,8 @@ public class TestRepeatBlock : Block
 
 		runningBlock = null;
 
-		// 오버플로와 return은 반복을 멈추고 바깥에 그대로 알린다. return이면 바깥 함수도 남은 블록을 실행하지 않는다
-		if (result == BlockResult.Overflow || result == BlockResult.Returned) return result;
+		// 실패와 return은 반복을 멈추고 바깥에 그대로 알린다. return이면 바깥 함수도 남은 블록을 실행하지 않는다
+		if (result == BlockResult.Failed || result == BlockResult.Returned) return result;
 
 		doneCount++;
 		return doneCount >= count ? BlockResult.Done : BlockResult.Running;

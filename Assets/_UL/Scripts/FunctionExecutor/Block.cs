@@ -32,6 +32,9 @@ public abstract class Block
 	bool started;
 	bool ended;
 
+	// 이 블록이 끝났는지. OnEnd, OnCancel이 불릴 때는 이미 true다
+	internal bool HasEnded => ended;
+
 	/// <summary>
 	/// 이 블록을 1틱 실행한다. 실행기와 바깥 블록만 부른다.
 	/// </summary>

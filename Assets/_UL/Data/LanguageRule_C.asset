@@ -17,3 +17,5 @@ MonoBehaviour:
     handling: 0
   - failure: 1
     handling: 1
+  - failure: 2
+    handling: 0

@@ -12,6 +12,9 @@ public enum FunctionFailure
 	Overflow,
 	// 시전하는 순간 남은 메모리가 그 함수의 프레임 크기보다 적었다
 	NotEnoughMemory,
+	// 스킬 구현자가 PredefinedFunction.Fail로 에러를 냈다. 어떤 에러인지는 FunctionTask.Error로 확인한다
+	// 에러 종류마다 값을 두지 않는다. 스킬 구현자가 에러 클래스를 새로 만들어도 이 목록과 언어 규칙 표는 고치지 않게 하기 위함
+	SkillFailed,
 }
 
 /// <summary>

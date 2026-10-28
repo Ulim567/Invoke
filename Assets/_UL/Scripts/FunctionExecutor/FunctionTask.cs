@@ -39,6 +39,8 @@ public class FunctionTask
 	// 실패한 블록이 기록한 실패 종류. 바깥에는 Failure로, 실패로 끝났을 때만 보여 준다
 	// null을 쓰는 이유: enum 기본값은 첫 값인 Overflow라서, 기록하지 않았는데도 Overflow로 보이기 때문
 	FunctionFailure? recordedFailure;
+	// 스킬이 Fail로 낸 에러. 실패 종류가 SkillFailed일 때만 있다
+	SkillError recordedError;
 
 	/// <summary>
 	/// 이 작업을 시전한 캐릭터.
@@ -73,6 +75,12 @@ public class FunctionTask
 	// 이후 Java의 try처럼 실패를 잡고 계속 진행해 Completed로 끝나는 경우에도, 이 값만 보고 실패로 오해하지 않게 하기 위함
 	public FunctionFailure? Failure => IsFailed ? recordedFailure : null;
 
+	/// <summary>
+	/// 스킬이 낸 에러로 끝났을 때 그 에러(Failure가 SkillFailed일 때). 그 밖에는 null이다.
+	/// </summary>
+	// Failure와 같은 이유로 실패로 끝났을 때만 보여 준다
+	public SkillError Error => IsFailed ? recordedError : null;
+
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	internal FunctionTask(FunctionExecutor executor, ProcessMemory memory, FunctionBlock function)
 	{
@@ -102,11 +110,13 @@ public class FunctionTask
 	}
 
 	/// <summary>
-	/// 실패한 블록이 그 자리에서 실패 종류를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.
+	/// 실패한 블록이 그 자리에서 실패 종류를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
+	/// 스킬이 Fail로 낸 에러이면 error도 함께 넘긴다.
 	/// </summary>
-	internal void RecordFailure(FunctionFailure failure)
+	internal void RecordFailure(FunctionFailure failure, SkillError error = null)
 	{
 		recordedFailure = failure;
+		recordedError = error;
 	}
 
 	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다

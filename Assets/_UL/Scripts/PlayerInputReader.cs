@@ -65,6 +65,7 @@ public class PlayerInputReader : NetworkBehaviour
 	/// <summary>
 	/// 슬롯을 누르고 있는 동안 이번 프레임에 → 를 누르면 1, ← 를 누르면 -1, 그 밖에는 0.
 	/// 슬롯을 누르고 있지 않으면 항상 0이다.
+	/// 슬롯을 누르는 동안 Player 묶음이 꺼져 있어야 ← → 를 받는다. 켜져 있으면 Move가 ← → 를 먼저 가져가 항상 0이 된다. (Shortcut Keys Consume Input)
 	/// </summary>
 	public int TargetStep => !IsSlotHeld ? 0
 		: (targetNext.WasPressedThisFrame() ? 1 : 0) - (targetPrev.WasPressedThisFrame() ? 1 : 0);

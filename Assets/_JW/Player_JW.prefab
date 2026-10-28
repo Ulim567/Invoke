@@ -114,6 +114,15 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2690987339819865046}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 877132152123956791}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8410677118024237602}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8583556769451416292}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -141,6 +150,7 @@ MonoBehaviour:
   bodyCollider: {fileID: 2850566709390127241}
   input: {fileID: 1965934584990814665}
   stats: {fileID: 5698767611976514815}
+  health: {fileID: 877132152123956791}
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
@@ -213,7 +223,7 @@ MonoBehaviour:
     m_Bits: 512
   input: {fileID: 1965934584990814665}
   executor: {fileID: 1518876502040340094}
-  health: {fileID: 0}
+  health: {fileID: 877132152123956791}
 --- !u!114 &2690987339819865046
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -227,6 +237,53 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SlotTargetMarker
   color: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+--- !u!114 &877132152123956791
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c6fab3c7c6687a43a66a28de95b5e68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  hitStunTime: 0.3
+  invincibleTime: 1
+  hideDelay: 1
+  respawnDelay: 3
+--- !u!114 &8410677118024237602
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26cf859405427446a87580d7f6a0706c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerFacingView
+  movement: {fileID: 5197172094904820648}
+  spriteRenderer: {fileID: 8670862466287496158}
+--- !u!114 &8583556769451416292
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c210399716e8476397f20cf8191caca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerCameraFollow
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  offset: {x: 0, y: 2}
+  cameraZ: -10
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
@@ -257,5 +314,10 @@ MonoBehaviour:
 --- !u!50 &7079417861596757320 stripped
 Rigidbody2D:
   m_CorrespondingSourceObject: {fileID: 6317378190948175376, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+  m_PrefabInstance: {fileID: 3860975724450263896}
+  m_PrefabAsset: {fileID: 0}
+--- !u!212 &8670862466287496158 stripped
+SpriteRenderer:
+  m_CorrespondingSourceObject: {fileID: 5603014008515254406, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
   m_PrefabInstance: {fileID: 3860975724450263896}
   m_PrefabAsset: {fileID: 0}

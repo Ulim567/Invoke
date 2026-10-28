@@ -8,6 +8,8 @@ using Mirror;
 /// - 점프는 바닥에 서 있을 때만 된다. 바닥 판정은 콜라이더 발밑의 얇은 상자로 한다.<br/>
 /// - 점프는 힘이 아니라 높이(유닛)로 정한다. 중력(Rigidbody2D Gravity Scale)을 바꿔도 같은 높이로 뛴다.<br/>
 /// - 떨어질 때는 중력을 더 줘서 묵직하게 떨어진다.<br/>
+/// - 바라보는 방향(Facing)을 MoveX로 정한다. 멈추면 마지막 방향을 유지한다. 그림 뒤집기는 PlayerFacingView가 한다.<br/>
+/// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 움직이거나 점프하지 않는다.<br/>
 /// - 입력은 PlayerInputReader에서만 읽는다.
 /// </para>
 /// </summary>
@@ -25,6 +27,8 @@ public class PlayerMovement : NetworkBehaviour
 	[SerializeField] private Collider2D bodyCollider;
 	[SerializeField] private PlayerInputReader input;
 	[SerializeField] private PlayerStats stats;
+	[Tooltip("비워 두면 경직·사망 검사를 하지 않는다")]
+	[SerializeField] private PlayerHealth health;
 
 	[Header("바닥 판정")]
 	[Tooltip("바닥으로 인정할 레이어 (Ground, Platform)")]
@@ -33,6 +37,13 @@ public class PlayerMovement : NetworkBehaviour
 	[SerializeField, Range(0.1f, 1f)] private float groundCheckWidthRatio = 0.9f;
 	[Tooltip("판정 상자 높이 (유닛). 발밑에서 위아래로 이 값의 절반씩 걸친다.")]
 	[SerializeField, Min(0.01f)] private float groundCheckHeight = 0.1f;
+
+	/// <summary>
+	/// 바라보는 방향. 오른쪽 1, 왼쪽 -1. 처음에는 오른쪽이다.
+	/// 스킬이 앞쪽 방향(판정, 투사체)을 정할 때, 그림 뒤집기(PlayerFacingView)가 읽는다.
+	/// </summary>
+	// TODO: 네트워크를 붙이면 [SyncVar]로 다른 플레이어 화면에도 맞춘다 (코드 작성 규칙 2)
+	public int Facing { get; private set; } = 1;
 
 	/// <summary>
 	/// 지금 바닥에 서 있으면 true. 올라가는 중(발판을 아래에서 뚫고 오르는 중 등)에는 false다.
@@ -56,6 +67,7 @@ public class PlayerMovement : NetworkBehaviour
 		bodyCollider = GetComponent<Collider2D>();
 		input = GetComponent<PlayerInputReader>();
 		stats = GetComponent<PlayerStats>();
+		health = GetComponent<PlayerHealth>();
 		groundLayers = LayerMask.GetMask("Ground", "Platform");
 	}
 
@@ -73,12 +85,28 @@ public class PlayerMovement : NetworkBehaviour
 
 	void Move()
 	{
-		body.linearVelocity = new Vector2(input.MoveX * stats.MoveSpeed, body.linearVelocity.y);
+		// 경직·사망 중에는 좌우 입력을 받지 않고 멈춘다 (떨어지는 것은 그대로)
+		if (health != null && !health.CanAct)
+		{
+			body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+			return;
+		}
+
+		float moveX = input.MoveX;
+		body.linearVelocity = new Vector2(moveX * stats.MoveSpeed, body.linearVelocity.y);
+		UpdateFacing(moveX);
 
 		if (input.JumpPressed && IsGrounded)
 		{
 			Jump();
 		}
+	}
+
+	// 움직이는 방향을 바라본다. 멈추면(0) 마지막 방향을 유지한다
+	void UpdateFacing(float moveX)
+	{
+		if (moveX > 0f) Facing = 1;
+		else if (moveX < 0f) Facing = -1;
 	}
 
 	// 지금 중력에서 jumpHeight만큼 오르는 데 필요한 속도를 바로 넣는다 (v = √(2gh))

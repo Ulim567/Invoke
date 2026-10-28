@@ -25,7 +25,7 @@
   - Trigger가 아닌 Collider(몸)에 닿았을 때만 피해를 준다.
 - 몬스터 공격 = 공격 형태 + 효과
   - 효과는 `MonsterAttackData` 파일에 목록으로 담는다. 맞으면 위에서부터 차례로 적용한다.
-  - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `IDamageable.TakeDamage`로 주고, 나머지 효과는 받을 시스템이 아직 없어서 로그만 남긴다.
+  - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 나머지 효과는 받을 시스템이 아직 없어서 로그만 남긴다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
 
@@ -108,11 +108,10 @@
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage(int)`로 데미지를 준다.
-  - 배율을 곱한 데미지는 데미지 계산 쪽에서 반올림해 정수로 바꾼다. 0 이하면 데미지를 주지 않는다.
-  - 몬스터 공격의 체력 피해도 데미지 계산을 거친다. 데미지 계산 함수가 dev에 들어오면 김도훈이 `MonsterAttackResolver`에서 그 함수를 불러 나온 정수로 `TakeDamage`를 부르도록 바꾼다. 그 전까지는 `Amount`로 바로 `TakeDamage`를 부른다.
-  - 처형(체력 2% 이하, 보스 제외)은 `Monster.IsBoss`, `Hp`, `MaxHp`를 읽는다.
+  - 배율을 곱한 데미지는 데미지 계산 쪽에서 반올림해 정수로 바꾼다. 계산 값이 양수면 최소 1, 0 이하면 0이고 `TakeDamage`가 0을 무시한다.
+  - 몬스터 공격의 체력 피해도 데미지 계산을 거친다. `MonsterAttackResolver`가 `DamageCalculator.Calculate(DamageRequest.Flat(effect.Amount))`를 부른다. 몬스터는 공격력 능력치가 없어서 `Amount`를 그대로 넘기고, 몬스터 공격은 처형하지 않으므로 대상 정보는 넘기지 않는다.
+  - 처형(체력 2% 이하, 보스 제외)은 `DamageTarget.FromMonster`로 `Monster.IsBoss`, `Hp`, `MaxHp`를 읽는다 (#42).
 - 박진우와 정해야 할 것
-  - 몬스터 공격이 데미지 계산 함수에 넘길 값 (몬스터는 공격력 능력치가 없어서 공격 데이터의 `Amount`와 맞은 대상만 넘길 수 있다)
   - 패링이 `MonsterProjectile`을 잡았을 때 투사체를 없애는 방법, 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지 (패링 이슈에서 정함)
 - 임혜원과 정해야 할 것
   - 피격·사망 연출을 `HitEffectPlayed`, `DeathEffectPlayed` event로 붙이는지

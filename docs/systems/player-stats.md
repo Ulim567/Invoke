@@ -58,5 +58,5 @@
   - `FunctionExecutor`가 쿨타임이 시작될 때 `ApplyCooldownReduction`을 한 번 적용하고, tick 수로 반올림한다 (#38)
 - 이우림과 정해야 할 것
   - 함수 실행기가 `PredefinedFunction.TickCount`에 `ApplyAttackSpeed`를 적용하는지
-- 박진우와 정해야 할 것
-  - 데미지 계산에서 `AttackPower`를 읽는지
+- 박진우와 정한 것
+  - 데미지 계산의 공격력은 스킬이 `PlayerStats.AttackPower`를 읽어 `DamageRequest`에 넣는다 (#41)

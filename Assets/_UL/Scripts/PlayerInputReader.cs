@@ -13,16 +13,19 @@ using UnityEngine.InputSystem;
 /// </para>
 /// <para>
 /// 이동 담당: MoveX, JumpPressed, DashPressed, DropPressed<br/>
-/// 시전 담당: HeldSlot, TargetStep, SlotPressed(), SlotReleased()
+/// 시전 담당: HeldSlot, TargetStep, SlotPressed(), SlotReleased()<br/>
+/// 액션 맵 활성화·비활성화: SetPlayerMapEnabled(), SetAttackMapEnabled()
 /// </para>
 /// <para>
-/// Player·Attack 묶음을 켜고 끄는 일(UI를 열 때, 공격 불가 지역 등)은 이 컴포넌트가 하지 않는다.
+/// 이 컴포넌트는 Player·Attack 액션 맵을 활성화·비활성화하는 함수만 제공한다.
+/// 언제 부를지(UI를 열 때, 공격 불가 지역, 슬롯 키를 누르는 동안 등)와 여러 이유가 겹칠 때의 판단은 부르는 쪽이 한다.
 /// </para>
 /// </summary>
 public class PlayerInputReader : NetworkBehaviour
 {
 	const int SlotCount = 8;
 
+	InputActionMap playerMap, attackMap;
 	InputAction move, jump, dash, down, targetPrev, targetNext;
 	readonly InputAction[] slots = new InputAction[SlotCount];
 
@@ -65,7 +68,7 @@ public class PlayerInputReader : NetworkBehaviour
 	/// <summary>
 	/// 슬롯을 누르고 있는 동안 이번 프레임에 → 를 누르면 1, ← 를 누르면 -1, 그 밖에는 0.
 	/// 슬롯을 누르고 있지 않으면 항상 0이다.
-	/// 슬롯을 누르는 동안 Player 묶음이 꺼져 있어야 ← → 를 받는다. 켜져 있으면 Move가 ← → 를 먼저 가져가 항상 0이 된다. (Shortcut Keys Consume Input)
+	/// 슬롯을 누르는 동안 Player 액션 맵이 비활성화되어 있어야 ← → 를 받는다. 활성화되어 있으면 Move가 ← → 를 먼저 가져가 항상 0이 된다. (Shortcut Keys Consume Input)
 	/// </summary>
 	public int TargetStep => !IsSlotHeld ? 0
 		: (targetNext.WasPressedThisFrame() ? 1 : 0) - (targetPrev.WasPressedThisFrame() ? 1 : 0);
@@ -80,17 +83,47 @@ public class PlayerInputReader : NetworkBehaviour
 	/// </summary>
 	public bool SlotReleased(int index) => slots[index].WasReleasedThisFrame();
 
+	/// <summary>
+	/// Player 액션 맵(Move, Jump, Dash, Down)을 활성화하거나 비활성화한다.<br/>
+	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유(UI, 슬롯 키 등)가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
+	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
+	/// </summary>
+	public void SetPlayerMapEnabled(bool enabled)
+	{
+		// Project-wide Actions는 모든 플레이어 오브젝트가 함께 쓰므로, 다른 플레이어의 캐릭터에서 불려도 내 입력이 바뀌지 않게 막는다
+		if (!isLocalPlayer) return;
+		SetMapEnabled(playerMap, enabled);
+	}
+
+	/// <summary>
+	/// Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext)을 활성화하거나 비활성화한다.<br/>
+	/// 비활성화하면 누르고 있던 슬롯도 해제된다 (HeldSlot이 -1).<br/>
+	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
+	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
+	/// </summary>
+	public void SetAttackMapEnabled(bool enabled)
+	{
+		if (!isLocalPlayer) return;
+		SetMapEnabled(attackMap, enabled);
+	}
+
+	static void SetMapEnabled(InputActionMap map, bool enabled)
+	{
+		if (enabled) map.Enable();
+		else map.Disable();
+	}
+
 	public override void OnStartLocalPlayer()
 	{
 		base.OnStartLocalPlayer();
 
-		InputActionMap playerMap = InputSystem.actions.FindActionMap("Player", true);
+		playerMap = InputSystem.actions.FindActionMap("Player", true);
 		move = playerMap.FindAction("Move", true);
 		jump = playerMap.FindAction("Jump", true);
 		dash = playerMap.FindAction("Dash", true);
 		down = playerMap.FindAction("Down", true);
 
-		InputActionMap attackMap = InputSystem.actions.FindActionMap("Attack", true);
+		attackMap = InputSystem.actions.FindActionMap("Attack", true);
 		targetPrev = attackMap.FindAction("TargetPrev", true);
 		targetNext = attackMap.FindAction("TargetNext", true);
 
@@ -122,5 +155,9 @@ public class PlayerInputReader : NetworkBehaviour
 			slots[i].canceled -= onSlotCanceled[i];
 		}
 		heldSlot = -1;
+
+		// 액션 맵이 비활성화된 채로 캐릭터가 사라지면 Project-wide Actions에 그 상태가 남아, 재접속한 캐릭터가 처음부터 움직이지 못한다
+		playerMap?.Enable();
+		attackMap?.Enable();
 	}
 }

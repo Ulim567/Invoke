@@ -44,7 +44,7 @@ public class UserFunction : FunctionBlock
 			// 조건문, for, while 블록이 생기면 그 블록들도 안쪽 블록을 실행하므로 같은 처리가 필요하다. 그때 이 처리를 한 함수로 빼서 함께 쓴다
 			if (next is PredefinedFunction function && function.IsAsync)
 			{
-				task.Executor.Cast(function);
+				task.Executor.CastUnchecked(function);
 				blockIndex++;
 				return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
 			}

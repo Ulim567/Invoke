@@ -18,4 +18,5 @@ public static class PredefinedFunctionIds
 	public const string TestFunctionA = "test.function_a";
 	public const string TestFunctionB = "test.function_b";
 	public const string TestAsyncFunction = "test.async_function";
+	public const string TestHeavyFunction = "test.heavy_function";
 }

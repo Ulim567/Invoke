@@ -20,12 +20,14 @@ public class FunctionExecutorLogger : MonoBehaviour
 	{
 		executor.TaskStarted += LogStarted;
 		executor.TaskEnded += LogEnded;
+		executor.CastRejected += LogRejected;
 	}
 
 	void OnDisable()
 	{
 		executor.TaskStarted -= LogStarted;
 		executor.TaskEnded -= LogEnded;
+		executor.CastRejected -= LogRejected;
 	}
 
 	void LogStarted(FunctionTask task)
@@ -39,5 +41,11 @@ public class FunctionExecutorLogger : MonoBehaviour
 		string reason = task.IsFailed ? $"{task.EndReason}: {task.Failure}" : task.EndReason.ToString();
 		// 끝난 작업을 모두 진행한 뒤에 불리므로, 이 틱이 끝난 시점의 스택 사용량이 찍힌다
 		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 끝 ({reason}) / 스택 {memory.StackUsed}/{memory.Capacity}");
+	}
+
+	void LogRejected(FunctionBlock function, FunctionFailure failure)
+	{
+		// 거부는 게임 속 실패이므로 오류가 아니라 일반 로그로 찍는다
+		Debug.Log($"[틱 {executor.CurrentTick}] {name}: {function.Name} 시전 거부 ({failure}) / 남은 칸 {memory.Free}, 프레임 {function.FrameSize}");
 	}
 }

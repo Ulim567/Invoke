@@ -33,6 +33,10 @@ public class FunctionExecutor : MonoBehaviour
 	// 틱 도중에 tasks가 바뀌면 작업을 건너뛰거나 두 번 진행할 수 있고, 새 작업이 끝나는 틱도 생긴 위치에 따라 달라지기 때문
 	readonly List<FunctionTask> pendingTasks = new List<FunctionTask>();
 
+	// 시전할 때 차례로 검사하는 공통 조건. 앞의 조건에서 실패하면 뒤의 조건은 검사하지 않는다
+	// 새 조건(쿨타임 등)은 Awake에서 이 목록에 추가한다
+	readonly List<CastCondition> castConditions = new List<CastCondition>();
+
 	int fixedUpdateCount;
 	ProcessMemory memory;
 
@@ -52,10 +56,36 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<FunctionTask> TaskEnded;
 
 	/// <summary>
+	/// 시전 전 검사에 걸려 시전하지 않았을 때 불린다. 거부한 함수와 실패 종류를 넘긴다.
+	/// </summary>
+	public event Action<FunctionBlock, FunctionFailure> CastRejected;
+
+	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
-	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.
+	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
+	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
 	/// </summary>
 	public FunctionTask Cast(FunctionBlock function)
+	{
+		// 빈 슬롯은 시전하는 쪽(키 입력 처리)이 걸러 Cast를 부르지 않는다. 그래서 null은 코드 실수로 보고 바로 드러나게 한다
+		if (function == null) throw new ArgumentNullException(nameof(function));
+
+		foreach (CastCondition condition in castConditions)
+		{
+			if (condition.Check(function, out FunctionFailure failure)) continue;
+
+			HandleCastFailure(function, failure);
+			return null;
+		}
+
+		return CastUnchecked(function);
+	}
+
+	/// <summary>
+	/// 시전 전 검사 없이 작업을 만든다. 사용자 정의 함수가 안쪽의 비동기 함수를 새 작업으로 시전할 때 쓴다.
+	/// </summary>
+	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
+	internal FunctionTask CastUnchecked(FunctionBlock function)
 	{
 		FunctionTask task = new FunctionTask(this, memory, (FunctionBlock)function.Clone());
 		pendingTasks.Add(task);
@@ -83,29 +113,46 @@ public class FunctionExecutor : MonoBehaviour
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
 	internal void HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
-		switch (FindHandling(task, failure))
+		switch (FindHandling(task.Name, failure))
 		{
+			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
+			case FailureHandling.Reject:
 			case FailureHandling.EndTask:
 				task.End(FunctionTaskEndReason.Failed);
 				break;
 		}
 	}
 
-	FailureHandling FindHandling(FunctionTask task, FunctionFailure failure)
+	// 시전 전 검사에 걸렸을 때. 아직 작업이 없다
+	void HandleCastFailure(FunctionBlock function, FunctionFailure failure)
+	{
+		switch (FindHandling(function.Name, failure))
+		{
+			// 끝낼 작업이 아직 없으므로, 그 작업만 끝내는 처리도 시전하지 않는 것과 같다
+			// 재부팅처럼 시전 전에도 다른 일을 하는 처리가 생기면 여기에 case를 따로 둔다
+			case FailureHandling.Reject:
+			case FailureHandling.EndTask:
+				CastRejected?.Invoke(function, failure);
+				break;
+		}
+	}
+
+	FailureHandling FindHandling(string functionName, FunctionFailure failure)
 	{
 		if (languageRule != null && languageRule.TryGetHandling(failure, out FailureHandling handling)) return handling;
 
-		// 파일이 없는 경우는 Awake에서 이미 알렸다. 표에 빠진 줄은 어느 작업에서 났는지 알 수 있도록 실제로 났을 때 한 번 더 알린다
+		// 파일이 없는 경우는 Awake에서 이미 알렸다. 표에 빠진 줄은 어느 함수에서 났는지 알 수 있도록 실제로 났을 때 한 번 더 알린다
 		if (languageRule != null)
-			Debug.LogError($"{languageRule.name}: 실패 종류 {failure}의 처리가 표에 없습니다. 작업 {task.Name}만 끝냅니다.", languageRule);
+			Debug.LogError($"{languageRule.name}: 실패 종류 {failure}의 처리가 표에 없습니다. {functionName}을 EndTask로 처리합니다.", languageRule);
 
-		// 예외를 던지지 않고 그 작업만 끝낸다. 예외를 던지면 이번 틱의 나머지 작업이 진행되지 않고, 끝난 작업도 목록에서 빠지지 않기 때문
+		// 예외를 던지지 않고 EndTask로 처리한다. 예외를 던지면 이번 틱의 나머지 작업이 진행되지 않고, 끝난 작업도 목록에서 빠지지 않기 때문
 		return FailureHandling.EndTask;
 	}
 
 	void Awake()
 	{
 		memory = GetComponent<ProcessMemory>();
+		castConditions.Add(new MemoryCondition(memory));
 		CheckLanguageRule();
 	}
 
@@ -114,7 +161,7 @@ public class FunctionExecutor : MonoBehaviour
 	{
 		if (languageRule == null)
 		{
-			Debug.LogError($"{name}: FunctionExecutor에 언어 규칙 파일이 연결되지 않았습니다. 모든 실패를 그 작업만 끝내는 것으로 처리합니다.", this);
+			Debug.LogError($"{name}: FunctionExecutor에 언어 규칙 파일이 연결되지 않았습니다. 모든 실패를 EndTask로 처리합니다.", this);
 			return;
 		}
 

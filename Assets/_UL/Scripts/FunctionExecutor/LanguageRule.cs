@@ -15,6 +15,8 @@ public enum FunctionFailure
 	// 스킬 구현자가 PredefinedFunction.Fail로 에러를 냈다. 어떤 에러인지는 FunctionTask.Error로 확인한다
 	// 에러 종류마다 값을 두지 않는다. 스킬 구현자가 에러 클래스를 새로 만들어도 이 목록과 언어 규칙 표는 고치지 않게 하기 위함
 	SkillFailed,
+	// 시전한 함수가 아직 실행 중이거나 쿨타임 중이었다
+	OnCooldown,
 }
 
 /// <summary>

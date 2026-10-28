@@ -58,6 +58,10 @@ public class FunctionTask
 	// 이 작업을 만든 실행기. 사용자 정의 함수가 비동기 함수를 새 작업으로 시전할 때 쓴다
 	internal FunctionExecutor Executor { get; }
 
+	// 슬롯에서 시전할 때 넘긴 함수(원본). 이 작업이 끝나면 실행기가 이 함수의 쿨타임을 시작한다
+	// 함수 안의 비동기 시전으로 만든 작업은 null이다. 그 스킬의 쿨타임은 바깥 함수의 쿨타임에 이미 더해져 있기 때문
+	internal FunctionBlock CooldownSource { get; set; }
+
 	public FunctionTaskState State { get; private set; } = FunctionTaskState.Running;
 	public FunctionTaskEndReason EndReason { get; private set; } = FunctionTaskEndReason.None;
 

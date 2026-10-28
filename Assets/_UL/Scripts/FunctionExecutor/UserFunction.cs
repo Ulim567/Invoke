@@ -24,6 +24,21 @@ public class UserFunction : FunctionBlock
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
 
+	/// <summary>
+	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.
+	/// </summary>
+	// 반복문 같은 문법 블록 안의 함수는 아직 세지 않는다. 몇 번 실행될지 미리 알 수 없으므로 블록 실행 이슈에서 정한다
+	public override int CooldownTicks
+	{
+		get
+		{
+			int sum = 0;
+			foreach (Block block in Blocks)
+				if (block is FunctionBlock function) sum += function.CooldownTicks;
+			return sum;
+		}
+	}
+
 	public UserFunction(string name, params Block[] blocks)
 	{
 		Name = name;

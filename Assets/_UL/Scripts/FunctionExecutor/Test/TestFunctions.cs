@@ -92,3 +92,14 @@ public class TestStopFunction : PredefinedFunction
 		if (tick == 5) Stop();
 	}
 }
+
+/// <summary>
+/// 쿨타임 테스트용 함수. 10틱 동안 진행하고, 쿨타임은 20틱이다.
+/// </summary>
+public class TestCooldownFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestCooldownFunction;
+	public override string Name => "TestCooldownFunction";
+	public override int TickCount => 10;
+	public override int CooldownTicks => 20;
+}

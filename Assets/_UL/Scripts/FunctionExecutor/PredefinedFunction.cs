@@ -8,7 +8,7 @@ using UnityEngine;
 /// <para>
 /// 사용법 (docs/systems/predefined-function.md)<br/>
 /// - 이 클래스를 상속하고 Id, Name, TickCount를 정한다. Id는 PredefinedFunctionIds의 상수를 쓴다.<br/>
-/// - CodeSize, Parameters, ReturnType, LocalVariableCount, IsAsync는 기본값과 다를 때만 덮어쓴다.<br/>
+/// - CodeSize, Parameters, ReturnType, LocalVariableCount, IsAsync, CooldownTicks는 기본값과 다를 때만 덮어쓴다.<br/>
 /// - OnStart, OnTick, OnEnd, OnCancel 중 필요한 것만 덮어써서, 몇 번째 틱에 무엇을 할지 적는다. (예: 자세잡기 → 차징 → 발사)<br/>
 /// - 실행되는 것은 언제나 복사본이므로, 실행 중에 쓰는 값(예: 차징한 양)을 필드에 그대로 저장해도 된다.<br/>
 /// - OnStart나 OnTick에서 실행할 수 없는 상태를 발견하면 Fail(에러)로 에러를 내고, 에러 없이 일찍 끝내려면 Stop()을 부른다.<br/>

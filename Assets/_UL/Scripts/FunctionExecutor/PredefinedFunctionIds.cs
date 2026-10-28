@@ -22,4 +22,5 @@ public static class PredefinedFunctionIds
 	public const string TestAttackFunction = "test.attack_function";
 	public const string TestSummonedSwordFunction = "test.summoned_sword_function";
 	public const string TestStopFunction = "test.stop_function";
+	public const string TestCooldownFunction = "test.cooldown_function";
 }

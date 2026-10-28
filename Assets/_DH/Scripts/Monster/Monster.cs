@@ -23,6 +23,14 @@ public class Monster : MonoBehaviour, IDamageable
 	[SerializeField, Min(0f), Tooltip("사망 후 오브젝트를 없애기까지 기다리는 시간(초). 사망 연출이 보일 시간")]
 	float despawnDelay = 0.5f;
 
+	[SerializeField, Tooltip("보스면 체크한다. 처형(체력 2% 이하 즉사) 같은 보스 제외 규칙이 이 값을 본다")]
+	bool isBoss;
+
+	/// <summary>
+	/// 보스면 true (Inspector 값). 처형처럼 보스를 빼야 하는 규칙에서 읽는다.
+	/// </summary>
+	public bool IsBoss => isBoss;
+
 	/// <summary>
 	/// 최대 체력.
 	/// </summary>

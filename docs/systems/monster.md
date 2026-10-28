@@ -49,6 +49,7 @@
 | `Hp` | - | `int` | 지금 체력. 읽기만 한다. |
 | `MaxHp` | - | `int` | 최대 체력 (Inspector 값) |
 | `IsDead` | - | `bool` | 죽었으면 `true` |
+| `IsBoss` | - | `bool` | 보스면 `true` (Inspector 값). 처형처럼 보스를 빼는 규칙에서 읽는다. |
 | `Damaged` (event) | `int` (받은 데미지) | - | [로직] 체력이 줄었을 때 불린다. 보스 페이즈 전환처럼 체력에 따른 로직에 쓴다. |
 | `Died` (event) | - | - | [로직] 체력이 0이 된 순간 한 번 불린다. 드롭, 스포너 집계, 레이드 판정에 쓴다. |
 | `HitEffectPlayed` (event) | `int` (받은 데미지) | - | [연출] 피격 이펙트, 소리, 데미지 숫자 표시에 쓴다. |
@@ -105,10 +106,13 @@
 ## 맞춘 결과
 - 이우림과 정한 것
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
+- 박진우와 정한 것
+  - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage(int)`로 데미지를 준다.
+  - 배율을 곱한 데미지는 데미지 계산 쪽에서 반올림해 정수로 바꾼다. 0 이하면 데미지를 주지 않는다.
+  - 몬스터 공격의 체력 피해도 데미지 계산을 거친다. 데미지 계산 함수가 dev에 들어오면 김도훈이 `MonsterAttackResolver`에서 그 함수를 불러 나온 정수로 `TakeDamage`를 부르도록 바꾼다. 그 전까지는 `Amount`로 바로 `TakeDamage`를 부른다.
+  - 처형(체력 2% 이하, 보스 제외)은 `Monster.IsBoss`, `Hp`, `MaxHp`를 읽는다.
 - 박진우와 정해야 할 것
-  - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage`로 데미지를 주는지
-  - 배율을 곱한 데미지를 정수로 바꾸는 방법(반올림, 버림)과 그 일을 데미지 계산 쪽에서 하는지
-  - 몬스터 공격의 체력 피해를 데미지 계산에 거치게 할지, 거친다면 `MonsterAttackResolver`에서 무엇을 부를지
-  - 패링이 `MonsterProjectile`을 잡았을 때 투사체를 없애는 방법, 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지
+  - 몬스터 공격이 데미지 계산 함수에 넘길 값 (몬스터는 공격력 능력치가 없어서 공격 데이터의 `Amount`와 맞은 대상만 넘길 수 있다)
+  - 패링이 `MonsterProjectile`을 잡았을 때 투사체를 없애는 방법, 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지 (패링 이슈에서 정함)
 - 임혜원과 정해야 할 것
   - 피격·사망 연출을 `HitEffectPlayed`, `DeathEffectPlayed` event로 붙이는지

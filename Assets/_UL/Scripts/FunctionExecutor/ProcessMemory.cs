@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 캐릭터(프로세스) 하나의 메모리. 지금은 스택만 다룬다.<br/>
-/// 메모리 값은 이 컴포넌트만 바꾼다. 다른 스크립트는 TryAllocateStack, ReleaseStack을 부른다.
+/// 캐릭터(프로세스) 하나의 메모리. 스택과 힙의 칸 수를 센다.<br/>
+/// 메모리 값은 이 컴포넌트만 바꾼다. 다른 스크립트는 스택은 TryAllocateStack, ReleaseStack을 부르고, 힙은 Heap(HeapStorage)의 함수를 부른다.
 /// <para>
 /// 메모리 전체 크기는 같은 오브젝트에 붙은 PlayerStats의 MemorySize다.<br/>
 /// 메모리 크기가 줄어 스택 사용량보다 작아져도 실행 중인 함수는 끊지 않는다. 남은 칸이 0이 되어, 새로 시전한 함수만 오버플로로 끝난다.
@@ -12,7 +12,8 @@ using UnityEngine;
 /// 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, 스택과 힙은 각각 칸 수만 센다. 그래서 위아래 방향은 계산에 쓰지 않는다.
 /// </para>
 /// <para>
-/// 힙과 코드 영역은 이후 이슈에서 추가한다. 지금 HeapUsed는 남은 칸 계산에 들어갈 자리만 있고 항상 0이다.
+/// 힙은 여기서 칸 수만 센다. 어떤 객체가 그 칸을 쓰는지는 Heap(힙 객체 저장소)이 안다.<br/>
+/// 코드 영역은 이후 이슈에서 추가한다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(PlayerStats))]
@@ -32,9 +33,14 @@ public class ProcessMemory : MonoBehaviour
 	public int StackUsed { get; private set; }
 
 	/// <summary>
-	/// 지금 힙이 쓰고 있는 칸 수. 힙은 아직 없으므로 항상 0이다.
+	/// 지금 힙이 쓰고 있는 칸 수. 해제하지 않은 객체와 누수된 객체의 크기 합이다.
 	/// </summary>
 	public int HeapUsed { get; private set; }
+
+	/// <summary>
+	/// 이 캐릭터의 힙 객체 저장소. 스킬 코드가 힙에 올린 객체(소환검 등)를 포인터로 보관한다.
+	/// </summary>
+	public HeapStorage Heap { get; private set; }
 
 	/// <summary>
 	/// 남은 칸 수(Capacity - StackUsed - HeapUsed). 0보다 작아지지 않는다.
@@ -46,6 +52,7 @@ public class ProcessMemory : MonoBehaviour
 	void Awake()
 	{
 		stats = GetComponent<PlayerStats>();
+		Heap = new HeapStorage(this);
 	}
 
 	/// <summary>
@@ -65,5 +72,26 @@ public class ProcessMemory : MonoBehaviour
 	public void ReleaseStack(int size)
 	{
 		StackUsed -= size;
+	}
+
+	/// <summary>
+	/// 힙을 size칸 쓴다. 남은 칸이 모자라면 쓰지 않고 false를 돌려준다(malloc 실패).
+	/// </summary>
+	// 스택과 같은 Free를 본다. 스택과 힙이 한 영역을 함께 쓰므로, 둘의 합이 메모리 크기를 넘지 않게 하기 위함
+	// HeapStorage만 부르도록 internal로 둔다. 다른 스크립트가 칸 수만 바꾸면 HeapUsed가 저장소의 객체 크기 합과 어긋나, Clear를 불러도 0으로 돌아가지 않기 때문
+	internal bool TryAllocateHeap(int size)
+	{
+		if (size > Free) return false;
+
+		HeapUsed += size;
+		return true;
+	}
+
+	/// <summary>
+	/// 힙 size칸을 돌려준다. TryAllocateHeap으로 받은 만큼만 돌려준다.
+	/// </summary>
+	internal void ReleaseHeap(int size)
+	{
+		HeapUsed -= size;
 	}
 }

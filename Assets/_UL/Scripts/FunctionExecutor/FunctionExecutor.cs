@@ -249,6 +249,8 @@ public class FunctionExecutor : MonoBehaviour
 			if (!task.IsEnded) continue;
 
 			StartCooldown(task);
+			// TaskEnded보다 먼저 한다. 이벤트를 받은 쪽이 누수 여부까지 정해진 상태를 보게 하기 위함
+			memory.Heap.HandleTaskEnded(task);
 			TaskEnded?.Invoke(task);
 		}
 		tasks.RemoveAll(task => task.IsEnded);

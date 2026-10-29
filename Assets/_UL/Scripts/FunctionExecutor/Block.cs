@@ -31,9 +31,14 @@ public abstract class Block
 {
 	bool started;
 	bool ended;
+	bool cancelled;
 
 	// 이 블록이 끝났는지. OnEnd, OnCancel이 불릴 때는 이미 true다
 	internal bool HasEnded => ended;
+
+	// 이 블록이 끊겼는지. OnCancel이 불릴 때는 이미 true다
+	// 사전 정의 함수가 OnCancel 안에서 힙을 바꾸지 못하게 막을 때 쓴다. HasEnded만으로는 OnEnd와 OnCancel을 구분할 수 없기 때문
+	internal bool WasCancelled => cancelled;
 
 	/// <summary>
 	/// 이 블록을 1틱 실행한다. 실행기와 바깥 블록만 부른다.
@@ -59,7 +64,11 @@ public abstract class Block
 
 		ended = true;
 		// 안쪽에서 실패하면 이 블록도 끝까지 실행하지 못한 것이므로 끊긴 것으로 정리한다
-		if (result == BlockResult.Failed) OnCancel(task);
+		if (result == BlockResult.Failed)
+		{
+			cancelled = true;
+			OnCancel(task);
+		}
 		else OnEnd(task);
 
 		// 함수가 끝나는 즉시 프레임을 반환한다. 실제 프로그램에서 return하는 순간 프레임이 빠지는 것과 같다
@@ -76,6 +85,7 @@ public abstract class Block
 		if (!started || ended) return;
 
 		ended = true;
+		cancelled = true;
 		OnCancel(task);
 		ReleaseMemory(task);
 	}

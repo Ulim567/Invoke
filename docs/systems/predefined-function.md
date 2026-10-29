@@ -6,12 +6,13 @@
 - 게임이 통째로 제공하는 function(C 스킬, 공통 function, 특수 이동 function, 입력 function)을 만드는 형식
 - 고정 ID로 사전 정의 함수 찾기
 - 스킬 코드에서 에러로 끝내기(`Fail`), 일찍 끝내기(`Stop`)와 스킬 에러(`SkillError`) 형식
+- 스킬 코드에서 heap 쓰기(`Malloc`, `Free`, `TryGetHeapObject`)
 - 하지 않는 일
   - 에러가 났을 때의 처리(그 작업만 끝냄, 페널티 등): 캐릭터 언어의 언어 규칙 파일 (`function-executor.md` 「실패 처리」)
   - 실행: `FunctionExecutor` (`function-executor.md`)
   - 실제 대상 입력, 파라미터 값 읽기: 「함수 실행 중 대상 입력 기다리기」 이슈
   - 반환 값을 실제로 넘기기: 블록 실행 이슈
-  - heap 계산: 메모리 작업 이슈
+  - heap 칸 계산, 누수 판단: `ProcessMemory`, `HeapStorage` (`function-executor.md` 「heap」)
 
 ## 규칙
 
@@ -32,7 +33,7 @@
 - stack 프레임 크기(`FrameSize`): 1 + 파라미터 수 + `LocalVariableCount`. 실행기가 계산
 - `LocalVariableCount`: 스킬마다 stack 부담을 조정하는 값. 무거운 스킬일수록 크게 정함
   - 스킬 작성자가 정하는 이유: C 스킬의 내부는 C# 코드라서 실제 지역 변수를 셀 수 없음
-- heap: 실행 중에 객체를 만들 때 사용. 계산 방식은 메모리 작업 이슈
+- heap: 함수가 끝나도 남아야 하는 객체(예: 소환검)를 올릴 때 사용. 아래 「heap 쓰기」
 
 ### 대상 지정 방식
 - 대상: 파라미터로 받음
@@ -53,7 +54,8 @@
 
 ### 실행 중단 공격
 - 맞았을 때: 그 캐릭터의 모든 `FunctionTask`가 끊김 (`FunctionExecutor.InterruptAll`)
-- 실행 중이던 function마다 `OnEnd` 대신 `OnCancel`이 한 번 불림. 만들어 둔 오브젝트 정리는 `OnCancel`에서
+- 실행 중이던 function마다 `OnEnd` 대신 `OnCancel`이 한 번 불림. heap에 올리지 않은 오브젝트(예: 이펙트) 정리는 `OnCancel`에서
+- heap에 올린 오브젝트(예: 소환검): `OnCancel`에서 없애지 않음. 해제하지 않은 객체는 누수가 됨 (`function-executor.md` 「heap」)
 - stack: 실행기가 돌려줌
 
 ## 다른 시스템이 쓰는 것
@@ -85,7 +87,7 @@
 | `OnStart(FunctionTask task)` | 아무것도 하지 않음 | 첫 tick에 `OnTick`보다 먼저 한 번 불린다. |
 | `OnTick(FunctionTask task, int tick)` | 아무것도 하지 않음 | 매 tick 불린다. `tick`은 1부터 `TickCount`까지 센다. 몇 번째 tick에 무엇을 할지(예: 자세잡기 → 차징 → 발사) 여기서 정한다. |
 | `OnEnd(FunctionTask task)` | 아무것도 하지 않음 | 마지막 tick에 `OnTick` 다음으로 한 번 불린다. `Completed`일 때만 불린다. |
-| `OnCancel(FunctionTask task)` | 아무것도 하지 않음 | 도중에 cancel됐을 때(실패, `Interrupted`) `OnEnd` 대신 한 번 불린다. 만들어 둔 오브젝트를 없애는 등의 정리를 한다. |
+| `OnCancel(FunctionTask task)` | 아무것도 하지 않음 | 도중에 cancel됐을 때(실패, `Interrupted`) `OnEnd` 대신 한 번 불린다. heap에 올리지 않은 오브젝트를 없애는 등의 정리를 한다. heap에 올린 오브젝트는 없애지 않는다. |
 | `OnFail(FunctionTask task, SkillError error)` | 아무것도 하지 않음 | 이 스킬이 `Fail`로 에러를 냈을 때 `OnCancel`보다 먼저 한 번 불린다. 이 스킬만의 결과(예: 시전자가 피해를 입음)를 적는다. |
 
 - 한 tick에서 부르는 순서: `OnStart`(첫 tick만) → `OnTick` → `OnEnd`(마지막 tick만)
@@ -126,10 +128,38 @@ public class Thrust : PredefinedFunction
 - `OnFail` 안에서 부름: 무시 (이미 에러로 끝나는 중)
 
 ```csharp
-// 예시. TempSwordState는 물리 검 관리가 생기기 전까지 쓰는 테스트용 임시 컴포넌트
+// 예시. TempSwordState는 물리 검 관리가 생기기 전까지 쓰는 테스트용 임시 컴포넌트(맨손 여부만 가짐)
 protected override void OnStart(FunctionTask task)
 {
 	if (task.Caster.GetComponent<TempSwordState>().IsUnarmed) Fail(new UnarmedError());
+}
+```
+
+#### heap 쓰기
+
+`OnStart`, `OnTick`, `OnEnd` 안에서 부른다.
+
+| 이름 | 돌려주는 값 | 하는 일 |
+| --- | --- | --- |
+| `Malloc(FunctionTask task, object obj, int size)` | `int` | `obj`를 시전한 캐릭터의 heap `size`칸에 올리고 포인터를 돌려줌. heap이 모자라면 `HeapStorage.NullPointer`, 에러 없음 |
+| `Free(FunctionTask task, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음 |
+| `TryGetHeapObject<T>(FunctionTask task, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false` (C의 null 역참조) |
+| `GetGlobalPointers<T>(FunctionTask task)` | `List<int>` | 전역 포인터 목록의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
+| `CountHeapObjects<T>(FunctionTask task)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
+
+- 쓸 수 없는 포인터: `NullPointer`, 해제한 포인터, 누수된 포인터, 타입이 다른 객체의 포인터
+- 포인터의 주인: malloc한 작업. 그 작업이 정상으로 끝나면 전역 포인터 목록으로 옮겨지고, 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수
+- 진행 중인 다른 작업이 malloc한 객체: `GetGlobalPointers`에 나오지 않음
+- `OnCancel` 안에서 `Malloc`, `Free`를 부름: 콘솔 오류, 무시 (`OnCancel`에서 해제하면 누수가 생기지 않기 때문)
+- `size`가 음수이거나 `obj`가 `null`: 예외 (스킬 코드의 실수)
+
+```csharp
+// 예시. Sword, SpawnSword는 실제로 있는 것이 아니다
+protected override void OnTick(FunctionTask task, int tick)
+{
+	if (tick != 5) return;
+	Sword sword = SpawnSword(task.Caster);
+	if (Malloc(task, sword, 2) == HeapStorage.NullPointer) DespawnSword(sword); // heap 부족: 소환하지 못함
 }
 ```
 
@@ -146,9 +176,13 @@ protected override void OnStart(FunctionTask task)
 | `Message` | `string` | 로그와 화면에 보여 줄 설명. 덮어쓰지 않으면 클래스 이름 |
 | `SourceName` | `string` | 에러를 낸 스킬의 이름. `Fail`이 채움 |
 
-- 있는 에러 (`Assets/_UL/Scripts/FunctionExecutor/SwordErrors.cs`)
-  - `UnarmedError`: 맨손
-  - `NoSummonedSwordError`: 소환검 없음
+- 있는 에러
+  - `Assets/_UL/Scripts/FunctionExecutor/SwordErrors.cs`
+    - `UnarmedError`: 맨손
+    - `NoSummonedSwordError`: 소환검 없음
+  - `Assets/_UL/Scripts/FunctionExecutor/PointerErrors.cs`
+    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄
+    - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
 
 ### `PredefinedFunctionRegistry` (고정 ID로 function 찾기)
 
@@ -174,5 +208,7 @@ protected override void OnStart(FunctionTask task)
   - 스킬마다 다른 조건(맨손, 소환검)을 스킬 코드에서 `Fail`로 처리 (#38)
   - 에러 클래스(`UnarmedError` 등)의 위치: 지금은 `_UL`. 박진우 폴더로 옮겨도 실행기 코드는 고치지 않음 (#38)
   - 쿨타임 `CooldownTicks`를 스킬마다 정함 (#38)
+  - heap 쓰기 함수(`Malloc`, `Free`, `TryGetHeapObject`)와 `OnCancel`에서 heap 오브젝트를 없애지 않는 규칙 (#66)
 - 박진우·임혜원과 확인할 것
   - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)
+  - 누수된 소환검 연출: `ObjectLeaked`를 받아 그 자리에 멈추고 흐리게 (#66)

@@ -66,14 +66,15 @@
   - 피격: 경직 0.3초, 이후 무적 1초. 무적 깜빡임은 코드로 한다.
   - 사망: 1초짜리 사망 모션 1회 재생 후, 1초 뒤 캐릭터를 숨기고 관전으로 넘어간다.
   - 부활: 부활 전용 모션 없이 대기 모습으로 다시 나타난다.
-- 이우림, 박진우와 정해야 할 것
-  - `PlayerMove`가 `CanAct`가 false일 때 움직이지 않는지 (경직·사망 중)
-  - 시전 담당이 `CanAct`가 false일 때 시전을 막는지
-  - `PlayerHealth`, `PlayerHealthEffects`를 공용 Player.prefab에 붙이는 것 (지금은 Player_DH에만 있다)
+- 박진우와 정한 것
+  - `PlayerMovement`가 `CanAct`가 false면 이동·점프를 막는다 (#53)
+  - `SlotCaster`가 `CanAct`가 false면 시전하지 않고 고르던 대상도 취소한다 (#48)
+- 임혜원과 정한 것
+  - `PlayerAnimator`가 `HitEffectPlayed`, `DeathEffectPlayed`, `RespawnEffectPlayed`를 받아 피격·사망 모션을 재생한다 (#49)
+- 다른 시스템이 쓰는 곳
+  - 몬스터 AI(`GroundChaseAI`)가 `IsDead`를 읽어 죽은 플레이어는 쫓지 않는다.
 - 이우림과 정해야 할 것
+  - `PlayerHealth`, `PlayerHealthEffects`를 공용 Player.prefab에 붙이는 것 (지금은 Player_DH에만 있다)
   - 씬 이동이 생기면 `LobbyReturnRequested`를 받아 로비로 옮기는지
 - 박진우와 정해야 할 것
   - 관전 카메라가 `HideEffectPlayed`에 다른 파티원으로, `RespawnEffectPlayed`에 내 캐릭터로 돌아오는지
-  - 데미지 계산 결과를 `TakeDamage`로 넘기는지
-- 임혜원과 정해야 할 것
-  - 애니메이션이 `HitEffectPlayed`, `DeathEffectPlayed`를 받아 재생하는지

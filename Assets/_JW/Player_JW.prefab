@@ -185,6 +185,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutor
   fixedUpdatesPerTick: 1
+  languageRule: {fileID: 11400000, guid: a79aabd9154a0af46a3e72e9a33751cf, type: 2}
 --- !u!114 &8735626613347549550
 MonoBehaviour:
   m_ObjectHideFlags: 0

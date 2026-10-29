@@ -9,7 +9,7 @@ using UnityEngine;
 /// 흐름 (노션 「슬롯 누른 채 대상 고르고 떼면 발동하기」)<br/>
 /// - 대상 있음(Target 파라미터가 있는 함수): 누르면 주변 몬스터가 후보가 되고 가장 가까운 몬스터가 선택된다 → 누른 채 ← →로 넘긴다 → 떼면 CastRequested.<br/>
 /// - 대상 없음(Target 파라미터가 없는 함수): 누르는 순간 FunctionExecutor.Cast로 시전하고 CastRequested를 부른다 (대상은 null).<br/>
-/// - 슬롯을 누르고 있는 동안에는 PlayerInputReader.MoveX가 0이라 움직이지 않는다.<br/>
+/// - 대상을 고르는 동안에는 Player 액션 맵(이동·점프·대시·내려가기)을 비활성화한다. 그래야 ← →가 Move가 아니라 대상 넘기기로 들어간다 (#59).<br/>
 /// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 시전하지 않고, 고르던 대상도 취소한다.
 /// </para>
 /// <para>
@@ -44,6 +44,9 @@ public class SlotCaster : NetworkBehaviour
 	int selectingSlot = -1;
 	readonly List<GameObject> candidates = new List<GameObject>();
 	int selectedIndex = -1;
+
+	// 이 컴포넌트가 Player 액션 맵을 비활성화했는지. 내가 끈 것만 다시 켠다 (다른 이유로 꺼진 맵을 켜지 않기 위해)
+	bool playerMapDisabledByMe;
 
 	/// <summary>지금 대상을 고르고 있는 슬롯 번호 (0~7). 고르는 중이 아니면 -1.</summary>
 	public int SelectingSlot => selectingSlot;
@@ -130,6 +133,7 @@ public class SlotCaster : NetworkBehaviour
 	void BeginSelection(int slot)
 	{
 		selectingSlot = slot;
+		SetPlayerMapBlocked(true);
 		FindCandidates();
 		selectedIndex = NearestCandidateIndex();
 		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 대상 고르기 시작 (후보 {candidates.Count}명)");
@@ -175,10 +179,27 @@ public class SlotCaster : NetworkBehaviour
 
 	void EndSelection()
 	{
+		SetPlayerMapBlocked(false);
 		selectingSlot = -1;
 		candidates.Clear();
 		selectedIndex = -1;
 		NotifyTargetChanged();
+	}
+
+	// 고르는 동안 Player 액션 맵을 비활성화한다. 다시 켤 때는 내가 끈 경우에만 켠다.
+	// 지금은 Player 맵을 끄는 곳이 여기뿐이다. UI·공격 불가 지역 등 다른 이유가 생기면, 모든 이유가 풀렸을 때만 켜도록 함께 정해야 한다 (player-input.md)
+	void SetPlayerMapBlocked(bool blocked)
+	{
+		if (blocked == playerMapDisabledByMe) return;
+		input.SetPlayerMapEnabled(!blocked);
+		playerMapDisabledByMe = blocked;
+	}
+
+	// 고르는 중에 꺼지거나 사라지면 꺼 둔 Player 맵을 남기지 않는다
+	void OnDisable()
+	{
+		if (selectingSlot >= 0) EndSelection();
+		else SetPlayerMapBlocked(false);
 	}
 
 	void NotifyTargetChanged() => TargetChanged?.Invoke(CurrentTarget);

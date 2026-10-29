@@ -15,7 +15,6 @@ GameObject:
   - component: {fileID: 8526818006109154282}
   - component: {fileID: 3724148789813507843}
   - component: {fileID: 1675113152176967359}
-  - component: {fileID: 3445442861597484561}
   m_Layer: 9
   m_Name: Leak
   m_TagString: Untagged
@@ -223,7 +222,14 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 192
   edgeCheckDepth: 0.5
+  obstacleLayers:
+    serializedVersion: 2
+    m_Bits: 0
   wallCheckDistance: 0.1
+  walkTimeRange: {x: 1.5, y: 4}
+  idleTimeRange: {x: 0.5, y: 2}
+  idleChance: 0.5
+  turnChance: 0.4
   targetLayers:
     serializedVersion: 2
     m_Bits: 256
@@ -231,16 +237,3 @@ MonoBehaviour:
   loseRange: 12
   detectInterval: 0.2
   stopDistance: 0.1
---- !u!114 &3445442861597484561
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4308786132074449698}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1e783d7291753194fa2f8de48ed01483, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MonsterTester
-  testDamage: 10

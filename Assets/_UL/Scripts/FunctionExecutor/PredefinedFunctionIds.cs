@@ -23,4 +23,7 @@ public static class PredefinedFunctionIds
 	public const string TestSummonedSwordFunction = "test.summoned_sword_function";
 	public const string TestStopFunction = "test.stop_function";
 	public const string TestCooldownFunction = "test.cooldown_function";
+	public const string TestMallocFunction = "test.malloc_function";
+	public const string TestLongMallocFunction = "test.long_malloc_function";
+	public const string TestFreeFunction = "test.free_function";
 }

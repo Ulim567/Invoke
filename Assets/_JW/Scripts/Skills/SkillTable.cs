@@ -51,24 +51,27 @@ public class SkillTable : ScriptableObject
 
 	static void BuildIndex()
 	{
-		byId = new Dictionary<string, SkillData>();
+		// 표를 먼저 불러온다. 에디터에서는 에셋을 처음 불러올 때 OnValidate가 불려 byId를 비우기 때문
 		SkillTable table = Instance;
+		Dictionary<string, SkillData> index = new Dictionary<string, SkillData>();
 		if (table == null)
 		{
 			Debug.LogError($"[SkillTable] Resources/{ResourcePath} 에셋이 없음");
+			byId = index;
 			return;
 		}
 
 		foreach (SkillData data in table.skills)
 		{
-			if (string.IsNullOrEmpty(data.Id)) continue;
-			if (byId.ContainsKey(data.Id))
+			if (data == null || string.IsNullOrEmpty(data.Id)) continue;
+			if (index.ContainsKey(data.Id))
 			{
 				Debug.LogWarning($"[SkillTable] \"{data.Id}\"가 두 줄 있음. 위의 줄을 씀");
 				continue;
 			}
-			byId.Add(data.Id, data);
+			index.Add(data.Id, data);
 		}
+		byId = index;
 	}
 
 	// Inspector에서 줄을 더하거나 ID를 바꾸면 찾기 목록을 다시 만든다

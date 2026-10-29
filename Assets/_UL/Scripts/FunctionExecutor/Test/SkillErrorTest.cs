@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 스킬 에러(Fail)와 일찍 끝내기(Stop) 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
-/// 붙이면 TempSwordState도 함께 붙는다. TempSwordState의 소환검 개수는 0으로 둔다.<br/>
+/// 붙이면 TempSwordState도 함께 붙는다.<br/>
 /// 다른 테스트 컴포넌트와 함께 붙이지 않는다. 다른 테스트의 작업이 섞이면 로그를 알아보기 어렵기 때문
 /// </summary>
 [RequireComponent(typeof(FunctionExecutor), typeof(TempSwordState))]
@@ -30,7 +30,7 @@ public class SkillErrorTest : MonoBehaviour
 			new TestFunctionA(),
 			new TestAttackFunction()));
 
-		// 소환검 0개: 틱 1에 Failed: SkillFailed - 소환검 없음으로 끝나야 한다
+		// 소환검 0개(TestSword를 malloc하지 않음): 틱 1에 Failed: SkillFailed - 소환검 없음으로 끝나야 한다
 		executor.Cast(new TestSummonedSwordFunction());
 
 		// Stop: 50틱짜리지만 틱 5에 Completed로 끝나야 한다

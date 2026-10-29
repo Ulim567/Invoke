@@ -12,7 +12,8 @@ using UnityEngine;
 /// - OnStart, OnTick, OnEnd, OnCancel 중 필요한 것만 덮어써서, 몇 번째 틱에 무엇을 할지 적는다. (예: 자세잡기 → 차징 → 발사)<br/>
 /// - 실행되는 것은 언제나 복사본이므로, 실행 중에 쓰는 값(예: 차징한 양)을 필드에 그대로 저장해도 된다.<br/>
 /// - OnStart나 OnTick에서 실행할 수 없는 상태를 발견하면 Fail(에러)로 에러를 내고, 에러 없이 일찍 끝내려면 Stop()을 부른다.<br/>
-/// - 에러로 끝날 때 이 스킬만의 결과(예: 시전자가 피해를 입음)가 있으면 OnFail에 적는다.
+/// - 에러로 끝날 때 이 스킬만의 결과(예: 시전자가 피해를 입음)가 있으면 OnFail에 적는다.<br/>
+/// - 힙에 객체(예: 소환검)를 올리고 내릴 때는 Malloc, Free를 부르고, 포인터로 객체를 꺼낼 때는 TryGetHeapObject를 부른다.
 /// </para>
 /// <para>
 /// 한 틱에서 부르는 순서: OnStart(첫 틱만) → OnTick → OnEnd(마지막 틱만)<br/>
@@ -140,5 +141,64 @@ public abstract class PredefinedFunction : FunctionBlock
 		}
 
 		stopRequested = true;
+	}
+
+	/// <summary>
+	/// obj를 시전한 캐릭터의 힙 size칸에 올리고 포인터를 돌려준다. OnStart, OnTick, OnEnd에서 부른다.<br/>
+	/// 힙이 모자라면 NullPointer를 돌려준다. 에러로 끝내지 않으므로, 실패했는지는 돌려받은 값이 HeapStorage.NullPointer인지로 확인한다.<br/>
+	/// 이 작업이 정상으로 끝나면 포인터가 전역 포인터 목록으로 옮겨진다. 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수가 된다.
+	/// </summary>
+	protected int Malloc(FunctionTask task, object obj, int size)
+	{
+		if (IsInCancel(nameof(Malloc))) return HeapStorage.NullPointer;
+		return task.Memory.Heap.Malloc(task, obj, size);
+	}
+
+	/// <summary>
+	/// 포인터의 객체를 해제하고 힙 칸을 돌려준다. OnStart, OnTick, OnEnd에서 부른다.<br/>
+	/// 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터)이면 Fail(InvalidPointerError)로 에러를 내고 false를 돌려준다.<br/>
+	/// 오브젝트를 없애지는 않는다. 오브젝트는 스킬 코드가 따로 없앤다.
+	/// </summary>
+	protected bool Free(FunctionTask task, int pointer)
+	{
+		if (IsInCancel(nameof(Free))) return false;
+		if (task.Memory.Heap.Free(pointer)) return true;
+
+		Fail(new InvalidPointerError(pointer));
+		return false;
+	}
+
+	/// <summary>
+	/// 포인터의 객체를 T 타입으로 꺼낸다.<br/>
+	/// 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터, 타입이 T가 아닌 객체의 포인터)이면 Fail(InvalidPointerError)로 에러를 내고 false를 돌려준다.
+	/// </summary>
+	// C에서 null이나 해제한 포인터를 역참조하면 프로그램이 오류를 내는 것처럼, 꺼내지 못하면 바로 스킬 에러로 끝낸다
+	protected bool TryGetHeapObject<T>(FunctionTask task, int pointer, out T obj)
+	{
+		if (task.Memory.Heap.TryGet(pointer, out obj)) return true;
+
+		Fail(new InvalidPointerError(pointer));
+		return false;
+	}
+
+	/// <summary>
+	/// 전역 포인터 목록에 있는 T 타입 객체의 포인터를 malloc한 순서대로 돌려준다.<br/>
+	/// 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 쓴다.
+	/// </summary>
+	protected List<int> GetGlobalPointers<T>(FunctionTask task) => task.Memory.Heap.GetGlobalPointers<T>();
+
+	/// <summary>
+	/// 시전한 캐릭터의 힙에 있는 T 타입 객체의 수. 누수된 객체도 센다. 소환검 최대 개수 검사에 쓴다.
+	/// </summary>
+	protected int CountHeapObjects<T>(FunctionTask task) => task.Memory.Heap.CountObjects<T>();
+
+	// OnCancel 안에서 힙을 바꾸지 못하게 막는다
+	// OnCancel에서 Free하면 실행 중단을 당해도 누수가 생기지 않고, Malloc하면 끊기는 작업의 포인터가 되어 바로 누수가 되기 때문
+	bool IsInCancel(string functionName)
+	{
+		if (!WasCancelled) return false;
+
+		Debug.LogError($"{Name}: OnCancel 안에서 {functionName}을 불렀습니다. 힙에 올린 객체는 OnCancel에서 정리하지 않습니다(누수 규칙).");
+		return true;
 	}
 }

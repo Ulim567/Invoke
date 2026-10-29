@@ -12,8 +12,9 @@ using UnityEngine.InputSystem;
 /// - 값은 읽을 때마다 그 프레임의 입력을 돌려주므로, Update에서 필요할 때 바로 읽으면 된다. 따로 저장해 둘 필요가 없다.
 /// </para>
 /// <para>
-/// 이동 담당: MoveX, JumpPressed, DashPressed, DropPressed<br/>
-/// 시전 담당: HeldSlot, TargetStep, SlotPressed(), SlotReleased()<br/>
+/// 이동 담당: MoveX, JumpPressed, RunHeld, DropPressed<br/>
+/// 시전 담당: HeldSlot, TargetStep, MarkPressed, SlotPressed(), SlotReleased()<br/>
+/// 그 밖: PickUpPressed(검 줍기), InteractPressed(입구 들어가기, 스킬 트리 해금 장소)<br/>
 /// 액션 맵 활성화·비활성화: SetPlayerMapEnabled(), SetAttackMapEnabled()
 /// </para>
 /// <para>
@@ -26,7 +27,7 @@ public class PlayerInputReader : NetworkBehaviour
 	const int SlotCount = 8;
 
 	InputActionMap playerMap, attackMap;
-	InputAction move, jump, dash, down, targetPrev, targetNext;
+	InputAction move, jump, run, down, pickUp, interact, targetPrev, targetNext, mark;
 	readonly InputAction[] slots = new InputAction[SlotCount];
 
 	// 내 캐릭터가 사라질 때 -=로 등록을 해제하려면 등록할 때와 같은 함수 객체가 필요하므로 보관
@@ -56,14 +57,25 @@ public class PlayerInputReader : NetworkBehaviour
 	public bool JumpPressed => jump.WasPressedThisFrame();
 
 	/// <summary>
-	/// 이번 프레임에 대시 키(왼쪽 Shift)를 눌렀으면 true.
+	/// 달리기 키(왼쪽 Shift)를 누르고 있는 동안 true.
+	/// 슬롯을 누르고 있는 동안에는 Player 액션 맵이 비활성화되므로 false이다.
 	/// </summary>
-	public bool DashPressed => dash.WasPressedThisFrame();
+	public bool RunHeld => run.IsPressed();
 
 	/// <summary>
 	/// 이번 프레임에 ↓ 를 누른 채 Space를 눌렀으면 true. 발판 아래로 내려가기에 쓴다.
 	/// </summary>
 	public bool DropPressed => down.WasPressedThisFrame();
+
+	/// <summary>
+	/// 이번 프레임에 검 줍기 키(Z)를 눌렀으면 true.
+	/// </summary>
+	public bool PickUpPressed => pickUp.WasPressedThisFrame();
+
+	/// <summary>
+	/// 이번 프레임에 상호작용 키(↑)를 눌렀으면 true. 입구 들어가기, 스킬 트리 해금 장소에 쓴다.
+	/// </summary>
+	public bool InteractPressed => interact.WasPressedThisFrame();
 
 	/// <summary>
 	/// 슬롯을 누르고 있는 동안 이번 프레임에 → 를 누르면 1, ← 를 누르면 -1, 그 밖에는 0.
@@ -72,6 +84,12 @@ public class PlayerInputReader : NetworkBehaviour
 	/// </summary>
 	public int TargetStep => !IsSlotHeld ? 0
 		: (targetNext.WasPressedThisFrame() ? 1 : 0) - (targetPrev.WasPressedThisFrame() ? 1 : 0);
+
+	/// <summary>
+	/// 슬롯을 누르고 있는 동안 이번 프레임에 Space를 눌렀으면 true. 여러 명 선택에서 지금 고른 대상을 찍거나 뺄 때 쓴다.
+	/// 슬롯을 누르고 있지 않으면 항상 false이다. 이때 Space는 Jump와 Mark가 함께 받지만, 점프로만 쓰이게 하기 위함이다.
+	/// </summary>
+	public bool MarkPressed => IsSlotHeld && mark.WasPressedThisFrame();
 
 	/// <summary>
 	/// 이번 프레임에 index번 슬롯(0~7)을 눌렀으면 true.
@@ -84,7 +102,7 @@ public class PlayerInputReader : NetworkBehaviour
 	public bool SlotReleased(int index) => slots[index].WasReleasedThisFrame();
 
 	/// <summary>
-	/// Player 액션 맵(Move, Jump, Dash, Down)을 활성화하거나 비활성화한다.<br/>
+	/// Player 액션 맵(Move, Jump, Run, Down, PickUp, Interact)을 활성화하거나 비활성화한다.<br/>
 	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유(UI, 슬롯 키 등)가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
 	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
 	/// </summary>
@@ -96,7 +114,7 @@ public class PlayerInputReader : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext)을 활성화하거나 비활성화한다.<br/>
+	/// Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext, Mark)을 활성화하거나 비활성화한다.<br/>
 	/// 비활성화하면 누르고 있던 슬롯도 해제된다 (HeldSlot이 -1).<br/>
 	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
 	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
@@ -120,12 +138,15 @@ public class PlayerInputReader : NetworkBehaviour
 		playerMap = InputSystem.actions.FindActionMap("Player", true);
 		move = playerMap.FindAction("Move", true);
 		jump = playerMap.FindAction("Jump", true);
-		dash = playerMap.FindAction("Dash", true);
+		run = playerMap.FindAction("Run", true);
 		down = playerMap.FindAction("Down", true);
+		pickUp = playerMap.FindAction("PickUp", true);
+		interact = playerMap.FindAction("Interact", true);
 
 		attackMap = InputSystem.actions.FindActionMap("Attack", true);
 		targetPrev = attackMap.FindAction("TargetPrev", true);
 		targetNext = attackMap.FindAction("TargetNext", true);
+		mark = attackMap.FindAction("Mark", true);
 
 		for (int i = 0; i < SlotCount; i++)
 		{

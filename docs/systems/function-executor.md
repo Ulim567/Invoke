@@ -8,7 +8,7 @@
 - 하지 않는 일
   - 키 입력을 읽지 않는다. slot을 뗐을 때 `Cast`를 부르는 것은 cast 담당 스크립트가 한다.
   - 이펙트, 소리, 애니메이션을 하지 않는다. 연출은 `TaskStarted`, `TaskEnded` event를 받은 쪽이 한다.
-  - heap, code area, Overflow 시 재부팅, Java의 try는 아직 다루지 않는다. 이후 이슈에서 추가한다.
+  - code area, Overflow 시 재부팅, Java의 try, 버그 공격의 메모리 효과(`MemoryOccupy`, `ReclaimBlock`)는 아직 다루지 않는다. 이후 이슈에서 추가한다.
   - 빈 슬롯을 거르지 않는다. 빈 슬롯이면 cast 담당 스크립트가 `Cast`를 부르지 않는다.
 
 ## 동작 규칙
@@ -29,9 +29,35 @@
 - stack과 heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - StackUsed - HeapUsed`다.
   - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, stack과 heap은 각각 칸 수만 센다.
   - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
-  - heap은 아직 없으므로 `HeapUsed`는 항상 0이다.
 - `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
+
+### heap
+- malloc: 스킬 코드가 객체를 heap에 올리고 포인터를 받음. `Free`가 모자라면 `NullPointer`(0), 에러 없음
+- free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
+- 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
+  - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
+- 루트 집합: 포인터를 보관하는 목록들
+
+| 목록 | 들어가는 포인터 | C에서 |
+| --- | --- | --- |
+| 작업의 포인터 목록 | 그 작업이 malloc한 포인터 | 지역 포인터 |
+| 전역 포인터 목록 (캐릭터 하나에 하나) | 정상 종료한 작업에서 옮겨진 포인터. 어느 작업에서든 씀 | 전역 포인터 |
+
+- 작업이 끝날 때
+  - `Completed`: 그 작업의 포인터를 전역 포인터 목록으로 옮김
+  - `Interrupted`, `Failed`: 그 작업의 포인터를 버림 (정리 블록이 실행되지 못함)
+  - 그다음 루트 집합 어디에도 포인터가 없는 객체: 누수
+- 누수 객체
+  - heap 칸: 계속 차지
+  - 객체 수(`CountObjects`): 포함. 소환검 최대 개수에 들어감
+  - 포인터로 꺼내기·해제: 불가. 포인터 값을 알아도 같음
+  - 반환: 영역 비우기(`Clear`)만
+- 영역 비우기(`Clear`): heap 전부 비움. 아직 쓰던 객체까지 포함
+  - 부르는 곳: 재부팅, 메모리 비우기 스킬 (이후 이슈)
+- 지금 규칙의 한계: 변수 블록이 없어서, 정상 종료한 작업이 해제하지 않은 포인터는 모두 전역 포인터 목록으로 옮겨짐
+  - 실제 C: 전역 변수에 담지 않은 지역 포인터는 함수가 끝나면 누수
+  - 블록 실행 이슈: 포인터 변수(`function-data.md`)를 루트 집합에 추가, 옮기는 규칙(`HeapStorage.HandOverPointers`)만 바꿈. 누수 판단은 그대로
 
 ### 시전 전 검사
 - `Cast`가 `FunctionTask`를 만들기 전에 공통 조건을 차례로 검사한다. 하나라도 걸리면 `FunctionTask`를 만들지 않고 거부한다.
@@ -126,14 +152,33 @@
 
 ### `ProcessMemory`
 
-값은 `ProcessMemory`만 바꾼다. 다른 시스템은 읽기만 한다(예: memory 게이지 UI).
+값은 `ProcessMemory`만 바꾼다. 다른 시스템은 읽기만 한다(예: memory 게이지 UI). heap 객체는 `Heap`의 함수로 다룬다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Capacity` | - | `int` | memory 전체 칸 수. `PlayerStats.MemorySize`와 같다. |
 | `StackUsed` | - | `int` | 지금 stack이 쓰는 칸 수. 실행 중인 모든 `FunctionBlock`의 `FrameSize` 합 |
-| `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. heap은 아직 없으므로 항상 0 |
+| `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. 해제하지 않은 객체와 누수 객체의 크기 합 |
 | `Free` | - | `int` | 남은 칸 수. `Capacity - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. |
+| `Heap` | - | `HeapStorage` | 이 캐릭터의 heap 객체 저장소 |
+
+### `HeapStorage` (heap 객체 저장소)
+
+- 가져오기: `ProcessMemory.Heap`. 컴포넌트가 아니므로 프리팹에 따로 붙이지 않음
+- 스킬 코드: 이 표의 함수 대신 `PredefinedFunction`의 heap 함수를 씀 ([predefined-function.md](predefined-function.md))
+- 오브젝트 생성·삭제: 하지 않음. 메모리 기록만 맡음
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `NullPointer` | - | `int` | null 포인터(0). malloc 실패 값. 이 값으로는 어떤 객체도 찾을 수 없음 |
+| `Malloc(FunctionTask owner, object obj, int size)` | malloc하는 작업, 올릴 객체, 칸 수 | `int` | 포인터. 그 포인터는 `owner`의 포인터 목록에 들어감(`owner`가 `null`이면 전역 포인터 목록). heap이 모자라면 `NullPointer` |
+| `Free(int pointer)` | 포인터 | `bool` | 해제하고 heap 칸 반환. `NullPointer`, 없는·해제한·누수된 포인터이면 `false` |
+| `TryGet<T>(int pointer, out T obj)` | 포인터 | `bool` | 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터, 타입이 다른 객체, `Destroy`된 Unity 오브젝트이면 `false` |
+| `GetGlobalPointers<T>()` | - | `List<int>` | 전역 포인터 목록의 `T` 객체 포인터. malloc한 순서 |
+| `CountObjects<T>()` | - | `int` | heap의 `T` 객체 수. 누수 객체 포함 |
+| `Clear()` | - | - | 영역 비우기. heap 전부 비우고 `HeapUsed`를 0으로 |
+| `ObjectLeaked` (event) | `object` | - | 객체가 누수될 때. 누수된 소환검을 멈추고 흐리게 그리는 일은 받은 쪽 |
+| `ObjectCleared` (event) | `object` | - | `Clear`로 객체를 지울 때 객체마다. 소환검 오브젝트 삭제는 받은 쪽 |
 
 ### `PredefinedFunction` (C 스킬, 공통 function, 특수 이동 function, 입력 function)
 - 만드는 방법: [predefined-function.md](predefined-function.md)
@@ -160,5 +205,9 @@ executor.Cast(dashThrust);
 - 박진우와 확인할 것
   - 쿨타임을 동작 시간과 따로 `CooldownTicks`로 정한다 (#38)
   - 스킬마다 다른 조건(맨손, 소환검)은 스킬 코드가 `Fail`로 처리한다 (#38)
-- 박진우와 정해야 할 것
-  - 스킬별로 stack 밖에서 따로 쓰는 memory(예: 검 소환의 heap)를 어떻게 다룰지
+- 박진우와 확인할 것 (#66)
+  - 검 소환·해제: `PredefinedFunction`의 `Malloc`, `Free`로 heap을 씀
+  - 누수된 소환검: 소환검 최대 개수에 포함. `ObjectLeaked`를 받아 그 자리에 멈춤 (흐린 연출은 임혜원)
+  - 영역 비우기: `ObjectCleared`를 받아 소환검 오브젝트 삭제
+- 김도훈과 정할 것 (#66)
+  - 버그 공격 `MemoryOccupy`, `ReclaimBlock`을 heap에 적용하는 방식

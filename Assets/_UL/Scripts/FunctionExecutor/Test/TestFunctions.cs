@@ -64,7 +64,7 @@ public class TestAttackFunction : PredefinedFunction
 }
 
 /// <summary>
-/// 스킬 에러 테스트용 소환검 스킬. 시작할 때 소환검이 없으면 NoSummonedSwordError를 낸다. 10틱 동안 진행한다.
+/// 스킬 에러 테스트용 소환검 스킬. 시작할 때 전역 포인터 목록에 TestSword가 없으면 NoSummonedSwordError를 낸다. 10틱 동안 진행한다.
 /// </summary>
 public class TestSummonedSwordFunction : PredefinedFunction
 {
@@ -74,7 +74,7 @@ public class TestSummonedSwordFunction : PredefinedFunction
 
 	protected override void OnStart(FunctionTask task)
 	{
-		if (task.Caster.GetComponent<TempSwordState>().SummonedSwordCount <= 0) Fail(new NoSummonedSwordError());
+		if (GetGlobalPointers<TestSword>(task).Count <= 0) Fail(new NoSummonedSwordError());
 	}
 }
 
@@ -102,4 +102,63 @@ public class TestCooldownFunction : PredefinedFunction
 	public override string Name => "TestCooldownFunction";
 	public override int TickCount => 10;
 	public override int CooldownTicks => 20;
+}
+
+/// <summary>
+/// 힙 테스트용 객체. 소환검 대신 힙에 올린다. 오브젝트가 아니라서 프리팹이 필요 없다.
+/// </summary>
+public class TestSword { }
+
+/// <summary>
+/// 힙 테스트용 malloc 함수. 1틱째에 TestSword를 힙 2칸에 올리고, 5틱 동안 진행한다. free하지 않는다.
+/// </summary>
+public class TestMallocFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestMallocFunction;
+	public override string Name => "TestMallocFunction";
+	public override int TickCount => 5;
+
+	protected override void OnTick(FunctionTask task, int tick)
+	{
+		if (tick != 1) return;
+
+		int pointer = Malloc(task, new TestSword(), 2);
+		Debug.Log($"{Name}: malloc → {(pointer == HeapStorage.NullPointer ? "NullPointer" : pointer.ToString())}");
+	}
+}
+
+/// <summary>
+/// 힙 테스트용 malloc 함수. 1틱째에 TestSword를 힙 2칸에 올리고, 20틱 동안 진행한다. 도중에 실행 중단해서 누수를 만들 때 쓴다.
+/// </summary>
+public class TestLongMallocFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestLongMallocFunction;
+	public override string Name => "TestLongMallocFunction";
+	public override int TickCount => 20;
+
+	protected override void OnTick(FunctionTask task, int tick)
+	{
+		if (tick != 1) return;
+
+		int pointer = Malloc(task, new TestSword(), 2);
+		Debug.Log($"{Name}: malloc → {pointer}");
+	}
+}
+
+/// <summary>
+/// 힙 테스트용 free 함수. 시작할 때 전역 포인터 목록의 첫 TestSword를 free한다. 1틱짜리다.<br/>
+/// 전역 포인터 목록에 TestSword가 없으면 NullPointer를 free해서 InvalidPointerError를 낸다.
+/// </summary>
+public class TestFreeFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestFreeFunction;
+	public override string Name => "TestFreeFunction";
+	public override int TickCount => 1;
+
+	protected override void OnStart(FunctionTask task)
+	{
+		var pointers = GetGlobalPointers<TestSword>(task);
+		int pointer = pointers.Count > 0 ? pointers[0] : HeapStorage.NullPointer;
+		if (Free(task, pointer)) Debug.Log($"{Name}: free {pointer}");
+	}
 }

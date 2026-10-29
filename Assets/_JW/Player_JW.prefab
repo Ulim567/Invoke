@@ -156,6 +156,10 @@ MonoBehaviour:
     m_Bits: 192
   groundCheckWidthRatio: 0.9
   groundCheckHeight: 0.1
+  platformLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  dropDuration: 0.3
 --- !u!114 &1741652210532893673
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
 
@@ -10,6 +11,8 @@ using Mirror;
 /// - 떨어질 때는 중력을 더 줘서 묵직하게 떨어진다.<br/>
 /// - 바라보는 방향(Facing)을 MoveX로 정한다. 멈추면 마지막 방향을 유지한다. 그림 뒤집기는 PlayerFacingView가 한다.<br/>
 /// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 움직이거나 점프하지 않는다.<br/>
+/// - 발판(Platform) 위에서 ↓ + Space(DropPressed)를 누르면 잠깐 그 발판과 부딪히지 않게 해서 아래로 내려간다. 내 캐릭터만 통과한다.<br/>
+/// - 발판을 아래에서 뚫고 오르는 것은 발판 타일맵의 Platform Effector 2D가 한다 (docs/systems/player-movement.md 「발판 설정」).<br/>
 /// - 입력은 PlayerInputReader에서만 읽는다.
 /// </para>
 /// </summary>
@@ -38,6 +41,19 @@ public class PlayerMovement : NetworkBehaviour
 	[Tooltip("판정 상자 높이 (유닛). 발밑에서 위아래로 이 값의 절반씩 걸친다.")]
 	[SerializeField, Min(0.01f)] private float groundCheckHeight = 0.1f;
 
+	[Header("발판 내려가기")]
+	[Tooltip("↓ + Space로 내려갈 수 있는 레이어 (Platform). Ground Layers에 포함되어 있어야 한다.")]
+	[SerializeField] private LayerMask platformLayers;
+	[Tooltip("내려갈 때 발판과 부딪히지 않는 최소 시간(초). 이 시간이 지나도 몸이 발판에 걸쳐 있으면 빠져나올 때까지 계속 통과한다.")]
+	[SerializeField, Min(0.05f)] private float dropDuration = 0.3f;
+
+	// 내려가는 중에 충돌을 끈 발판들. 최소 시간이 지나고 몸이 발판에서 완전히 빠져나오면 다시 켠다
+	readonly List<Collider2D> droppedPlatforms = new List<Collider2D>();
+	float dropEndTime;
+
+	/// <summary>발판 아래로 내려가는 중이면 true. 이 동안 발판은 바닥으로 치지 않는다.</summary>
+	public bool IsDropping => droppedPlatforms.Count > 0;
+
 	/// <summary>
 	/// 바라보는 방향. 오른쪽 1, 왼쪽 -1. 처음에는 오른쪽이다.
 	/// 스킬이 앞쪽 방향(판정, 투사체)을 정할 때, 그림 뒤집기(PlayerFacingView)가 읽는다.
@@ -56,7 +72,9 @@ public class PlayerMovement : NetworkBehaviour
 			// 올라가는 중에는 발판 안을 지나가도 바닥으로 치지 않는다 (공중 재점프 방지)
 			if (body.linearVelocity.y > 0.01f) return false;
 			GetGroundCheckBox(out Vector2 center, out Vector2 size);
-			return Physics2D.OverlapBox(center, size, 0f, groundLayers) != null;
+			// 내려가는 중에는 발판을 바닥으로 치지 않는다 (발판 안을 지나가는 동안 다시 착지한 것으로 보지 않게)
+			LayerMask mask = IsDropping ? (groundLayers & ~platformLayers) : groundLayers;
+			return Physics2D.OverlapBox(center, size, 0f, mask) != null;
 		}
 	}
 
@@ -69,13 +87,18 @@ public class PlayerMovement : NetworkBehaviour
 		stats = GetComponent<PlayerStats>();
 		health = GetComponent<PlayerHealth>();
 		groundLayers = LayerMask.GetMask("Ground", "Platform");
+		platformLayers = LayerMask.GetMask("Platform");
 	}
 
 	void Update()
 	{
 		if (!isLocalPlayer) return;
 		Move();
+		if (IsDropping && Time.time >= dropEndTime && !IsInsideDroppedPlatform()) EndDrop();
 	}
+
+	// 캐릭터가 사라지거나 꺼질 때 꺼 둔 충돌을 남기지 않는다
+	void OnDisable() => EndDrop();
 
 	void FixedUpdate()
 	{
@@ -96,7 +119,12 @@ public class PlayerMovement : NetworkBehaviour
 		body.linearVelocity = new Vector2(moveX * stats.MoveSpeed, body.linearVelocity.y);
 		UpdateFacing(moveX);
 
-		if (input.JumpPressed && IsGrounded)
+		// ↓ + Space일 때 PlayerInputReader는 JumpPressed를 false로 준다 (입력 체계 「Complexity Consumption」)
+		if (input.DropPressed && IsGrounded)
+		{
+			TryDrop();
+		}
+		else if (input.JumpPressed && IsGrounded)
 		{
 			Jump();
 		}
@@ -115,6 +143,44 @@ public class PlayerMovement : NetworkBehaviour
 		float gravity = Mathf.Abs(Physics2D.gravity.y * body.gravityScale);
 		float jumpSpeed = Mathf.Sqrt(2f * gravity * jumpHeight);
 		body.linearVelocity = new Vector2(body.linearVelocity.x, jumpSpeed);
+	}
+
+	// 발밑이 발판뿐일 때만 내려간다. 땅(Ground)을 밟고 있으면 내려가지 않는다
+	void TryDrop()
+	{
+		GetGroundCheckBox(out Vector2 center, out Vector2 size);
+		LayerMask solidGround = groundLayers & ~platformLayers;
+		if (Physics2D.OverlapBox(center, size, 0f, solidGround) != null) return;
+
+		Collider2D[] platforms = Physics2D.OverlapBoxAll(center, size, 0f, platformLayers);
+		if (platforms.Length == 0) return;
+
+		// 발판 전체를 끄지 않고 내 콜라이더와의 충돌만 끈다. 다른 플레이어는 그대로 발판 위에 선다
+		foreach (Collider2D platform in platforms)
+		{
+			Physics2D.IgnoreCollision(bodyCollider, platform, true);
+			droppedPlatforms.Add(platform);
+		}
+		dropEndTime = Time.time + dropDuration;
+	}
+
+	// 몸이 아직 발판에 걸쳐 있는지. 걸친 채로 충돌을 다시 켜면 발판 속에 끼어 버린다
+	bool IsInsideDroppedPlatform()
+	{
+		foreach (Collider2D platform in droppedPlatforms)
+		{
+			if (platform != null && bodyCollider.Distance(platform).isOverlapped) return true;
+		}
+		return false;
+	}
+
+	void EndDrop()
+	{
+		foreach (Collider2D platform in droppedPlatforms)
+		{
+			if (platform != null && bodyCollider != null) Physics2D.IgnoreCollision(bodyCollider, platform, false);
+		}
+		droppedPlatforms.Clear();
 	}
 
 	// 떨어지는 중에만 기본 중력에 (배율 - 1)만큼을 더 준다

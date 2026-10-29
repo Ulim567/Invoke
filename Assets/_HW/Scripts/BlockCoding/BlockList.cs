@@ -30,7 +30,19 @@ public class BlockList : MonoBehaviour
 		foreach (BlockData block in blocks)
 		{
 			BlockView view = editor.CreateView(block, transform);
-			view.Owner = this;
+			view.OwnerList = this;
+			view.RefreshTexts();
+		}
+	}
+
+	/// <summary>
+	/// 화면의 블록 UI를 모두 지운다. 데이터는 건드리지 않는다. 다른 함수를 열기 전에 부른다.
+	/// </summary>
+	public void ClearViews()
+	{
+		for (int i = transform.childCount - 1; i >= 0; i--)
+		{
+			if (transform.GetChild(i).TryGetComponent(out BlockView view)) editor.DestroyView(view);
 		}
 	}
 
@@ -43,16 +55,20 @@ public class BlockList : MonoBehaviour
 		blocks.Insert(index, view.Data);
 		view.transform.SetParent(transform, false);
 		view.transform.SetSiblingIndex(index);
-		view.Owner = this;
-		editor.RefreshLayout();
+		view.OwnerList = this;
+		view.OwnerSlot = null;
+		view.RefreshTexts();
+		editor.NotifyChanged();
 	}
 
 	/// <summary>
 	/// block을 index 자리에 놓을 수 있으면 true.<br/>
-	/// else if, else는 바로 위 블록이 if 또는 else if일 때만 놓을 수 있다 (function-data.md 「조건문 드롭다운」).
+	/// - 값 칸에만 들어가는 블록(연산, 비교, 논리)은 놓을 수 없다 (BlockData.CanBeStatement).<br/>
+	/// - else if, else는 바로 위 블록이 if 또는 else if일 때만 놓을 수 있다 (function-data.md 「조건문 드롭다운」).
 	/// </summary>
 	public bool CanInsert(BlockData block, int index)
 	{
+		if (!BlockData.CanBeStatement(block.Kind)) return false;
 		if (!IsElseBranch(block)) return true;
 		index = Mathf.Clamp(index, 0, blocks.Count);
 		if (index == 0) return false;
@@ -75,8 +91,8 @@ public class BlockList : MonoBehaviour
 	public void Detach(BlockView view)
 	{
 		blocks.Remove(view.Data);
-		view.Owner = null;
-		editor.RefreshLayout();
+		view.OwnerList = null;
+		editor.NotifyChanged();
 	}
 
 	/// <summary>

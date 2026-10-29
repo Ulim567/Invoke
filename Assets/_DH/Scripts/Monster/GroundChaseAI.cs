@@ -8,7 +8,8 @@ using UnityEngine;
 ///   걷는 중 앞이 낭떠러지거나 장애물이면 바로 돌아선다. 처음 방향과 상태는 랜덤이라 여러 마리가 똑같이 움직이지 않는다.<br/>
 /// - 발견: detectRange 안에 살아 있는 플레이어가 있으면 가장 가까운 플레이어를 쫓는다. loseRange 밖으로 벗어나거나 죽으면 순찰로 돌아간다.<br/>
 /// - 추적: 좌우로만 chaseSpeed로 움직인다. 앞이 낭떠러지거나 장애물이면 그 자리에 멈춘다(떨어지지 않고, 다른 몬스터를 밀지 않는다).<br/>
-/// - 몬스터가 죽으면 멈춘다. 공격(접촉 피해)은 같은 오브젝트의 ContactDamage가 한다.
+/// - 몬스터가 죽으면 멈춘다. 공격(접촉 피해)은 같은 오브젝트의 ContactDamage가 한다.<br/>
+/// - 탐지·낭떠러지·장애물 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.
 /// </para>
 /// <para>
 /// 네트워크를 붙이면 AI는 서버에서만 돌린다(FixedUpdate에 [ServerCallback]). 위치는 Rigidbody 동기화로 각 화면에 보인다.
@@ -202,7 +203,7 @@ public class GroundChaseAI : MonoBehaviour
 		}
 		if (target != null) return;
 
-		int count = Physics2D.OverlapCircle(pos, detectRange, targetFilter, found);
+		int count = ScenePhysics().OverlapCircle(pos, detectRange, targetFilter, found);
 		float bestSqr = float.MaxValue;
 		for (int i = 0; i < count; i++)
 		{
@@ -225,13 +226,17 @@ public class GroundChaseAI : MonoBehaviour
 
 		// 발 바로 앞 아래에 땅이 없으면 낭떠러지
 		Vector2 footFront = new Vector2(b.center.x + dir * (b.extents.x + 0.05f), b.min.y + 0.05f);
-		if (!Physics2D.Raycast(footFront, Vector2.down, edgeCheckDepth, groundLayers)) return true;
+		PhysicsScene2D physics = ScenePhysics();
+		if (!physics.Raycast(footFront, Vector2.down, edgeCheckDepth, groundLayers)) return true;
 
 		// 몸 가운데 높이에서 앞으로 장애물을 찾는다
 		// 내 Collider 바로 바깥에서 시작해서, Monster 레이어를 검사해도 나 자신은 잡히지 않게 한다
 		Vector2 bodyFront = new Vector2(b.center.x + dir * (b.extents.x + 0.02f), b.center.y);
-		return Physics2D.Raycast(bodyFront, new Vector2(dir, 0f), wallCheckDistance, obstacleLayers);
+		return physics.Raycast(bodyFront, new Vector2(dir, 0f), wallCheckDistance, obstacleLayers);
 	}
+
+	// 내가 속한 장소 씬의 물리 세계. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 검사할 때마다 가져온다
+	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();
 
 	void SetVelocityX(float x) => body.linearVelocity = new Vector2(x, body.linearVelocity.y);
 

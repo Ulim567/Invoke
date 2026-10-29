@@ -224,7 +224,7 @@ MonoBehaviour:
   edgeCheckDepth: 0.5
   obstacleLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 64
   wallCheckDistance: 0.1
   walkTimeRange: {x: 1.5, y: 4}
   idleTimeRange: {x: 0.5, y: 2}

@@ -24,6 +24,7 @@
 - 접촉 피해는 `FixedUpdate`마다 몸 크기의 상자 안을 검사한다. Player와 Monster 레이어는 충돌이 꺼져 있어서 Trigger를 쓸 수 없기 때문이다.
   - 같은 대상에게는 Inspector 값 `Hit Interval`초에 한 번만 피해를 준다.
   - Trigger가 아닌 Collider(몸)에 닿았을 때만 피해를 준다.
+- 판정(접촉 피해 상자, 플레이어 탐지, 낭떠러지·장애물 검사)은 `Physics2D`가 아니라 몬스터가 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 한다. 서버는 장소 씬마다 물리 세계가 따로 있어서, `Physics2D`로 검사하면 사냥터 등에 있는 플레이어와 땅을 찾지 못한다(`place-scenes.md`). 물리 세계는 저장하지 않고 검사할 때마다 가져온다.
 - 몬스터 공격 = 공격 형태 + 효과
   - 효과는 `MonsterAttackData` 파일에 목록으로 담는다. 맞으면 위에서부터 차례로 적용한다.
   - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 나머지 효과는 받을 시스템이 아직 없어서 로그만 남긴다.
@@ -134,6 +135,8 @@
 - 이우림과 정해야 할 것
   - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌 끄기 (몬스터끼리 통과)
 - 이우림과 정한 것
+  - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
+  - 몬스터·투사체의 생성·삭제는 `NetworkSpawner.Spawn` / `Despawn`(이우림)으로 바꾼다. 몬스터 서버 동기화 이슈에서 한다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage(int)`로 데미지를 준다.

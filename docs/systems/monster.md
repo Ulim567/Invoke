@@ -33,11 +33,16 @@
 - 잡몹
   - 잡몹 1 **Leak**(메모리 누수 덩어리): 근접 추적형. `Monster` + `ContactDamage` + `GroundChaseAI`. 체력 40, 접촉 피해 10, 순찰 1.5, 추적 2.5, 발견 거리 8, 놓치는 거리 12 (전부 임시, 프리팹 Inspector 값)
   - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형 (「잡몹 2」 이슈)
+- 몬스터끼리는 서로 통과한다(메이플 방식). 지금은 몬스터 프리팹 콜라이더의 Layer Overrides → Exclude Layers에 `Monster`를 넣어서 막는다. 공용 Collision Matrix의 Monster ↔ Monster 끄기는 이우림에게 요청했다.
 - 순찰·추적 (`GroundChaseAI`)
-  - 순찰: 바라보는 방향으로 걷다가, 앞이 낭떠러지(발 앞 아래에 Ground·Platform이 없음)거나 벽이면 돌아선다.
+  - 순찰: "걷기"와 "멈추기"를 랜덤 시간씩 번갈아 한다.
+    - 걷기 `Walk Time Range`(1.5~4초)가 끝나면 `Idle Chance`(50%) 확률로 멈추고, 아니면 계속 걷는다.
+    - 멈추기 `Idle Time Range`(0.5~2초)가 끝나면 다시 걷는다. 다시 걸을 때 `Turn Chance`(40%) 확률로 반대로 돌아선다.
+    - 걷는 중 앞이 낭떠러지(발 앞 아래에 Ground·Platform이 없음)거나 장애물(`Obstacle Layers`)이면 바로 돌아선다. 몬스터끼리 통과하게 하려면 `Obstacle Layers`에는 Ground만 넣는다.
+    - 처음 방향과 상태는 랜덤이라 여러 마리가 똑같이 움직이지 않는다.
   - 발견: `Detect Interval`(0.2초)마다 `Detect Range` 안의 살아 있는(`PlayerHealth.IsDead`가 false) 플레이어 중 가장 가까운 플레이어를 쫓는다.
-  - 놓침: 쫓던 플레이어가 죽거나 `Lose Range` 밖으로 나가면 순찰로 돌아간다.
-  - 추적: 좌우로만 움직이고 점프하지 않는다. 앞이 낭떠러지나 벽이면 그 자리에서 기다린다(떨어지지 않는다).
+  - 놓침: 쫓던 플레이어가 죽거나 `Lose Range` 밖으로 나가면 잠깐 멈췄다가 순찰로 돌아간다.
+  - 추적: 좌우로만 움직이고 점프하지 않는다. 앞이 낭떠러지나 장애물이면 그 자리에서 기다린다(떨어지지 않는다).
   - 몬스터가 죽으면 멈춘다. 그림은 오른쪽을 보고 그리고, 왼쪽을 볼 때 `SpriteRenderer.flipX`를 켠다(플레이어와 같은 규칙).
   - 네트워크를 붙이면 AI는 서버에서만 돈다.
 
@@ -80,12 +85,13 @@
 
 ### `GroundChaseAI`
 
-몬스터 프리팹에 `Monster`, `Rigidbody2D`, `Collider2D`와 함께 붙인다. Inspector에서 `Ground Layers`는 Ground·Platform, `Target Layers`는 Player로 둔다.
+몬스터 프리팹에 `Monster`, `Rigidbody2D`, `Collider2D`와 함께 붙인다. Inspector에서 `Ground Layers`는 Ground·Platform, `Obstacle Layers`는 Ground(Monster를 넣으면 몬스터끼리 마주칠 때 통과하지 않고 돌아선다), `Target Layers`는 Player로 둔다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Target` | - | `PlayerHealth` | 지금 쫓는 플레이어. 순찰 중이면 `null`. 연출(추적 중 표정 등)이나 공격 AI가 읽는다. |
 | `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
+| `IsMoving` | - | `bool` | 지금 좌우로 움직이고 있으면 `true`. 이동·대기 애니메이션을 바꿀 때 읽는다. |
 
 ### `AttackEffectType`, `AttackEffect`
 
@@ -125,6 +131,8 @@
 | `Attack` | - | `MonsterAttackData` | 이 투사체의 공격 데이터. 패링은 `Attack.Parryable`로 잡을 수 있는지 확인한다. |
 
 ## 맞춘 결과
+- 이우림과 정해야 할 것
+  - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌 끄기 (몬스터끼리 통과)
 - 이우림과 정한 것
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
@@ -136,3 +144,4 @@
   - 패링이 `MonsterProjectile`을 잡았을 때 투사체를 없애는 방법, 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지 (패링 이슈에서 정함)
 - 임혜원과 정해야 할 것
   - 피격·사망 연출을 `HitEffectPlayed`, `DeathEffectPlayed` event로 붙이는지
+  - Leak·Loop 그림. Leak 이동·대기 모션은 `GroundChaseAI.IsMoving`, 방향은 `flipX`(오른쪽을 보고 그림)

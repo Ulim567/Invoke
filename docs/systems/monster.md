@@ -33,7 +33,7 @@
 - 잡몹
   - 잡몹 1 **Leak**(메모리 누수 덩어리): 근접 추적형. `Monster` + `ContactDamage` + `GroundChaseAI`. 체력 40, 접촉 피해 10, 순찰 1.5, 추적 2.5, 발견 거리 8, 놓치는 거리 12 (전부 임시, 프리팹 Inspector 값)
   - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형 (「잡몹 2」 이슈)
-- 몬스터끼리는 서로 통과한다(메이플 방식). 지금은 몬스터 프리팹 콜라이더의 Layer Overrides → Exclude Layers에 `Monster`를 넣어서 막는다. 공용 Collision Matrix의 Monster ↔ Monster 끄기는 이우림에게 요청했다.
+- 몬스터끼리는 서로 통과한다(메이플 방식). 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌이 꺼져 있다(#81).
 - 순찰·추적 (`GroundChaseAI`)
   - 순찰: "걷기"와 "멈추기"를 랜덤 시간씩 번갈아 한다.
     - 걷기 `Walk Time Range`(1.5~4초)가 끝나면 `Idle Chance`(50%) 확률로 멈추고, 아니면 계속 걷는다.
@@ -131,9 +131,8 @@
 | `Attack` | - | `MonsterAttackData` | 이 투사체의 공격 데이터. 패링은 `Attack.Parryable`로 잡을 수 있는지 확인한다. |
 
 ## 맞춘 결과
-- 이우림과 정해야 할 것
-  - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌 끄기 (몬스터끼리 통과)
 - 이우림과 정한 것
+  - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌을 껐다(#81). 그래서 몬스터 프리팹 콜라이더의 Exclude Layers에 `Monster`를 넣지 않아도 몬스터끼리 통과한다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage(int)`로 데미지를 준다.

@@ -1,0 +1,303 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fabde1ef7de545ec8270160964774391, type: 3}
+  m_Name: SkillTable
+  m_EditorClassIdentifier: Assembly-CSharp::SkillTable
+  skills:
+  - id: c.thrust
+    displayName: "검 찌르기"
+    family: 0
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "기본 찌르기"
+  - id: c.focused_thrust
+    displayName: "검 집중찌르기"
+    family: 0
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "출혈 상태의 적에게 1.5배 (DamageBonus.BleedFocusedThrust)"
+  - id: c.vital_strike
+    displayName: "급소공략"
+    family: 0
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "미니게임 성공 시 3.0배 (DamageBonus.VitalStrikeMinigame). 눈 명중 시 실명, 발목 명중 시 이속 감소"
+  - id: c.skewer
+    displayName: "꼬챙이"
+    family: 0
+    targeting: 2
+    damageMultiplier: 0.5
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "여러 명 동시에 찌름, 데미지 약함 (배율 0.5는 임시)"
+  - id: c.summoned_thrust
+    displayName: "소환검 찌르기"
+    family: 0
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "소환검에게 명령해 검이 찌름"
+  - id: c.wound_exploit
+    displayName: "상처 공략"
+    family: 0
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "출혈 상태의 적에게 2.0배 (DamageBonus.BleedWoundExploit)"
+  - id: c.deep_thrust
+    displayName: "검 깊이찌르기"
+    family: 0
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "치명타 2.5배 (DamageBonus.CritDeepThrust)"
+  - id: c.sword_throw
+    displayName: "검 던지기"
+    family: 1
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "물리 검을 던짐. 체력 2% 이하 적 처형 (보스 제외)"
+  - id: c.summoned_throw
+    displayName: "소환검 던지기"
+    family: 1
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "소환검을 던짐, 더 먼 적까지 명중"
+  - id: c.sword_return
+    displayName: "검 돌아오기"
+    family: 1
+    targeting: 5
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "던진 검을 던진 순서대로 하나씩 회수, 돌아오는 경로의 적에게 데미지. 맨손이어도 사용 가능"
+  - id: c.sword_slash
+    displayName: "검 휘두르기"
+    family: 2
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "검기를 날림 (검기는 heap 사용)"
+  - id: c.wide_slash
+    displayName: "검 크게베기"
+    family: 2
+    targeting: 4
+    damageMultiplier: 0.5
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "광역 검기, 데미지는 낮지만 출혈 부여 (배율 0.5는 임시)"
+  - id: c.summoned_slash
+    displayName: "소환검 휘두르기"
+    family: 2
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "소환된 검 개수만큼 검기 발사"
+  - id: c.wound_slash
+    displayName: "상처 가르기"
+    family: 2
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "출혈 상태의 적에게 출혈 도트 2.0배 (DamageBonus.BleedWoundSlash)"
+  - id: c.multi_slash
+    displayName: "검 다중베기"
+    family: 2
+    targeting: 1
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "소환된 검들이 각각 한 번씩 대상을 벰"
+  - id: c.battlefield_sweep
+    displayName: "전장 휩쓸기"
+    family: 2
+    targeting: 3
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "소환된 검들이 여러 적에게 각각 가서 벰"
+  - id: c.summon_sword
+    displayName: "검 소환"
+    family: 3
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "malloc. 최대 5개, 검마다 포인터 생성"
+  - id: c.free_sword
+    displayName: "해제"
+    family: 3
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 1
+    note: "free. 소환검만 해제 가능 (물리 검 불가), 거리 상관없음"
+  - id: c.parry
+    displayName: "패링"
+    family: 3
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 0
+    note: "성공 시 적 공격을 검 이펙트로 1회 되돌려줌. 맨손 불가로 가정"
+  - id: c.mark
+    displayName: "표식 남기기"
+    family: 3
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "검이 적 좌우로 찔러 표식 + 1.0초 기절. 소환검 필요로 가정"
+  - id: c.sword_dance
+    displayName: "검무"
+    family: 3
+    targeting: 4
+    damageMultiplier: 0.5
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    needsSummonedSword: 1
+    usableUnarmed: 0
+    note: "검 개수만큼 적 근처에 두고 휘두름, 데미지는 낮지만 출혈 부여 (배율 0.5는 임시)"
+  - id: common.dash
+    displayName: "대시"
+    family: 4
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "짧은 거리 빠르게 이동. 세 캐릭터 공통"
+  - id: common.double_jump
+    displayName: "더블점프"
+    family: 4
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "공중에서 한 번 더 점프. 세 캐릭터 공통"
+  - id: c.sword_ride
+    displayName: "검 타기"
+    family: 4
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    needsSummonedSword: 1
+    usableUnarmed: 1
+    note: "소환검을 타고 이동. 쓸 수 있는 소환검이 없으면 불가"

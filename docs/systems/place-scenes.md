@@ -30,6 +30,12 @@
 - 판정 방법: 오브젝트가 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 질의
   - 예: `gameObject.scene.GetPhysicsScene2D().OverlapBox(center, size, 0f, filter, results)`
   - 서버·클라이언트·호스트 모두 같은 결과
+- 바꾸는 방법: `Physics2D.` → `gameObject.scene.GetPhysicsScene2D().`
+  - `OverlapBox`, `OverlapCircle`, `Raycast`: 받는 값 그대로
+  - `OverlapBoxAll`, `OverlapCircleAll` 등 이름이 `All`로 끝나는 함수: `PhysicsScene2D`에 없음. `ContactFilter2D`와 `List<Collider2D>`를 받는 함수로 대체 (돌려주는 값: 찾은 개수, 찾은 Collider는 `List`에 채워짐)
+    - 예: `Physics2D.OverlapCircleAll(pos, range, layers)` → `gameObject.scene.GetPhysicsScene2D().OverlapCircle(pos, range, filter, results)`
+    - `filter` 설정: `filter.SetLayerMask(layers)`, `filter.useTriggers = Physics2D.queriesHitTriggers` (예전 함수와 같은 결과)
+- `GetPhysicsScene2D()` 결과: 저장하지 않고 판정할 때마다 호출. 장소 이동으로 오브젝트의 씬이 바뀌면 저장해 둔 값은 이전 씬의 물리 세계를 가리킴
 - 그대로 동작하는 것
   - `Rigidbody2D` 이동(`linearVelocity`, `AddForce`), 중력
   - 충돌 이벤트(`OnCollisionEnter2D`, `OnTriggerEnter2D`)

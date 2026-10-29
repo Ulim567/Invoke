@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 8526818006109154282}
   - component: {fileID: 3724148789813507843}
   - component: {fileID: 1675113152176967359}
+  - component: {fileID: 6717312794983794336}
   m_Layer: 9
   m_Name: Leak
   m_TagString: Untagged
@@ -230,6 +231,7 @@ MonoBehaviour:
   idleTimeRange: {x: 0.5, y: 2}
   idleChance: 0.5
   turnChance: 0.4
+  chasePlayers: 0
   targetLayers:
     serializedVersion: 2
     m_Bits: 256
@@ -237,3 +239,20 @@ MonoBehaviour:
   loseRange: 12
   detectInterval: 0.2
   stopDistance: 0.1
+--- !u!114 &6717312794983794336
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4308786132074449698}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 0
+  _assetId: 2649484479
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0

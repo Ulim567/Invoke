@@ -6,12 +6,13 @@
 - 모든 몬스터(잡몹, 보스)의 체력, 피격, 사망을 맡는다. 체력은 `Monster`만 바꾼다.
 - 데미지를 받을 수 있는 모든 것이 쓰는 공통 인터페이스 `IDamageable`을 정한다. 몬스터, 플레이어, 보스, 기둥, 분신이 이것을 구현한다.
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
+- 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
 - 하지 않는 일
   - 데미지 계산(공격력 × 배율, 치명타, 처형)은 하지 않는다. 계산이 끝난 정수 데미지를 받기만 한다.
   - 연출(이펙트, 소리, 애니메이션)을 하지 않는다. 연출은 `HitEffectPlayed`, `DeathEffectPlayed` event를 받은 쪽이 한다.
-  - 상태 이상, AI, 드롭, 스폰은 아직 다루지 않는다. 이후 이슈에서 추가한다.
-  - 언제, 어느 방향으로 공격할지는 정하지 않는다. 몬스터 AI(잡몹·보스 이슈)가 정한다.
+  - 상태 이상 반응, 드롭, 스폰은 아직 다루지 않는다. 이후 이슈에서 추가한다.
+  - 공격 구조(`MonsterAttackData`, `ProjectileAttack`)는 언제, 어느 방향으로 공격할지 정하지 않는다. 몬스터 AI(`GroundChaseAI` 등)가 정한다.
 
 ## 동작 규칙
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
@@ -28,6 +29,17 @@
   - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 나머지 효과는 받을 시스템이 아직 없어서 로그만 남긴다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
+
+- 잡몹
+  - 잡몹 1 **Leak**(메모리 누수 덩어리): 근접 추적형. `Monster` + `ContactDamage` + `GroundChaseAI`. 체력 40, 접촉 피해 10, 순찰 1.5, 추적 2.5, 발견 거리 8, 놓치는 거리 12 (전부 임시, 프리팹 Inspector 값)
+  - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형 (「잡몹 2」 이슈)
+- 순찰·추적 (`GroundChaseAI`)
+  - 순찰: 바라보는 방향으로 걷다가, 앞이 낭떠러지(발 앞 아래에 Ground·Platform이 없음)거나 벽이면 돌아선다.
+  - 발견: `Detect Interval`(0.2초)마다 `Detect Range` 안의 살아 있는(`PlayerHealth.IsDead`가 false) 플레이어 중 가장 가까운 플레이어를 쫓는다.
+  - 놓침: 쫓던 플레이어가 죽거나 `Lose Range` 밖으로 나가면 순찰로 돌아간다.
+  - 추적: 좌우로만 움직이고 점프하지 않는다. 앞이 낭떠러지나 벽이면 그 자리에서 기다린다(떨어지지 않는다).
+  - 몬스터가 죽으면 멈춘다. 그림은 오른쪽을 보고 그리고, 왼쪽을 볼 때 `SpriteRenderer.flipX`를 켠다(플레이어와 같은 규칙).
+  - 네트워크를 붙이면 AI는 서버에서만 돈다.
 
 ## 다른 시스템이 쓰는 것
 
@@ -65,6 +77,15 @@
 | `Hit Interval` | 같은 대상에게 다시 피해를 주기까지 시간(초) |
 | `Box Size`, `Box Offset` | 검사 상자 크기와 위치. Scene 창에서 빨간 상자로 보인다. |
 | `Target Layers` | 피해를 줄 레이어. Player로 둔다. |
+
+### `GroundChaseAI`
+
+몬스터 프리팹에 `Monster`, `Rigidbody2D`, `Collider2D`와 함께 붙인다. Inspector에서 `Ground Layers`는 Ground·Platform, `Target Layers`는 Player로 둔다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Target` | - | `PlayerHealth` | 지금 쫓는 플레이어. 순찰 중이면 `null`. 연출(추적 중 표정 등)이나 공격 AI가 읽는다. |
+| `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
 
 ### `AttackEffectType`, `AttackEffect`
 

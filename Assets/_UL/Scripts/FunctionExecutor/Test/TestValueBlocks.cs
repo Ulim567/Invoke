@@ -58,3 +58,23 @@ public class TestReadBlock : Block
 		value?.Cancel(task);
 	}
 }
+
+/// <summary>
+/// 테스트용 확인 블록. 실행되면 onRun에 작업을 넘긴다. 1틱을 쓴다.<br/>
+/// 함수 중간에 메모리 같은 상태를 확인할 때 블록 사이에 끼워 넣는다.
+/// </summary>
+public class TestProbeBlock : Block
+{
+	readonly Action<FunctionTask> onRun;
+
+	public TestProbeBlock(Action<FunctionTask> onRun)
+	{
+		this.onRun = onRun;
+	}
+
+	protected override BlockResult Step(FunctionTask task)
+	{
+		onRun(task);
+		return BlockResult.Done;
+	}
+}

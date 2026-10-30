@@ -58,9 +58,9 @@ public readonly struct RuntimeValue
 	}
 
 	/// <summary>
-	/// 지금 실행기가 값으로 다룰 수 있는 타입이면 true. int, float, bool, string, char, 포인터.
+	/// 지금 실행기가 값으로 다룰 수 있는 타입이면 true. int, float, bool, string, char, 미리 정한 struct의 포인터(예: Sword*).
 	/// </summary>
-	// 함수 데이터를 바꿀 때 아직 다루지 않는 타입(위치, 배열 등)의 변수를 미리 거르기 위함
+	// 함수 데이터를 바꿀 때 아직 다루지 않는 타입(위치, 배열, 정의되지 않은 struct 등)의 변수를 미리 거르기 위함
 	internal static bool IsSupportedType(VariableType type)
 	{
 		if (type == null) return false;
@@ -69,7 +69,9 @@ public readonly struct RuntimeValue
 		{
 			VariableTypeKind.Int or VariableTypeKind.Float or VariableTypeKind.Bool
 				or VariableTypeKind.String or VariableTypeKind.Char => true,
-			VariableTypeKind.Pointer => type.ElementType != null,
+			// 지금 포인터를 만드는 곳은 malloc뿐이고, malloc은 미리 정한 struct만 만든다
+			VariableTypeKind.Pointer => type.ElementType?.Kind == VariableTypeKind.Struct
+				&& PredefinedStructs.TryGet(type.ElementType.StructName, out _),
 			_ => false,
 		};
 	}

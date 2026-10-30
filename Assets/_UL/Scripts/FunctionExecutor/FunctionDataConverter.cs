@@ -82,6 +82,13 @@ public static class FunctionDataConverter
 				return value == null ? null : new AssignBlock(variableName, value);
 			}
 
+			// 칸: 포인터 값
+			case BlockKind.Free when block.Slots.Count >= 1:
+			{
+				ValueBlock pointer = ConvertValue(data, block.Slots[0]);
+				return pointer == null ? null : new FreeBlock(pointer);
+			}
+
 			// 칸: 파라미터 수만큼의 값. 반환 값이 있어도 버린다
 			case BlockKind.Function:
 				return TryConvertCall(data, block, out PredefinedFunction function, out ValueBlock[] arguments)
@@ -148,6 +155,16 @@ public static class FunctionDataConverter
 				if (left == null) return null;
 				ValueBlock right = ConvertValue(data, block.Slots[2]);
 				return right == null ? null : new ArithmeticBlock(left, op, right);
+			}
+
+			// 칸: struct 타입 (드롭다운)
+			case BlockKind.Malloc when block.Slots.Count >= 1:
+			{
+				VariableType structType = block.Slots[0].Type;
+				if (structType?.Kind != VariableTypeKind.Struct || !PredefinedStructs.TryGet(structType.StructName, out StructDefinition definition))
+					return Reject<ValueBlock>(data, $"malloc할 struct {structType?.StructName}이(가) 미리 정한 struct 목록에 없습니다.");
+
+				return new MallocBlock(definition);
 			}
 
 			// 값을 돌려주는 사전 정의 함수. 칸: 파라미터 수만큼의 값

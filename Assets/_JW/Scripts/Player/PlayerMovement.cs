@@ -5,7 +5,8 @@ using Mirror;
 /// <summary>
 /// 플레이어의 좌우 이동과 점프를 맡는 컴포넌트. (공용 PlayerMove를 복사해 바닥 판정을 더한 것)
 /// <para>
-/// - 이동 속도는 PlayerStats.MoveSpeed를 읽는다.<br/>
+/// - 이동 속도는 PlayerStats.MoveSpeed를 읽는다. 왼쪽 Shift(PlayerInputReader.RunHeld)를 누르는 동안은 Run Speed Multiplier배로 달린다.<br/>
+/// - 공중에서는 땅을 떠난 순간의 달리기 여부를 착지할 때까지 유지한다. 공중에서 Shift를 누르거나 떼도 속도가 바뀌지 않는다.<br/>
 /// - 점프는 바닥에 서 있을 때만 된다. 바닥 판정은 콜라이더 발밑의 얇은 상자로 한다.<br/>
 /// - 점프는 힘이 아니라 높이(유닛)로 정한다. 중력(Rigidbody2D Gravity Scale)을 바꿔도 같은 높이로 뛴다.<br/>
 /// - 떨어질 때는 중력을 더 줘서 묵직하게 떨어진다.<br/>
@@ -24,6 +25,10 @@ public class PlayerMovement : NetworkBehaviour
 	[SerializeField, Min(0f)] private float jumpHeight = 4f;
 	[Tooltip("떨어질 때 중력 배율. 1이면 오를 때와 같고, 클수록 빨리 떨어져 묵직해진다.")]
 	[SerializeField, Min(1f)] private float fallGravityMultiplier = 1.5f;
+
+	[Header("달리기")]
+	[Tooltip("Shift를 누르는 동안 이동 속도 배율 (임시: 기획에서 정해지면 바꾼다)")]
+	[SerializeField, Min(1f)] private float runSpeedMultiplier = 1.5f;
 
 	[Header("연결")]
 	[SerializeField] private Rigidbody2D body;
@@ -50,6 +55,18 @@ public class PlayerMovement : NetworkBehaviour
 	// 내려가는 중에 충돌을 끈 발판들. 최소 시간이 지나고 몸이 발판에서 완전히 빠져나오면 다시 켠다
 	readonly List<Collider2D> droppedPlatforms = new List<Collider2D>();
 	float dropEndTime;
+
+	// 달리는 속도로 움직이는지. 땅에 있을 때만 Shift 상태로 바꾸고, 공중에서는 땅을 떠난 순간의 값을 유지한다
+	bool runMode;
+
+	/// <summary>
+	/// 달리는 속도로 좌우로 움직이고 있으면 true (멈춰 있으면 false). 달리기 애니메이션에서 읽는다.<br/>
+	/// 공중에서는 땅을 떠난 순간의 달리기 여부를 유지한다.
+	/// </summary>
+	public bool IsRunning => runMode && Mathf.Abs(input.MoveX) > 0f;
+
+	/// <summary>달리기 속도 배율. 이동 속도 = PlayerStats.MoveSpeed × 이 값 (달릴 때).</summary>
+	public float RunSpeedMultiplier => runSpeedMultiplier;
 
 	/// <summary>발판 아래로 내려가는 중이면 true. 이 동안 발판은 바닥으로 치지 않는다.</summary>
 	public bool IsDropping => droppedPlatforms.Count > 0;
@@ -115,16 +132,21 @@ public class PlayerMovement : NetworkBehaviour
 			return;
 		}
 
+		bool grounded = IsGrounded;
+		// 땅에 있을 때만 Shift를 읽는다. 공중에서는 땅을 떠난 순간(점프, 내려가기, 낭떠러지)의 값을 그대로 쓴다
+		if (grounded) runMode = input.RunHeld;
+
 		float moveX = input.MoveX;
-		body.linearVelocity = new Vector2(moveX * stats.MoveSpeed, body.linearVelocity.y);
+		float speed = stats.MoveSpeed * (runMode ? runSpeedMultiplier : 1f);
+		body.linearVelocity = new Vector2(moveX * speed, body.linearVelocity.y);
 		UpdateFacing(moveX);
 
 		// ↓ + Space일 때 PlayerInputReader는 JumpPressed를 false로 준다 (입력 체계 「Complexity Consumption」)
-		if (input.DropPressed && IsGrounded)
+		if (input.DropPressed && grounded)
 		{
 			TryDrop();
 		}
-		else if (input.JumpPressed && IsGrounded)
+		else if (input.JumpPressed && grounded)
 		{
 			Jump();
 		}

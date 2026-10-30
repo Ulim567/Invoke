@@ -6,11 +6,12 @@ using UnityEngine;
 /// 플레이어의 소환검(malloc으로 만든 검)들의 목록, 포인터, 상태를 관리하는 컴포넌트. 플레이어 프리팹에 ProcessMemory와 함께 붙인다 (#99).
 /// <para>
 /// - 포인터는 이우림 heap(ProcessMemory.Heap)의 포인터를 그대로 쓴다. 소환검 하나 = heap 객체 하나.<br/>
+/// - heap에 올리고 내리는 일(malloc, free)은 검 소환·해제 스킬이 PredefinedFunction.Malloc / Free로 한다. 이 컴포넌트는 오브젝트와 목록만 맡는다.<br/>
 /// - 최대 5개. 누수된 소환검도 개수에 들어간다 (HeapStorage.CountObjects).<br/>
 /// - 소환검 오브젝트는 SpawnSword / DespawnSword로만 만들고 없앤다 (코드 작성 규칙 3).<br/>
-/// - 던진 소환검은 회수해야 다시 쓴다: 검 돌아오기(Recall), 줍기(TryPickUpNearest), 해제(Free) 후 다시 소환.<br/>
+/// - 던진 소환검은 회수해야 다시 쓴다: 검 돌아오기(Recall), 줍기(TryPickUpNearest), 해제 후 다시 소환.<br/>
 /// - 슬롯에서 바로 쓰는 스킬은 가장 먼저 소환한(포인터가 작은) 사용 가능한 검부터 쓴다 (TryGetFirstReady).<br/>
-/// - 해제한 포인터는 heap에서 찾을 수 없다. 스킬이 TryGetHeapObject로 꺼내면 InvalidPointerError로 그 작업만 끝난다 (추가 페널티는 기획 결정 후).
+/// - 해제한 포인터는 heap에서 찾을 수 없다. 스킬이 TryGetHeapObject / Free로 쓰면 InvalidPointerError로 그 작업만 끝난다 (추가 페널티는 기획 결정 후).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(ProcessMemory))]
@@ -79,39 +80,38 @@ public class SummonedSwords : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 소환검 하나를 만들어 heap heapSize칸에 올리고 포인터를 돌려준다 (malloc). owner는 malloc하는 작업(검 소환 스킬의 task).<br/>
-	/// 최대 개수거나 heap이 모자라면 만들지 않고 HeapStorage.NullPointer를 돌려준다.
+	/// 소환검 오브젝트를 하나 만든다. 아직 목록에 없고 포인터도 없다. 검 소환 스킬이 부른다.<br/>
+	/// 순서: SpawnSword → PredefinedFunction.Malloc → 성공하면 Register, NullPointer면 DespawnSword.<br/>
+	/// 소환검은 이 함수로만 만든다 (코드 작성 규칙 3). 네트워크를 붙일 때 여기만 NetworkServer.Spawn으로 바꾼다.
 	/// </summary>
-	public int Summon(FunctionTask owner, int heapSize)
+	public SummonedSword SpawnSword()
 	{
-		if (!CanSummon) return HeapStorage.NullPointer;
-
-		SummonedSword sword = SpawnSword();
-		int pointer = memory.Heap.Malloc(owner, sword, heapSize);
-		if (pointer == HeapStorage.NullPointer)
-		{
-			DespawnSword(sword);
-			return HeapStorage.NullPointer;
-		}
-
-		sword.Init(this, pointer, groundLayers);
-		swords.Add(sword);
-		NotifyChanged();
-		return pointer;
+		Vector2 at = (Vector2)transform.position + followOffset;
+		return Instantiate(swordPrefab, at, Quaternion.identity);
 	}
 
 	/// <summary>
-	/// 포인터의 소환검을 해제한다 (free). heap 칸을 돌려주고 오브젝트를 없앤다.<br/>
-	/// 해제한 포인터, 누수된 포인터, 소환검이 아닌 포인터이면 false. 스킬은 false면 InvalidPointerError로 끝낸다.
+	/// malloc에 성공한 소환검을 포인터와 함께 목록에 올린다. 검 소환 스킬이 Malloc 다음에 부른다.
 	/// </summary>
-	public bool Free(int pointer)
+	public void Register(SummonedSword sword, int pointer)
 	{
-		if (!memory.Heap.TryGet(pointer, out SummonedSword sword)) return false;
-		if (!memory.Heap.Free(pointer)) return false;
-		swords.Remove(sword);
-		DespawnSword(sword);
+		if (sword == null || pointer == HeapStorage.NullPointer || swords.Contains(sword)) return;
+		sword.Init(this, pointer, groundLayers);
+		swords.Add(sword);
 		NotifyChanged();
-		return true;
+	}
+
+	/// <summary>
+	/// 소환검 오브젝트를 없애고 목록에서 뺀다. 해제 스킬이 PredefinedFunction.Free에 성공한 뒤, 또는 검 소환 스킬이 malloc에 실패했을 때 부른다.<br/>
+	/// heap은 건드리지 않는다 (heap 해제는 스킬의 Free). 소환검은 이 함수로만 없앤다 (코드 작성 규칙 3).
+	/// </summary>
+	public void DespawnSword(SummonedSword sword)
+	{
+		if (sword == null) return;
+		bool listed = swords.Remove(sword);
+		// 네트워크를 붙일 때 여기만 NetworkServer.Destroy로 바꾼다
+		Destroy(sword.gameObject);
+		if (listed) NotifyChanged();
 	}
 
 	/// <summary>포인터로 소환검을 찾는다. 해제·누수된 포인터이면 false.</summary>
@@ -221,23 +221,7 @@ public class SummonedSwords : MonoBehaviour
 	// 영역 비우기(재부팅 등)로 heap에서 지워진 소환검: 오브젝트도 없앤다
 	void OnObjectCleared(object obj)
 	{
-		if (obj is SummonedSword sword && swords.Remove(sword))
-		{
-			DespawnSword(sword);
-			NotifyChanged();
-		}
-	}
-
-	// 소환검은 이 두 함수로만 만들고 없앤다. 네트워크를 붙일 때 여기만 NetworkServer.Spawn / Destroy로 바꾼다
-	SummonedSword SpawnSword()
-	{
-		Vector2 at = (Vector2)transform.position + followOffset;
-		return Instantiate(swordPrefab, at, Quaternion.identity);
-	}
-
-	void DespawnSword(SummonedSword sword)
-	{
-		if (sword != null) Destroy(sword.gameObject);
+		if (obj is SummonedSword sword && swords.Contains(sword)) DespawnSword(sword);
 	}
 
 	// 캐릭터가 사라지면 소환검도 남기지 않는다
@@ -248,7 +232,8 @@ public class SummonedSwords : MonoBehaviour
 			memory.Heap.ObjectLeaked -= OnObjectLeaked;
 			memory.Heap.ObjectCleared -= OnObjectCleared;
 		}
-		foreach (SummonedSword s in swords) DespawnSword(s);
+		// 목록을 돌면서 빼면 안 되므로 복사본으로 없앤다. 캐릭터가 사라지는 중이라 Changed는 알리지 않아도 된다
+		foreach (SummonedSword s in swords.ToArray()) if (s != null) Destroy(s.gameObject);
 		swords.Clear();
 	}
 }

@@ -56,6 +56,7 @@
   2. 소환검이 필요한데 쓸 수 있는 소환검이 0개: `NoSummonedSwordError`
 - 맨손: 시전자의 `PhysicalSword.IsUnarmed`. `PhysicalSword`가 없으면 `TempSwordState.IsUnarmed`.
 - 소환검 개수: 시전자의 `SummonedSwords.ReadyCount` (사용 가능한 소환검). 없으면 `TempSwordState.SummonedSwordCount`, 그것도 없으면 소환검이 있는 것으로 본다.
+  - 해제만 다르게 센다: 해제할 수 있는 소환검(전역 포인터 목록의 소환검, 던진 검 포함) 수.
 - 둘 다 없으면 검을 들고 있고 소환검도 있는 것으로 본다.
 
 ### 스킬 목록
@@ -91,6 +92,17 @@
   - 패링: 맨손 불가
   - 표식 남기기: 소환검 필요 (「검이 적 좌우로 찔러」)
   - 해제: 소환검이 있어야 쓸 수 있음
+
+### 검 소환·해제 (#102)
+- 검 소환 (`c.summon_sword`, malloc)
+  - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, heapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
+  - 소환검이 이미 5개(`CountHeapObjects<SummonedSword>`, 누수 포함)거나 heap이 모자라면 만들지 않는다. C의 malloc처럼 에러로 끝내지 않는다.
+  - 포인터는 이 작업의 것. 정상으로 끝나면 전역 포인터 목록으로 옮겨지고, 도중에 실행 중단·실패로 끝나면 그 소환검은 누수된다.
+- 해제 (`c.free_sword`, free)
+  - 마지막에 소환한 소환검부터 해제한다 (`GetGlobalPointers<SummonedSword>`의 마지막).
+  - 날아가는 중·떨어진 소환검도 거리와 상관없이 해제한다. 물리 검, 누수된 소환검, 아직 진행 중인 검 소환의 소환검은 해제하지 않는다.
+  - 순서: `TryGetHeapObject` → `PredefinedFunction.Free` → `SummonedSwords.DespawnSword`. 쓸 수 없는 포인터면 `InvalidPointerError`로 그 작업만 끝난다.
+  - 해제할 소환검이 없으면 `NoSummonedSwordError`.
 
 ## 다른 시스템이 쓰는 것
 

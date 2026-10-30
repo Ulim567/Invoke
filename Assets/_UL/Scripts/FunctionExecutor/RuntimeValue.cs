@@ -57,6 +57,23 @@ public readonly struct RuntimeValue
 		return new RuntimeValue(pointerType, pointer);
 	}
 
+	/// <summary>
+	/// 지금 실행기가 값으로 다룰 수 있는 타입이면 true. int, float, bool, string, char, 포인터.
+	/// </summary>
+	// 함수 데이터를 바꿀 때 아직 다루지 않는 타입(위치, 배열 등)의 변수를 미리 거르기 위함
+	internal static bool IsSupportedType(VariableType type)
+	{
+		if (type == null) return false;
+
+		return type.Kind switch
+		{
+			VariableTypeKind.Int or VariableTypeKind.Float or VariableTypeKind.Bool
+				or VariableTypeKind.String or VariableTypeKind.Char => true,
+			VariableTypeKind.Pointer => type.ElementType != null,
+			_ => false,
+		};
+	}
+
 	// 담은 타입과 다른 함수를 부르면 InvalidCastException이 난다. 실행기 코드의 실수이므로 바로 드러나게 한다
 	public int AsInt() => (int)value;
 	public float AsFloat() => (float)value;

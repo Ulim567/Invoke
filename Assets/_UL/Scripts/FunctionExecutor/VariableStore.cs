@@ -37,6 +37,11 @@ public class VariableStore
 	}
 
 	/// <summary>
+	/// 변수 name이 있으면 true. TryDeclare, TrySet이 false를 돌려준 이유(이름 때문인지 타입 때문인지)를 가릴 때 쓴다.
+	/// </summary>
+	public bool Contains(string name) => name != null && variables.ContainsKey(name);
+
+	/// <summary>
 	/// 변수 name의 현재 값을 꺼낸다. 없는 이름이면 false를 돌려준다.
 	/// </summary>
 	public bool TryGet(string name, out RuntimeValue value)

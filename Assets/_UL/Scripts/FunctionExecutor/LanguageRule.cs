@@ -21,6 +21,10 @@ public enum FunctionFailure
 	UndeclaredVariable,
 	// 값 칸에 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없었다 (예: int 칸의 "abc")
 	InvalidLiteral,
+	// 같은 이름의 변수를 두 번 선언했다
+	DuplicateVariable,
+	// 변수의 타입과 다른 타입의 값을 넣었다 (예: int x = 0.5)
+	TypeMismatch,
 }
 
 /// <summary>

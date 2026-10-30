@@ -45,9 +45,24 @@ public class UserFunction : FunctionBlock
 		}
 	}
 
-	public UserFunction(string name, params Block[] blocks)
+	/// <summary>
+	/// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수. 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 계산해 넣는다.
+	/// </summary>
+	public override int FrameSize { get; }
+
+	/// <summary>
+	/// 프레임 크기 1(파라미터, 지역 변수 없음)인 함수를 만든다.
+	/// </summary>
+	public UserFunction(string name, params Block[] blocks) : this(name, 1, blocks) { }
+
+	/// <summary>
+	/// 프레임 크기를 정해 함수를 만든다. 1보다 작으면 1로 본다.
+	/// </summary>
+	public UserFunction(string name, int frameSize, params Block[] blocks)
 	{
 		Name = name;
+		// 호출 자리 1칸은 언제나 쓴다
+		FrameSize = frameSize < 1 ? 1 : frameSize;
 		Blocks = blocks;
 	}
 

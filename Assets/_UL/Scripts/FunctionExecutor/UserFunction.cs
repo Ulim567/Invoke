@@ -40,7 +40,11 @@ public class UserFunction : FunctionBlock
 		{
 			int sum = 0;
 			foreach (Block block in Blocks)
+			{
 				if (block is FunctionBlock function) sum += function.CooldownTicks;
+				// 함수 데이터에서 바꾼 함수는 스킬을 함수 블록(CallPredefinedBlock)으로 감싸 넣는다
+				else if (block is CallPredefinedBlock call) sum += call.CooldownTicks;
+			}
 			return sum;
 		}
 	}

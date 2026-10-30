@@ -11,7 +11,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 거부(false)하는 함수: 지금 실행기가 아직 실행할 수 없는 기능을 쓴 함수다. 콘솔 오류를 남긴다.<br/>
-/// - 예: 조건문·for 블록, 위치 타입 변수, 비어 있는 값 칸<br/>
+/// - 예: 조건문·for 블록, 위치 타입 변수, 비어 있는 값 칸(함수 블록의 파라미터 칸은 비워도 됨), 없는 고정 ID<br/>
 /// - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등)은 거부하지 않는다. 실행 중에 그 블록이 실패 종류를 기록하고 실패한다.
 /// </para>
 /// </summary>
@@ -66,6 +66,26 @@ public static class FunctionDataConverter
 
 				ValueBlock value = ConvertValue(data, block.Slots[1]);
 				return value == null ? null : new AssignBlock(variableName, value);
+			}
+
+			// 칸: 파라미터 수만큼의 값
+			case BlockKind.Function:
+			{
+				if (block.IsUserFunction) return Reject(data, "사용자 정의 함수 호출은 아직 실행할 수 없습니다.");
+				if (string.IsNullOrEmpty(block.FunctionId) || !PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function))
+					return Reject(data, $"고정 ID {block.FunctionId}의 함수를 찾을 수 없습니다.");
+				if (block.Slots.Count > function.Parameters.Count)
+					return Reject(data, $"{function.Name}의 값 칸이 파라미터 수({function.Parameters.Count})보다 많습니다.");
+
+				// 비운 값 칸은 null로 넘긴다. 스킬은 값이 없을 때 슬롯에서 바로 시전했을 때처럼 동작한다
+				ValueBlock[] arguments = new ValueBlock[block.Slots.Count];
+				for (int i = 0; i < arguments.Length; i++)
+				{
+					if (IsEmpty(block.Slots[i])) continue;
+					arguments[i] = ConvertValue(data, block.Slots[i]);
+					if (arguments[i] == null) return null;
+				}
+				return new CallPredefinedBlock(function, arguments);
 			}
 		}
 

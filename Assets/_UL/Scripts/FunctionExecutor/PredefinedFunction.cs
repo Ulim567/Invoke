@@ -28,6 +28,9 @@ public abstract class PredefinedFunction : FunctionBlock
 	// OnStart, OnTick 도중에 바로 끝내면 그 뒤의 스킬 코드가 끝난 함수 위에서 계속 실행되기 때문
 	SkillError requestedError;
 	bool stopRequested;
+	// 함수 블록의 값 칸에서 받은 파라미터 값. Parameters와 같은 순서이고, 비운 칸은 null이다
+	// 슬롯에서 바로 시전했거나 값 칸이 없으면 배열 자체가 null이다
+	RuntimeValue?[] arguments;
 
 	/// <summary>
 	/// 고정 ID. 함수 데이터의 함수 블록이 이 값으로 이 함수를 가리킨다. 화면 이름(Name)과 따로 둔다.
@@ -141,6 +144,36 @@ public abstract class PredefinedFunction : FunctionBlock
 		}
 
 		stopRequested = true;
+	}
+
+	/// <summary>
+	/// 이름이 name인 파라미터의 값을 꺼낸다. OnStart, OnTick, OnEnd에서 부른다.<br/>
+	/// 값 칸을 비웠거나 슬롯에서 바로 시전해 값이 없으면 false를 돌려준다. 그때는 슬롯에서 바로 시전했을 때처럼 동작한다.<br/>
+	/// name은 Parameters에 적은 이름이다. 없는 이름이면 콘솔 오류를 내고 false를 돌려준다.
+	/// </summary>
+	// 번호가 아니라 이름으로 읽는 이유: 코드에서 무엇을 읽는지 바로 보이고, 파라미터 순서가 바뀌어도 읽는 코드를 고치지 않기 위함
+	protected bool TryGetArgument(string name, out RuntimeValue value)
+	{
+		value = default;
+		IReadOnlyList<ParameterData> parameters = Parameters;
+		for (int i = 0; i < parameters.Count; i++)
+		{
+			if (parameters[i].Name != name) continue;
+
+			if (arguments == null || i >= arguments.Length || arguments[i] == null) return false;
+			value = arguments[i].Value;
+			return true;
+		}
+
+		// 이름 오타는 컴파일 오류로 잡히지 않으므로 바로 알린다
+		Debug.LogError($"{Name}: 파라미터 {name}이(가) 없습니다. Parameters에 적은 이름으로 읽습니다.");
+		return false;
+	}
+
+	// 함수 블록(CallPredefinedBlock)이 값 칸을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
+	internal void SetArguments(RuntimeValue?[] values)
+	{
+		arguments = values;
 	}
 
 	/// <summary>

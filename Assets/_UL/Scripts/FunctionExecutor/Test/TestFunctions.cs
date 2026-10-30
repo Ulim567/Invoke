@@ -162,3 +162,26 @@ public class TestFreeFunction : PredefinedFunction
 		if (Free(task, pointer)) Debug.Log($"{Name}: free {pointer}");
 	}
 }
+
+/// <summary>
+/// 파라미터 값 테스트용 함수. int 파라미터 amount 하나를 받고, 시작할 때 읽은 값을 ArgumentRead로 알린다. 5틱 동안 진행하고 쿨타임은 7틱이다.
+/// </summary>
+public class TestArgumentFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestArgumentFunction;
+	public override string Name => "TestArgumentFunction";
+	public override int TickCount => 5;
+	public override int CooldownTicks => 7;
+	public override System.Collections.Generic.IReadOnlyList<ParameterData> Parameters =>
+		new[] { new ParameterData("amount", new VariableType(VariableTypeKind.Int)) };
+
+	/// <summary>
+	/// 시작할 때 읽은 amount. 값이 없으면 "값 없음"을 넘긴다. 테스트 컴포넌트가 결과를 확인할 때 쓴다.
+	/// </summary>
+	public static event System.Action<string> ArgumentRead;
+
+	protected override void OnStart(FunctionTask task)
+	{
+		ArgumentRead?.Invoke(TryGetArgument("amount", out RuntimeValue amount) ? amount.ToString() : "값 없음");
+	}
+}

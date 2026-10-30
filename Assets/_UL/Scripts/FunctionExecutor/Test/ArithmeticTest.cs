@@ -15,10 +15,13 @@ public class ArithmeticTest : MonoBehaviour
 	static readonly VariableType Bool = new VariableType(VariableTypeKind.Bool);
 
 	FunctionExecutor executor;
+	// 테스트가 시전한 순간의 틱. 끝나는 틱은 이 틱부터 센다. 캐릭터가 네트워크로 늦게 생성되면 실행기가 먼저 돌고 있기 때문
+	int startTick;
 
 	void Start()
 	{
 		executor = GetComponent<FunctionExecutor>();
+		startTick = executor.CurrentTick;
 		executor.TaskEnded += OnTaskEnded;
 
 		TestCRules(executor.Rule);
@@ -130,7 +133,7 @@ public class ArithmeticTest : MonoBehaviour
 
 	void OnTaskEnded(FunctionTask task)
 	{
-		int tick = executor.CurrentTick;
+		int tick = executor.CurrentTick - startTick;
 		switch (task.Name)
 		{
 			case "AddTwo":

@@ -11,6 +11,9 @@ public class VariableValue : ValueBlock
 		this.variableName = variableName;
 	}
 
+	// 값 칸에 넣은 변수는 블록이 아니므로 틱을 쓰지 않는다
+	internal override bool UsesTick => false;
+
 	protected override BlockResult Step(FunctionTask task)
 	{
 		// 사용자 정의 함수 밖이면 지역 변수가 없으므로, 없는 변수를 읽은 것과 같게 처리한다

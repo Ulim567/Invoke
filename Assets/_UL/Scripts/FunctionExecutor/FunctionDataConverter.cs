@@ -75,12 +75,34 @@ public static class FunctionDataConverter
 	// 값 칸 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
 	static ValueBlock ConvertValue(FunctionData data, SlotData slot)
 	{
-		if (slot.Block != null) return Reject<ValueBlock>(data, $"값 칸의 {slot.Block.Kind} 블록은 아직 실행할 수 없습니다.");
+		if (slot.Block != null) return ConvertValueBlock(data, slot.Block);
 		if (slot.VariableName != null) return new VariableValue(slot.VariableName);
 		// 글자열이 그 타입의 값으로 바뀌는지는 실행할 때 확인한다(InvalidLiteral). 플레이어 코드의 잘못이기 때문
 		if (slot.Literal != null && slot.Type != null) return new LiteralValue(slot.Type, slot.Literal);
 
 		return Reject<ValueBlock>(data, "값 칸이 비어 있습니다.");
+	}
+
+	// 값 칸에 끼운 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
+	static ValueBlock ConvertValueBlock(FunctionData data, BlockData block)
+	{
+		switch (block.Kind)
+		{
+			// 칸: 왼쪽 값, 연산자, 오른쪽 값
+			case BlockKind.Arithmetic when block.Slots.Count >= 3:
+			{
+				// "5"처럼 숫자 글자열도 TryParse를 통과하므로, 정의된 값인지 한 번 더 본다
+				if (!System.Enum.TryParse(block.Slots[1].Option, out ArithmeticOperator op) || !System.Enum.IsDefined(typeof(ArithmeticOperator), op))
+					return Reject<ValueBlock>(data, $"연산자 {block.Slots[1].Option}을(를) 알 수 없습니다.");
+
+				ValueBlock left = ConvertValue(data, block.Slots[0]);
+				if (left == null) return null;
+				ValueBlock right = ConvertValue(data, block.Slots[2]);
+				return right == null ? null : new ArithmeticBlock(left, op, right);
+			}
+		}
+
+		return Reject<ValueBlock>(data, $"값 칸의 {block.Kind} 블록은 아직 실행할 수 없습니다.");
 	}
 
 	static bool IsEmpty(SlotData slot) => slot.Block == null && slot.VariableName == null && slot.Literal == null;

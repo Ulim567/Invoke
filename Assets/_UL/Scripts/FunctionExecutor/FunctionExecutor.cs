@@ -188,12 +188,20 @@ public class FunctionExecutor : MonoBehaviour
 	/// </summary>
 	// 언어 규칙 파일이 없으면 C 기본값으로 실행을 이어 간다. 연결하지 않은 것은 Awake에서 이미 알렸다
 	// 임시 규칙을 만들어 쓰는 이유: C 기본값을 이 파일에 한 번 더 적으면, 언어 규칙 파일의 처음 값과 어긋날 수 있기 때문
-	internal bool TryGetDefaultValue(VariableType type, out RuntimeValue value)
-	{
-		if (languageRule != null) return languageRule.TryGetDefaultValue(type, out value);
+	internal bool TryGetDefaultValue(VariableType type, out RuntimeValue value) => Rule.TryGetDefaultValue(type, out value);
 
-		if (fallbackRule == null) fallbackRule = ScriptableObject.CreateInstance<LanguageRule>();
-		return fallbackRule.TryGetDefaultValue(type, out value);
+	/// <summary>
+	/// 블록이 따를 언어 규칙. 언어 규칙 파일이 없으면 처음 값(C 규칙)만 가진 임시 규칙이다.
+	/// </summary>
+	internal LanguageRule Rule
+	{
+		get
+		{
+			if (languageRule != null) return languageRule;
+
+			if (fallbackRule == null) fallbackRule = ScriptableObject.CreateInstance<LanguageRule>();
+			return fallbackRule;
+		}
 	}
 
 	FailureHandling FindHandling(string functionName, FunctionFailure failure)

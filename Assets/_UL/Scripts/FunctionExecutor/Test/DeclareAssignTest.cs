@@ -10,7 +10,6 @@ using UnityEngine;
 public class DeclareAssignTest : MonoBehaviour
 {
 	static readonly VariableType Int = new VariableType(VariableTypeKind.Int);
-	static readonly VariableType Float = new VariableType(VariableTypeKind.Float);
 
 	FunctionExecutor executor;
 
@@ -55,9 +54,9 @@ public class DeclareAssignTest : MonoBehaviour
 		duplicate.Blocks.Add(BlockData.Declare(Int, "x", SlotData.FromLiteral(Int, "2")));
 		CastConverted(duplicate, 3);
 
-		// int x = 0.5; → 틱 1에 TypeMismatch
+		// int x = "abc"; → 틱 1에 TypeMismatch. 글자열은 C에서도 int로 바뀌지 않는다
 		FunctionData mismatch = FunctionData.Create("Mismatch");
-		mismatch.Blocks.Add(BlockData.Declare(Int, "x", SlotData.FromLiteral(Float, "0.5")));
+		mismatch.Blocks.Add(BlockData.Declare(Int, "x", SlotData.FromLiteral(new VariableType(VariableTypeKind.String), "abc")));
 		CastConverted(mismatch, 2);
 
 		// y = 1; (선언 없음) → 틱 1에 UndeclaredVariable. 지역 변수가 없어 프레임 1

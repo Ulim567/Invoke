@@ -23,8 +23,25 @@ public enum FunctionFailure
 	InvalidLiteral,
 	// 같은 이름의 변수를 두 번 선언했다
 	DuplicateVariable,
-	// 변수의 타입과 다른 타입의 값을 넣었다 (예: int x = 0.5)
+	// 변수의 타입과 다른 타입의 값을 넣었거나, 그 타입에 쓸 수 없는 연산을 했다 (예: int x = 0.5를 허용하지 않는 언어, float의 %)
 	TypeMismatch,
+	// 0으로 나누거나 0으로 나머지를 구했다 (int, float 모두)
+	DivideByZero,
+}
+
+/// <summary>
+/// 숫자 타입(int, float, char, bool)이 섞일 때 값을 바꾸는 규칙. 언어마다 다르므로 언어 규칙 파일이 고른다.
+/// </summary>
+// FunctionFailure와 같은 이유로, 새 규칙은 맨 끝에만 추가한다
+public enum NumericConversion
+{
+	// 실제 C처럼 모두 자동으로 바꾼다. 연산에서 char, bool은 int로 올리고, int와 float이 섞이면 float으로 계산한다.
+	// 대입할 때 float을 int에 넣으면 소수점을 버린다 (int x = 0.5 → 0)
+	ImplicitAll,
+	// 같은 타입끼리만 계산하고 대입한다 (float f = 3도 TypeMismatch)
+	Strict,
+	// 값이 잘리지 않는 쪽으로만 바꾼다 (Java, C#). int → float, char → int, char → float만 된다
+	WideningOnly,
 }
 
 /// <summary>
@@ -55,7 +72,7 @@ public enum FailureHandling
 }
 
 /// <summary>
-/// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지와 그 실패의 분류(실패 처리 표), 초기값을 비운 변수의 기본값을 정한다.
+/// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지와 그 실패의 분류(실패 처리 표), 초기값을 비운 변수의 기본값, 숫자 타입 변환 규칙을 정한다.
 /// <para>
 /// 사용법<br/>
 /// - Project 창에서 Create → Invoke → Language Rule로 만들고, 모든 실패 종류마다 처리를 한 줄씩 넣는다.<br/>
@@ -89,6 +106,32 @@ public class LanguageRule : ScriptableObject
 	// 글자가 아니라 글자 번호로 받는다. Inspector의 글자 칸에는 글자 번호 0('\0')을 넣을 수 없기 때문
 	[SerializeField, Tooltip("char 기본값의 글자 번호. 0은 '\\0'")] int defaultCharCode = 0;
 	[SerializeField] string defaultString = "";
+
+	// 처음 값은 C의 규칙이다. 이미 만든 C 파일도 Unity가 새 칸을 읽을 때 이 값을 넣는다
+	[Header("숫자 타입 변환")]
+	[SerializeField, Tooltip("int, float, char, bool이 섞일 때 값을 바꾸는 규칙")]
+	NumericConversion numericConversion = NumericConversion.ImplicitAll;
+	[SerializeField, Tooltip("float에 %를 쓸 수 있는지. C는 쓸 수 없다(TypeMismatch)")]
+	bool allowFloatModulo = false;
+
+	/// <summary>
+	/// 숫자 타입이 섞일 때 값을 바꾸는 규칙. 연산 블록, 선언 블록, 대입 블록이 따른다.
+	/// </summary>
+	public NumericConversion NumericConversion => numericConversion;
+
+	/// <summary>
+	/// float에 %를 쓸 수 있으면 true. false이면 TypeMismatch로 실패한다.
+	/// </summary>
+	public bool AllowFloatModulo => allowFloatModulo;
+
+	// 테스트 코드가 C가 아닌 숫자 타입 변환 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
+	internal static LanguageRule CreateForTest(NumericConversion conversion, bool allowFloatModulo)
+	{
+		LanguageRule rule = CreateInstance<LanguageRule>();
+		rule.numericConversion = conversion;
+		rule.allowFloatModulo = allowFloatModulo;
+		return rule;
+	}
 
 	/// <summary>
 	/// failure의 처리를 찾는다. 표에 없으면 false를 돌려준다.

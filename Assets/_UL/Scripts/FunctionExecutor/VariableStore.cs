@@ -42,6 +42,21 @@ public class VariableStore
 	public bool Contains(string name) => name != null && variables.ContainsKey(name);
 
 	/// <summary>
+	/// 변수 name을 선언한 타입. 대입 블록이 새 값을 이 타입으로 바꿀 때 쓴다. 없는 이름이면 false를 돌려준다.
+	/// </summary>
+	public bool TryGetType(string name, out VariableType type)
+	{
+		if (name != null && variables.TryGetValue(name, out Variable variable))
+		{
+			type = variable.Type;
+			return true;
+		}
+
+		type = null;
+		return false;
+	}
+
+	/// <summary>
 	/// 변수 name의 현재 값을 꺼낸다. 없는 이름이면 false를 돌려준다.
 	/// </summary>
 	public bool TryGet(string name, out RuntimeValue value)
@@ -71,7 +86,7 @@ public class VariableStore
 
 	// 두 타입이 같은지. 포인터, 배열, list는 원소 타입까지, struct는 이름까지 같아야 한다
 	// VariableType은 클래스라서 ==로 비교하면 같은 객체인지만 보므로 따로 비교한다
-	static bool IsSameType(VariableType a, VariableType b)
+	internal static bool IsSameType(VariableType a, VariableType b)
 	{
 		if (a == null || b == null) return a == b;
 		if (a.Kind != b.Kind) return false;

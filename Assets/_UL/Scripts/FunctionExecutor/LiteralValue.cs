@@ -23,6 +23,9 @@ public class LiteralValue : ValueBlock
 		isValid = TryParse(type, literal, out parsedValue);
 	}
 
+	// 키보드로 적은 값은 블록이 아니므로 틱을 쓰지 않는다
+	internal override bool UsesTick => false;
+
 	protected override BlockResult Step(FunctionTask task)
 	{
 		if (!isValid)

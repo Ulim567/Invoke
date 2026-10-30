@@ -53,6 +53,8 @@ public class SkillData
 	[SerializeField, Min(0)] int localVariableCount;
 	[Tooltip("heap 사용량 (칸). 검 소환, 검기, 패링, 이동 계열. 메모리 작업(이우림)이 끝나면 실행기가 읽는다")]
 	[SerializeField, Min(0)] int heapSize;
+	[Tooltip("범위 스킬(Area)의 반경 (유닛). 캐릭터 주변 이 거리 안의 몬스터가 대상이 된다. 다른 방식은 쓰지 않는다")]
+	[SerializeField, Min(0f)] float areaRadius = 4f;
 
 	[Header("필요 조건")]
 	[Tooltip("쓸 수 있는 소환검이 있어야 하면 체크")]
@@ -72,6 +74,7 @@ public class SkillData
 	public int CooldownTicks => cooldownTicks;
 	public int LocalVariableCount => localVariableCount;
 	public int HeapSize => heapSize;
+	public float AreaRadius => areaRadius;
 	public bool NeedsSummonedSword => needsSummonedSword;
 	public bool UsableUnarmed => usableUnarmed;
 	public string Note => note;

@@ -7,13 +7,14 @@
 - 데미지를 받을 수 있는 모든 것이 쓰는 공통 인터페이스 `IDamageable`을 정한다. 몬스터, 플레이어, 보스, 기둥, 분신이 이것을 구현한다.
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
+- 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
 - 하지 않는 일
   - 데미지 계산(공격력 × 배율, 치명타, 처형)은 하지 않는다. 계산이 끝난 정수 데미지를 받기만 한다.
   - 연출(이펙트, 소리, 애니메이션)을 하지 않는다. 연출은 `HitEffectPlayed`, `DeathEffectPlayed` event를 받은 쪽이 한다.
   - 드롭은 아직 다루지 않는다. 이후 이슈에서 추가한다.
-  - 공격 구조(`MonsterAttackData`, `ProjectileAttack`)는 언제, 어느 방향으로 공격할지 정하지 않는다. 몬스터 AI(`GroundChaseAI` 등)가 정한다.
+  - 공격 구조(`MonsterAttackData`, `ProjectileAttack`)는 언제, 어느 방향으로 공격할지 정하지 않는다. 몬스터 AI(`GroundChaseAI`, `FlyingShooterAI` 등)가 정한다.
 
 ## 동작 규칙
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
@@ -35,7 +36,8 @@
 - 잡몹
   - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
     - 몸 약 2.5×1.5칸, 그림 Pivot은 몸 바닥(임혜원 #101). 판정 BoxCollider2D와 `ContactDamage` 상자는 Size (2.4, 1.2), Offset (0, 0.6) (#107)
-  - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형 (「잡몹 2」 이슈)
+  - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형. `Monster` + `ContactDamage` + `FlyingShooterAI` + `ProjectileAttack` + `StatusEffects`. 공중을 떠다니다 사거리 안의 플레이어를 멈춰서 겨냥해 쏜다. 쫓아가지는 않는다. 체력 30, 접촉 피해 5, 투사체 체력 피해 8(`Loop_Shot`), 사거리 6, 쏘는 간격 2초, 모으는 시간 0.25초, 사망 대기 0.75초 (전부 임시, 프리팹 Inspector 값)
+    - 원형 판정(CircleCollider2D) 지름 1.1, 그림 Pivot은 가운데(임혜원 #101). Rigidbody2D Gravity Scale 0
 - 몬스터끼리는 서로 통과한다(메이플 방식). 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌이 꺼져 있다(#81).
 - 순찰·추적 (`GroundChaseAI`)
   - 순찰: "걷기"와 "멈추기"를 랜덤 시간씩 번갈아 한다.
@@ -51,7 +53,7 @@
 
 - 스포너 (`MonsterSpawner`)
   - 구역(`Area Size`, `Area Offset`) 안에 몬스터를 `Max Count`(임시 3)마리까지 둔다. 한 마리가 죽으면(`Died`) `Respawn Delay`(임시 5초) 뒤 구역 안 새 랜덤 위치에 한 마리를 만든다.
-  - 위치: 구역 안 땅·발판의 윗면 중 랜덤한 곳에 발이 닿게 만든다(몬스터의 BoxCollider2D 기준). 구역은 몬스터가 생길 땅과 발판을 덮기만 하면 된다.
+  - 위치: 구역 안 땅·발판의 윗면 중 랜덤한 곳에 발이 닿게 만든다(몬스터의 BoxCollider2D 또는 CircleCollider2D 기준). 떠다니는 몬스터(`FlyingShooterAI`)는 생긴 자리에서 `Hover Height`만큼 떠오른다. 구역은 몬스터가 생길 땅과 발판을 덮기만 하면 된다.
     - 구역 안 랜덤한 x의 높은 하늘(구역 위 100칸)에서 아래로 선을 그어 땅(`Ground Layers`)을 찾는다. 타일맵 Collider는 테두리(Outlines)만 있어서 선이 윗면·아랫면을 번갈아 맞으므로, 짝수 번째만 윗면으로 써서 땅 속에는 만들지 않는다.
     - 고른 자리 위로 몸 높이만큼 비어 있지 않거나 구역 안에 윗면이 없으면 x를 다시 뽑는다(최대 10번).
   - 몬스터는 `NetworkSpawner.Spawn`(이우림)으로 스포너가 있는 씬에 만든다. 그래서 사냥터 씬의 물리 세계와 플레이어에게 맞춰진다.
@@ -59,10 +61,19 @@
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
   - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(몬스터 서버 동기화 이슈).
 
+- 떠다니며 쏘기 (`FlyingShooterAI`)
+  - 떠다니기: 중력 없이 생긴 자리보다 `Hover Height`(2.5)만큼 위에서 위아래로 살짝 둥실거린다.
+  - 순찰: 움직이기·멈추기를 랜덤 시간씩 번갈아 하고 가끔 돌아선다. 벽(`Obstacle Layers`)이나 처음 자리에서 `Patrol Radius`(4)보다 멀어지면 돌아선다.
+  - 공격: `Attack Range`(6) 안의 살아 있는 플레이어 중 가장 가까운 플레이어를 멈춰서 바라보고, 처음엔 `First Shot Delay`(0.5초) 뒤, 그다음엔 `Fire Interval`(2초)마다 몸 중심을 겨냥해 `ProjectileAttack.Fire`를 부른다. 대각선으로도 쏜다. `Lose Range`(8) 밖으로 나가거나 죽으면 순찰로 돌아간다.
+  - 밀려나기: 맞으면(`Damaged`) 쏘던 플레이어 반대쪽(없으면 바라보는 반대쪽)으로 `Knockback Time`(0.15초) 동안 `Knockback Speed`(4)로 밀린다. `TakeDamage`에는 때린 쪽 정보가 없어서 쏘던 플레이어를 기준으로 한다.
+- 발사 (`ProjectileAttack`)
+  - `Fire`를 부르면 연출 `FireEffectPlayed`가 바로 나가고, `Fire Delay`초(모으는 시간) 뒤에 투사체가 나간다. 모으는 중에는 `IsCharging`이 `true`이고, 다시 `Fire`를 불러도 무시한다.
+  - 방향은 `Fire`를 부른 순간에 정해진다. 모으는 중에 죽거나 기절하면 투사체는 나가지 않는다.
+
 - 상태 이상 반응 (#103)
   - 상태 이상은 같은 오브젝트의 `StatusEffects`(박진우)에서 읽기만 한다. 몬스터 프리팹 최상위에 `StatusEffects`를 붙인다. 없으면 상태 이상에 반응하지 않는다.
-  - 기절(`IsStunned`): 행동 불가. `GroundChaseAI`가 그 자리에 멈추고 탐지도 하지 않는다. `ContactDamage`는 피해를 주지 않고, `ProjectileAttack.Fire`는 쏘지 않는다.
-  - 이속 감소(`MoveSpeedMultiplier`): `GroundChaseAI`의 순찰·추적 속도에 곱한다.
+  - 기절(`IsStunned`): 행동 불가. `GroundChaseAI`, `FlyingShooterAI`가 그 자리에 멈추고 탐지도 하지 않는다. `ContactDamage`는 피해를 주지 않고, `ProjectileAttack.Fire`는 쏘지 않는다. 발사를 모으는 중에 기절하면 투사체는 나가지 않는다.
+  - 이속 감소(`MoveSpeedMultiplier`): `GroundChaseAI`의 순찰·추적 속도, `FlyingShooterAI`의 순찰 속도에 곱한다.
   - 실명(`IsBlinded`): 공격이 빗나간다. `ContactDamage`는 피해를 주지 않는다. 실명 중에 쏜 투사체는 `Misses`가 켜져 플레이어를 통과한다(날아가는 중에 실명이 풀려도 빗나감). 땅·발판에는 그대로 막힌다.
 
 ## 다른 시스템이 쓰는 것
@@ -147,11 +158,23 @@
 
 ### `ProjectileAttack`
 
-몬스터 프리팹에 `Monster`와 함께 붙인다. Inspector에서 `Attack`(MonsterAttackData), `Projectile Prefab`, `Speed`, `Fire Point Offset`을 정한다.
+몬스터 프리팹에 `Monster`와 함께 붙인다. Inspector에서 `Attack`(MonsterAttackData), `Projectile Prefab`, `Speed`, `Fire Point Offset`, `Fire Delay`(모으는 시간)를 정한다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 투사체를 쏜다. 몬스터 AI가 부른다. 죽었거나 기절했거나 방향이 (0, 0)이면 쏘지 않는다. 실명 중에 쏜 투사체는 빗나간다. |
+| `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 쏜다. 몬스터 AI가 부른다. 연출이 바로 나가고 `Fire Delay`초 뒤 투사체가 나간다. 죽었거나 기절했거나 방향이 (0, 0)이거나 모으는 중이면 쏘지 않는다. 실명 중에 나간 투사체는 빗나간다. |
+| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` |
+| `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
+
+### `FlyingShooterAI`
+
+몬스터 프리팹에 `Monster`, `Rigidbody2D`(Dynamic, Gravity Scale 0, Freeze Rotation Z), `Collider2D`, `ProjectileAttack`과 함께 붙인다. Inspector에서 `Obstacle Layers`는 Ground, `Target Layers`는 Player로 둔다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Target` | - | `PlayerHealth` | 지금 쏘고 있는 플레이어. 순찰 중이면 `null` |
+| `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
+| `IsMoving` | - | `bool` | 지금 좌우로 움직이고 있으면 `true`(밀려나는 중 포함) |
 
 ### `MonsterProjectile`
 
@@ -185,6 +208,6 @@
   - `Despawn Delay`는 사망 모션 길이 이상 (Leak 1.0초, Loop 0.75초)
   - 프리팹 판정 크기·값은 김도훈이 먼저 바꾸고, 그림·Animator·MonsterAnimator(임혜원)는 그 뒤 임혜원이 프리팹 최상위에 붙인다
   - 몬스터 연출은 임혜원의 MonsterAnimator(`_HW`)가 `HitEffectPlayed`, `DeathEffectPlayed`, `GroundChaseAI.IsMoving`을 읽어서 한다. Leak은 멈출 때 Move를 천천히 틀고, 대기 모션은 따로 없다
-- 임혜원과 정해야 할 것
-  - Loop 발사 연출: `ProjectileAttack`에 연출 event `FireEffectPlayed`와 모으는 시간 `Fire Delay`(Loop 0.25초)를 추가한다 (잡몹 2 이슈)
-  - Loop 피격 시 쫓던 플레이어 반대쪽으로 살짝 밀리기 (잡몹 2 이슈)
+  - Loop 발사 연출은 `ProjectileAttack.FireEffectPlayed`를 받는다. Shoot 모션 4번째 프레임(약 0.25초)에 맞춰 `Fire Delay` 0.25초 뒤 투사체가 나간다
+  - Loop는 맞으면 쏘던 플레이어 반대쪽으로 살짝 밀린다(`FlyingShooterAI`). 그림의 휘청 모션과 함께 보인다
+  - 투사체 그림 `Loop_Bullet`은 `MonsterBullet` 프리팹에 임혜원이 붙인다

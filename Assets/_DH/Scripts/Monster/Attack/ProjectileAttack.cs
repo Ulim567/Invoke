@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -7,7 +8,8 @@ using UnityEngine;
 /// - Monster와 같은 오브젝트에 붙이고, Attack에 MonsterAttackData 파일, Projectile Prefab에 MonsterProjectile 프리팹을 넣는다.<br/>
 /// - 언제, 어느 방향으로 쏠지는 몬스터 AI(잡몹·보스 이슈)가 정하고 Fire(방향)를 부른다.<br/>
 /// - 죽은 몬스터는 쏘지 않는다.<br/>
-/// - 같은 오브젝트의 StatusEffects(없으면 무시)가 기절이면 쏘지 않고, 실명이면 쏘지만 그 투사체는 플레이어를 통과한다(빗나감).
+/// - 같은 오브젝트의 StatusEffects(없으면 무시)가 기절이면 쏘지 않고, 실명이면 쏘지만 그 투사체는 플레이어를 통과한다(빗나감).<br/>
+/// - Fire를 부르면 발사 연출(FireEffectPlayed)이 바로 나가고, Fire Delay초(모으는 시간) 뒤에 투사체가 나간다. 모으는 중에 죽거나 기절하면 투사체는 나가지 않는다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster))]
@@ -25,6 +27,25 @@ public class ProjectileAttack : MonoBehaviour
 	[SerializeField, Tooltip("몬스터 위치에서 투사체가 나오는 곳까지의 거리. 왼쪽으로 쏘면 x가 반대로 뒤집힌다")]
 	Vector2 firePointOffset = new Vector2(0.5f, 0.5f);
 
+	[SerializeField, Min(0f), Tooltip("Fire를 부른 뒤 투사체가 나가기까지 모으는 시간(초). 발사 모션에 맞춘다")]
+	float fireDelay;
+
+	// 모으는 중인 발사. 시간이 되면 이 방향으로 투사체를 낸다
+	bool pending;
+	float releaseTime;
+	Vector2 pendingDirection;
+
+	/// <summary>
+	/// [연출] Fire를 불러 발사를 시작할 때 불린다. 쏠 방향(길이 1)을 넘긴다. 발사 모션, 소리에 쓴다.<br/>
+	/// 투사체는 Fire Delay초 뒤에 나간다.
+	/// </summary>
+	public event Action<Vector2> FireEffectPlayed;
+
+	/// <summary>
+	/// 발사를 모으는 중이면 true. 이 동안 Fire를 다시 불러도 무시한다.
+	/// </summary>
+	public bool IsCharging => pending;
+
 	Monster monster;
 	// 상태 이상. 몬스터에 붙어 있지 않으면 null이고, 상태 이상에 반응하지 않는다
 	StatusEffects status;
@@ -37,19 +58,48 @@ public class ProjectileAttack : MonoBehaviour
 
 	/// <summary>
 	/// direction 방향으로 투사체를 쏜다. 방향 길이는 상관없다(자동으로 1로 맞춘다).<br/>
-	/// 몬스터가 죽었거나 기절했거나 방향이 (0, 0)이면 쏘지 않는다. 실명 중에 쏜 투사체는 빗나간다.
+	/// 발사 연출이 바로 나가고, Fire Delay초 뒤에 투사체가 나간다.<br/>
+	/// 몬스터가 죽었거나 기절했거나, 방향이 (0, 0)이거나, 이미 모으는 중이면 쏘지 않는다. 실명 중에 나간 투사체는 빗나간다.
 	/// </summary>
 	public void Fire(Vector2 direction)
 	{
-		if (monster.IsDead || (status != null && status.IsStunned) || direction.sqrMagnitude < 0.0001f) return;
+		if (pending || monster.IsDead || IsStunned() || direction.sqrMagnitude < 0.0001f) return;
 
 		Vector2 dir = direction.normalized;
-		Vector2 offset = new Vector2(dir.x < 0f ? -firePointOffset.x : firePointOffset.x, firePointOffset.y);
+		PlayFireEffect(dir);
 
+		if (fireDelay <= 0f)
+		{
+			Release(dir);
+			return;
+		}
+		pending = true;
+		pendingDirection = dir;
+		releaseTime = Time.time + fireDelay;
+	}
+
+	void Update()
+	{
+		if (!pending || Time.time < releaseTime) return;
+		pending = false;
+		// 모으는 동안 죽거나 기절했으면 나가지 않는다
+		if (monster.IsDead || IsStunned()) return;
+		Release(pendingDirection);
+	}
+
+	// 투사체를 실제로 낸다
+	void Release(Vector2 dir)
+	{
+		Vector2 offset = new Vector2(dir.x < 0f ? -firePointOffset.x : firePointOffset.x, firePointOffset.y);
 		MonsterProjectile projectile = SpawnProjectile((Vector2)transform.position + offset);
-		// 실명 중에 쏜 투사체는 날아가는 동안 실명이 풀려도 빗나간다
+		// 실명 중에 나간 투사체는 날아가는 동안 실명이 풀려도 빗나간다
 		projectile.Launch(attack, dir * speed, status != null && status.IsBlinded);
 	}
+
+	bool IsStunned() => status != null && status.IsStunned;
+
+	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
+	void PlayFireEffect(Vector2 dir) => FireEffectPlayed?.Invoke(dir);
 
 	// 투사체를 만드는 곳은 여기 하나다. 네트워크를 붙이면 NetworkServer.Spawn을 더한다 (코드 작성 규칙 3·4)
 	MonsterProjectile SpawnProjectile(Vector2 position) => Instantiate(projectilePrefab, position, Quaternion.identity);

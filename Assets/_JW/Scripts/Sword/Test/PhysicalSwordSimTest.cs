@@ -9,7 +9,7 @@ using UnityEngine.InputSystem.LowLevel;
 /// <para>
 /// 1. 빗나감: 대상 없이 던지면 바로 떨어져 땅에 멈추고 맨손이 된다.<br/>
 /// 2. 맨손 스킬: 검 찌르기는 UnarmedError, 검 돌아오기는 정상으로 끝난다.<br/>
-/// 3. 줍기: 가짜 Z 키를 넣으면 다시 손에 든다 (TempPickUpInput).<br/>
+/// 3. 줍기: 가짜 Z 키를 넣으면 다시 손에 든다 (SwordPickUpInput, PlayerInputReader.PickUpPressed).<br/>
 /// 4. 맞음: 가장 가까운 몬스터에게 던지면 Hit가 불리고 떨어진다. Recall(검 돌아오기)로 다시 손에 든다.
 /// </para>
 /// 가짜 키 입력은 Game 창에 초점이 있어야 들어간다. 자동으로 돌기 때문에 평소에는 꺼 둔다.

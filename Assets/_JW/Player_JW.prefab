@@ -326,10 +326,12 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bae528607b44d4dec943501fceb75bc6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TempPickUpInput
+  m_EditorClassIdentifier: Assembly-CSharp::SwordPickUpInput
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+  input: {fileID: 1965934584990814665}
+  sword: {fileID: 163385676324885216}
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

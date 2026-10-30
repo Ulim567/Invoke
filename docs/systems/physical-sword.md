@@ -25,7 +25,7 @@
   - 검 돌아오기(`Recall`): 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다.
 - 해제(free)할 수 없다.
 - 떨어진 검 오브젝트는 `SpawnDroppedSword` / `DespawnDroppedSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
-- 줍기 키(Z)는 임시로 `TempPickUpInput`이 읽는다. `PlayerInputReader.PickUpPressed`가 생기면 그쪽으로 옮기고 `TempPickUpInput`을 지운다 (규칙 5의 임시 예외).
+- 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다.
 
 ### 지금 값 (Player_JW)
 
@@ -61,7 +61,7 @@
 
 ## 맞춘 결과
 - 이우림과 정함
-  - 줍기 키는 Z. `PlayerInputReader`에 반영되기 전까지 `TempPickUpInput`으로 임시 처리 (이우림 동의)
+  - 줍기 키는 Z (`PlayerInputReader.PickUpPressed`, 이우림 #73)
 - 정해야 할 것
   - 검 그림 (지금은 흰 막대): 임혜원
   - 던진 검이 날아가는 속도, 줍기 거리: 기획

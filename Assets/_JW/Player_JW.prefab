@@ -152,6 +152,7 @@ MonoBehaviour:
   syncInterval: 0
   jumpHeight: 4
   fallGravityMultiplier: 1.5
+  runSpeedMultiplier: 1.5
   body: {fileID: 7079417861596757320}
   bodyCollider: {fileID: 2850566709390127241}
   input: {fileID: 1965934584990814665}
@@ -222,8 +223,8 @@ MonoBehaviour:
   slotFunctionIds:
   - c.thrust
   - test.function_a
-  - 
-  - 
+  - c.battlefield_sweep
+  - c.wide_slash
   - 
   - 
   - 
@@ -248,6 +249,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SlotTargetMarker
   color: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  markedColor: {r: 0, g: 1, b: 1, a: 1}
 --- !u!114 &877132152123956791
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -33,6 +33,7 @@
 | `cooldownTicks` | 쿨타임 (틱 수). 동작이 끝난 뒤부터 흐른다 |
 | `localVariableCount` | stack 부담. 프레임 크기 = 1 + 파라미터 수 + 이 값 |
 | `heapSize` | heap 사용량 (칸). 검 소환, 검기, 패링, 이동 계열. 메모리 작업이 끝나면 실행기가 읽는다 |
+| `areaRadius` | 범위 스킬(`Area`)의 반경 (유닛, 임시 4). 플레이어 주변 이 거리 안의 몬스터가 대상 (slot-caster.md) |
 | `needsSummonedSword` | 쓸 수 있는 소환검이 있어야 쓸 수 있다 |
 | `usableUnarmed` | 맨손이어도 쓸 수 있다 |
 | `note` | 효과 요약, 기획과 다르게 가정한 것 |

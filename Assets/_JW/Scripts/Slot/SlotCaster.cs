@@ -4,25 +4,37 @@ using Mirror;
 using UnityEngine;
 
 /// <summary>
-/// 슬롯 키로 함수를 시전하는 컴포넌트. 대상이 필요한 함수는 슬롯을 누른 채 ← →로 대상을 고르고, 떼면 시전을 요청한다.
+/// 슬롯 키로 함수를 시전하는 컴포넌트. 함수의 대상 지정 방식에 따라 입력이 달라진다.
 /// <para>
-/// 흐름 (노션 「슬롯 누른 채 대상 고르고 떼면 발동하기」)<br/>
-/// - 대상 있음(Target 파라미터가 있는 함수): 누르면 주변 몬스터가 후보가 되고 가장 가까운 몬스터가 선택된다 → 누른 채 ← →로 넘긴다 → 떼면 CastRequested.<br/>
-/// - 대상 없음(Target 파라미터가 없는 함수): 누르는 순간 FunctionExecutor.Cast로 시전하고 CastRequested를 부른다 (대상은 null).<br/>
-/// - 대상을 고르는 동안에는 Player 액션 맵(이동·점프·대시·내려가기)을 비활성화한다. 그래야 ← →가 Move가 아니라 대상 넘기기로 들어간다 (#59).<br/>
+/// 대상 지정 방식 (노션 「C 캐릭터 - 1차」 7. 입력 방식, c-skills.md 「대상 지정 방식」)<br/>
+/// - 단일(Target 파라미터 1개): 누르면 주변 몬스터가 후보가 되고 가장 가까운 몬스터가 선택된다 → 누른 채 ← →로 넘긴다 → 떼면 CastRequested (대상 1명).<br/>
+/// - 여러 명(Target list 파라미터): 단일처럼 고르면서 Space(MarkPressed)로 지금 고른 대상을 찍거나 뺀다 → 떼면 찍은 대상 모두로 CastRequested.
+///   아무도 찍지 않고 떼면 지금 고른 대상 한 명. 찍을 수 있는 최대 인원은 쓸 수 있는 소환검 개수다.<br/>
+/// - 범위(스킬 표의 Area): 누르는 순간 시전하고, 캐릭터 주변 Area Radius 안의 살아 있는 몬스터로 CastRequested.<br/>
+/// - 대상 없음: 누르는 순간 FunctionExecutor.Cast로 시전하고 CastRequested (대상 0명).<br/>
+/// - 대상을 고르는 동안에는 Player 액션 맵(이동·점프·대시·내려가기)을 비활성화한다. 그래야 ← →가 Move가 아니라 대상 넘기기로, Space가 점프가 아니라 찍기로 들어간다 (#59).<br/>
+/// - 고를 대상이 필요한 함수는 주변에 후보가 없으면 시전하지 않는다.<br/>
 /// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 시전하지 않고, 고르던 대상도 취소한다.
 /// </para>
 /// <para>
 /// 아직 하지 않는 일<br/>
 /// - 고른 대상을 함수의 Target 파라미터에 넣는 일: 넘기는 방법을 이우림과 정하는 중이라 CastRequested 이벤트와 로그까지만 한다.<br/>
-/// - 슬롯에 함수 장착: 「슬롯 8개에 함수 장착·해제하기」 이슈. 그 전까지는 Inspector의 Slot Function Ids에 고정 ID를 적어 둔다.<br/>
-/// - 여러 명 선택(Target list)·범위: 「여러 명 골라 발동하기와 범위로 발동하기」 이슈.
+/// - 슬롯에 함수 장착: 「슬롯 8개에 함수 장착·해제하기」 이슈. 그 전까지는 Inspector의 Slot Function Ids에 고정 ID를 적어 둔다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(PlayerInputReader))]
 public class SlotCaster : NetworkBehaviour
 {
 	const int SlotCount = 8;
+
+	/// <summary>슬롯을 눌렀을 때의 입력 방식</summary>
+	public enum CastMode
+	{
+		None,        // 대상 없음: 누르는 순간 시전
+		Single,      // 한 명 고르기
+		MultiSelect, // 여러 명 찍기
+		Area,        // 범위: 누르는 순간 주변 몬스터 모두
+	}
 
 	[Header("슬롯 (임시: 장착 이슈 전까지 고정 ID를 직접 적는다)")]
 	[Tooltip("슬롯 1~8(Q W E R A S D F)에 넣을 사전 정의 함수의 고정 ID. 예: c.thrust, test.function_a. 비우면 빈 슬롯")]
@@ -42,8 +54,11 @@ public class SlotCaster : NetworkBehaviour
 
 	// 대상을 고르는 중인 슬롯과 후보. 고르는 중이 아니면 selectingSlot = -1
 	int selectingSlot = -1;
+	CastMode selectingMode;
 	readonly List<GameObject> candidates = new List<GameObject>();
 	int selectedIndex = -1;
+	// 여러 명 선택에서 찍은 대상 (찍은 순서)
+	readonly List<GameObject> marked = new List<GameObject>();
 
 	// 이 컴포넌트가 Player 액션 맵을 비활성화했는지. 내가 끈 것만 다시 켠다 (다른 이유로 꺼진 맵을 켜지 않기 위해)
 	bool playerMapDisabledByMe;
@@ -54,16 +69,25 @@ public class SlotCaster : NetworkBehaviour
 	/// <summary>지금 선택된 대상. 고르는 중이 아니거나 후보가 없으면 null. 대상 표시 연출에서 읽는다.</summary>
 	public GameObject CurrentTarget => selectedIndex >= 0 && selectedIndex < candidates.Count ? candidates[selectedIndex] : null;
 
+	/// <summary>여러 명 선택에서 지금까지 찍은 대상 (찍은 순서). 찍은 대상 표시 연출에서 읽는다.</summary>
+	public IReadOnlyList<GameObject> MarkedTargets => marked;
+
 	/// <summary>
 	/// [표시] 선택된 대상이 바뀌었을 때 불린다 (고르기 시작, ← →, 취소·시전으로 끝남). 끝나면 null을 넘긴다.
 	/// </summary>
 	public event Action<GameObject> TargetChanged;
 
 	/// <summary>
-	/// [로직] 시전을 요청했을 때 불린다. (슬롯 번호, 함수, 대상). 대상 없는 함수면 대상은 null.<br/>
-	/// 대상 있는 함수는 아직 실제로 Cast하지 않는다. 대상을 Target 파라미터에 넣는 방법이 정해지면 이 이벤트를 받는 쪽에서 Cast한다.
+	/// [표시] 여러 명 선택에서 찍은 대상 목록이 바뀌었을 때 불린다 (찍기, 빼기, 끝남). 끝나면 빈 목록을 넘긴다.
 	/// </summary>
-	public event Action<int, PredefinedFunction, GameObject> CastRequested;
+	public event Action<IReadOnlyList<GameObject>> MarkedChanged;
+
+	/// <summary>
+	/// [로직] 시전을 요청했을 때 불린다. (슬롯 번호, 함수, 대상 목록).<br/>
+	/// 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안의 몬스터 모두, 대상 없음은 빈 목록.<br/>
+	/// 대상을 고르는 함수(단일, 여러 명)는 아직 실제로 Cast하지 않는다. 대상을 Target 파라미터에 넣는 방법이 정해지면 이 이벤트를 받는 쪽에서 Cast한다.
+	/// </summary>
+	public event Action<int, PredefinedFunction, IReadOnlyList<GameObject>> CastRequested;
 
 	void Reset()
 	{
@@ -105,6 +129,8 @@ public class SlotCaster : NetworkBehaviour
 
 		int step = input.TargetStep;
 		if (step != 0) MoveSelection(step);
+
+		if (selectingMode == CastMode.MultiSelect && input.MarkPressed) ToggleMark();
 	}
 
 	void OnSlotPressed(int slot)
@@ -118,25 +144,39 @@ public class SlotCaster : NetworkBehaviour
 			return;
 		}
 
-		if (!NeedsTarget(function))
+		CastMode mode = GetCastMode(function, out float areaRadius);
+		switch (mode)
 		{
-			// 대상 없음: 누르는 순간 시전
-			executor.Cast(function);
-			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 바로 시전 (대상 없음)");
-			CastRequested?.Invoke(slot, function, null);
-			return;
-		}
+			case CastMode.None:
+				executor.Cast(function);
+				Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 바로 시전 (대상 없음)");
+				CastRequested?.Invoke(slot, function, Array.Empty<GameObject>());
+				break;
 
-		BeginSelection(slot);
+			case CastMode.Area:
+				List<GameObject> inArea = FindMonsters(areaRadius);
+				executor.Cast(function);
+				Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 범위 시전 (반경 {areaRadius}, {inArea.Count}명)");
+				CastRequested?.Invoke(slot, function, inArea);
+				break;
+
+			default:
+				BeginSelection(slot, mode);
+				break;
+		}
 	}
 
-	void BeginSelection(int slot)
+	void BeginSelection(int slot, CastMode mode)
 	{
 		selectingSlot = slot;
+		selectingMode = mode;
 		SetPlayerMapBlocked(true);
-		FindCandidates();
+		candidates.Clear();
+		candidates.AddRange(FindMonsters(targetRange));
+		// ← → 넘기는 순서와 화면 순서를 맞춘다
+		candidates.Sort((a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
 		selectedIndex = NearestCandidateIndex();
-		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 대상 고르기 시작 (후보 {candidates.Count}명)");
+		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 대상 고르기 시작 ({(mode == CastMode.MultiSelect ? "여러 명" : "단일")}, 후보 {candidates.Count}명)");
 		NotifyTargetChanged();
 	}
 
@@ -150,24 +190,54 @@ public class SlotCaster : NetworkBehaviour
 		NotifyTargetChanged();
 	}
 
+	// 지금 고른 대상을 찍는다. 이미 찍었으면 뺀다
+	void ToggleMark()
+	{
+		RemoveDeadCandidates();
+		GameObject target = CurrentTarget;
+		if (target == null) return;
+
+		if (marked.Remove(target))
+		{
+			Debug.Log($"[SlotCaster] {target.name} 찍기 취소 ({marked.Count}명)");
+		}
+		else
+		{
+			int max = MaxMarkCount();
+			if (marked.Count >= max)
+			{
+				Debug.Log($"[SlotCaster] 더 찍을 수 없음 (최대 {max}명 = 쓸 수 있는 소환검 개수)");
+				return;
+			}
+			marked.Add(target);
+			Debug.Log($"[SlotCaster] {target.name} 찍음 ({marked.Count}명)");
+		}
+		MarkedChanged?.Invoke(marked);
+	}
+
 	void ConfirmSelection()
 	{
 		int slot = selectingSlot;
+		CastMode mode = selectingMode;
 		RemoveDeadCandidates();
-		GameObject target = CurrentTarget;
+
+		List<GameObject> targets = new List<GameObject>();
+		if (mode == CastMode.MultiSelect && marked.Count > 0) targets.AddRange(marked);
+		else if (CurrentTarget != null) targets.Add(CurrentTarget); // 단일, 또는 아무도 찍지 않은 여러 명 선택
+
 		EndSelection();
 
 		if (!TryGetSlotFunction(slot, out PredefinedFunction function)) return;
 
-		if (target == null)
+		if (targets.Count == 0)
 		{
 			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 대상이 없어서 시전하지 않음");
 			return;
 		}
 
 		// TODO(이우림과 정하는 중): 고른 대상을 function의 Target 파라미터에 넣어 Cast한다
-		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} → {target.name} 시전 요청");
-		CastRequested?.Invoke(slot, function, target);
+		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} → {string.Join(", ", targets.ConvertAll(t => t.name))} 시전 요청");
+		CastRequested?.Invoke(slot, function, targets);
 	}
 
 	void CancelSelection()
@@ -183,7 +253,10 @@ public class SlotCaster : NetworkBehaviour
 		selectingSlot = -1;
 		candidates.Clear();
 		selectedIndex = -1;
+		bool hadMarks = marked.Count > 0;
+		marked.Clear();
 		NotifyTargetChanged();
+		if (hadMarks) MarkedChanged?.Invoke(marked);
 	}
 
 	// 고르는 동안 Player 액션 맵을 비활성화한다. 다시 켤 때는 내가 끈 경우에만 켠다.
@@ -204,18 +277,46 @@ public class SlotCaster : NetworkBehaviour
 
 	void NotifyTargetChanged() => TargetChanged?.Invoke(CurrentTarget);
 
-	// 주변의 살아 있는 몬스터를 왼쪽부터 오른쪽 순서로 모은다 (← → 넘기는 순서와 화면 순서를 맞춤)
-	void FindCandidates()
+	// 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수
+	// TODO(소환검 이슈): 소환검 관리가 생기면 그 개수를 읽는다. 그 전까지는 TempSwordState(이우림, 테스트용), 없으면 제한 없음
+	int MaxMarkCount()
 	{
-		candidates.Clear();
-		Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, targetRange, targetLayers);
+		TempSwordState temp = GetComponent<TempSwordState>();
+		return temp != null ? temp.SummonedSwordCount : int.MaxValue;
+	}
+
+	// 함수의 대상 지정 방식으로 입력 방식을 정한다. 범위는 스킬 표에만 있으므로 표를 먼저 보고, 표에 없는 함수(테스트 함수 등)는 파라미터로 정한다
+	static CastMode GetCastMode(PredefinedFunction function, out float areaRadius)
+	{
+		areaRadius = 0f;
+		if (function is DataDrivenSkill && SkillTable.TryGet(function.Id, out SkillData data) && data.Targeting == SkillTargeting.Area)
+		{
+			areaRadius = data.AreaRadius;
+			return CastMode.Area;
+		}
+
+		foreach (ParameterData parameter in function.Parameters)
+		{
+			VariableType type = parameter.Type;
+			if (type == null) continue;
+			if (type.Kind == VariableTypeKind.Target) return CastMode.Single;
+			if (type.ElementType != null && type.ElementType.Kind == VariableTypeKind.Target) return CastMode.MultiSelect;
+		}
+		return CastMode.None;
+	}
+
+	// 플레이어 주변 radius 안의 살아 있는 몬스터
+	List<GameObject> FindMonsters(float radius)
+	{
+		List<GameObject> found = new List<GameObject>();
+		Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, radius, targetLayers);
 		foreach (Collider2D hit in hits)
 		{
 			Monster monster = hit.GetComponentInParent<Monster>();
 			if (monster == null || monster.IsDead) continue;
-			if (!candidates.Contains(monster.gameObject)) candidates.Add(monster.gameObject);
+			if (!found.Contains(monster.gameObject)) found.Add(monster.gameObject);
 		}
-		candidates.Sort((a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
+		return found;
 	}
 
 	int NearestCandidateIndex()
@@ -234,12 +335,15 @@ public class SlotCaster : NetworkBehaviour
 	void RemoveDeadCandidates()
 	{
 		GameObject selected = CurrentTarget;
-		candidates.RemoveAll(c => c == null || (c.TryGetComponent(out Monster m) && m.IsDead));
+		candidates.RemoveAll(IsGone);
+		if (marked.RemoveAll(IsGone) > 0) MarkedChanged?.Invoke(marked);
 
 		if (candidates.Count == 0) { selectedIndex = -1; return; }
 		int stillThere = selected != null ? candidates.IndexOf(selected) : -1;
 		selectedIndex = stillThere >= 0 ? stillThere : Mathf.Clamp(selectedIndex, 0, candidates.Count - 1);
 	}
+
+	static bool IsGone(GameObject target) => target == null || (target.TryGetComponent(out Monster monster) && monster.IsDead);
 
 	bool TryGetSlotFunction(int slot, out PredefinedFunction function)
 	{
@@ -255,16 +359,6 @@ public class SlotCaster : NetworkBehaviour
 			return false;
 		}
 		return true;
-	}
-
-	// Target 파라미터가 있으면 대상을 골라야 하는 함수다 (docs/systems/predefined-function.md 「대상 지정 방식」)
-	static bool NeedsTarget(PredefinedFunction function)
-	{
-		foreach (ParameterData parameter in function.Parameters)
-		{
-			if (parameter.Type != null && parameter.Type.Kind == VariableTypeKind.Target) return true;
-		}
-		return false;
 	}
 
 	void OnDrawGizmosSelected()

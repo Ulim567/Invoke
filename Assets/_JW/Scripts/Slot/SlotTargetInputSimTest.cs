@@ -32,7 +32,7 @@ public class SlotTargetInputSimTest : MonoBehaviour
 
 		int changes = 0;
 		caster.TargetChanged += t => { changes++; Debug.Log($"[SlotSim] TargetChanged → {(t != null ? t.name : "null")}"); };
-		caster.CastRequested += (slot, f, t) => Debug.Log($"[SlotSim] CastRequested 슬롯 {slot + 1} {f.Name} → {(t != null ? t.name : "null")}");
+		caster.CastRequested += (slot, f, targets) => Debug.Log($"[SlotSim] CastRequested 슬롯 {slot + 1} {f.Name} → {targets.Count}명");
 
 		yield return Press(keyboard, "Q", Key.Q);
 		yield return Press(keyboard, "Q+→", Key.Q, Key.RightArrow);

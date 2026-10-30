@@ -12,7 +12,7 @@
 - 하지 않는 일
   - 데미지 계산(공격력 × 배율, 치명타, 처형)은 하지 않는다. 계산이 끝난 정수 데미지를 받기만 한다.
   - 연출(이펙트, 소리, 애니메이션)을 하지 않는다. 연출은 `HitEffectPlayed`, `DeathEffectPlayed` event를 받은 쪽이 한다.
-  - 상태 이상 반응, 드롭은 아직 다루지 않는다. 이후 이슈에서 추가한다.
+  - 드롭은 아직 다루지 않는다. 이후 이슈에서 추가한다.
   - 공격 구조(`MonsterAttackData`, `ProjectileAttack`)는 언제, 어느 방향으로 공격할지 정하지 않는다. 몬스터 AI(`GroundChaseAI` 등)가 정한다.
 
 ## 동작 규칙
@@ -33,7 +33,7 @@
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
 
 - 잡몹
-  - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔). 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5 (전부 임시, 프리팹 Inspector 값)
+  - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5 (전부 임시, 프리팹 Inspector 값)
   - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형 (「잡몹 2」 이슈)
 - 몬스터끼리는 서로 통과한다(메이플 방식). 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌이 꺼져 있다(#81).
 - 순찰·추적 (`GroundChaseAI`)
@@ -57,6 +57,12 @@
   - 서버(Host 포함)에서만 만든다. 서버가 켜지는 순간 모든 지점에 만들고, 클라이언트는 서버가 만든 몬스터를 받기만 한다. 네트워크를 켜지 않으면 만들지 않는다.
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
   - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(몬스터 서버 동기화 이슈).
+
+- 상태 이상 반응 (#103)
+  - 상태 이상은 같은 오브젝트의 `StatusEffects`(박진우)에서 읽기만 한다. 몬스터 프리팹 최상위에 `StatusEffects`를 붙인다. 없으면 상태 이상에 반응하지 않는다.
+  - 기절(`IsStunned`): 행동 불가. `GroundChaseAI`가 그 자리에 멈추고 탐지도 하지 않는다. `ContactDamage`는 피해를 주지 않고, `ProjectileAttack.Fire`는 쏘지 않는다.
+  - 이속 감소(`MoveSpeedMultiplier`): `GroundChaseAI`의 순찰·추적 속도에 곱한다.
+  - 실명(`IsBlinded`): 공격이 빗나간다. `ContactDamage`는 피해를 주지 않는다. 실명 중에 쏜 투사체는 `Misses`가 켜져 플레이어를 통과한다(날아가는 중에 실명이 풀려도 빗나감). 땅·발판에는 그대로 막힌다.
 
 ## 다른 시스템이 쓰는 것
 
@@ -144,7 +150,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 투사체를 쏜다. 몬스터 AI가 부른다. 죽었거나 방향이 (0, 0)이면 쏘지 않는다. |
+| `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 투사체를 쏜다. 몬스터 AI가 부른다. 죽었거나 기절했거나 방향이 (0, 0)이면 쏘지 않는다. 실명 중에 쏜 투사체는 빗나간다. |
 
 ### `MonsterProjectile`
 
@@ -153,6 +159,7 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Attack` | - | `MonsterAttackData` | 이 투사체의 공격 데이터. 패링은 `Attack.Parryable`로 잡을 수 있는지 확인한다. |
+| `Misses` | - | `bool` | 쏜 몬스터가 실명 중이었으면 `true`. 플레이어를 통과한다. |
 
 ## 맞춘 결과
 - 이우림과 정해야 할 것
@@ -165,6 +172,7 @@
   - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 투사체 생성·삭제와 몬스터 삭제를 `NetworkSpawner`로 바꾸는 일은 몬스터 서버 동기화 이슈에서 한다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
+  - 상태 이상(#97)은 `StatusEffects`가 걸고 풀고, 몬스터 반응(기절·이속 감소·실명)은 김도훈이 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 한다(#103). 몬스터 프리팹에 `StatusEffects`를 붙이는 일은 김도훈이 한다.
   - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage(int)`로 데미지를 준다.
   - 배율을 곱한 데미지는 데미지 계산 쪽에서 반올림해 정수로 바꾼다. 계산 값이 양수면 최소 1, 0 이하면 0이고 `TakeDamage`가 0을 무시한다.
   - 몬스터 공격의 체력 피해도 데미지 계산을 거친다. `MonsterAttackResolver`가 `DamageCalculator.Calculate(DamageRequest.Flat(effect.Amount))`를 부른다. 몬스터는 공격력 능력치가 없어서 `Amount`를 그대로 넘기고, 몬스터 공격은 처형하지 않으므로 대상 정보는 넘기지 않는다.

@@ -35,17 +35,24 @@ public class MonsterProjectile : MonoBehaviour
 	/// </summary>
 	public MonsterAttackData Attack { get; private set; }
 
+	/// <summary>
+	/// true면 플레이어에게 맞지 않고 통과한다(쏜 몬스터가 실명 중이었음). Launch에서 정해진다.
+	/// </summary>
+	public bool Misses { get; private set; }
+
 	void Awake()
 	{
 		body = GetComponent<Rigidbody2D>();
 	}
 
 	/// <summary>
-	/// attack 데이터를 담아 velocity 속도로 날린다. ProjectileAttack이 생성 직후 부른다.
+	/// attack 데이터를 담아 velocity 속도로 날린다. ProjectileAttack이 생성 직후 부른다.<br/>
+	/// misses가 true면 플레이어를 통과한다(실명). 땅·발판에는 그대로 막힌다.
 	/// </summary>
-	public void Launch(MonsterAttackData attack, Vector2 velocity)
+	public void Launch(MonsterAttackData attack, Vector2 velocity, bool misses = false)
 	{
 		Attack = attack;
+		Misses = misses;
 		body.linearVelocity = velocity;
 		despawnTime = Time.time + lifetime;
 		spent = false;
@@ -64,6 +71,8 @@ public class MonsterProjectile : MonoBehaviour
 		int layerBit = 1 << other.gameObject.layer;
 		if ((targetLayers.value & layerBit) != 0)
 		{
+			// 빗나가는 투사체는 플레이어를 그냥 지나간다
+			if (Misses) return;
 			spent = true;
 			MonsterAttackResolver.Apply(Attack, other);
 			Despawn();

@@ -12,7 +12,8 @@ using UnityEngine;
 /// 사용법<br/>
 /// - Monster와 같은 오브젝트에 붙인다. targetLayers는 Player로 둔다.<br/>
 /// - 상자 크기(boxSize, boxOffset)는 Scene 창에서 오브젝트를 선택하면 빨간 상자로 보인다.<br/>
-/// - 같은 대상에게는 hitInterval초에 한 번만 피해를 준다.
+/// - 같은 대상에게는 hitInterval초에 한 번만 피해를 준다.<br/>
+/// - 같은 오브젝트의 StatusEffects(없으면 무시)가 기절(행동 불가)이나 실명(공격이 빗나감)이면 피해를 주지 않는다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster))]
@@ -40,10 +41,13 @@ public class ContactDamage : MonoBehaviour
 
 	ContactFilter2D filter;
 	Monster monster;
+	// 상태 이상. 몬스터에 붙어 있지 않으면 null이고, 상태 이상에 반응하지 않는다
+	StatusEffects status;
 
 	void Awake()
 	{
 		monster = GetComponent<Monster>();
+		status = GetComponent<StatusEffects>();
 
 		filter.SetLayerMask(targetLayers);
 		// 몸(Trigger가 아닌 Collider)에 닿았을 때만 피해를 준다
@@ -52,7 +56,8 @@ public class ContactDamage : MonoBehaviour
 
 	void FixedUpdate()
 	{
-		if (monster.IsDead) return;
+		// 기절이면 행동하지 않고, 실명이면 공격이 빗나간다
+		if (monster.IsDead || (status != null && (status.IsStunned || status.IsBlinded))) return;
 
 		// 내가 속한 장소 씬의 물리 세계에 묻는다. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 매번 가져온다
 		int count = gameObject.scene.GetPhysicsScene2D().OverlapBox((Vector2)transform.position + boxOffset, boxSize, 0f, filter, hits);

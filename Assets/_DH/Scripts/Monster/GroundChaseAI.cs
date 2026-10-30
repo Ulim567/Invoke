@@ -9,6 +9,7 @@ using UnityEngine;
 /// - 발견: chasePlayers가 켜져 있을 때만 한다. 끄면 플레이어를 쫓지 않고 순찰만 한다(Leak). detectRange 안에 살아 있는 플레이어가 있으면 가장 가까운 플레이어를 쫓는다. loseRange 밖으로 벗어나거나 죽으면 순찰로 돌아간다.<br/>
 /// - 추적: 좌우로만 chaseSpeed로 움직인다. 앞이 낭떠러지거나 장애물이면 그 자리에 멈춘다(떨어지지 않고, 다른 몬스터를 밀지 않는다).<br/>
 /// - 몬스터가 죽으면 멈춘다. 공격(접촉 피해)은 같은 오브젝트의 ContactDamage가 한다.<br/>
+/// - 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 멈추고 탐지도 하지 않는다. 이속 감소 중에는 순찰·추적 속도에 MoveSpeedMultiplier를 곱한다.<br/>
 /// - 탐지·낭떠러지·장애물 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.
 /// </para>
 /// <para>
@@ -70,6 +71,8 @@ public class GroundChaseAI : MonoBehaviour
 	float stopDistance = 0.1f;
 
 	Monster monster;
+	// 상태 이상. 몬스터에 붙어 있지 않으면 null이고, 상태 이상에 반응하지 않는다
+	StatusEffects status;
 	Rigidbody2D body;
 	Collider2D bodyCollider;
 	SpriteRenderer spriteRenderer;
@@ -103,6 +106,7 @@ public class GroundChaseAI : MonoBehaviour
 	void Awake()
 	{
 		monster = GetComponent<Monster>();
+		status = GetComponent<StatusEffects>();
 		body = GetComponent<Rigidbody2D>();
 		bodyCollider = GetComponent<Collider2D>();
 		spriteRenderer = GetComponent<SpriteRenderer>();
@@ -121,7 +125,8 @@ public class GroundChaseAI : MonoBehaviour
 
 	void FixedUpdate()
 	{
-		if (monster.IsDead)
+		// 죽었거나 기절했으면 그 자리에 멈춘다 (기절: 행동 불가)
+		if (monster.IsDead || (status != null && status.IsStunned))
 		{
 			SetVelocityX(0f);
 			return;
@@ -155,7 +160,7 @@ public class GroundChaseAI : MonoBehaviour
 			SetVelocityX(0f);
 			return;
 		}
-		SetVelocityX(facing * patrolSpeed);
+		SetVelocityX(facing * patrolSpeed * SpeedMultiplier());
 	}
 
 	// 걷기가 끝나면 멈추거나 계속 걷고, 멈추기가 끝나면 다시 걷는다. 다시 걸을 때 가끔 돌아선다
@@ -192,7 +197,7 @@ public class GroundChaseAI : MonoBehaviour
 		int dir = dx > 0f ? 1 : -1;
 		Face(dir);
 		// 쫓다가 낭떠러지나 벽을 만나면 그 자리에서 기다린다
-		SetVelocityX(IsBlocked(dir) ? 0f : dir * chaseSpeed);
+		SetVelocityX(IsBlocked(dir) ? 0f : dir * chaseSpeed * SpeedMultiplier());
 	}
 
 	void UpdateTarget()
@@ -238,6 +243,9 @@ public class GroundChaseAI : MonoBehaviour
 		Vector2 bodyFront = new Vector2(b.center.x + dir * (b.extents.x + 0.02f), b.center.y);
 		return physics.Raycast(bodyFront, new Vector2(dir, 0f), wallCheckDistance, obstacleLayers);
 	}
+
+	// 이속 감소 중이면 0.5처럼 1보다 작은 값. 상태 이상이 없으면 1
+	float SpeedMultiplier() => status != null ? status.MoveSpeedMultiplier : 1f;
 
 	// 내가 속한 장소 씬의 물리 세계. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 검사할 때마다 가져온다
 	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();

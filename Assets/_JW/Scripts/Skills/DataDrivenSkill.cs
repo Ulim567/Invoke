@@ -11,8 +11,9 @@ using UnityEngine;
 /// - 효과(판정, 데미지)는 각 스킬 이슈에서 OnSkillStart, OnTick, OnEnd, OnCancel을 덮어써서 만든다.
 /// </para>
 /// <para>
-/// 맨손·소환검 상태는 물리 검·소환검 관리가 생기기 전까지 TempSwordState(이우림, 테스트용)를 읽는다.
-/// 시전자에게 TempSwordState가 없으면 검을 들고 있고 소환검도 있는 것으로 본다.
+/// 맨손: 시전자의 PhysicalSword를 읽는다. 없으면 TempSwordState(이우림, 테스트용)를 읽는다.<br/>
+/// 소환검 개수: 소환검 관리가 생기기 전까지 TempSwordState를 읽는다.<br/>
+/// 둘 다 없으면 검을 들고 있고 소환검도 있는 것으로 본다.
 /// </para>
 /// </summary>
 public abstract class DataDrivenSkill : PredefinedFunction
@@ -60,15 +61,17 @@ public abstract class DataDrivenSkill : PredefinedFunction
 		SkillData data = Data;
 		if (data == null) return true;
 
-		TempSwordState sword = task.Caster.GetComponent<TempSwordState>();
-		if (sword == null) return true;
+		PhysicalSword physical = task.Caster.GetComponent<PhysicalSword>();
+		TempSwordState temp = task.Caster.GetComponent<TempSwordState>();
 
-		if (!data.UsableUnarmed && sword.IsUnarmed)
+		bool unarmed = physical != null ? physical.IsUnarmed : temp != null && temp.IsUnarmed;
+		if (!data.UsableUnarmed && unarmed)
 		{
 			Fail(new UnarmedError());
 			return false;
 		}
-		if (data.NeedsSummonedSword && sword.SummonedSwordCount <= 0)
+		// TODO(소환검 이슈): 소환검 관리 컴포넌트가 생기면 그 개수를 읽는다
+		if (data.NeedsSummonedSword && temp != null && temp.SummonedSwordCount <= 0)
 		{
 			Fail(new NoSummonedSwordError());
 			return false;

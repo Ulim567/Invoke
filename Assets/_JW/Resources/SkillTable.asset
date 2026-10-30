@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SkillTable
   skills:
   - id: c.thrust
-    displayName: "검 찌르기"
+    displayName: "\uAC80 \uCC0C\uB974\uAE30"
     family: 0
     targeting: 0
     damageMultiplier: 1
@@ -24,9 +24,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "기본 찌르기"
+    note: "\uAE30\uBCF8 \uCC0C\uB974\uAE30"
   - id: c.focused_thrust
-    displayName: "검 집중찌르기"
+    displayName: "\uAC80 \uC9D1\uC911\uCC0C\uB974\uAE30"
     family: 0
     targeting: 0
     damageMultiplier: 1
@@ -36,9 +36,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "출혈 상태의 적에게 1.5배 (DamageBonus.BleedFocusedThrust)"
+    note: "\uCD9C\uD608 \uC0C1\uD0DC\uC758 \uC801\uC5D0\uAC8C 1.5\uBC30 (DamageBonus.BleedFocusedThrust)"
   - id: c.vital_strike
-    displayName: "급소공략"
+    displayName: "\uAE09\uC18C\uACF5\uB7B5"
     family: 0
     targeting: 0
     damageMultiplier: 1
@@ -48,9 +48,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "미니게임 성공 시 3.0배 (DamageBonus.VitalStrikeMinigame). 눈 명중 시 실명, 발목 명중 시 이속 감소"
+    note: "\uBBF8\uB2C8\uAC8C\uC784 \uC131\uACF5 \uC2DC 3.0\uBC30 (DamageBonus.VitalStrikeMinigame). \uB208 \uBA85\uC911 \uC2DC \uC2E4\uBA85, \uBC1C\uBAA9 \uBA85\uC911 \uC2DC \uC774\uC18D \uAC10\uC18C"
   - id: c.skewer
-    displayName: "꼬챙이"
+    displayName: "\uAF2C\uCC59\uC774"
     family: 0
     targeting: 2
     damageMultiplier: 0.5
@@ -60,9 +60,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "여러 명 동시에 찌름, 데미지 약함 (배율 0.5는 임시)"
+    note: "\uC5EC\uB7EC \uBA85 \uB3D9\uC2DC\uC5D0 \uCC0C\uB984, \uB370\uBBF8\uC9C0 \uC57D\uD568 (\uBC30\uC728 0.5\uB294 \uC784\uC2DC)"
   - id: c.summoned_thrust
-    displayName: "소환검 찌르기"
+    displayName: "\uC18C\uD658\uAC80 \uCC0C\uB974\uAE30"
     family: 0
     targeting: 0
     damageMultiplier: 1
@@ -72,9 +72,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "소환검에게 명령해 검이 찌름"
+    note: "\uC18C\uD658\uAC80\uC5D0\uAC8C \uBA85\uB839\uD574 \uAC80\uC774 \uCC0C\uB984"
   - id: c.wound_exploit
-    displayName: "상처 공략"
+    displayName: "\uC0C1\uCC98 \uACF5\uB7B5"
     family: 0
     targeting: 0
     damageMultiplier: 1
@@ -84,9 +84,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "출혈 상태의 적에게 2.0배 (DamageBonus.BleedWoundExploit)"
+    note: "\uCD9C\uD608 \uC0C1\uD0DC\uC758 \uC801\uC5D0\uAC8C 2.0\uBC30 (DamageBonus.BleedWoundExploit)"
   - id: c.deep_thrust
-    displayName: "검 깊이찌르기"
+    displayName: "\uAC80 \uAE4A\uC774\uCC0C\uB974\uAE30"
     family: 0
     targeting: 0
     damageMultiplier: 1
@@ -96,9 +96,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "치명타 2.5배 (DamageBonus.CritDeepThrust)"
+    note: "\uCE58\uBA85\uD0C0 2.5\uBC30 (DamageBonus.CritDeepThrust)"
   - id: c.sword_throw
-    displayName: "검 던지기"
+    displayName: "\uAC80 \uB358\uC9C0\uAE30"
     family: 1
     targeting: 0
     damageMultiplier: 1
@@ -108,9 +108,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "물리 검을 던짐. 체력 2% 이하 적 처형 (보스 제외)"
+    note: "\uBB3C\uB9AC \uAC80\uC744 \uB358\uC9D0. \uCCB4\uB825 2% \uC774\uD558 \uC801 \uCC98\uD615 (\uBCF4\uC2A4 \uC81C\uC678)"
   - id: c.summoned_throw
-    displayName: "소환검 던지기"
+    displayName: "\uC18C\uD658\uAC80 \uB358\uC9C0\uAE30"
     family: 1
     targeting: 0
     damageMultiplier: 1
@@ -120,9 +120,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "소환검을 던짐, 더 먼 적까지 명중"
+    note: "\uC18C\uD658\uAC80\uC744 \uB358\uC9D0, \uB354 \uBA3C \uC801\uAE4C\uC9C0 \uBA85\uC911"
   - id: c.sword_return
-    displayName: "검 돌아오기"
+    displayName: "\uAC80 \uB3CC\uC544\uC624\uAE30"
     family: 1
     targeting: 5
     damageMultiplier: 1
@@ -132,9 +132,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 0
     usableUnarmed: 1
-    note: "던진 검을 던진 순서대로 하나씩 회수, 돌아오는 경로의 적에게 데미지. 맨손이어도 사용 가능"
+    note: "\uB358\uC9C4 \uAC80\uC744 \uB358\uC9C4 \uC21C\uC11C\uB300\uB85C \uD558\uB098\uC529 \uD68C\uC218, \uB3CC\uC544\uC624\uB294 \uACBD\uB85C\uC758 \uC801\uC5D0\uAC8C \uB370\uBBF8\uC9C0. \uB9E8\uC190\uC774\uC5B4\uB3C4 \uC0AC\uC6A9 \uAC00\uB2A5"
   - id: c.sword_slash
-    displayName: "검 휘두르기"
+    displayName: "\uAC80 \uD718\uB450\uB974\uAE30"
     family: 2
     targeting: 0
     damageMultiplier: 1
@@ -144,9 +144,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "검기를 날림 (검기는 heap 사용)"
+    note: "\uAC80\uAE30\uB97C \uB0A0\uB9BC (\uAC80\uAE30\uB294 heap \uC0AC\uC6A9)"
   - id: c.wide_slash
-    displayName: "검 크게베기"
+    displayName: "\uAC80 \uD06C\uAC8C\uBCA0\uAE30"
     family: 2
     targeting: 4
     damageMultiplier: 0.5
@@ -156,9 +156,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "광역 검기, 데미지는 낮지만 출혈 부여 (배율 0.5는 임시)"
+    note: "\uAD11\uC5ED \uAC80\uAE30, \uB370\uBBF8\uC9C0\uB294 \uB0AE\uC9C0\uB9CC \uCD9C\uD608 \uBD80\uC5EC (\uBC30\uC728 0.5\uB294 \uC784\uC2DC)"
   - id: c.summoned_slash
-    displayName: "소환검 휘두르기"
+    displayName: "\uC18C\uD658\uAC80 \uD718\uB450\uB974\uAE30"
     family: 2
     targeting: 0
     damageMultiplier: 1
@@ -168,9 +168,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "소환된 검 개수만큼 검기 발사"
+    note: "\uC18C\uD658\uB41C \uAC80 \uAC1C\uC218\uB9CC\uD07C \uAC80\uAE30 \uBC1C\uC0AC"
   - id: c.wound_slash
-    displayName: "상처 가르기"
+    displayName: "\uC0C1\uCC98 \uAC00\uB974\uAE30"
     family: 2
     targeting: 0
     damageMultiplier: 1
@@ -180,9 +180,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "출혈 상태의 적에게 출혈 도트 2.0배 (DamageBonus.BleedWoundSlash)"
+    note: "\uCD9C\uD608 \uC0C1\uD0DC\uC758 \uC801\uC5D0\uAC8C \uCD9C\uD608 \uB3C4\uD2B8 2.0\uBC30 (DamageBonus.BleedWoundSlash)"
   - id: c.multi_slash
-    displayName: "검 다중베기"
+    displayName: "\uAC80 \uB2E4\uC911\uBCA0\uAE30"
     family: 2
     targeting: 1
     damageMultiplier: 1
@@ -192,9 +192,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "소환된 검들이 각각 한 번씩 대상을 벰"
+    note: "\uC18C\uD658\uB41C \uAC80\uB4E4\uC774 \uAC01\uAC01 \uD55C \uBC88\uC529 \uB300\uC0C1\uC744 \uBCB0"
   - id: c.battlefield_sweep
-    displayName: "전장 휩쓸기"
+    displayName: "\uC804\uC7A5 \uD729\uC4F8\uAE30"
     family: 2
     targeting: 3
     damageMultiplier: 1
@@ -204,9 +204,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "소환된 검들이 여러 적에게 각각 가서 벰"
+    note: "\uC18C\uD658\uB41C \uAC80\uB4E4\uC774 \uC5EC\uB7EC \uC801\uC5D0\uAC8C \uAC01\uAC01 \uAC00\uC11C \uBCB0"
   - id: c.summon_sword
-    displayName: "검 소환"
+    displayName: "\uAC80 \uC18C\uD658"
     family: 3
     targeting: 6
     damageMultiplier: 1
@@ -216,9 +216,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 1
-    note: "malloc. 최대 5개, 검마다 포인터 생성"
+    note: "malloc. \uCD5C\uB300 5\uAC1C, \uAC80\uB9C8\uB2E4 \uD3EC\uC778\uD130 \uC0DD\uC131"
   - id: c.free_sword
-    displayName: "해제"
+    displayName: "\uD574\uC81C"
     family: 3
     targeting: 6
     damageMultiplier: 1
@@ -228,9 +228,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 1
-    note: "free. 소환검만 해제 가능 (물리 검 불가), 거리 상관없음"
+    note: "free. \uC18C\uD658\uAC80\uB9CC \uD574\uC81C \uAC00\uB2A5 (\uBB3C\uB9AC \uAC80 \uBD88\uAC00), \uAC70\uB9AC \uC0C1\uAD00\uC5C6\uC74C"
   - id: c.parry
-    displayName: "패링"
+    displayName: "\uD328\uB9C1"
     family: 3
     targeting: 6
     damageMultiplier: 1
@@ -240,9 +240,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 0
-    note: "성공 시 적 공격을 검 이펙트로 1회 되돌려줌. 맨손 불가로 가정"
+    note: "\uC131\uACF5 \uC2DC \uC801 \uACF5\uACA9\uC744 \uAC80 \uC774\uD399\uD2B8\uB85C 1\uD68C \uB418\uB3CC\uB824\uC90C. \uB9E8\uC190 \uBD88\uAC00\uB85C \uAC00\uC815"
   - id: c.mark
-    displayName: "표식 남기기"
+    displayName: "\uD45C\uC2DD \uB0A8\uAE30\uAE30"
     family: 3
     targeting: 0
     damageMultiplier: 1
@@ -252,9 +252,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "검이 적 좌우로 찔러 표식 + 1.0초 기절. 소환검 필요로 가정"
+    note: "\uAC80\uC774 \uC801 \uC88C\uC6B0\uB85C \uCC14\uB7EC \uD45C\uC2DD + 1.0\uCD08 \uAE30\uC808. \uC18C\uD658\uAC80 \uD544\uC694\uB85C \uAC00\uC815"
   - id: c.sword_dance
-    displayName: "검무"
+    displayName: "\uAC80\uBB34"
     family: 3
     targeting: 4
     damageMultiplier: 0.5
@@ -264,9 +264,9 @@ MonoBehaviour:
     heapSize: 0
     needsSummonedSword: 1
     usableUnarmed: 0
-    note: "검 개수만큼 적 근처에 두고 휘두름, 데미지는 낮지만 출혈 부여 (배율 0.5는 임시)"
+    note: "\uAC80 \uAC1C\uC218\uB9CC\uD07C \uC801 \uADFC\uCC98\uC5D0 \uB450\uACE0 \uD718\uB450\uB984, \uB370\uBBF8\uC9C0\uB294 \uB0AE\uC9C0\uB9CC \uCD9C\uD608 \uBD80\uC5EC (\uBC30\uC728 0.5\uB294 \uC784\uC2DC)"
   - id: common.dash
-    displayName: "대시"
+    displayName: "\uB300\uC2DC"
     family: 4
     targeting: 6
     damageMultiplier: 1
@@ -276,9 +276,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 1
-    note: "짧은 거리 빠르게 이동. 세 캐릭터 공통"
+    note: "\uC9E7\uC740 \uAC70\uB9AC \uBE60\uB974\uAC8C \uC774\uB3D9. \uC138 \uCE90\uB9AD\uD130 \uACF5\uD1B5"
   - id: common.double_jump
-    displayName: "더블점프"
+    displayName: "\uB354\uBE14\uC810\uD504"
     family: 4
     targeting: 6
     damageMultiplier: 1
@@ -288,9 +288,9 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 0
     usableUnarmed: 1
-    note: "공중에서 한 번 더 점프. 세 캐릭터 공통"
+    note: "\uACF5\uC911\uC5D0\uC11C \uD55C \uBC88 \uB354 \uC810\uD504. \uC138 \uCE90\uB9AD\uD130 \uACF5\uD1B5"
   - id: c.sword_ride
-    displayName: "검 타기"
+    displayName: "\uAC80 \uD0C0\uAE30"
     family: 4
     targeting: 6
     damageMultiplier: 1
@@ -300,4 +300,4 @@ MonoBehaviour:
     heapSize: 1
     needsSummonedSword: 1
     usableUnarmed: 1
-    note: "소환검을 타고 이동. 쓸 수 있는 소환검이 없으면 불가"
+    note: "\uC18C\uD658\uAC80\uC744 \uD0C0\uACE0 \uC774\uB3D9. \uC4F8 \uC218 \uC788\uB294 \uC18C\uD658\uAC80\uC774 \uC5C6\uC73C\uBA74 \uBD88\uAC00"

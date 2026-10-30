@@ -8,7 +8,7 @@ using UnityEngine;
 /// <para>
 /// 1. 표 검사: 표의 모든 줄이 등록된 스킬이고, 이름·틱 수·파라미터를 표에서 읽는지. 등록된 DataDrivenSkill이 모두 표에 있는지.<br/>
 /// 2. 시전: 표의 스킬을 하나씩 내 캐릭터의 FunctionExecutor로 시전해서, 표의 틱 수만큼 실행되고 정상으로 끝나는지.<br/>
-/// 3. 맨손: 내 캐릭터에 TempSwordState를 잠깐 붙여 맨손으로 만들고, 검 찌르기는 UnarmedError로 끝나고 검 돌아오기는 정상으로 끝나는지. 끝나면 떼어 낸다.
+/// 3. 맨손: 물리 검을 던져(없으면 TempSwordState를 잠깐 붙여) 맨손으로 만들고, 검 찌르기는 UnarmedError로 끝나고 검 돌아오기는 정상으로 끝나는지. 끝나면 되돌린다.
 /// </para>
 /// 자동으로 돌기 때문에 평소에는 꺼 둔다.
 /// </summary>
@@ -72,7 +72,18 @@ public class SkillCastTest : MonoBehaviour
 
 	IEnumerator CheckUnarmed(FunctionExecutor executor)
 	{
-		// 물리 검 관리가 생기기 전이라 프리팹에 붙이지 않고 테스트 동안만 붙인다
+		// 물리 검이 있으면 던져서 맨손으로 만든다
+		PhysicalSword physical = executor.GetComponent<PhysicalSword>();
+		if (physical != null)
+		{
+			physical.Throw(null);
+			yield return CastAndWait(executor, PredefinedFunctionIds.Thrust, FunctionTaskEndReason.Failed, typeof(UnarmedError), 0);
+			yield return CastAndWait(executor, PredefinedFunctionIds.SwordReturn, FunctionTaskEndReason.Completed, null, 0);
+			physical.Recall();
+			yield break;
+		}
+
+		// 물리 검이 없으면 TempSwordState를 테스트 동안만 붙인다
 		TempSwordState sword = executor.GetComponent<TempSwordState>();
 		bool added = sword == null;
 		if (added) sword = executor.gameObject.AddComponent<TempSwordState>();

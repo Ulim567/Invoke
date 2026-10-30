@@ -9,7 +9,8 @@
 - 하지 않는 일
   - 효과(판정, 데미지, 상태 이상, 이동): 각 스킬 이슈(찌르기 1·2, 던지기, 휘두르기 1·2, 소환, 이동, 검 소환·해제, 패링, 급소공략)에서 채운다. 지금은 정해진 틱 동안 실행되고 로그만 남는다.
   - heap 계산: 메모리 작업(이우림). 표에는 heap 사용량만 적어 둔다.
-  - 맨손·소환검 상태 관리: 물리 검, 소환검 이슈. 그 전까지 `TempSwordState`(이우림, 테스트용)를 읽는다.
+  - 맨손 상태 관리: `PhysicalSword` (physical-sword.md)
+  - 소환검 관리: 소환검 이슈. 그 전까지 소환검 개수는 `TempSwordState`(이우림, 테스트용)를 읽는다.
 
 ## 규칙
 
@@ -52,7 +53,9 @@
 - 첫 틱(`OnStart`)에 검사한다. 통과하지 못하면 `Fail`로 끝난다 (처리는 언어 규칙 표의 `SkillFailed`).
   1. 맨손으로 못 쓰는 스킬인데 맨손: `UnarmedError`
   2. 소환검이 필요한데 쓸 수 있는 소환검이 0개: `NoSummonedSwordError`
-- 시전자에게 `TempSwordState`가 없으면 검을 들고 있고 소환검도 있는 것으로 본다. (Player_JW에는 아직 붙이지 않았다)
+- 맨손: 시전자의 `PhysicalSword.IsUnarmed`. `PhysicalSword`가 없으면 `TempSwordState.IsUnarmed`.
+- 소환검 개수: `TempSwordState.SummonedSwordCount` (소환검 이슈 전까지). `TempSwordState`가 없으면 소환검이 있는 것으로 본다.
+- 둘 다 없으면 검을 들고 있고 소환검도 있는 것으로 본다.
 
 ### 스킬 목록
 
@@ -111,7 +114,7 @@
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
-| `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지), 맨손 검사(검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정함

@@ -24,7 +24,8 @@
   - 사용 가능(`Ready`): 플레이어 머리 뒤쪽에 줄 서서 따라다닌다 (`Follow Offset`, `Follow Spacing`).
   - 던져짐(`Flying`): 대상을 향해 날아가 닿으면 `Hit`을 알리고 그 자리에서 떨어진다. 대상이 없거나 `Max Flight Time` 안에 못 닿으면 바로 떨어진다.
   - 떨어짐(`Dropped`): 땅(Ground, Platform) 윗면에 멈춘다. 회수해야 다시 쓴다.
-  - 누수(`Leaked`): 포인터를 잃은 소환검. 그 자리에 멈추고 반투명해진다. 회수·해제할 수 없고 개수만 차지한다.
+  - 누수(`Leaked`): 포인터를 잃은 소환검. 그 자리에 멈추고 반투명해진다(`SummonedSwordView`). 회수·해제할 수 없고 개수만 차지한다.
+  - 상태는 `SummonedSwords`만 바꾼다. `SummonedSword`는 움직임만 맡고, 땅에 닿으면 `SummonedSwords`에 알린다(`NotifyLanded`).
 - 회수
   - 검 돌아오기(`Recall`): 거리와 상관없이 바로 사용 가능으로.
   - 줍기(`TryPickUpNearest`): 떨어진 소환검과 `Pick Up Range`(1.5) 안. Z 키는 물리 검을 먼저 줍고, 못 주우면 소환검을 줍는다 (`SwordPickUpInput`).
@@ -69,9 +70,10 @@
 | `Changed` (event) | - | - | [표시] 목록·상태가 바뀔 때 |
 | `Hit` (event) | `SummonedSword`, `GameObject` | - | [로직] 던진 소환검이 대상에 닿았을 때 |
 
-`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked`).
+`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked`), `StateChanged`(event, [표시]).
 
 ### 임시 표시
+- `SummonedSwordView`(소환검 프리팹): `StateChanged`를 받아서 누수면 반투명(`Leaked Alpha` 0.35)으로 바꾼다.
 - `SummonedSwordHud`: 내 캐릭터 화면 왼쪽 위에 「소환검 n/5 (사용 가능 m)」과 포인터별 상태를 그린다. 실제 HUD는 임혜원 이슈에서 `Swords`와 `Changed`를 읽어 바꾼다.
 
 ### 테스트

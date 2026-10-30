@@ -95,6 +95,8 @@ public class SummonedSwordSimTest : MonoBehaviour
 		SummonedSword leaked = null;
 		foreach (SummonedSword s in swords.Swords) if (s.Pointer == leakedPointer) leaked = s;
 		Check("실패로 끝난 작업의 소환검은 누수", leaked != null && leaked.State == SummonedSwordState.Leaked);
+		SpriteRenderer leakedSprite = leaked != null ? leaked.GetComponentInChildren<SpriteRenderer>() : null;
+		Check("누수되면 반투명 (SummonedSwordView)", leakedSprite != null && leakedSprite.color.a < 1f);
 		Check("누수돼도 개수에 남음 (5개, 사용 가능 4개)", swords.Count == 5 && swords.ReadyCount == 4);
 		Check("누수된 포인터는 해제 못함", !swords.Free(leakedPointer));
 		Check("누수로 자리가 차서 더 소환 못함", swords.Summon(null, heapSize) == HeapStorage.NullPointer);

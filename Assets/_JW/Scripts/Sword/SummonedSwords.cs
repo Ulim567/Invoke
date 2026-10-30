@@ -184,7 +184,15 @@ public class SummonedSwords : MonoBehaviour
 
 	internal void NotifyHit(SummonedSword sword, GameObject target) => Hit?.Invoke(sword, target);
 
-	internal void NotifyChanged() => Changed?.Invoke();
+	// 던진 소환검이 땅에 닿았을 때 SummonedSword가 부른다
+	internal void NotifyLanded(SummonedSword sword)
+	{
+		if (!swords.Contains(sword) || sword.State != SummonedSwordState.Flying) return;
+		sword.SetDropped();
+		NotifyChanged();
+	}
+
+	void NotifyChanged() => Changed?.Invoke();
 
 	void LateUpdate()
 	{

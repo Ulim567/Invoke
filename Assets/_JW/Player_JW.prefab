@@ -129,6 +129,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8224731288559705605}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4146338954725351482}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7588237388506021420}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -334,6 +340,41 @@ MonoBehaviour:
   syncInterval: 0
   input: {fileID: 1965934584990814665}
   sword: {fileID: 163385676324885216}
+  summoned: {fileID: 4146338954725351482}
+--- !u!114 &4146338954725351482
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e215f3c80a9324f948147377472d0ee3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SummonedSwords
+  swordPrefab: {fileID: 4252824113598437922, guid: 65dc4f6495f694e03bccdd9d99dce6a0, type: 3}
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 192
+  followOffset: {x: 0.6, y: 3.2}
+  followSpacing: 0.45
+  pickUpRange: 1.5
+--- !u!114 &7588237388506021420
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df0633b94e76c44858a2c48f5c270cb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SummonedSwordHud
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

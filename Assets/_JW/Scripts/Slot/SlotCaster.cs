@@ -278,9 +278,11 @@ public class SlotCaster : NetworkBehaviour
 	void NotifyTargetChanged() => TargetChanged?.Invoke(CurrentTarget);
 
 	// 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수
-	// TODO(소환검 이슈): 소환검 관리가 생기면 그 개수를 읽는다. 그 전까지는 TempSwordState(이우림, 테스트용), 없으면 제한 없음
+	// SummonedSwords(#99)의 사용 가능한 개수를 읽는다. 없으면 TempSwordState(이우림, 테스트용), 그것도 없으면 제한 없음
 	int MaxMarkCount()
 	{
+		SummonedSwords summoned = GetComponent<SummonedSwords>();
+		if (summoned != null) return summoned.ReadyCount;
 		TempSwordState temp = GetComponent<TempSwordState>();
 		return temp != null ? temp.SummonedSwordCount : int.MaxValue;
 	}

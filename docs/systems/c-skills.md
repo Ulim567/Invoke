@@ -10,7 +10,7 @@
   - 효과(판정, 데미지, 상태 이상, 이동): 각 스킬 이슈(찌르기 1·2, 던지기, 휘두르기 1·2, 소환, 이동, 검 소환·해제, 패링, 급소공략)에서 채운다. 지금은 정해진 틱 동안 실행되고 로그만 남는다.
   - heap 계산: 메모리 작업(이우림). 표에는 heap 사용량만 적어 둔다.
   - 맨손 상태 관리: `PhysicalSword` (physical-sword.md)
-  - 소환검 관리: 소환검 이슈. 그 전까지 소환검 개수는 `TempSwordState`(이우림, 테스트용)를 읽는다.
+  - 소환검 관리: summoned-sword.md (#99)
 
 ## 규칙
 
@@ -55,7 +55,7 @@
   1. 맨손으로 못 쓰는 스킬인데 맨손: `UnarmedError`
   2. 소환검이 필요한데 쓸 수 있는 소환검이 0개: `NoSummonedSwordError`
 - 맨손: 시전자의 `PhysicalSword.IsUnarmed`. `PhysicalSword`가 없으면 `TempSwordState.IsUnarmed`.
-- 소환검 개수: `TempSwordState.SummonedSwordCount` (소환검 이슈 전까지). `TempSwordState`가 없으면 소환검이 있는 것으로 본다.
+- 소환검 개수: 시전자의 `SummonedSwords.ReadyCount` (사용 가능한 소환검). 없으면 `TempSwordState.SummonedSwordCount`, 그것도 없으면 소환검이 있는 것으로 본다.
 - 둘 다 없으면 검을 들고 있고 소환검도 있는 것으로 본다.
 
 ### 스킬 목록

@@ -12,7 +12,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 맨손: 시전자의 PhysicalSword를 읽는다. 없으면 TempSwordState(이우림, 테스트용)를 읽는다.<br/>
-/// 소환검 개수: 소환검 관리가 생기기 전까지 TempSwordState를 읽는다.<br/>
+/// 소환검 개수: 시전자의 SummonedSwords에서 사용 가능한 개수를 읽는다. 없으면 TempSwordState를 읽는다.<br/>
 /// 둘 다 없으면 검을 들고 있고 소환검도 있는 것으로 본다.
 /// </para>
 /// </summary>
@@ -70,8 +70,10 @@ public abstract class DataDrivenSkill : PredefinedFunction
 			Fail(new UnarmedError());
 			return false;
 		}
-		// TODO(소환검 이슈): 소환검 관리 컴포넌트가 생기면 그 개수를 읽는다
-		if (data.NeedsSummonedSword && temp != null && temp.SummonedSwordCount <= 0)
+		// 소환검 개수: SummonedSwords(#99)의 사용 가능한 개수를 읽는다. 없으면 TempSwordState(이우림, 테스트용)
+		SummonedSwords summoned = task.Caster.GetComponent<SummonedSwords>();
+		int readySwords = summoned != null ? summoned.ReadyCount : temp != null ? temp.SummonedSwordCount : int.MaxValue;
+		if (data.NeedsSummonedSword && readySwords <= 0)
 		{
 			Fail(new NoSummonedSwordError());
 			return false;

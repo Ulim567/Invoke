@@ -22,7 +22,7 @@
 - 여러 명 선택
   - 슬롯을 누른 채 Space(`PlayerInputReader.MarkPressed`)로 지금 고른 대상을 찍는다. 이미 찍은 대상을 다시 찍으면 뺀다.
   - 떼면 찍은 대상 모두로 시전을 요청한다 (찍은 순서). **아무도 찍지 않고 떼면 지금 고른 대상 한 명**으로 요청한다.
-  - 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수. 소환검 관리 전까지 `TempSwordState.SummonedSwordCount`를 읽고, 없으면 제한 없음.
+  - 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수. `SummonedSwords.ReadyCount`를 읽는다 (summoned-sword.md). 없으면 `TempSwordState.SummonedSwordCount`, 그것도 없으면 제한 없음.
   - 고르는 동안 Player 맵이 꺼져 있어 Space가 점프로 들어가지 않는다.
 - 범위
   - 누르는 순간 시전하고, 플레이어 주변 `Area Radius`(스킬 표, 임시 4) 안의 살아 있는 몬스터를 대상으로 알린다. 0명이어도 시전한다.

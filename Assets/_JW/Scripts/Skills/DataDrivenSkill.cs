@@ -56,6 +56,19 @@ public abstract class DataDrivenSkill : PredefinedFunction
 	/// </summary>
 	protected virtual void OnSkillStart(FunctionTask task) { }
 
+	/// <summary>
+	/// 소환검이 필요한 스킬(needsSummonedSword)이 쓸 수 있는 소환검 수. 0이면 NoSummonedSwordError로 끝난다.<br/>
+	/// 기본: 시전자의 SummonedSwords.ReadyCount(플레이어 곁에 있는 소환검). 없으면 TempSwordState(이우림, 테스트용), 그것도 없으면 있는 것으로 본다.<br/>
+	/// 해제처럼 던진 소환검도 쓰는 스킬은 덮어쓴다.
+	/// </summary>
+	protected virtual int CountUsableSummonedSwords(FunctionTask task)
+	{
+		SummonedSwords summoned = task.Caster.GetComponent<SummonedSwords>();
+		if (summoned != null) return summoned.ReadyCount;
+		TempSwordState temp = task.Caster.GetComponent<TempSwordState>();
+		return temp != null ? temp.SummonedSwordCount : int.MaxValue;
+	}
+
 	bool CheckRequirements(FunctionTask task)
 	{
 		SkillData data = Data;
@@ -70,10 +83,7 @@ public abstract class DataDrivenSkill : PredefinedFunction
 			Fail(new UnarmedError());
 			return false;
 		}
-		// 소환검 개수: SummonedSwords(#99)의 사용 가능한 개수를 읽는다. 없으면 TempSwordState(이우림, 테스트용)
-		SummonedSwords summoned = task.Caster.GetComponent<SummonedSwords>();
-		int readySwords = summoned != null ? summoned.ReadyCount : temp != null ? temp.SummonedSwordCount : int.MaxValue;
-		if (data.NeedsSummonedSword && readySwords <= 0)
+		if (data.NeedsSummonedSword && CountUsableSummonedSwords(task) <= 0)
 		{
 			Fail(new NoSummonedSwordError());
 			return false;

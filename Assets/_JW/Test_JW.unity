@@ -1282,7 +1282,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71fe62a6321d045eb9644e593af13dcc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SummonedSwordSimTest
-  heapSize: 1
 --- !u!4 &139502676
 Transform:
   m_ObjectHideFlags: 0

@@ -6,7 +6,7 @@ using UnityEngine;
 /// 사냥터의 정해진 구역 안 랜덤 위치에 몬스터를 만들고, 죽으면 시간이 지난 뒤 다시 만드는 컴포넌트.
 /// <para>
 /// - 구역(Area Size, Area Offset) 안에 몬스터를 Max Count 마리까지 둔다. 한 마리가 죽으면 respawnDelay초 뒤 구역 안 새 랜덤 위치에 한 마리를 만든다.<br/>
-/// - 위치 고르기: 구역 안 랜덤한 x의 아주 높은 하늘에서 아래로 선을 그어 땅(groundLayers)의 "윗면"들을 찾고, 구역 안에 있는 윗면 하나에 발이 닿게 만든다(몬스터의 BoxCollider2D 기준).<br/>
+/// - 위치 고르기: 구역 안 랜덤한 x의 아주 높은 하늘에서 아래로 선을 그어 땅(groundLayers)의 "윗면"들을 찾고, 구역 안에 있는 윗면 하나에 발이 닿게 만든다(몬스터의 BoxCollider2D 또는 CircleCollider2D 기준).<br/>
 ///   타일맵 Collider는 테두리(Outlines)만 있어서, 선은 땅에 들어갈 때(윗면)와 나올 때(아랫면)를 번갈아 맞는다. 하늘에서 시작하므로 짝수 번째(0, 2, 4…)가 윗면이고, 땅 속에는 만들지 않는다.<br/>
 ///   고른 자리 위로 몸 높이만큼 비어 있지 않으면(천장이 낮으면) 다른 x를 다시 뽑는다.<br/>
 /// - 몬스터는 NetworkSpawner.Spawn으로 이 스포너가 있는 씬에 만든다. 땅 찾기도 이 씬의 물리 세계에 한다.<br/>
@@ -62,12 +62,20 @@ public class MonsterSpawner : MonoBehaviour
 
 	void Awake()
 	{
-		// 프리팹은 씬에 없어서 Collider.bounds를 못 쓰므로, BoxCollider2D 값으로 직접 구한다
-		if (monsterPrefab != null && monsterPrefab.TryGetComponent(out BoxCollider2D box))
+		// 프리팹은 씬에 없어서 Collider.bounds를 못 쓰므로, BoxCollider2D·CircleCollider2D 값으로 직접 구한다
+		if (monsterPrefab != null)
 		{
 			float scaleY = monsterPrefab.transform.localScale.y;
-			footHeight = (box.size.y * 0.5f - box.offset.y) * scaleY;
-			bodyHeight = box.size.y * scaleY;
+			if (monsterPrefab.TryGetComponent(out BoxCollider2D box))
+			{
+				footHeight = (box.size.y * 0.5f - box.offset.y) * scaleY;
+				bodyHeight = box.size.y * scaleY;
+			}
+			else if (monsterPrefab.TryGetComponent(out CircleCollider2D circle))
+			{
+				footHeight = (circle.radius - circle.offset.y) * scaleY;
+				bodyHeight = circle.radius * 2f * scaleY;
+			}
 		}
 
 		groundFilter.SetLayerMask(groundLayers);

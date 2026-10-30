@@ -7,6 +7,7 @@ using UnityEngine;
 /// - 데미지 = 공격력 × 스킬 배율 × (1 + 추가분 합)<br/>
 /// - 추가분은 조건 배율(출혈, 표식 등)의 "+몇 %"를 더한 값이다. 예: 표식(+100%) + 집중찌르기 출혈(+50%) → 1 + 1.0 + 0.5 = 2.5배<br/>
 /// - 치명타가 나면 치명타 추가분도 더한다.<br/>
+/// - 대상에게 표식(StatusEffects)이 있으면 표식 추가분(DamageBonus.Mark, +100%)을 자동으로 더한다. 스킬은 표식을 BonusRate에 넣지 않는다.<br/>
 /// - 결과는 반올림(0.5는 올림)한 정수다. 0보다 크면 최소 1이다.
 /// </para>
 /// <para>
@@ -51,7 +52,7 @@ public static class DamageCalculator
 			return new DamageResult(target.Hp, isCritical: false, isExecution: true);
 
 		bool isCritical = critRoll < request.CritChance;
-		float bonus = request.BonusRate + (isCritical ? request.CritBonusRate : 0f);
+		float bonus = request.BonusRate + (isCritical ? request.CritBonusRate : 0f) + (target.IsMarked ? DamageBonus.Mark : 0f);
 		float raw = request.AttackPower * request.SkillMultiplier * (1f + bonus);
 
 		return new DamageResult(ToDamage(raw), isCritical, isExecution: false);
@@ -117,7 +118,7 @@ public struct DamageRequest
 }
 
 /// <summary>
-/// 맞은 대상의 정보. 처형 판정에만 쓴다. Monster라면 FromMonster로 만든다.
+/// 맞은 대상의 정보. 처형 판정과 표식 배율에 쓴다. Monster라면 FromMonster로 만든다.
 /// </summary>
 public readonly struct DamageTarget
 {
@@ -128,20 +129,27 @@ public readonly struct DamageTarget
 	public readonly int Hp;
 	public readonly int MaxHp;
 	public readonly bool IsBoss;
+	/// <summary>표식 상태면 true. 데미지 +100%</summary>
+	public readonly bool IsMarked;
 
-	public DamageTarget(int hp, int maxHp, bool isBoss)
+	public DamageTarget(int hp, int maxHp, bool isBoss, bool isMarked = false)
 	{
 		HasValue = true;
 		Hp = hp;
 		MaxHp = maxHp;
 		IsBoss = isBoss;
+		IsMarked = isMarked;
 	}
 
 	/// <summary>
-	/// Monster에서 만든다. Hp, MaxHp, IsBoss를 읽는다 (docs/systems/monster.md).
+	/// Monster에서 만든다. Hp, MaxHp, IsBoss를 읽고 (docs/systems/monster.md), 같은 오브젝트의 StatusEffects에서 표식을 읽는다.
 	/// </summary>
 	public static DamageTarget FromMonster(Monster monster)
-		=> monster == null ? None : new DamageTarget(monster.Hp, monster.MaxHp, monster.IsBoss);
+	{
+		if (monster == null) return None;
+		StatusEffects status = monster.GetComponent<StatusEffects>();
+		return new DamageTarget(monster.Hp, monster.MaxHp, monster.IsBoss, status != null && status.IsMarked);
+	}
 }
 
 /// <summary>

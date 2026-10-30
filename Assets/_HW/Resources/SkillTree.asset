@@ -1,0 +1,385 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8dda1e95ba9e41a4b2d490e05d85763, type: 3}
+  m_Name: SkillTree
+  m_EditorClassIdentifier: Assembly-CSharp::SkillTree
+  nodes:
+  - id: syntax.sequence
+    kind: 0
+    displayName: "\uC21C\uCC28 \uC2E4\uD589"
+    prerequisites: []
+    autoUnlock: 1
+    cost: []
+    unlocksBlocks: 0e00000010000000i
+    note: "\uCC98\uC74C\uBD80\uD130. \uBE14\uB85D\uC744 \uC704\uC5D0\uC11C\uBD80\uD130 \uCC28\uB840\uB85C \uC2E4\uD589. C \uC2A4\uD0AC \uBE14\uB85D, \uAE30\uB2E4\uB9AC\uAE30"
+  - id: syntax.variable
+    kind: 0
+    displayName: "\uBCC0\uC218"
+    prerequisites:
+    - syntax.sequence
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 2
+    unlocksBlocks: 0000000001000000i
+    note: 
+  - id: syntax.arithmetic
+    kind: 0
+    displayName: "\uC5F0\uC0B0"
+    prerequisites:
+    - syntax.variable
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 3
+    unlocksBlocks: 02000000i
+    note: 
+  - id: syntax.if
+    kind: 0
+    displayName: "if\uBB38"
+    prerequisites:
+    - syntax.arithmetic
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 0600000003000000i
+    note: "\uBE44\uAD50(> < ==)\uB294 \uC870\uAC74\uC5D0 \uC4F0\uBBC0\uB85C if\uBB38\uACFC \uAC19\uC774 \uC5F0\uB2E4 (\uAC00\uC815)"
+  - id: syntax.logic
+    kind: 0
+    displayName: "\uB17C\uB9AC \uC5F0\uC0B0"
+    prerequisites:
+    - syntax.if
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 5
+    unlocksBlocks: 0400000005000000i
+    note: 
+  - id: syntax.for
+    kind: 0
+    displayName: "for\uBB38"
+    prerequisites:
+    - syntax.logic
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 07000000090000000a000000i
+    note: "break, continue\uB294 \uCCAB \uBC18\uBCF5\uBB38\uACFC \uAC19\uC774 \uC5F0\uB2E4 (\uAC00\uC815)"
+  - id: syntax.while
+    kind: 0
+    displayName: "while\uBB38"
+    prerequisites:
+    - syntax.for
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 7
+    unlocksBlocks: 08000000i
+    note: 
+  - id: syntax.function
+    kind: 0
+    displayName: "\uD568\uC218"
+    prerequisites:
+    - syntax.while
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    unlocksBlocks: 0f000000i
+    note: "\uC0AC\uC6A9\uC790 \uC815\uC758 \uD568\uC218 \uB9CC\uB4E4\uAE30\xB7\uBD80\uB974\uAE30, return. \uD568\uC218 \uBE14\uB85D(BlockKind.Function)\uC740 C \uC2A4\uD0AC\uACFC \uAC19\uC740 \uC885\uB958\uB77C \uC5EC\uAE30\uC11C \uB9C9\uC9C0 \uC54A\uB294\uB2E4"
+  - id: syntax.list
+    kind: 0
+    displayName: list
+    prerequisites:
+    - syntax.function
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 10
+    unlocksBlocks: 0b000000i
+    note: "\uBC30\uC5F4 \uB9CC\uB4E4\uAE30 \uBE14\uB85D\uC744 \uAC19\uC774 \uC5F0\uB2E4 (\uAC00\uC815)"
+  - id: syntax.type
+    kind: 0
+    displayName: "Type \uC815\uC758"
+    prerequisites:
+    - syntax.list
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 12
+    unlocksBlocks: 
+    note: "struct \uB9CC\uB4E4\uAE30. \uBE14\uB85D\uC774 \uC544\uC9C1 \uC5C6\uC74C"
+  - id: c.thrust
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 1
+    cost: []
+    unlocksBlocks: 
+    note: "\uCC98\uC74C\uBD80\uD130"
+  - id: c.focused_thrust
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.thrust
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 3
+    unlocksBlocks: 
+    note: 
+  - id: c.vital_strike
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.focused_thrust
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.skewer
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.thrust
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.summoned_thrust
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.thrust
+    - c.summon_sword
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 5
+    unlocksBlocks: 
+    note: 
+  - id: c.wound_exploit
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summoned_thrust
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.deep_thrust
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summoned_thrust
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.sword_throw
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 1
+    cost: []
+    unlocksBlocks: 
+    note: "\uCC98\uC74C\uBD80\uD130"
+  - id: c.summoned_throw
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.sword_throw
+    - c.summon_sword
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 5
+    unlocksBlocks: 
+    note: 
+  - id: c.sword_return
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summoned_throw
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.sword_slash
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summon_sword
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.wide_slash
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.sword_slash
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 5
+    unlocksBlocks: 
+    note: 
+  - id: c.summoned_slash
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.wide_slash
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.wound_slash
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.wide_slash
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.multi_slash
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summoned_slash
+    - c.wound_slash
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    unlocksBlocks: 
+    note: 
+  - id: c.battlefield_sweep
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.multi_slash
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 10
+    - materialId: boss_core
+      count: 1
+    unlocksBlocks: 
+    note: 
+  - id: c.summon_sword
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    - materialId: field_boss_core
+      count: 1
+    unlocksBlocks: 0c0000000d000000i
+    note: "\uC2A4\uD0AC \uC120\uD589 \uC5C6\uC74C. \uC0AC\uB0E5\uD130 \uBCF4\uC2A4 \uC7AC\uB8CC\uB85C \uB9C9\uC74C. malloc\xB7free \uBE14\uB85D\uB3C4 \uAC19\uC774 \uC5F0\uB2E4 (malloc \u2192 \uAC80 \uC18C\uD658)"
+  - id: c.free_sword
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summon_sword
+    autoUnlock: 1
+    cost: []
+    unlocksBlocks: 
+    note: "\uAC80 \uC18C\uD658 \uD574\uAE08 \uC2DC \uAC19\uC774 \uC5F4\uB9BC"
+  - id: c.parry
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: "\uB418\uB3CC\uB9AC\uB294 \uAC80\uC740 \uC18C\uD658\uAC80\uACFC \uB530\uB85C \uC0DD\uAE30\uBBC0\uB85C \uC120\uD589 \uC5C6\uC74C"
+  - id: c.mark
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.summon_sword
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: c.sword_dance
+    kind: 1
+    displayName: 
+    prerequisites:
+    - c.mark
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 10
+    - materialId: boss_core
+      count: 1
+    unlocksBlocks: 
+    note: 
+  - id: common.dash
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 2
+    unlocksBlocks: 
+    note: "\uC800\uB819 \uAD6C\uAC04\uC5D0 \uC5F0\uB2E4. \uB808\uBCA8\uC774 \uC544\uC9C1 \uC5C6\uC5B4\uC11C \uC120\uD589 \uC5C6\uC774 \uC801\uC740 \uC7AC\uB8CC\uB85C \uB460"
+  - id: common.double_jump
+    kind: 1
+    displayName: 
+    prerequisites:
+    - common.dash
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.sword_ride
+    kind: 1
+    displayName: 
+    prerequisites:
+    - common.double_jump
+    - c.summon_sword
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    unlocksBlocks: 
+    note: 

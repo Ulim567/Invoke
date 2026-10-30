@@ -8,7 +8,7 @@
 - 던진 검 오브젝트(떨어진 검 프리팹)를 만들고 없앤다.
 - 하지 않는 일
   - 던지기·검 돌아오기 스킬의 데미지, 처형, 돌아오는 경로 판정: 던지기 스킬 이슈 (`Hit` 이벤트를 받아서 처리)
-  - 소환검: 소환검 이슈
+  - 소환검: summoned-sword.md
   - 네트워크 동기화: 「소환검·검기를 서버에서 생성하고 동기화하기」 이슈
 
 ## 규칙
@@ -26,7 +26,7 @@
   - 검 돌아오기(`Recall`): 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다.
 - 해제(free)할 수 없다.
 - 떨어진 검 오브젝트는 `SpawnDroppedSword` / `DespawnDroppedSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
-- 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다.
+- 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다. 못 주우면 근처에 떨어진 소환검을 줍는다 (`SummonedSwords.TryPickUpNearest`).
 
 ### 지금 값 (Player_JW)
 

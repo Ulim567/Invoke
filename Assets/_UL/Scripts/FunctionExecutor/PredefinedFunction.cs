@@ -31,6 +31,8 @@ public abstract class PredefinedFunction : FunctionBlock
 	// 함수 블록의 값 칸에서 받은 파라미터 값. Parameters와 같은 순서이고, 비운 칸은 null이다
 	// 슬롯에서 바로 시전했거나 값 칸이 없으면 배열 자체가 null이다
 	RuntimeValue?[] arguments;
+	// Return으로 정한 반환 값. 정하지 않았으면 null
+	RuntimeValue? returnValue;
 
 	/// <summary>
 	/// 고정 ID. 함수 데이터의 함수 블록이 이 값으로 이 함수를 가리킨다. 화면 이름(Name)과 따로 둔다.
@@ -168,6 +170,35 @@ public abstract class PredefinedFunction : FunctionBlock
 		// 이름 오타는 컴파일 오류로 잡히지 않으므로 바로 알린다
 		Debug.LogError($"{Name}: 파라미터 {name}이(가) 없습니다. Parameters에 적은 이름으로 읽습니다.");
 		return false;
+	}
+
+	/// <summary>
+	/// 이 함수의 반환 값을 정한다. ReturnType이 Void가 아닌 함수는 끝나기 전에 반드시 부른다. OnStart, OnTick, OnEnd에서 부른다.<br/>
+	/// 여러 번 부르면 마지막 값을 쓴다. 값이 ReturnType과 다르면 실행기가 캐릭터 언어의 숫자 타입 변환 규칙으로 맞춘다.<br/>
+	/// 부르지 않고 끝나면, 값 칸에 끼운 이 함수는 MissingReturnValue로 실패한다.
+	/// </summary>
+	// 실제 C의 return과 달리 함수를 끝내지 않는다. 끝내려면 Stop을 함께 부른다
+	protected void Return(RuntimeValue value)
+	{
+		if (ReturnType.Kind == VariableTypeKind.Void)
+		{
+			Debug.LogError($"{Name}: 반환 타입이 Void인데 Return을 불렀습니다. ReturnType을 먼저 정합니다.");
+			return;
+		}
+		if (WasCancelled)
+		{
+			Debug.LogError($"{Name}: OnCancel 안에서 Return을 불렀습니다. 끊긴 함수의 반환 값은 쓰이지 않습니다.");
+			return;
+		}
+
+		returnValue = value;
+	}
+
+	// 값 칸의 함수 블록(PredefinedValueBlock)이 이 함수가 끝난 뒤 반환 값을 받아 간다
+	internal bool TryGetReturnValue(out RuntimeValue value)
+	{
+		value = returnValue ?? default;
+		return returnValue.HasValue;
 	}
 
 	// 함수 블록(CallPredefinedBlock)이 값 칸을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다

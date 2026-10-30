@@ -33,8 +33,22 @@ public static class FunctionDataConverter
 
 		// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수
 		int frameSize = 1 + data.Parameters.Count + data.LocalVariables().Count;
-		function = new UserFunction(data.Name, frameSize, blocks.ToArray());
+		function = new UserFunction(data.Name, frameSize, SumCooldownTicks(data), blocks.ToArray());
 		return true;
+	}
+
+	// 함수 몸통과 값 칸 안의 모든 사전 정의 함수 블록의 쿨타임 합. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다
+	// 반복문 안의 함수는 한 번만 센다. 몇 번 반복될지 미리 알 수 없기 때문
+	static int SumCooldownTicks(FunctionData data)
+	{
+		int sum = 0;
+		foreach (BlockData block in data.AllBlocks())
+		{
+			if (block.Kind != BlockKind.Function || block.IsUserFunction) continue;
+			if (!string.IsNullOrEmpty(block.FunctionId) && PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function))
+				sum += function.CooldownTicks;
+		}
+		return sum;
 	}
 
 	// 함수 몸통에 놓인 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
@@ -68,28 +82,43 @@ public static class FunctionDataConverter
 				return value == null ? null : new AssignBlock(variableName, value);
 			}
 
-			// 칸: 파라미터 수만큼의 값
+			// 칸: 파라미터 수만큼의 값. 반환 값이 있어도 버린다
 			case BlockKind.Function:
-			{
-				if (block.IsUserFunction) return Reject(data, "사용자 정의 함수 호출은 아직 실행할 수 없습니다.");
-				if (string.IsNullOrEmpty(block.FunctionId) || !PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function))
-					return Reject(data, $"고정 ID {block.FunctionId}의 함수를 찾을 수 없습니다.");
-				if (block.Slots.Count > function.Parameters.Count)
-					return Reject(data, $"{function.Name}의 값 칸이 파라미터 수({function.Parameters.Count})보다 많습니다.");
-
-				// 비운 값 칸은 null로 넘긴다. 스킬은 값이 없을 때 슬롯에서 바로 시전했을 때처럼 동작한다
-				ValueBlock[] arguments = new ValueBlock[block.Slots.Count];
-				for (int i = 0; i < arguments.Length; i++)
-				{
-					if (IsEmpty(block.Slots[i])) continue;
-					arguments[i] = ConvertValue(data, block.Slots[i]);
-					if (arguments[i] == null) return null;
-				}
-				return new CallPredefinedBlock(function, arguments);
-			}
+				return TryConvertCall(data, block, out PredefinedFunction function, out ValueBlock[] arguments)
+					? new CallPredefinedBlock(function, arguments)
+					: null;
 		}
 
 		return Reject(data, $"{block.Kind} 블록은 아직 실행할 수 없습니다.");
+	}
+
+	// 함수 블록의 부를 함수와 파라미터 값 칸을 바꾼다. 몸통의 함수 블록과 값 칸의 함수 블록이 함께 쓴다. 바꿀 수 없으면 콘솔 오류를 남기고 false
+	static bool TryConvertCall(FunctionData data, BlockData block, out PredefinedFunction function, out ValueBlock[] arguments)
+	{
+		function = null;
+		arguments = null;
+		string rejection = null;
+		if (block.IsUserFunction) rejection = "사용자 정의 함수 호출은 아직 실행할 수 없습니다.";
+		else if (string.IsNullOrEmpty(block.FunctionId) || !PredefinedFunctionRegistry.TryGet(block.FunctionId, out function))
+			rejection = $"고정 ID {block.FunctionId}의 함수를 찾을 수 없습니다.";
+		else if (block.Slots.Count > function.Parameters.Count)
+			rejection = $"{function.Name}의 값 칸이 파라미터 수({function.Parameters.Count})보다 많습니다.";
+
+		if (rejection != null)
+		{
+			Reject(data, rejection);
+			return false;
+		}
+
+		// 비운 값 칸은 null로 넘긴다. 스킬은 값이 없을 때 슬롯에서 바로 시전했을 때처럼 동작한다
+		arguments = new ValueBlock[block.Slots.Count];
+		for (int i = 0; i < arguments.Length; i++)
+		{
+			if (IsEmpty(block.Slots[i])) continue;
+			arguments[i] = ConvertValue(data, block.Slots[i]);
+			if (arguments[i] == null) return false;
+		}
+		return true;
 	}
 
 	// 값 칸 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
@@ -119,6 +148,23 @@ public static class FunctionDataConverter
 				if (left == null) return null;
 				ValueBlock right = ConvertValue(data, block.Slots[2]);
 				return right == null ? null : new ArithmeticBlock(left, op, right);
+			}
+
+			// 값을 돌려주는 사전 정의 함수. 칸: 파라미터 수만큼의 값
+			case BlockKind.Function:
+			{
+				if (!TryConvertCall(data, block, out PredefinedFunction function, out ValueBlock[] arguments)) return null;
+
+				VariableType returnType = function.ReturnType;
+				if (returnType.Kind == VariableTypeKind.Void)
+					return Reject<ValueBlock>(data, $"{function.Name}은(는) 값을 돌려주지 않으므로 값 칸에 끼울 수 없습니다.");
+				if (!RuntimeValue.IsSupportedType(returnType))
+					return Reject<ValueBlock>(data, $"{function.Name}의 반환 타입 {returnType.Kind}은(는) 아직 실행할 수 없습니다.");
+				// 비동기 함수는 끝나기를 기다리지 않으므로 반환 값을 받을 수 없다
+				if (function.IsAsync)
+					return Reject<ValueBlock>(data, $"{function.Name}은(는) 비동기 함수라 값 칸에 끼울 수 없습니다.");
+
+				return new PredefinedValueBlock(function, arguments);
 			}
 		}
 

@@ -57,4 +57,6 @@ public static class PredefinedFunctionIds
 	public const string TestLongMallocFunction = "test.long_malloc_function";
 	public const string TestFreeFunction = "test.free_function";
 	public const string TestArgumentFunction = "test.argument_function";
+	public const string TestReturnFunction = "test.return_function";
+	public const string TestMissingReturnFunction = "test.missing_return_function";
 }

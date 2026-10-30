@@ -27,6 +27,8 @@ public enum FunctionFailure
 	TypeMismatch,
 	// 0으로 나누거나 0으로 나머지를 구했다 (int, float 모두)
 	DivideByZero,
+	// 반환 타입이 있는 사전 정의 함수가 Return을 부르지 않고 끝났다. 플레이어가 아니라 스킬 작성자의 실수다
+	MissingReturnValue,
 }
 
 /// <summary>

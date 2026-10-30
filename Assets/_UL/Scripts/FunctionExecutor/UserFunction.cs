@@ -30,21 +30,23 @@ public class UserFunction : FunctionBlock
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
 
+	// 만들 때 정한 쿨타임. 정하지 않았으면 null이고, 그때는 Blocks에서 계산한다
+	readonly int? cooldownTicks;
+
 	/// <summary>
-	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.
+	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.<br/>
+	/// 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 값 칸 안의 스킬까지 세어 넣는다.
 	/// </summary>
-	// 반복문 같은 문법 블록 안의 함수는 아직 세지 않는다. 몇 번 실행될지 미리 알 수 없으므로 블록 실행 이슈에서 정한다
+	// 직접 만든 함수(테스트 등)는 Blocks에 바로 들어 있는 함수 블록만 센다
 	public override int CooldownTicks
 	{
 		get
 		{
+			if (cooldownTicks.HasValue) return cooldownTicks.Value;
+
 			int sum = 0;
 			foreach (Block block in Blocks)
-			{
 				if (block is FunctionBlock function) sum += function.CooldownTicks;
-				// 함수 데이터에서 바꾼 함수는 스킬을 함수 블록(CallPredefinedBlock)으로 감싸 넣는다
-				else if (block is CallPredefinedBlock call) sum += call.CooldownTicks;
-			}
 			return sum;
 		}
 	}
@@ -68,6 +70,14 @@ public class UserFunction : FunctionBlock
 		// 호출 자리 1칸은 언제나 쓴다
 		FrameSize = frameSize < 1 ? 1 : frameSize;
 		Blocks = blocks;
+	}
+
+	/// <summary>
+	/// 프레임 크기와 쿨타임을 정해 함수를 만든다. FunctionDataConverter가 쓴다.
+	/// </summary>
+	public UserFunction(string name, int frameSize, int cooldownTicks, params Block[] blocks) : this(name, frameSize, blocks)
+	{
+		this.cooldownTicks = cooldownTicks;
 	}
 
 	protected override BlockResult Step(FunctionTask task)

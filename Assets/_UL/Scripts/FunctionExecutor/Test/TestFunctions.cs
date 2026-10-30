@@ -185,3 +185,34 @@ public class TestArgumentFunction : PredefinedFunction
 		ArgumentRead?.Invoke(TryGetArgument("amount", out RuntimeValue amount) ? amount.ToString() : "값 없음");
 	}
 }
+
+/// <summary>
+/// 반환 값 테스트용 함수. int 파라미터 amount를 받아 마지막 틱에 amount × 2를 돌려준다. 3틱 동안 진행하고 쿨타임은 4틱이다.
+/// </summary>
+public class TestReturnFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestReturnFunction;
+	public override string Name => "TestReturnFunction";
+	public override int TickCount => 3;
+	public override int CooldownTicks => 4;
+	public override VariableType ReturnType => new VariableType(VariableTypeKind.Int);
+	public override System.Collections.Generic.IReadOnlyList<ParameterData> Parameters =>
+		new[] { new ParameterData("amount", new VariableType(VariableTypeKind.Int)) };
+
+	protected override void OnEnd(FunctionTask task)
+	{
+		int amount = TryGetArgument("amount", out RuntimeValue value) ? value.AsInt() : 0;
+		Return(RuntimeValue.FromInt(amount * 2));
+	}
+}
+
+/// <summary>
+/// 반환 값 테스트용 함수. 반환 타입이 int인데 Return을 부르지 않는 잘못 만든 스킬이다. 1틱 동안 진행한다.
+/// </summary>
+public class TestMissingReturnFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestMissingReturnFunction;
+	public override string Name => "TestMissingReturnFunction";
+	public override int TickCount => 1;
+	public override VariableType ReturnType => new VariableType(VariableTypeKind.Int);
+}

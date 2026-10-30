@@ -32,7 +32,7 @@ public enum FailureHandling
 }
 
 /// <summary>
-/// 캐릭터 언어 하나의 실패 처리 표. 실패 종류마다 실행기가 무엇을 할지 정한다.
+/// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지(실패 처리 표)와, 초기값을 비운 변수의 기본값을 정한다.
 /// <para>
 /// 사용법<br/>
 /// - Project 창에서 Create → Invoke → Language Rule로 만들고, 모든 실패 종류마다 처리를 한 줄씩 넣는다.<br/>
@@ -55,6 +55,16 @@ public class LanguageRule : ScriptableObject
 
 	[SerializeField, Tooltip("실패 종류마다 할 처리. 모든 실패 종류가 한 줄씩 있어야 한다")]
 	List<Rule> rules = new List<Rule>();
+
+	// 초기값 칸을 비운 선언 블록이 변수에 넣는 값. 언어마다 기본값이 다르므로(예: Java의 String은 null) 언어 규칙 파일이 정한다
+	// 처음 값은 C의 전역 변수 기본값이다. 이미 만든 C 파일도 Unity가 새 칸을 읽을 때 이 값을 넣는다
+	[Header("기본값 (초기값을 비운 변수)")]
+	[SerializeField] int defaultInt = 0;
+	[SerializeField] float defaultFloat = 0f;
+	[SerializeField] bool defaultBool = false;
+	// 글자가 아니라 글자 번호로 받는다. Inspector의 글자 칸에는 글자 번호 0('\0')을 넣을 수 없기 때문
+	[SerializeField, Tooltip("char 기본값의 글자 번호. 0은 '\\0'")] int defaultCharCode = 0;
+	[SerializeField] string defaultString = "";
 
 	/// <summary>
 	/// failure의 처리를 찾는다. 표에 없으면 false를 돌려준다.
@@ -80,5 +90,30 @@ public class LanguageRule : ScriptableObject
 	{
 		foreach (FunctionFailure failure in Enum.GetValues(typeof(FunctionFailure)))
 			if (!TryGetHandling(failure, out _)) yield return failure;
+	}
+
+	/// <summary>
+	/// type 타입 변수의 기본값을 돌려준다. 선언 블록의 초기값 칸이 비어 있을 때 쓴다.<br/>
+	/// 포인터는 언어와 상관없이 언제나 HeapStorage.NullPointer다. 아직 다루지 않는 타입이면 콘솔 오류를 내고 false를 돌려준다.
+	/// </summary>
+	public bool TryGetDefaultValue(VariableType type, out RuntimeValue value)
+	{
+		value = default;
+		if (type == null) throw new ArgumentNullException(nameof(type));
+
+		switch (type.Kind)
+		{
+			case VariableTypeKind.Int: value = RuntimeValue.FromInt(defaultInt); return true;
+			case VariableTypeKind.Float: value = RuntimeValue.FromFloat(defaultFloat); return true;
+			case VariableTypeKind.Bool: value = RuntimeValue.FromBool(defaultBool); return true;
+			case VariableTypeKind.Char: value = RuntimeValue.FromChar((char)defaultCharCode); return true;
+			// Unity는 비운 글자 칸을 null로 둘 수 있으므로 빈 글자열로 바꾼다
+			case VariableTypeKind.String: value = RuntimeValue.FromString(defaultString ?? ""); return true;
+			// 표에서 정하지 않는다. HeapStorage가 0을 null 포인터로 쓰므로 다른 값이면 malloc 실패를 알아볼 수 없기 때문
+			case VariableTypeKind.Pointer: value = RuntimeValue.FromPointer(type, HeapStorage.NullPointer); return true;
+		}
+
+		Debug.LogError($"{name}: {type.Kind} 타입의 기본값은 아직 없습니다. 이 타입은 이후 이슈에서 추가합니다.", this);
+		return false;
 	}
 }

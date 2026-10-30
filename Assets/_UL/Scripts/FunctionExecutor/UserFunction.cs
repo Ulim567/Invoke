@@ -20,6 +20,12 @@ public class UserFunction : FunctionBlock
 	public override string Name { get; }
 
 	/// <summary>
+	/// 이 실행의 지역 변수. 실행을 시작할 때(OnStart) 새로 만들어지며, 시작하기 전에는 null이다.
+	/// </summary>
+	// 필드에 미리 만들어 두지 않는다. Clone은 얕은 복사라서, 같은 함수를 두 번 시전하면 두 작업이 같은 저장소를 함께 쓰게 되기 때문
+	internal VariableStore Variables { get; private set; }
+
+	/// <summary>
 	/// 위에서부터 차례로 실행할 블록들(원본).
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
@@ -81,6 +87,11 @@ public class UserFunction : FunctionBlock
 
 		blockIndex++;
 		return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
+	}
+
+	protected override void OnStart(FunctionTask task)
+	{
+		Variables = new VariableStore();
 	}
 
 	protected override void OnCancel(FunctionTask task)

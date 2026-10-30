@@ -44,6 +44,8 @@ public class FunctionExecutor : MonoBehaviour
 	int fixedUpdateCount;
 	ProcessMemory memory;
 	PlayerStats stats;
+	// 언어 규칙 파일이 연결되지 않았을 때 기본값을 읽는 임시 규칙. 처음 값(C 기본값)만 가진다
+	LanguageRule fallbackRule;
 
 	/// <summary>
 	/// 지금까지 지난 틱 수. 첫 틱이 1이다.
@@ -170,6 +172,19 @@ public class FunctionExecutor : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// 이 캐릭터 언어에서 type 타입 변수의 기본값. 선언 블록의 초기값 칸이 비어 있을 때 쓴다.
+	/// </summary>
+	// 언어 규칙 파일이 없으면 C 기본값으로 실행을 이어 간다. 연결하지 않은 것은 Awake에서 이미 알렸다
+	// 임시 규칙을 만들어 쓰는 이유: C 기본값을 이 파일에 한 번 더 적으면, 언어 규칙 파일의 처음 값과 어긋날 수 있기 때문
+	internal bool TryGetDefaultValue(VariableType type, out RuntimeValue value)
+	{
+		if (languageRule != null) return languageRule.TryGetDefaultValue(type, out value);
+
+		if (fallbackRule == null) fallbackRule = ScriptableObject.CreateInstance<LanguageRule>();
+		return fallbackRule.TryGetDefaultValue(type, out value);
+	}
+
 	FailureHandling FindHandling(string functionName, FunctionFailure failure)
 	{
 		if (languageRule != null && languageRule.TryGetHandling(failure, out FailureHandling handling)) return handling;
@@ -190,6 +205,12 @@ public class FunctionExecutor : MonoBehaviour
 		castConditions.Add(new CooldownCondition(this));
 		castConditions.Add(new MemoryCondition(memory));
 		CheckLanguageRule();
+	}
+
+	// 코드로 만든 ScriptableObject는 Unity가 저절로 지우지 않으므로 직접 지운다
+	void OnDestroy()
+	{
+		if (fallbackRule != null) Destroy(fallbackRule);
 	}
 
 	// 쿨타임은 함수가 끝난 순간부터 흐른다. 정상 종료, 실패, 실행 중단 모두 같다

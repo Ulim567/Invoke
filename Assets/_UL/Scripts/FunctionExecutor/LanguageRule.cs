@@ -17,6 +17,25 @@ public enum FunctionFailure
 	SkillFailed,
 	// 시전한 함수가 아직 실행 중이거나 쿨타임 중이었다
 	OnCooldown,
+	// 값 칸의 변수가 지금 함수의 지역 변수에 없었다
+	UndeclaredVariable,
+	// 값 칸에 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없었다 (예: int 칸의 "abc")
+	InvalidLiteral,
+}
+
+/// <summary>
+/// 실패가 플레이어 코드의 어떤 잘못인지. 화면이 compile error와 runtime error를 나누어 보여 줄 때 쓴다.
+/// </summary>
+// 같은 실패라도 언어마다 분류가 다르므로(예: 선언하지 않은 변수는 C에서 compile error, Python에서 runtime error) 언어 규칙 표가 정한다
+// FunctionFailure와 같은 이유로, 새 분류는 맨 끝에만 추가한다
+public enum FailureCategory
+{
+	// 플레이어 코드의 잘못이 아니다 (쿨타임, 시전 전 메모리 부족 등)
+	NotCodeError,
+	// 그 언어에서 실행하기 전에 찾아내는 잘못
+	CompileError,
+	// 그 언어에서 실행 중에 찾아내는 잘못
+	RuntimeError,
 }
 
 /// <summary>
@@ -32,7 +51,7 @@ public enum FailureHandling
 }
 
 /// <summary>
-/// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지(실패 처리 표)와, 초기값을 비운 변수의 기본값을 정한다.
+/// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지와 그 실패의 분류(실패 처리 표), 초기값을 비운 변수의 기본값을 정한다.
 /// <para>
 /// 사용법<br/>
 /// - Project 창에서 Create → Invoke → Language Rule로 만들고, 모든 실패 종류마다 처리를 한 줄씩 넣는다.<br/>
@@ -51,6 +70,7 @@ public class LanguageRule : ScriptableObject
 	{
 		public FunctionFailure failure;
 		public FailureHandling handling;
+		public FailureCategory category;
 	}
 
 	[SerializeField, Tooltip("실패 종류마다 할 처리. 모든 실패 종류가 한 줄씩 있어야 한다")]
@@ -71,15 +91,32 @@ public class LanguageRule : ScriptableObject
 	/// </summary>
 	public bool TryGetHandling(FunctionFailure failure, out FailureHandling handling)
 	{
+		bool found = TryGetRule(failure, out Rule rule);
+		handling = rule.handling;
+		return found;
+	}
+
+	/// <summary>
+	/// failure의 분류(compile error, runtime error 등)를 찾는다. 표에 없으면 false를 돌려준다.
+	/// </summary>
+	public bool TryGetCategory(FunctionFailure failure, out FailureCategory category)
+	{
+		bool found = TryGetRule(failure, out Rule rule);
+		category = rule.category;
+		return found;
+	}
+
+	bool TryGetRule(FunctionFailure failure, out Rule found)
+	{
 		foreach (Rule rule in rules)
 		{
 			if (rule.failure != failure) continue;
 
-			handling = rule.handling;
+			found = rule;
 			return true;
 		}
 
-		handling = default;
+		found = default;
 		return false;
 	}
 

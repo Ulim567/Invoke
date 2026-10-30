@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -41,6 +42,10 @@ public class FunctionTask
 	FunctionFailure? recordedFailure;
 	// 스킬이 Fail로 낸 에러. 실패 종류가 SkillFailed일 때만 있다
 	SkillError recordedError;
+	// 실행 중인 사용자 정의 함수들의 지역 변수. 맨 뒤가 지금 실행 중인(가장 안쪽) 함수의 것이다
+	// 블록은 실행될 때 task만 받으므로, 자기를 실행하는 함수의 지역 변수를 task를 거쳐 찾는다
+	// 목록인 이유: 함수 안에서 다른 함수를 부르면 불린 함수의 것이 위에 쌓이고, 끝나면 내려가 부른 함수의 것이 다시 맨 위가 된다(C의 호출 스택)
+	readonly List<VariableStore> variableStack = new List<VariableStore>();
 
 	/// <summary>
 	/// 이 작업을 시전한 캐릭터.
@@ -57,6 +62,13 @@ public class FunctionTask
 
 	// 이 작업을 만든 실행기. 사용자 정의 함수가 비동기 함수를 새 작업으로 시전할 때 쓴다
 	internal FunctionExecutor Executor { get; }
+
+	// 지금 실행 중인 사용자 정의 함수의 지역 변수. 사용자 정의 함수 밖(사전 정의 함수만 시전한 작업)이면 null이다
+	internal VariableStore CurrentVariables => variableStack.Count > 0 ? variableStack[variableStack.Count - 1] : null;
+
+	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
+	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
+	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);
 
 	// 슬롯에서 시전할 때 넘긴 함수(원본). 이 작업이 끝나면 실행기가 이 함수의 쿨타임을 시작한다
 	// 함수 안의 비동기 시전으로 만든 작업은 null이다. 그 스킬의 쿨타임은 바깥 함수의 쿨타임에 이미 더해져 있기 때문

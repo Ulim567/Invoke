@@ -173,6 +173,17 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 이 캐릭터 언어에서 failure가 플레이어 코드의 어떤 잘못인지(compile error, runtime error 등).<br/>
+	/// 화면이 TaskEnded의 task.Failure나 CastRejected의 실패 종류를 받아 보여 줄 때 쓴다.
+	/// </summary>
+	// 언어 규칙 파일이 없거나 표에 그 줄이 없으면 NotCodeError로 본다. 둘 다 Play를 시작할 때 이미 콘솔 오류로 알렸다
+	public FailureCategory GetFailureCategory(FunctionFailure failure)
+	{
+		if (languageRule != null && languageRule.TryGetCategory(failure, out FailureCategory category)) return category;
+		return FailureCategory.NotCodeError;
+	}
+
+	/// <summary>
 	/// 이 캐릭터 언어에서 type 타입 변수의 기본값. 선언 블록의 초기값 칸이 비어 있을 때 쓴다.
 	/// </summary>
 	// 언어 규칙 파일이 없으면 C 기본값으로 실행을 이어 간다. 연결하지 않은 것은 Awake에서 이미 알렸다

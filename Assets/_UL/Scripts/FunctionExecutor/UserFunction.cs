@@ -89,14 +89,24 @@ public class UserFunction : FunctionBlock
 		return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
 	}
 
+	// 안쪽 블록은 task만 받으므로, 이 함수의 지역 변수를 task에 올려 두어 안쪽 블록이 찾게 한다
+	// Block은 OnStart가 불린 뒤 OnEnd, OnCancel 중 정확히 하나를 부르므로, 올리고 내리는 짝이 어긋나지 않는다
 	protected override void OnStart(FunctionTask task)
 	{
 		Variables = new VariableStore();
+		task.PushVariables(Variables);
+	}
+
+	protected override void OnEnd(FunctionTask task)
+	{
+		task.PopVariables();
 	}
 
 	protected override void OnCancel(FunctionTask task)
 	{
 		// 실행 중인 안쪽 블록도 함께 끊어서, 안쪽 블록들도 정리할 기회를 갖게 한다
+		// 안쪽을 먼저 끊는다. 안쪽 사용자 정의 함수가 자기 지역 변수를 먼저 내려야 이 함수의 것이 맨 위가 되기 때문
 		runningBlock?.Cancel(task);
+		task.PopVariables();
 	}
 }

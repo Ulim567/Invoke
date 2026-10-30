@@ -14,7 +14,12 @@
 
 ## 동작 규칙
 - 이동 속도는 `PlayerStats.MoveSpeed`를 읽는다.
-- 입력은 `PlayerInputReader`의 `MoveX`, `JumpPressed`, `DropPressed`만 읽는다. 내 캐릭터(`isLocalPlayer`)에서만 동작한다.
+- 달리기 (#93)
+  - 왼쪽 Shift(`PlayerInputReader.RunHeld`)를 누르는 동안 이동 속도 × `Run Speed Multiplier`(임시 1.5).
+  - 땅에 있을 때만 Shift 상태를 읽는다. 공중에서는 땅을 떠난 순간(점프, 발판 내려가기, 낭떠러지)의 달리기 여부를 착지할 때까지 유지한다. 공중에서 Shift를 누르거나 떼도 속도가 바뀌지 않는다. 방향(←→)은 공중에서도 바꿀 수 있다.
+  - 슬롯을 누르고 있는 동안(대상 고르는 중)은 Player 맵이 꺼져 `RunHeld`가 false라 달리지 않는다.
+  - 대시는 달리기와 별개로 스킬(`common.dash`)이다.
+- 입력은 `PlayerInputReader`의 `MoveX`, `JumpPressed`, `DropPressed`, `RunHeld`만 읽는다. 내 캐릭터(`isLocalPlayer`)에서만 동작한다.
 - 바닥 판정
   - 콜라이더 아래 끝에 얇은 상자(너비 = 콜라이더 너비 × 0.9, 높이 0.1)를 두고 Ground·Platform 레이어와 겹치는지 검사한다.
   - 상자 너비가 몸보다 좁아서 옆의 벽은 바닥으로 잡히지 않는다.
@@ -52,6 +57,7 @@
 | Gravity Scale | 3 | Rigidbody2D |
 | Box Collider 2D | Size (1, 3.75), Offset (0, 2) | 64×64 그림, 캐릭터 60px 기준 |
 | Material | PlayerNoFriction | Box Collider 2D |
+| Run Speed Multiplier | 1.5 (임시) | PlayerMovement |
 | Platform Layers | Platform | PlayerMovement |
 | Drop Duration | 0.3 (초) | PlayerMovement |
 
@@ -74,7 +80,14 @@
 | --- | --- | --- | --- |
 | `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1. 스킬이 앞쪽(판정, 투사체 방향)을 정할 때 읽는다. 예: `Vector2.right * movement.Facing` |
 | `IsGrounded` | - | `bool` | 지금 바닥(Ground·Platform)에 서 있으면 `true`. 올라가는 중, 발판을 내려가는 중에는 `false`. 읽을 때마다 새로 검사하므로 저장해 두지 않고 필요할 때 읽는다. 점프·착지 애니메이션, 이동 스킬에서 쓴다. |
+| `IsRunning` | - | `bool` | 달리는 속도로 좌우로 움직이고 있으면 `true` (멈춰 있으면 `false`). 공중에서는 땅을 떠난 순간의 값을 유지. 달리기 애니메이션에서 읽는다. |
+| `RunSpeedMultiplier` | - | `float` | 달리기 속도 배율. 달릴 때 이동 속도 = `PlayerStats.MoveSpeed` × 이 값 |
 | `IsDropping` | - | `bool` | 발판 아래로 내려가는 중이면 `true`. 내려가는 애니메이션이 필요하면 읽는다. |
+
+### 테스트
+| 이름 | 설명 |
+| --- | --- |
+| `PlayerRunSimTest` | Test_JW의 RunTest. 켜고 Play → Host, Game 창을 한 번 클릭. 가짜 키로 걷기·달리기 속도, 달리다 점프 후 공중에서 Shift 떼기(달리는 속도 유지), 걷다 점프 후 공중에서 Shift 누르기(걷는 속도 유지)를 확인. 「[RunTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정한 것

@@ -7,7 +7,7 @@
 /// </summary>
 public static class DamageBonus
 {
-	/// <summary>표식 상태: 모든 스킬 +100%</summary>
+	/// <summary>표식 상태: 모든 스킬 +100%. 대상에 표식이 있으면 DamageCalculator가 자동으로 더하므로 스킬은 BonusRate에 넣지 않는다.</summary>
 	public const float Mark = 1.0f;
 
 	/// <summary>출혈 상태: 검 집중찌르기 +50%</summary>

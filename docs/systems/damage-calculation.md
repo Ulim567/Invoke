@@ -8,12 +8,14 @@
 - 하지 않는 일
   - 체력을 줄이지 않는다. 계산 결과를 받은 쪽이 `IDamageable.TakeDamage`를 부른다.
   - 이펙트, 소리, 데미지 숫자를 띄우지 않는다. 연출은 결과의 `IsCritical`, `IsExecution`을 읽는 쪽이 한다.
-  - 대상이 출혈·표식 상태인지 직접 찾지 않는다. 어떤 조건 배율이 붙는지는 스킬이 정해서 넘긴다. (상태 이상은 「상태 이상 5종」 이슈)
+  - 출혈 상태인지 직접 찾지 않는다. 출혈 조건 배율(집중찌르기 등)은 스킬이 `StatusEffects.Has(StatusType.Bleed)`를 읽어 `BonusRate`에 넣는다.
 
 ## 동작 규칙
 - 데미지 = 공격력 × 스킬 배율 × (1 + 추가분 합)
   - 추가분은 조건 배율의 "+몇 %"를 소수로 더한 값이다. 추가분끼리 더해서 중첩한다.
   - 예: 표식(+100%) + 집중찌르기 출혈(+50%) = 1 + 1.0 + 0.5 = 2.5배
+- 표식: 대상(`DamageTarget.IsMarked`)에 표식이 있으면 `DamageBonus.Mark`(+100%)를 자동으로 더한다 (#97). 스킬은 표식을 `BonusRate`에 넣지 않는다 (넣으면 두 번 더해짐).
+  - `DamageTarget.FromMonster`가 같은 오브젝트의 `StatusEffects`에서 표식을 읽는다. 대상 정보 없이 계산(`DamageTarget.None`)하면 표식은 붙지 않는다.
 - 치명타: `CritChance` 확률로 난다. 나면 `CritBonusRate`를 추가분에 더한다.
 - 정수 변환: 반올림한다(0.5는 올림). 계산 값이 0보다 크면 최소 1, 0 이하면 0이다.
   - `Mathf.RoundToInt`는 2.5를 2로 만드는 방식(짝수 쪽 반올림)이라 쓰지 않는다.
@@ -27,7 +29,7 @@
 
 | 이름 | 추가분 | 조건 | 스킬 |
 | --- | --- | --- | --- |
-| `Mark` | +100% (1.0) | 표식 상태 | 모든 스킬 |
+| `Mark` | +100% (1.0) | 표식 상태 | 모든 스킬 (계산기가 자동으로 더함) |
 | `BleedFocusedThrust` | +50% (0.5) | 출혈 상태 | 검 집중찌르기 |
 | `BleedWoundExploit` | +100% (1.0) | 출혈 상태 | 상처 공략 |
 | `BleedWoundSlash` | +100% (1.0) | 출혈 상태 | 상처 가르기 (출혈 도트) |
@@ -61,12 +63,13 @@
 | `CritBonusRate` | `float` | 치명타일 때 더하는 추가분. 기본 0 |
 | `CanExecute` | `bool` | 처형할 수 있는 공격이면 `true`. 검 던지기만 `true` |
 
-### `DamageTarget` (맞은 대상, 처형 판정용)
+### `DamageTarget` (맞은 대상, 처형 판정·표식용)
 
 | 이름 | 종류 | 설명 |
 | --- | --- | --- |
-| `DamageTarget.FromMonster(Monster monster)` | 함수 | 몬스터의 `Hp`, `MaxHp`, `IsBoss`로 만든다. |
-| `new DamageTarget(int hp, int maxHp, bool isBoss)` | 생성자 | 몬스터가 아닌 대상(기둥, 분신 등)에 쓴다. |
+| `DamageTarget.FromMonster(Monster monster)` | 함수 | 몬스터의 `Hp`, `MaxHp`, `IsBoss`와 `StatusEffects`의 표식으로 만든다. |
+| `new DamageTarget(int hp, int maxHp, bool isBoss, bool isMarked = false)` | 생성자 | 몬스터가 아닌 대상(기둥, 분신 등)에 쓴다. |
+| `IsMarked` | `bool` | 표식 상태면 `true`. 데미지 +100% |
 | `DamageTarget.None` | 값 | 대상 정보 없음. 처형 판정을 하지 않는다. |
 
 ### `DamageResult` (계산 결과)
@@ -80,12 +83,13 @@
 ### 사용 예
 
 ```csharp
-// 스킬: 표식이 붙은 몬스터를 집중찌르기(출혈)로 맞혔을 때
+// 스킬: 출혈 상태의 몬스터를 집중찌르기로 맞혔을 때. 표식은 FromMonster가 읽어서 자동으로 붙는다
+Monster monster = hit.GetComponentInParent<Monster>();
+StatusEffects status = monster.GetComponent<StatusEffects>();
 DamageRequest request = new DamageRequest(stats.AttackPower, skillMultiplier)
 {
-	BonusRate = DamageBonus.Mark + DamageBonus.BleedFocusedThrust,
+	BonusRate = status != null && status.Has(StatusType.Bleed) ? DamageBonus.BleedFocusedThrust : 0f,
 };
-Monster monster = hit.GetComponentInParent<Monster>();
 DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 hit.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
 
@@ -104,4 +108,5 @@ hit.GetComponentInParent<IDamageable>()?.TakeDamage(damage);
   - 데미지 계산의 공격력은 스킬이 `PlayerStats.AttackPower`를 읽어 `DamageRequest`에 넣는다.
 - 정해야 할 것
   - 일반 치명타 확률과 배율 (기획에 아직 없음). 지금은 스킬이 `CritChance`, `CritBonusRate`를 직접 넣는다.
-  - 상태 이상 시스템이 생기면, 스킬이 출혈·표식 여부를 어디서 읽어 `BonusRate`를 정하는지 (「상태 이상 5종」 이슈)
+- 정한 것 (#97)
+  - 표식은 계산기가 `DamageTarget`에서 읽어 자동으로 붙인다. 출혈 조건 배율은 스킬이 `StatusEffects`를 읽어 넣는다 (status-effects.md).

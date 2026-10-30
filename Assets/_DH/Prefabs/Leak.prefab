@@ -160,7 +160,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
+  m_Offset: {x: 0, y: 0.6}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
@@ -170,7 +170,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 1, y: 1}
+  m_Size: {x: 2.4, y: 1.2}
   m_EdgeRadius: 0
 --- !u!114 &8526818006109154282
 MonoBehaviour:
@@ -185,7 +185,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Monster
   maxHp: 40
-  despawnDelay: 0.5
+  despawnDelay: 1
   isBoss: 0
 --- !u!114 &3724148789813507843
 MonoBehaviour:
@@ -201,8 +201,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ContactDamage
   damage: 10
   hitInterval: 1
-  boxSize: {x: 1.5, y: 1}
-  boxOffset: {x: 0, y: 0}
+  boxSize: {x: 2.4, y: 1.2}
+  boxOffset: {x: 0, y: 0.6}
   targetLayers:
     serializedVersion: 2
     m_Bits: 256

@@ -17,7 +17,7 @@
 
 ## 동작 규칙
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
-- 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 오브젝트를 없앤다.
+- 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 오브젝트를 없앤다. `Despawn Delay`는 사망 모션 길이 이상으로 둔다(Leak 1.0초).
 - event는 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
   - 로직(드롭, 스포너, 보스 페이즈, 레이드 판정)은 `Damaged`, `Died`를 받는다.
   - 연출(이펙트, 소리, 애니메이션, 데미지 숫자)은 `HitEffectPlayed`, `DeathEffectPlayed`를 받는다.
@@ -33,7 +33,8 @@
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
 
 - 잡몹
-  - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5 (전부 임시, 프리팹 Inspector 값)
+  - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
+    - 몸 약 2.5×1.5칸, 그림 Pivot은 몸 바닥(임혜원 #101). 판정 BoxCollider2D와 `ContactDamage` 상자는 Size (2.4, 1.2), Offset (0, 0.6) (#107)
   - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형 (「잡몹 2」 이슈)
 - 몬스터끼리는 서로 통과한다(메이플 방식). 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌이 꺼져 있다(#81).
 - 순찰·추적 (`GroundChaseAI`)
@@ -179,6 +180,11 @@
   - 처형(체력 2% 이하, 보스 제외)은 `DamageTarget.FromMonster`로 `Monster.IsBoss`, `Hp`, `MaxHp`를 읽는다 (#42).
 - 박진우와 정해야 할 것
   - 패링이 `MonsterProjectile`을 잡았을 때 투사체를 없애는 방법, 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지 (패링 이슈에서 정함)
+- 임혜원과 정한 것
+  - Leak·Loop 그림과 애니메이션은 `_HW/Monsters`(#101). 오른쪽을 보고 그리고, 왼쪽은 최상위 SpriteRenderer의 `flipX`
+  - `Despawn Delay`는 사망 모션 길이 이상 (Leak 1.0초, Loop 0.75초)
+  - 프리팹 판정 크기·값은 김도훈이 먼저 바꾸고, 그림·Animator·MonsterAnimator(임혜원)는 그 뒤 임혜원이 프리팹 최상위에 붙인다
+  - 몬스터 연출은 임혜원의 MonsterAnimator(`_HW`)가 `HitEffectPlayed`, `DeathEffectPlayed`, `GroundChaseAI.IsMoving`을 읽어서 한다. Leak은 멈출 때 Move를 천천히 틀고, 대기 모션은 따로 없다
 - 임혜원과 정해야 할 것
-  - 피격·사망 연출을 `HitEffectPlayed`, `DeathEffectPlayed` event로 붙이는지
-  - Leak·Loop 그림. Leak 이동·대기 모션은 `GroundChaseAI.IsMoving`, 방향은 `flipX`(오른쪽을 보고 그림)
+  - Loop 발사 연출: `ProjectileAttack`에 연출 event `FireEffectPlayed`와 모으는 시간 `Fire Delay`(Loop 0.25초)를 추가한다 (잡몹 2 이슈)
+  - Loop 피격 시 쫓던 플레이어 반대쪽으로 살짝 밀리기 (잡몹 2 이슈)

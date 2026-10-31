@@ -11,6 +11,21 @@
   - code area, Overflow 시 재부팅, Java의 try, 버그 공격의 메모리 효과(`MemoryOccupy`, `ReclaimBlock`)는 아직 다루지 않는다. 이후 이슈에서 추가한다.
   - 빈 슬롯을 거르지 않는다. 빈 슬롯이면 cast 담당 스크립트가 `Cast`를 부르지 않는다.
 
+## 파일 위치
+- `Assets/_UL/Scripts/FunctionExecutor/` 아래 (#118)
+
+| 폴더 | 파일 | 맡는 일 |
+| --- | --- | --- |
+| `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
+| `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
+| `Predefined` | `PredefinedFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors` | 스킬 작성자가 쓰는 것 |
+| `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
+| `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
+| `Values` | `RuntimeValue`, `VariableStore` | 실행 중의 값, 지역 변수 |
+| `Conversion` | `FunctionDataConverter` | 함수 데이터 → `UserFunction` |
+| `Test` | 테스트 컴포넌트, 테스트용 함수·블록 | 테스트 |
+
 ## 동작 규칙
 - 1 tick = `FixedUpdate` N회. N은 `FunctionExecutor`의 Inspector 값 `Fixed Updates Per Tick`이다(처음 값 1, 즉 0.02초).
 - cast한 function은 다음 tick부터 진행한다.
@@ -19,9 +34,9 @@
   - `PredefinedFunction`: `TickCount` tick
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
   - `ReturnBlock`, 선언, 대입, 연산, `malloc`, `free`: 1 tick
-  - 값 칸에 끼운 블록(연산, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
-  - 값 칸에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
-  - 값 칸이 여럿: 왼쪽부터 차례로 실행
+  - expression으로 쓴 블록(연산, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
+  - value slot에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
+  - value slot이 여럿: 왼쪽부터 차례로 실행
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
   - 반복문도 문법 `Block`이므로 stack을 쓰지 않는다. 반복문 안의 `FunctionBlock`은 한 번 끝날 때마다 stack을 돌려주므로, 반복 횟수와 상관없이 그 `FunctionBlock`의 `FrameSize`만큼만 쓴다.
   - `PredefinedFunction`의 `FrameSize`: 1 + 파라미터 수 + `LocalVariableCount`
@@ -46,8 +61,8 @@
   - 저장: 실행 중인 `UserFunction` 복사본마다 변수 저장소(`VariableStore`) 하나. 같은 function을 두 번 시전하면 저장소 두 개
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
   - 블록 범위(조건문 안에서만 보이는 변수): 블록 실행 2 이슈
-- 선언의 초기값 칸을 비움: 언어 규칙 파일의 기본값
-- 값 칸: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, `malloc`, 값을 돌려주는 사전 정의 함수)
+- 선언의 initializer를 비움: 언어 규칙 파일의 기본값
+- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, `malloc`, 값을 돌려주는 사전 정의 함수)
 - 숫자 계산과 타입 변환: 언어 규칙 파일의 「숫자 타입 변환」. C는 `ImplicitAll`
   - `int / int`: 정수 나눗셈(`7 / 2` = 3). `%`의 부호는 왼쪽 값을 따름(`-7 % 2` = -1)
   - `int` 범위를 넘음: 반대쪽 끝으로 돌아감
@@ -62,15 +77,15 @@
 
 - 사전 정의 함수 블록
   - 찾기: 고정 ID로 `PredefinedFunctionRegistry`
-  - 파라미터 값 칸: 왼쪽부터 실행 후 스킬 복사본에 넘김. 비운 칸은 「값 없음」. 스킬은 `TryGetArgument`로 읽음([predefined-function.md](predefined-function.md))
-  - tick: 값 칸에 끼운 블록이 없으면 그 스킬의 `TickCount`(슬롯에서 바로 시전했을 때와 같음)
-  - 클래스: 함수 본문의 한 줄과 값 칸 모두 `PredefinedCallBlock`
-  - 함수 본문의 한 줄로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 값 칸에 끼웠을 때와 같이 실패
-  - 값 칸에 끼움: 스킬이 `Return`으로 정한 값을 반환 타입으로 맞춰 내놓음
+  - argument: 왼쪽부터 실행 후 스킬 복사본에 넘김. 비운 칸은 「값 없음」. 스킬은 `TryGetArgument`로 읽음([predefined-function.md](predefined-function.md))
+  - tick: argument에 expression으로 쓴 블록이 없으면 그 스킬의 `TickCount`(슬롯에서 바로 시전했을 때와 같음)
+  - 클래스: statement와 expression 모두 `PredefinedCallBlock`
+  - statement로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 expression으로 썼을 때와 같이 실패
+  - expression으로 씀: 스킬이 `Return`으로 정한 값을 반환 타입으로 맞춰 내놓음
   - `Return` 없이 끝남, 반환 타입으로 맞출 수 없는 값: 콘솔 오류 + 작업을 `InternalError`로 끝냄 (개발자 책임)
-  - 값 칸에 끼울 수 없음(변환 거부): 반환 타입 `Void`, 비동기 함수, 아직 다루지 않는 반환 타입
+  - expression으로 쓸 수 없음(변환 거부): 반환 타입 `Void`, 비동기 함수, 아직 다루지 않는 반환 타입
 - 변환 거부: 지금 실행기가 실행할 수 없는 기능을 쓴 함수. 콘솔 오류, 시전하지 않음
-  - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 비운 값 칸(사전 정의 함수의 파라미터 칸은 비워도 됨)
+  - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 비운 value slot(사전 정의 함수의 argument는 비워도 됨)
   - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등): 거부하지 않음. 실행 중 실패로 처리
 
 ### heap
@@ -78,7 +93,7 @@
 - free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
 - `malloc` 블록 (#90): 미리 정한 struct(`PredefinedStructs`)의 객체(`StructInstance`)를 heap에 올리고 포인터를 내놓음. 칸 수는 그 struct의 `HeapSize`. 모자라면 `NullPointer`, 에러 없음
   - 화면의 오브젝트(예: 소환검): 만들지 않음. 연결 방법은 박진우와 정할 것
-- `free` 블록 (#90): 값 칸의 포인터를 해제. 쓸 수 없는 포인터이면 `InvalidPointer`(플레이어 코드 에러)
+- `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터이면 `InvalidPointer`(플레이어 코드 에러)
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
   - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
 - 루트 집합: 포인터를 보관하는 목록들
@@ -90,7 +105,7 @@
 
 - 작업이 끝날 때
   - `Completed`: 그 작업의 포인터를 전역 포인터 목록으로 옮김
-  - `Interrupted`, `Failed`: 그 작업의 포인터를 버림 (정리 블록이 실행되지 못함)
+  - `Interrupted`, `Failed`, `InternalError`: 그 작업의 포인터를 버림 (정리 블록이 실행되지 못함)
   - 그다음 루트 집합 어디에도 포인터가 없는 객체: 누수
 - 누수 객체
   - heap 칸: 계속 차지
@@ -130,7 +145,7 @@
 | --- | --- |
 | `Overflow` | 실행 중에 stack이 모자람 |
 | `SkillFailed` | 스킬 코드가 `Fail`로 에러를 냄(예: 맨손으로 찌르기). 어떤 에러인지는 `task.Error`. 스킬을 함수로 부르는 컨셉이므로 잘못된 때에 스킬 함수를 부른 플레이어의 에러 |
-| `UndeclaredVariable` | 값 칸이나 대입 블록의 변수가 지금 함수의 지역 변수에 없음 (#90) |
+| `UndeclaredVariable` | value slot이나 대입 블록의 변수가 지금 함수의 지역 변수에 없음 (#90) |
 | `InvalidLiteral` | 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없음. 예: `int` 칸의 `"abc"` (#90) |
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
 | `TypeMismatch` | 값을 변수·파라미터 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
@@ -156,9 +171,9 @@
 - 길이: 그 function의 `CooldownTicks`(tick 수)
   - `PredefinedFunction`: 스킬 구현자가 정함. 기본 0
   - `UserFunction`: 안에 든 `FunctionBlock`들의 `CooldownTicks` 합
-    - 함수 데이터에서 바꾼 함수: 값 칸 안까지 모든 사전 정의 함수 블록의 합. 반복문 안의 함수는 한 번만 셈 (#90)
+    - 함수 데이터에서 바꾼 함수: expression 안까지 모든 사전 정의 함수 블록의 합. 반복문 안의 함수는 한 번만 셈 (#90)
     - 코드로 직접 만든 함수: `Blocks`에 바로 들어 있는 `FunctionBlock`만 셈
-- 시작: `FunctionTask`가 끝나는 tick부터. `Completed`, `Failed`, `Interrupted` 모두 같음
+- 시작: `FunctionTask`가 끝나는 tick부터. `Completed`, `Failed`, `Interrupted`, `InternalError` 모두 같음
 - 쿨타임 감소: 시작할 때 `PlayerStats.ApplyCooldownReduction`을 한 번 적용하고 tick 수로 반올림
 - 실행 중인 function: 쿨타임이 아직 시작되지 않았지만 다시 시전할 수 없음(`OnCooldown`)
 - `UserFunction` 안의 비동기 시전으로 만든 `FunctionTask`: 쿨타임을 시작하지 않음. 그 스킬의 쿨타임은 바깥 function의 쿨타임에 이미 더해져 있음
@@ -181,6 +196,7 @@
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 쿨타임 UI에서 쓴다. |
 | `IsRunning(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
+
 ### `FunctionTask`
 
 `FunctionTask`는 `FunctionExecutor`만 만든다. 다른 스크립트는 값을 읽기만 한다.
@@ -324,7 +340,16 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
 - 박진우와 정할 것 (#90)
   - `malloc` 블록이 heap에 올린 `StructInstance`(예: `Sword`)와 실제 소환검 오브젝트를 잇는 방법. 지금은 화면에 소환검이 나타나지 않음
 - 임혜원과 확인할 것 (#90)
-  - 실패를 화면에 보여 줄 때 `EndReason`으로 책임 구분(`Failed`: 플레이어, `InternalError`: 개발자), `Failed`이면 `LanguageRule.GetFailureCategory`로 compile error / runtime error 구분
+  - 실패를 화면에 보여 줄 때 `GetFailureCategory`로 compile error / runtime error 구분
+- 박진우와 확인할 것 (#118)
+  - 스킬 함수(`OnStart`, `OnTick`, `OnEnd`, `OnCancel`, `OnFail`)와 heap 함수(`Malloc`, `Free` 등)의 첫 파라미터 타입: `FunctionTask` → `FunctionContext`. 이름과 사용법은 그대로 ([predefined-function.md](predefined-function.md))
+  - `Return` 누락·반환 타입 불일치: statement로 불러도 콘솔 오류 + `InternalError`(개발자 책임)
+  - `Player_JW` 프리팹: `LanguageRule` 컴포넌트(없으면 붙이기)의 `Rule Data` 칸에 `LanguageRule_C` 연결. 연결하지 않으면 플레이어 함수의 실패가 `InternalError`로 끝남
+- 임혜원과 확인할 것 (#118)
+  - 실패를 화면에 보여 줄 때 `EndReason`으로 책임 구분(`Failed`: 플레이어, `InternalError`: 개발자). `Failed`이면 `LanguageRule.GetFailureCategory`로 compile error / runtime error 구분. `FailureCategory`는 `CompileError`, `RuntimeError` 두 값
+  - `GetFailureCategory` 위치: `FunctionExecutor` → `LanguageRule` 컴포넌트
+  - `CastRejected`의 거부 이유: `FunctionFailure` → `CastRejection`(`OnCooldown`, `NotEnoughMemory`)
+  - `Player_HW` 프리팹: `LanguageRule` 컴포넌트(없으면 붙이기)의 `Rule Data` 칸에 `LanguageRule_C` 연결. 연결하지 않으면 플레이어 함수의 실패가 `InternalError`로 끝남
 - 정할 것 (#90)
   - tick 비용 규칙 재검토: 지금은 블록 하나 = 1 tick. 반복문을 만드는 블록 실행 2 이슈에서 「문법 블록은 tick 없음, 반복 한 바퀴에 1 tick」 등과 비교
   - 플레이어가 만든 함수의 `return` 누락 규칙: 블록 실행 3 이슈. C는 컴파일러에 따라 경고(GCC) 또는 오류(MSVC C4716), 실행되면 값은 정의되지 않음

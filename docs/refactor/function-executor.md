@@ -2,7 +2,7 @@
 
 - 담당자: 이우림
 - 대상: `Assets/_UL/Scripts/FunctionExecutor/`
-- 진행: #90 merge 뒤 refactor 이슈
+- 진행: #118에서 구현 완료
 
 ## `Block`
 - 상태 필드: `started`, `ended`, `cancelled` 세 `bool` → enum `BlockState` 하나

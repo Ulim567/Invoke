@@ -45,7 +45,7 @@
 | 범위 | 없음. 캐릭터 주변에 바로 발동 | 검 크게베기, 검무 |
 | 대상 없음 | 없음 | 검 소환, 해제, 패링, 이동 계열 |
 
-- 파라미터로 받는 이유: 다른 function 안에서 불릴 때는 값 칸으로, 슬롯에서 바로 cast할 때는 플레이어 입력으로 대상을 받음. 두 경우를 같은 파라미터 하나로 받기 위함
+- 파라미터로 받는 이유: 다른 function 안에서 불릴 때는 argument로, 슬롯에서 바로 cast할 때는 플레이어 입력으로 대상을 받음. 두 경우를 같은 파라미터 하나로 받기 위함
 
 ### 동기·비동기
 - 동기(`IsAsync = false`): 부른 쪽이 이 function이 끝날 때까지 기다림. 같은 `FunctionTask` 안에서 stack 프레임이 위로 쌓임
@@ -74,8 +74,8 @@
 | `Name` | `string` | 컴파일 오류 (반드시 정함) | 화면 이름. 바꿔도 됨 |
 | `TickCount` | `int` | 컴파일 오류 (반드시 정함) | 동작 시간(tick 수). 1 이하이면 1 tick |
 | `CodeSize` | `int` | 1 | 코드 영역 크기. 함수 안의 함수 블록, 슬롯에 바로 넣은 경우 모두 이 값 |
-| `Parameters` | `ParameterData` 목록 | 파라미터 없음 | 파라미터 이름과 타입. 함수 블록의 값 칸 수와 순서 |
-| `ReturnType` | `VariableType` | `Void` | `Void`가 아니면 함수 블록을 값 칸에 끼울 수 있음 |
+| `Parameters` | `ParameterData` 목록 | 파라미터 없음 | 파라미터 이름과 타입. 함수 블록의 argument 수와 순서 |
+| `ReturnType` | `VariableType` | `Void` | `Void`가 아니면 함수 블록을 expression으로 쓸 수 있음 |
 | `LocalVariableCount` | `int` | 0 | 실행 중에 쓰는 지역 변수 수. stack 프레임 크기 계산에 씀. 스킬마다 stack 부담을 조정하는 값 |
 | `IsAsync` | `bool` | `false` (동기) | 다른 function 안에서 불렸을 때 기다리지 않으면 `true` |
 | `CooldownTicks` | `int` | 0 | 쿨타임(tick 수). 동작 시간(`TickCount`)과 따로 정함. 슬롯에 바로 넣으면 이 값, 사용자 정의 함수 안에 넣으면 그 함수의 쿨타임에 더해짐 |
@@ -169,15 +169,15 @@ protected override void OnTick(FunctionContext context, int tick)
 
 | 이름 | 돌려주는 값 | 하는 일 |
 | --- | --- | --- |
-| `TryGetArgument(string name, out RuntimeValue value)` | `bool` | 이름이 `name`인 파라미터의 값을 꺼냄. 값이 없으면(값 칸을 비움, 슬롯에서 바로 시전) `false`. 없는 이름이면 콘솔 오류 후 `false` |
+| `TryGetArgument(string name, out RuntimeValue value)` | `bool` | 이름이 `name`인 파라미터의 값을 꺼냄. 값이 없으면(argument를 비움, 슬롯에서 바로 시전) `false`. 없는 이름이면 콘솔 오류 후 `false` |
 | `Return(RuntimeValue value)` | - | 반환 값을 정함. 함수를 끝내지는 않음(끝내려면 `Stop`). 여러 번 부르면 마지막 값 |
 
-- 파라미터 값을 넘기는 곳: 함수 블록의 값 칸. 값은 `Parameters`의 타입으로 맞춰서 넘어옴(캐릭터 언어의 숫자 타입 변환 규칙)
+- 파라미터 값을 넘기는 곳: 함수 블록의 argument. 값은 `Parameters`의 타입으로 맞춰서 넘어옴(캐릭터 언어의 숫자 타입 변환 규칙)
   - 지금 넘어오는 타입: `int`, `float`, `bool`, `string`, `char`, 포인터. `Target` 등은 「함수 실행 중 대상 입력 기다리기」 이슈 전까지 언제나 「값 없음」
   - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
 - 이름: `Parameters`에 적은 `ParameterData`의 이름
-- 반환 값이 쓰이는 곳: 값 칸에 끼운 함수 블록(예: `int n = CountSwords();`). 함수 몸통에 놓으면 버림
-  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 작업을 `InternalError`(개발자 책임)로 끝냄. 함수 몸통에 놓아도 같음
+- 반환 값이 쓰이는 곳: expression으로 쓴 함수 블록(예: `int n = CountSwords();`). statement로 놓으면 버림
+  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 작업을 `InternalError`(개발자 책임)로 끝냄. statement로 놓아도 같음
   - 반환 타입이 `Void`인데 `Return`을 부름, `OnCancel`에서 부름: 콘솔 오류, 무시
 - 값 만들기, 꺼내기: `RuntimeValue.FromInt(3)`, `value.AsInt()` 등
 
@@ -205,10 +205,10 @@ protected override void OnEnd(FunctionContext context)
 | `SourceName` | `string` | 에러를 낸 스킬의 이름. `Fail`이 채움 |
 
 - 있는 에러
-  - `Assets/_UL/Scripts/FunctionExecutor/SwordErrors.cs`
+  - `Assets/_UL/Scripts/FunctionExecutor/Predefined/SwordErrors.cs`
     - `UnarmedError`: 맨손
     - `NoSummonedSwordError`: 소환검 없음
-  - `Assets/_UL/Scripts/FunctionExecutor/PointerErrors.cs`
+  - `Assets/_UL/Scripts/FunctionExecutor/Predefined/PointerErrors.cs`
     - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄. 플레이어의 `free` 블록은 이 에러 대신 실패 종류 `InvalidPointer`
     - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
 

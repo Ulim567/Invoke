@@ -35,7 +35,7 @@ public class VariableStoreTest : MonoBehaviour
 		CheckDefault(SwordPointer, "포인터 0");
 
 		// 아직 다루지 않는 타입. 이 줄 바로 앞에 「Position 타입의 기본값은 아직 없습니다」 콘솔 오류가 하나 나와야 한다
-		bool found = executor.TryGetDefaultValue(new VariableType(VariableTypeKind.Position), out _);
+		bool found = GetComponent<LanguageRule>().TryGetDefaultValue(new VariableType(VariableTypeKind.Position), out _);
 		Check("Position 기본값 없음 (콘솔 오류 1개가 정상)", !found);
 	}
 
@@ -83,7 +83,7 @@ public class VariableStoreTest : MonoBehaviour
 
 	void CheckDefault(VariableType type, string expected)
 	{
-		bool found = executor.TryGetDefaultValue(type, out RuntimeValue value);
+		bool found = GetComponent<LanguageRule>().TryGetDefaultValue(type, out RuntimeValue value);
 		Check($"{type.Kind} 기본값 {expected}", found && value.ToString() == expected, found ? $"실제 {value}" : "기본값 없음");
 	}
 

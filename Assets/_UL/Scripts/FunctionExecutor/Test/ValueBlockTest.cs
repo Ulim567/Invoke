@@ -109,7 +109,7 @@ public class ValueBlockTest : MonoBehaviour
 
 	void CheckFailed(FunctionTask task, int tick, FunctionFailure expected)
 	{
-		FailureCategory category = task.Failure.HasValue ? executor.GetFailureCategory(task.Failure.Value) : FailureCategory.NotCodeError;
+		FailureCategory category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : FailureCategory.NotCodeError;
 		Check($"{task.Name} 틱 1에 {expected}(CompileError)로 실패",
 			task.Failure == expected && category == FailureCategory.CompileError && tick == 1,
 			$"실제 틱 {tick}, {task.Failure}, {category}");

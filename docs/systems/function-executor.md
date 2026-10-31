@@ -128,7 +128,7 @@
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
 | `MissingReturnValue` | 값 칸에 끼운 사전 정의 함수가 `Return` 없이 끝남. 스킬 작성자의 실수 (#90) |
 
-- 실패 종류마다 할 처리와 분류: 캐릭터 언어의 언어 규칙 파일(`LanguageRule`)이 정함
+- 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 플레이어 코드의 어떤 잘못인지. 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
   - `NotCodeError`: 코드의 잘못이 아님(쿨타임, 시전 전 메모리 부족 등)
   - `CompileError`: 그 언어에서 실행 전에 찾아내는 잘못
@@ -161,7 +161,7 @@
 
 ## 다른 시스템이 쓰는 것
 
-캐릭터(Player 프리팹)에 `FunctionExecutor`, `ProcessMemory`가 붙어 있다. `GetComponent`로 가져온다.
+캐릭터(Player 프리팹)에 `FunctionExecutor`, `ProcessMemory`, `LanguageRule`이 붙어 있다. `GetComponent`로 가져온다.
 - `ProcessMemory`는 같은 오브젝트에 `PlayerStats`가 있어야 한다(`RequireComponent`). memory 전체 칸 수를 `PlayerStats`에서 읽기 때문이다.
 
 ### `FunctionExecutor`
@@ -176,7 +176,6 @@
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 쿨타임 UI에서 쓴다. |
 | `IsRunning(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true` |
-| `GetFailureCategory(FunctionFailure failure)` | 실패 종류 | `FailureCategory` | 이 캐릭터 언어에서 그 실패의 분류. `TaskEnded`의 `task.Failure`, `CastRejected`의 실패 종류를 화면에 보여 줄 때 쓴다. 언어 규칙 파일이 없거나 표에 없으면 `NotCodeError` (#90) |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
 ### `FunctionTask`
 
@@ -193,11 +192,21 @@
 | `Failure` | - | `FunctionFailure?` | 실패로 끝났을 때 실패 종류. 실패로 끝나지 않았으면 `null` |
 | `Error` | - | `SkillError` | `Failure`가 `SkillFailed`일 때 스킬이 낸 에러. 그 밖에는 `null` |
 
-### `LanguageRule` (언어 규칙 파일)
+### `LanguageRule` (캐릭터의 언어 컴포넌트)
+
+캐릭터 하나의 언어. 연결한 언어 규칙 파일(`LanguageRuleData`)로 실패의 처리와 분류, 기본값, 숫자 타입 변환 규칙을 알려 준다.
+- 붙이는 곳: `FunctionExecutor`와 같은 오브젝트(`RequireComponent`)
+- 없을 때: `FunctionExecutor`가 콘솔 오류를 내고 붙여서 실행. 언어 규칙 파일 미연결과 같은 처리
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `GetFailureCategory(FunctionFailure failure)` | 실패 종류 | `FailureCategory` | 이 캐릭터 언어에서 그 실패의 분류. `TaskEnded`의 `task.Failure`, `CastRejected`의 실패 종류를 화면에 보여 줄 때 쓴다. 언어 규칙 파일이 없거나 표에 없으면 `NotCodeError` (#90) |
+
+### `LanguageRuleData` (언어 규칙 파일)
 
 캐릭터 언어 하나의 규칙 파일이다.
 - 만들기: Project 창 Create → Invoke → Language Rule
-- 연결: 캐릭터의 `FunctionExecutor` Inspector `Language Rule` 칸
+- 연결: 캐릭터의 `LanguageRule` Inspector `Rule Data` 칸
 - 실패 처리 표: 실패 종류마다 처리, 분류 한 줄
 - 기본값: 초기값을 비운 변수의 값. `int`, `float`, `bool`, `char`(글자 번호), `string` 칸. 포인터는 언제나 `NullPointer` (#90)
 - 숫자 타입 변환: `ImplicitAll`, `Strict`, `WideningOnly` 중 하나(「함수 데이터 실행」의 표) (#90)
@@ -300,7 +309,7 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
 - 박진우와 정할 것 (#90)
   - `malloc` 블록이 heap에 올린 `StructInstance`(예: `Sword`)와 실제 소환검 오브젝트를 잇는 방법. 지금은 화면에 소환검이 나타나지 않음
 - 임혜원과 확인할 것 (#90)
-  - 실패를 화면에 보여 줄 때 `GetFailureCategory`로 compile error / runtime error 구분
+  - 실패를 화면에 보여 줄 때 `LanguageRule.GetFailureCategory`로 compile error / runtime error 구분
 - 정할 것 (#90)
   - tick 비용 규칙 재검토: 지금은 블록 하나 = 1 tick. 반복문을 만드는 블록 실행 2 이슈에서 「문법 블록은 tick 없음, 반복 한 바퀴에 1 tick」 등과 비교
   - 플레이어가 만든 함수의 `return` 누락 규칙: 블록 실행 3 이슈. C는 컴파일러에 따라 경고(GCC) 또는 오류(MSVC C4716), 실행되면 값은 정의되지 않음

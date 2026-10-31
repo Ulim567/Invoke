@@ -69,6 +69,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 381431623457180753}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6141779964505527880}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &7041558310181405839 stripped
 GameObject:
@@ -88,7 +91,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutor
   fixedUpdatesPerTick: 1
-  languageRule: {fileID: 11400000, guid: a79aabd9154a0af46a3e72e9a33751cf, type: 2}
 --- !u!114 &-3888150697130910594
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -113,3 +115,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 82ce100927077f3479822e99cca0cfdd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProcessMemory
+--- !u!114 &6141779964505527880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7041558310181405839}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ad473b5f35677914a9b9e2e3d0dd1fb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LanguageRule
+  ruleData: {fileID: 11400000, guid: a79aabd9154a0af46a3e72e9a33751cf, type: 2}

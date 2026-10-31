@@ -76,7 +76,7 @@ public class ReturnValueTest : MonoBehaviour
 			case "Returned": CheckCompleted(task, tick, 5); break;
 			case "Discarded": CheckCompleted(task, tick, 3); break;
 			case "MissingReturn":
-				FailureCategory category = task.Failure.HasValue ? executor.GetFailureCategory(task.Failure.Value) : FailureCategory.CompileError;
+				FailureCategory category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : FailureCategory.CompileError;
 				Check("MissingReturn: 틱 1에 MissingReturnValue(NotCodeError)로 실패",
 					task.Failure == FunctionFailure.MissingReturnValue && category == FailureCategory.NotCodeError && tick == 1,
 					$"실제 틱 {tick}, {task.Failure}, {category}");

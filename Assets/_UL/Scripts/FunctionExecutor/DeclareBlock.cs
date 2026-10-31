@@ -1,7 +1,7 @@
 /// <summary>
 /// 선언 블록. 예: int x = 3, int x. 지금 함수의 지역 변수에 변수 하나를 만든다. 1틱을 쓴다.
 /// <para>
-/// - 초기값 칸이 있으면 그 값을, 비어 있으면 캐릭터 언어의 기본값(LanguageRule)을 넣는다.<br/>
+/// - 초기값 칸이 있으면 그 값을, 비어 있으면 캐릭터 언어의 기본값(LanguageRuleData)을 넣는다.<br/>
 /// - 초기값 칸에 끼운 블록(연산 등)이 있으면 그 블록이 자기 틱을 쓴 뒤, 다음 틱에 변수를 만든다.<br/>
 /// - 초기값은 캐릭터 언어의 숫자 타입 변환 규칙으로 변수 타입에 맞춘다(C: float f = 3 → 3.0, int x = 0.5 → 0).<br/>
 /// - 같은 이름이 이미 있으면 DuplicateVariable, 초기값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.
@@ -33,7 +33,7 @@ public class DeclareBlock : Block
 		BlockResult result = slots.Step(task);
 		if (result != BlockResult.Done) return result;
 
-		LanguageRule rule = task.Executor.Rule;
+		LanguageRuleData rule = task.Executor.Rule;
 		RuntimeValue value;
 		if (initialValueOriginal != null)
 		{
@@ -43,7 +43,7 @@ public class DeclareBlock : Block
 				return BlockResult.Failed;
 			}
 		}
-		// 다룰 수 없는 타입은 FunctionDataConverter가 미리 거르므로 여기까지 오지 않는다. 온다면 LanguageRule이 콘솔 오류를 낸다
+		// 다룰 수 없는 타입은 FunctionDataConverter가 미리 거르므로 여기까지 오지 않는다. 온다면 LanguageRuleData가 콘솔 오류를 낸다
 		else if (!rule.TryGetDefaultValue(type, out value))
 		{
 			task.RecordFailure(FunctionFailure.TypeMismatch);

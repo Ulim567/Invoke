@@ -1,6 +1,6 @@
 /// <summary>
 /// 연산 블록의 계산과, 선언·대입 때 값을 변수 타입으로 바꾸는 규칙.<br/>
-/// 언어마다 다른 부분(타입을 섞을 때, float의 %)은 LanguageRule의 칸을 따른다.
+/// 언어마다 다른 부분(타입을 섞을 때, float의 %)은 LanguageRuleData의 칸을 따른다.
 /// <para>
 /// 모든 언어에 같은 규칙<br/>
 /// - 계산할 수 있는 타입: int, float, char, bool. string, 포인터 등은 TypeMismatch<br/>
@@ -15,7 +15,7 @@ internal static class NumericRules
 	/// <summary>
 	/// left op right를 계산한다. 계산할 수 없으면 실패 종류를 failure에 담고 false를 돌려준다.
 	/// </summary>
-	public static bool TryCalculate(ArithmeticOperator op, RuntimeValue left, RuntimeValue right, LanguageRule rule,
+	public static bool TryCalculate(ArithmeticOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule,
 		out RuntimeValue result, out FunctionFailure failure)
 	{
 		result = default;
@@ -37,7 +37,7 @@ internal static class NumericRules
 	/// <summary>
 	/// value를 target 타입의 변수에 넣을 값으로 바꾼다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).
 	/// </summary>
-	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRule rule, out RuntimeValue converted)
+	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted)
 	{
 		converted = value;
 		if (VariableStore.IsSameType(target, value.Type)) return true;
@@ -83,7 +83,7 @@ internal static class NumericRules
 		kind == VariableTypeKind.Int || kind == VariableTypeKind.Float || kind == VariableTypeKind.Char || kind == VariableTypeKind.Bool;
 
 	// 계산에 쓸 때의 타입. char, bool은 언어에 따라 int로 올리거나 거부한다
-	static bool TryGetOperandKind(RuntimeValue value, LanguageRule rule, out VariableTypeKind kind)
+	static bool TryGetOperandKind(RuntimeValue value, LanguageRuleData rule, out VariableTypeKind kind)
 	{
 		kind = value.Type?.Kind ?? VariableTypeKind.Void;
 		switch (kind)
@@ -138,7 +138,7 @@ internal static class NumericRules
 		return true;
 	}
 
-	static bool TryCalculateFloat(ArithmeticOperator op, float left, float right, LanguageRule rule, out RuntimeValue result, out FunctionFailure failure)
+	static bool TryCalculateFloat(ArithmeticOperator op, float left, float right, LanguageRuleData rule, out RuntimeValue result, out FunctionFailure failure)
 	{
 		result = default;
 		failure = FunctionFailure.TypeMismatch;

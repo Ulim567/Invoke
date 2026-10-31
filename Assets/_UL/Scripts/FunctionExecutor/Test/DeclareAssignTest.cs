@@ -112,7 +112,7 @@ public class DeclareAssignTest : MonoBehaviour
 
 	void CheckFailed(FunctionTask task, int tick, int expectedTick, FunctionFailure expected)
 	{
-		FailureCategory category = task.Failure.HasValue ? executor.GetFailureCategory(task.Failure.Value) : FailureCategory.NotCodeError;
+		FailureCategory category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : FailureCategory.NotCodeError;
 		Check($"{task.Name}: 틱 {expectedTick}에 {expected}(CompileError)로 실패",
 			task.Failure == expected && category == FailureCategory.CompileError && tick == expectedTick,
 			$"실제 틱 {tick}, {task.Failure}, {category}");

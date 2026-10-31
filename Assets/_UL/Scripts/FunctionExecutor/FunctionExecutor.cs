@@ -18,14 +18,11 @@ using UnityEngine;
 /// - 끝난 작업은 그 틱의 모든 작업을 진행한 뒤에 한꺼번에 뺀다.
 /// </para>
 /// </summary>
-[RequireComponent(typeof(ProcessMemory))]
+[RequireComponent(typeof(ProcessMemory), typeof(LanguageRule))]
 public class FunctionExecutor : MonoBehaviour
 {
 	[SerializeField, Min(1), Tooltip("1틱이 FixedUpdate 몇 번인지")]
 	int fixedUpdatesPerTick = 1;
-
-	[SerializeField, Tooltip("이 캐릭터 언어의 실패 처리 표")]
-	LanguageRule languageRule;
 
 	// 진행 중인 작업. 틱마다 이 목록의 작업만 진행하며, 시전한 순서대로 쌓인다
 	readonly List<FunctionTask> tasks = new List<FunctionTask>();
@@ -40,8 +37,7 @@ public class FunctionExecutor : MonoBehaviour
 	int fixedUpdateCount;
 	ProcessMemory memory;
 	CooldownTracker cooldowns;
-	// 언어 규칙 파일이 연결되지 않았을 때 기본값을 읽는 임시 규칙. 처음 값(C 기본값)만 가진다
-	LanguageRule fallbackRule;
+	LanguageRule language;
 
 	/// <summary>
 	/// 지금까지 지난 틱 수. 첫 틱이 1이다.
@@ -135,7 +131,7 @@ public class FunctionExecutor : MonoBehaviour
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
 	internal void HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
-		switch (FindHandling(task.Name, failure))
+		switch (language.FindHandling(task.Name, failure))
 		{
 			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
 			case FailureHandling.Reject:
@@ -148,7 +144,7 @@ public class FunctionExecutor : MonoBehaviour
 	// 시전 전 검사에 걸렸을 때. 아직 작업이 없다
 	void HandleCastFailure(FunctionBlock function, FunctionFailure failure)
 	{
-		switch (FindHandling(function.Name, failure))
+		switch (language.FindHandling(function.Name, failure))
 		{
 			// 끝낼 작업이 아직 없으므로, 그 작업만 끝내는 처리도 시전하지 않는 것과 같다
 			// 재부팅처럼 시전 전에도 다른 일을 하는 처리가 생기면 여기에 case를 따로 둔다
@@ -160,76 +156,25 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 이 캐릭터 언어에서 failure가 플레이어 코드의 어떤 잘못인지(compile error, runtime error 등).<br/>
-	/// 화면이 TaskEnded의 task.Failure나 CastRejected의 실패 종류를 받아 보여 줄 때 쓴다.
+	/// 블록이 따를 언어 규칙. 캐릭터의 LanguageRule 컴포넌트가 가진 규칙을 그대로 돌려준다.
 	/// </summary>
-	// 언어 규칙 파일이 없거나 표에 그 줄이 없으면 NotCodeError로 본다. 둘 다 Play를 시작할 때 이미 콘솔 오류로 알렸다
-	public FailureCategory GetFailureCategory(FunctionFailure failure)
-	{
-		if (languageRule != null && languageRule.TryGetCategory(failure, out FailureCategory category)) return category;
-		return FailureCategory.NotCodeError;
-	}
-
-	/// <summary>
-	/// 이 캐릭터 언어에서 type 타입 변수의 기본값. 선언 블록의 초기값 칸이 비어 있을 때 쓴다.
-	/// </summary>
-	// 언어 규칙 파일이 없으면 C 기본값으로 실행을 이어 간다. 연결하지 않은 것은 Awake에서 이미 알렸다
-	// 임시 규칙을 만들어 쓰는 이유: C 기본값을 이 파일에 한 번 더 적으면, 언어 규칙 파일의 처음 값과 어긋날 수 있기 때문
-	internal bool TryGetDefaultValue(VariableType type, out RuntimeValue value) => Rule.TryGetDefaultValue(type, out value);
-
-	/// <summary>
-	/// 블록이 따를 언어 규칙. 언어 규칙 파일이 없으면 처음 값(C 규칙)만 가진 임시 규칙이다.
-	/// </summary>
-	internal LanguageRule Rule
-	{
-		get
-		{
-			if (languageRule != null) return languageRule;
-
-			if (fallbackRule == null) fallbackRule = ScriptableObject.CreateInstance<LanguageRule>();
-			return fallbackRule;
-		}
-	}
-
-	FailureHandling FindHandling(string functionName, FunctionFailure failure)
-	{
-		if (languageRule != null && languageRule.TryGetHandling(failure, out FailureHandling handling)) return handling;
-
-		// 파일이 없는 경우는 Awake에서 이미 알렸다. 표에 빠진 줄은 어느 함수에서 났는지 알 수 있도록 실제로 났을 때 한 번 더 알린다
-		if (languageRule != null)
-			Debug.LogError($"{languageRule.name}: 실패 종류 {failure}의 처리가 표에 없습니다. {functionName}을 EndTask로 처리합니다.", languageRule);
-
-		// 예외를 던지지 않고 EndTask로 처리한다. 예외를 던지면 이번 틱의 나머지 작업이 진행되지 않고, 끝난 작업도 목록에서 빠지지 않기 때문
-		return FailureHandling.EndTask;
-	}
+	// 블록이 task.Executor.Rule로 읽고 있어서 남긴다. 블록이 실행 문맥에서 언어 규칙을 읽게 되면 지운다
+	internal LanguageRuleData Rule => language.Rule;
 
 	void Awake()
 	{
 		memory = GetComponent<ProcessMemory>();
+		language = GetComponent<LanguageRule>();
+		// RequireComponent는 이미 만든 프리팹에는 컴포넌트를 붙여 주지 않는다. 붙이지 않은 프리팹도 C 규칙으로 실행을 이어 가게 한다
+		if (language == null)
+		{
+			Debug.LogError($"{name}: LanguageRule 컴포넌트가 없습니다. 언어 규칙 파일 없이 붙여서 실행합니다. 프리팹에 LanguageRule을 붙이고 언어 규칙 파일을 연결합니다.", this);
+			language = gameObject.AddComponent<LanguageRule>();
+		}
 		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick);
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));
 		castConditions.Add(new MemoryCondition(memory));
-		CheckLanguageRule();
-	}
-
-	// 코드로 만든 ScriptableObject는 Unity가 저절로 지우지 않으므로 직접 지운다
-	void OnDestroy()
-	{
-		if (fallbackRule != null) Destroy(fallbackRule);
-	}
-
-	// 그 실패가 실제로 나기 전에, Play를 시작하자마자 표의 문제를 알리기 위함
-	void CheckLanguageRule()
-	{
-		if (languageRule == null)
-		{
-			Debug.LogError($"{name}: FunctionExecutor에 언어 규칙 파일이 연결되지 않았습니다. 모든 실패를 EndTask로 처리합니다.", this);
-			return;
-		}
-
-		foreach (FunctionFailure failure in languageRule.FindMissingFailures())
-			Debug.LogError($"{languageRule.name}: 실패 종류 {failure}의 처리가 표에 없습니다.", languageRule);
 	}
 
 	void FixedUpdate()

@@ -7,16 +7,16 @@
 /// </summary>
 public class CooldownCondition : CastCondition
 {
-	readonly FunctionExecutor executor;
+	readonly CooldownTracker cooldowns;
 
-	public CooldownCondition(FunctionExecutor executor)
+	public CooldownCondition(CooldownTracker cooldowns)
 	{
-		this.executor = executor;
+		this.cooldowns = cooldowns;
 	}
 
 	public override bool Check(FunctionBlock function, out FunctionFailure failure)
 	{
 		failure = FunctionFailure.OnCooldown;
-		return !executor.IsRunning(function) && executor.GetRemainingCooldownTicks(function) <= 0;
+		return !cooldowns.IsRunning(function) && cooldowns.GetRemainingTicks(function) <= 0;
 	}
 }

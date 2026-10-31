@@ -37,13 +37,9 @@ public class FunctionExecutor : MonoBehaviour
 	// 새 조건(쿨타임 등)은 Awake에서 이 목록에 추가한다
 	readonly List<CastCondition> castConditions = new List<CastCondition>();
 
-	// 슬롯에서 시전한 함수(원본)마다 쿨타임이 끝나는 틱. 쿨타임 값은 실행기만 바꾼다
-	// 원본 객체로 구분하므로, 슬롯은 같은 함수 객체를 계속 넘겨야 쿨타임이 이어진다
-	readonly Dictionary<FunctionBlock, int> cooldownEndTicks = new Dictionary<FunctionBlock, int>();
-
 	int fixedUpdateCount;
 	ProcessMemory memory;
-	PlayerStats stats;
+	CooldownTracker cooldowns;
 	// 언어 규칙 파일이 연결되지 않았을 때 기본값을 읽는 임시 규칙. 처음 값(C 기본값)만 가진다
 	LanguageRule fallbackRule;
 
@@ -92,29 +88,20 @@ public class FunctionExecutor : MonoBehaviour
 
 		FunctionTask task = CastUnchecked(function);
 		task.CooldownSource = function;
+		cooldowns.Register(task);
 		return task;
 	}
 
 	/// <summary>
 	/// 슬롯에서 시전한 function의 남은 쿨타임(틱 수). 쿨타임 중이 아니면 0이다. 쿨타임 UI에서 쓴다.
 	/// </summary>
-	public int GetRemainingCooldownTicks(FunctionBlock function)
-	{
-		if (!cooldownEndTicks.TryGetValue(function, out int endTick)) return 0;
-		return Mathf.Max(0, endTick - CurrentTick);
-	}
+	// 쿨타임은 CooldownTracker가 가진다. 다른 시스템이 쓰는 접점을 바꾸지 않기 위해 실행기에도 남긴다
+	public int GetRemainingCooldownTicks(FunctionBlock function) => cooldowns.GetRemainingTicks(function);
 
 	/// <summary>
 	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.
 	/// </summary>
-	public bool IsRunning(FunctionBlock function)
-	{
-		foreach (FunctionTask task in tasks)
-			if (task.CooldownSource == function && !task.IsEnded) return true;
-		foreach (FunctionTask task in pendingTasks)
-			if (task.CooldownSource == function && !task.IsEnded) return true;
-		return false;
-	}
+	public bool IsRunning(FunctionBlock function) => cooldowns.IsRunning(function);
 
 	/// <summary>
 	/// 시전 전 검사 없이 작업을 만든다. 사용자 정의 함수가 안쪽의 비동기 함수를 새 작업으로 시전할 때 쓴다.
@@ -219,9 +206,9 @@ public class FunctionExecutor : MonoBehaviour
 	void Awake()
 	{
 		memory = GetComponent<ProcessMemory>();
-		stats = GetComponent<PlayerStats>();
+		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick);
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
-		castConditions.Add(new CooldownCondition(this));
+		castConditions.Add(new CooldownCondition(cooldowns));
 		castConditions.Add(new MemoryCondition(memory));
 		CheckLanguageRule();
 	}
@@ -230,20 +217,6 @@ public class FunctionExecutor : MonoBehaviour
 	void OnDestroy()
 	{
 		if (fallbackRule != null) Destroy(fallbackRule);
-	}
-
-	// 쿨타임은 함수가 끝난 순간부터 흐른다. 정상 종료, 실패, 실행 중단 모두 같다
-	// 쿨타임 감소는 끝나는 순간의 능력치로 한 번 적용한다
-	void StartCooldown(FunctionTask task)
-	{
-		if (task.CooldownSource == null) return;
-
-		int cooldown = task.CooldownSource.CooldownTicks;
-		if (cooldown <= 0) return;
-
-		// 공격 속도(ApplyAttackSpeed)와 같게 반올림해서 틱 수로 맞춘다
-		cooldown = Mathf.RoundToInt(stats.ApplyCooldownReduction(cooldown));
-		cooldownEndTicks[task.CooldownSource] = CurrentTick + cooldown;
 	}
 
 	// 그 실패가 실제로 나기 전에, Play를 시작하자마자 표의 문제를 알리기 위함
@@ -288,7 +261,7 @@ public class FunctionExecutor : MonoBehaviour
 		{
 			if (!task.IsEnded) continue;
 
-			StartCooldown(task);
+			cooldowns.StartCooldown(task);
 			// TaskEnded보다 먼저 한다. 이벤트를 받은 쪽이 누수 여부까지 정해진 상태를 보게 하기 위함
 			memory.Heap.HandleTaskEnded(task);
 			TaskEnded?.Invoke(task);

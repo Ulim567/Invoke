@@ -29,7 +29,34 @@ public abstract class FunctionBlock : Block
 	// 동작 시간(TickCount)과 따로 둔다. 짧게 실행되고 오래 기다리는 스킬, 오래 실행되고 바로 다시 쓰는 스킬을 모두 만들기 위함
 	public virtual int CooldownTicks => 0;
 
-	internal sealed override bool AllocateMemory(FunctionTask task)
+	// 순서: 프레임 쓰기 → OnStart → … → OnEnd/OnCancel → 프레임 돌려주기
+	// 이 순서여야 UserFunction이 OnStart/OnEnd에서 쌓고 내리는 변수 저장소와 프레임이 어긋나지 않는다
+	// sealed: C 스킬이나 사용자 정의 함수가 덮어써서 이 순서를 깨지 못하게 한다. OnStart에 두지 않는 이유도 같다(C 스킬이 base를 부르지 않아도 됨)
+	internal sealed override BlockResult Execute(FunctionTask task)
+	{
+		if (State == BlockState.NotStarted)
+		{
+			// 프레임을 쌓을 공간이 없으면 시작하지 않는다. 시작하지 않았으므로 정리할 것도 없다
+			if (!TryAllocateFrame(task))
+			{
+				task.RecordFailure(FunctionFailure.Overflow);
+				return BlockResult.Failed;
+			}
+		}
+
+		BlockResult result = base.Execute(task);
+		// 함수가 끝나는 즉시 프레임을 반환한다. 실제 프로그램에서 return하는 순간 프레임이 빠지는 것과 같다
+		if (result != BlockResult.Running) ReleaseFrame(task);
+		return result;
+	}
+
+	internal sealed override void Cancel(FunctionTask task)
+	{
+		base.Cancel(task);
+		ReleaseFrame(task);
+	}
+
+	bool TryAllocateFrame(FunctionTask task)
 	{
 		if (!task.Memory.TryAllocateStack(FrameSize)) return false;
 
@@ -37,8 +64,11 @@ public abstract class FunctionBlock : Block
 		return true;
 	}
 
-	internal sealed override void ReleaseMemory(FunctionTask task)
+	// 받은 칸이 없으면(시작하지 않음, 이미 돌려줌) 아무것도 하지 않는다. 메모리를 두 번 돌려주지 않기 위함
+	void ReleaseFrame(FunctionTask task)
 	{
+		if (allocatedStack == 0) return;
+
 		task.Memory.ReleaseStack(allocatedStack);
 		allocatedStack = 0;
 	}

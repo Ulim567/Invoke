@@ -25,7 +25,7 @@ public enum BlockResult
 //   지금 OnCancel 안인지(사전 정의 함수의 Malloc·Return 막기)를 정한다. 아직 실행하지 않은 NotStarted처럼 틱 결과로는 나타낼 수 없는 값도 담는다
 public enum BlockState
 {
-	// 아직 실행하지 않았다. 프레임을 쓰지 못해 시작하지 못한 블록은 Ended다
+	// 아직 실행하지 않았다. 프레임을 쓰지 못해 시작하지 못한 함수 블록도 이 값으로 남는다
 	NotStarted,
 	// OnStart가 불렸고 아직 끝나지 않았다
 	Running,
@@ -52,6 +52,9 @@ public abstract class Block
 {
 	BlockState state;
 
+	// 함수 블록이 시작 전에 프레임을 쓸지 정할 때 읽는다
+	internal BlockState State => state;
+
 	// 이 블록이 끝났는지. OnEnd, OnCancel이 불릴 때는 이미 true다
 	internal bool HasEnded => state == BlockState.Ended || state == BlockState.Cancelled;
 
@@ -62,18 +65,11 @@ public abstract class Block
 	/// <summary>
 	/// 이 블록을 1틱 실행한다. 실행기와 바깥 블록만 부른다.
 	/// </summary>
-	internal BlockResult Execute(FunctionTask task)
+	// 함수 블록만 덮어써서 앞뒤로 프레임을 쓰고 돌려준다
+	internal virtual BlockResult Execute(FunctionTask task)
 	{
 		if (state == BlockState.NotStarted)
 		{
-			// 프레임을 쌓을 공간이 없으면 시작하지 않는다. 시작하지 않았으므로 정리할 것도 없다
-			if (!AllocateMemory(task))
-			{
-				state = BlockState.Ended;
-				task.RecordFailure(FunctionFailure.Overflow);
-				return BlockResult.Failed;
-			}
-
 			state = BlockState.Running;
 			OnStart(task);
 		}
@@ -93,28 +89,21 @@ public abstract class Block
 			OnEnd(task);
 		}
 
-		// 함수가 끝나는 즉시 프레임을 반환한다. 실제 프로그램에서 return하는 순간 프레임이 빠지는 것과 같다
-		ReleaseMemory(task);
 		return result;
 	}
 
 	/// <summary>
 	/// 실행 도중에 이 블록을 끊는다. 외부 중단 등으로 작업이 끊길 때 부른다.
 	/// </summary>
-	internal void Cancel(FunctionTask task)
+	// 함수 블록만 덮어써서 OnCancel 뒤에 프레임을 돌려준다
+	internal virtual void Cancel(FunctionTask task)
 	{
-		// 시작했고 아직 끝나지 않은 블록만 정리한다. 이미 끝난 블록을 두 번 정리하거나 메모리를 두 번 반환하지 않기 위함
+		// 시작했고 아직 끝나지 않은 블록만 정리한다. 이미 끝난 블록을 두 번 정리하지 않기 위함
 		if (state != BlockState.Running) return;
 
 		state = BlockState.Cancelled;
 		OnCancel(task);
-		ReleaseMemory(task);
 	}
-
-	// 실행을 시작할 때 메모리를 요청하고, 끝나거나 끊길 때 반환하는 자리. 함수 블록만 덮어쓴다
-	// OnStart 등과 따로 두어, C 스킬이 OnStart를 덮어쓰면서 base를 부르지 않아도 메모리 계산이 틀어지지 않게 한다
-	internal virtual bool AllocateMemory(FunctionTask task) => true;
-	internal virtual void ReleaseMemory(FunctionTask task) { }
 
 	// 원본은 여러 작업이 함께 쓰므로 직접 실행하지 않고, 실행할 때마다 이 복사본을 만든다
 	internal Block Clone() => (Block)MemberwiseClone();

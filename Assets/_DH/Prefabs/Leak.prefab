@@ -17,6 +17,8 @@ GameObject:
   - component: {fileID: 1675113152176967359}
   - component: {fileID: 6717312794983794336}
   - component: {fileID: 2764399774529590410}
+  - component: {fileID: 262886314703350384}
+  - component: {fileID: 5951959493276847512}
   m_Layer: 9
   m_Name: Leak
   m_TagString: Untagged
@@ -88,8 +90,8 @@ SpriteRenderer:
   m_SortingLayer: 6
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
-  m_Color: {r: 0.123716116, g: 1, b: 0, a: 1}
+  m_Sprite: {fileID: 6050501533337546806, guid: f8642b40883be46fa9ad7780fcbd2c9b, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -163,8 +165,8 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0.6}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1, y: 1}
+    pivot: {x: 0.5, y: 0.21}
+    oldSize: {x: 3.5, y: 3.5}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -269,3 +271,45 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5dcb3679c0d9e4a448d7024b3aaec3e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusEffects
+--- !u!95 &262886314703350384
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4308786132074449698}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: e378e22df0c3e467692be5b91fd6f6c5, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &5951959493276847512
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4308786132074449698}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 887d688eda6914fa0859f77f97ed40ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterAnimator
+  animator: {fileID: 0}
+  baseState: Move
+  hitState: Hit
+  deathState: Death
+  shootState: 
+  hitDuration: 0.42
+  shootDuration: 0.58
+  idleSpeed: 0.35

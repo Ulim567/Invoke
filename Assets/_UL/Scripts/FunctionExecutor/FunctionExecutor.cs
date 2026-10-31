@@ -55,14 +55,15 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<FunctionTask> TaskStarted;
 
 	/// <summary>
-	/// 작업이 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 task.EndReason으로, 실패했으면 실패 종류는 task.Failure로 확인한다.
+	/// 작업이 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 task.EndReason으로 확인한다.<br/>
+	/// Failed(플레이어 책임)이면 실패 종류는 task.Failure, 분류는 LanguageRule.GetFailureCategory로 확인한다. InternalError(개발자 책임)는 플레이어의 에러로 보여 주지 않는다.
 	/// </summary>
 	public event Action<FunctionTask> TaskEnded;
 
 	/// <summary>
-	/// 시전 전 검사에 걸려 시전하지 않았을 때 불린다. 거부한 함수와 실패 종류를 넘긴다.
+	/// 시전 전 검사에 걸려 시전하지 않았을 때 불린다. 거부한 함수와 거부 이유를 넘긴다.
 	/// </summary>
-	public event Action<FunctionBlock, FunctionFailure> CastRejected;
+	public event Action<FunctionBlock, CastRejection> CastRejected;
 
 	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
@@ -76,9 +77,10 @@ public class FunctionExecutor : MonoBehaviour
 
 		foreach (CastCondition condition in castConditions)
 		{
-			if (condition.Check(function, out FunctionFailure failure)) continue;
+			if (condition.Check(function, out CastRejection rejection)) continue;
 
-			HandleCastFailure(function, failure);
+			// 시전 거부는 플레이어 코드의 잘못이 아니므로 언어 규칙 표를 거치지 않고 바로 알린다
+			CastRejected?.Invoke(function, rejection);
 			return null;
 		}
 
@@ -126,31 +128,24 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 작업이 실패했을 때 그 작업이 부른다. 언어 규칙 표에서 처리를 찾아 실행한다.
+	/// 작업이 플레이어 책임으로 실패했을 때 그 작업이 부른다. 언어 규칙 표에서 처리를 찾아 실행한다.
 	/// </summary>
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
 	internal void HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
-		switch (language.FindHandling(task.Name, failure))
+		// 표에 줄이 없거나 언어 규칙 파일이 없으면 개발자 책임이다. 플레이어의 에러로 보이지 않게 InternalError로 끝낸다
+		if (!language.TryFindHandling(task.Name, failure, out FailureHandling handling))
+		{
+			task.End(FunctionTaskEndReason.InternalError);
+			return;
+		}
+
+		switch (handling)
 		{
 			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
 			case FailureHandling.Reject:
 			case FailureHandling.EndTask:
 				task.End(FunctionTaskEndReason.Failed);
-				break;
-		}
-	}
-
-	// 시전 전 검사에 걸렸을 때. 아직 작업이 없다
-	void HandleCastFailure(FunctionBlock function, FunctionFailure failure)
-	{
-		switch (language.FindHandling(function.Name, failure))
-		{
-			// 끝낼 작업이 아직 없으므로, 그 작업만 끝내는 처리도 시전하지 않는 것과 같다
-			// 재부팅처럼 시전 전에도 다른 일을 하는 처리가 생기면 여기에 case를 따로 둔다
-			case FailureHandling.Reject:
-			case FailureHandling.EndTask:
-				CastRejected?.Invoke(function, failure);
 				break;
 		}
 	}

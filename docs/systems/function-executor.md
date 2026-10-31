@@ -67,7 +67,7 @@
   - 클래스: 함수 본문의 한 줄과 값 칸 모두 `PredefinedCallBlock`
   - 함수 본문의 한 줄로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 값 칸에 끼웠을 때와 같이 실패
   - 값 칸에 끼움: 스킬이 `Return`으로 정한 값을 반환 타입으로 맞춰 내놓음
-  - `Return` 없이 끝남, 반환 타입으로 맞출 수 없는 값: 콘솔 오류 + `MissingReturnValue` (스킬 작성자의 실수)
+  - `Return` 없이 끝남, 반환 타입으로 맞출 수 없는 값: 콘솔 오류 + 작업을 `InternalError`로 끝냄 (개발자 책임)
   - 값 칸에 끼울 수 없음(변환 거부): 반환 타입 `Void`, 비동기 함수, 아직 다루지 않는 반환 타입
 - 변환 거부: 지금 실행기가 실행할 수 없는 기능을 쓴 함수. 콘솔 오류, 시전하지 않음
   - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 비운 값 칸(사전 정의 함수의 파라미터 칸은 비워도 됨)
@@ -78,7 +78,7 @@
 - free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
 - `malloc` 블록 (#90): 미리 정한 struct(`PredefinedStructs`)의 객체(`StructInstance`)를 heap에 올리고 포인터를 내놓음. 칸 수는 그 struct의 `HeapSize`. 모자라면 `NullPointer`, 에러 없음
   - 화면의 오브젝트(예: 소환검): 만들지 않음. 연결 방법은 박진우와 정할 것
-- `free` 블록 (#90): 값 칸의 포인터를 해제. 쓸 수 없는 포인터이면 `InvalidPointerError`(`SkillFailed`, `SourceName`은 `free`)
+- `free` 블록 (#90): 값 칸의 포인터를 해제. 쓸 수 없는 포인터이면 `InvalidPointer`(플레이어 코드 에러)
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
   - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
 - 루트 집합: 포인터를 보관하는 목록들
@@ -104,9 +104,10 @@
   - 전역 변수 이슈: 전역 변수에 담긴 포인터를 루트 집합에 추가, 옮기는 규칙(`HeapStorage.HandOverPointers`)만 바꿈. 누수 판단은 그대로
 
 ### 시전 전 검사
-- `Cast`가 `FunctionTask`를 만들기 전에 공통 조건을 차례로 검사한다. 하나라도 걸리면 `FunctionTask`를 만들지 않고 거부한다.
+- `Cast`가 `FunctionTask`를 만들기 전에 공통 조건을 차례로 검사한다. 하나라도 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`로 거부 이유(`CastRejection`)를 알린다.
   1. 쿨타임: 같은 function이 실행 중이거나 쿨타임 중이면 `OnCooldown`
   2. 메모리: `Free`가 그 function의 `FrameSize`보다 작으면 `NotEnoughMemory`
+- 시전 거부는 책임 없음(게임 상황): 언어 규칙 표를 거치지 않음
 - 메모리 검사 범위: 맨 바깥 function의 프레임만. 안쪽 function의 stack은 실행 중에 `Overflow`로 처리
 - 같은 tick에 연달아 시전: 둘 다 같은 `Free`를 보고 통과할 수 있음. 나중에 시작한 쪽은 실행 중에 `Overflow`
 - `UserFunction` 안의 비동기 시전: 검사하지 않음
@@ -115,38 +116,39 @@
 - 스킬마다 다른 조건(맨손, 소환검 등)은 공통 조건이 아니다. 스킬 코드가 `Fail`로 직접 처리한다([predefined-function.md](predefined-function.md)).
 
 ### 실패 처리
-- 실패 종류(`FunctionFailure`)
+- 책임으로 나눔
+
+| 책임 | 예 | 실행기가 하는 일 | 화면 |
+| --- | --- | --- | --- |
+| 없음 | 쿨타임 중, 시전 전 메모리 부족 | `FunctionTask`를 만들지 않고 `CastRejected` | 아직 쓸 수 없음 |
+| 플레이어 | 선언하지 않은 변수, 0으로 나누기, 잘못된 포인터 `free`, 맨손으로 찌르기 호출 | 언어 규칙 표의 처리. C는 그 `FunctionTask`만 `Failed`로 끝냄 | compile error 또는 runtime error |
+| 개발자 | 스킬의 `Return` 누락·반환 타입 불일치, 언어 규칙 표에 그 실패 종류의 줄이 없음, 언어 규칙 파일 미연결 | 콘솔 오류, 그 `FunctionTask`를 `InternalError`로 끝냄 | 플레이어의 에러로 보여 주지 않음 |
+
+- 플레이어 책임인 실패 종류(`FunctionFailure`)
 
 | 실패 종류 | 나는 때 |
 | --- | --- |
 | `Overflow` | 실행 중에 stack이 모자람 |
-| `NotEnoughMemory` | 시전 전 검사에서 메모리가 모자람 |
-| `SkillFailed` | 스킬 코드가 `Fail`로 에러를 냄. 어떤 에러인지는 `task.Error` |
-| `OnCooldown` | 시전 전 검사에서 실행 중이거나 쿨타임 중 |
+| `SkillFailed` | 스킬 코드가 `Fail`로 에러를 냄(예: 맨손으로 찌르기). 어떤 에러인지는 `task.Error`. 스킬을 함수로 부르는 컨셉이므로 잘못된 때에 스킬 함수를 부른 플레이어의 에러 |
 | `UndeclaredVariable` | 값 칸이나 대입 블록의 변수가 지금 함수의 지역 변수에 없음 (#90) |
 | `InvalidLiteral` | 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없음. 예: `int` 칸의 `"abc"` (#90) |
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
-| `TypeMismatch` | 값을 변수·파라미터·반환 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
+| `TypeMismatch` | 값을 변수·파라미터 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
-| `MissingReturnValue` | 사전 정의 함수가 `Return` 없이 끝나거나, 반환 타입으로 맞출 수 없는 값을 넘김. 스킬 작성자의 실수 (#90) |
+| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(`NullPointer`, 해제한 포인터, 누수된 포인터)를 넣음 |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
-- 분류(`FailureCategory`): 플레이어 코드의 어떤 잘못인지. 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
-  - `NotCodeError`: 코드의 잘못이 아님(쿨타임, 시전 전 메모리 부족 등)
+- 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
   - `CompileError`: 그 언어에서 실행 전에 찾아내는 잘못
   - `RuntimeError`: 그 언어에서 실행 중에 찾아내는 잘못
   - 언어마다 다름. 예: 선언하지 않은 변수는 C에서 `CompileError`, Python에서 `RuntimeError`
-  - 찾아내는 시점: 분류와 상관없이 지금은 모두 실행 중. 실행 전에 거부하는 일은 「만든 함수를 서버로 보내 검사·저장하기」 이슈의 구조 검사
+  - 찾아내는 시점: 분류와 상관없이 지금은 모두 실행 중. compile error를 편집 화면에서 저장할 때 검사하는 일은 별도 이슈
   - `SkillFailed`는 한 줄이므로 스킬 에러는 종류와 상관없이 같은 분류
-- 처리 종류(`FailureHandling`)와 시점별 동작
-
-| 처리 | 시전 전 | 실행 중 |
-| --- | --- | --- |
-| `Reject` | 시전하지 않음, `CastRejected` | 그 `FunctionTask`만 `Failed`로 끝남 |
-| `EndTask` | 시전하지 않음, `CastRejected` (끝낼 `FunctionTask`가 아직 없음) | 그 `FunctionTask`만 `Failed`로 끝남 |
-
-- 표에 없는 실패 종류: Play를 시작할 때 콘솔 오류. 실제로 나면 콘솔 오류 후 `EndTask`
-- 언어 규칙 파일 미연결: 콘솔 오류, 모든 실패를 `EndTask`
+- 처리 종류(`FailureHandling`)
+  - `EndTask`: 그 `FunctionTask`만 `Failed`로 끝남
+  - `Reject`: 실행 중에는 `EndTask`와 같음. 시전 거부가 표를 거치지 않게 된 뒤로 쓰는 줄 없음
+- 표에 없는 실패 종류: Play를 시작할 때 콘솔 오류. 실제로 나면 콘솔 오류 후 `InternalError`
+- 언어 규칙 파일 미연결: Play를 시작할 때 콘솔 오류. 실패가 나면 콘솔 오류 후 `InternalError`
 - `FunctionFailure`, `FailureHandling`, `FailureCategory`, `NumericConversion`의 새 값: 맨 끝에만 추가. 언어 규칙 파일이 값을 숫자로 저장하므로, 중간에 끼우면 이미 만든 파일의 값이 바뀜
 
 ### 쿨타임
@@ -171,9 +173,9 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Cast(FunctionBlock function)` | cast할 function (`PredefinedFunction` 또는 `UserFunction`) | `FunctionTask` | function을 cast한다. 넘긴 객체는 원본으로 남고 복사본이 실행되므로, 같은 객체를 여러 번 넘겨도 된다. `FunctionTask`는 다음 tick부터 진행한다. 시전 전 검사에 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`를 알린 뒤 `null`을 돌려준다. |
-| `CastRejected` (event) | `FunctionBlock`, `FunctionFailure` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 실패 종류를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. |
+| `CastRejected` (event) | `FunctionBlock`, `CastRejection` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 거부 이유(`OnCooldown`, `NotEnoughMemory`)를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. |
 | `TaskStarted` (event) | `FunctionTask` | - | `FunctionTask`가 첫 tick을 진행하기 직전에 불린다. 연출을 시작할 때 쓴다. |
-| `TaskEnded` (event) | `FunctionTask` | - | `FunctionTask`가 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 `task.EndReason`, 실패했으면 `task.Failure`, `task.Error`로 확인한다. |
+| `TaskEnded` (event) | `FunctionTask` | - | `FunctionTask`가 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 `task.EndReason`, 플레이어 책임으로 실패(`Failed`)했으면 `task.Failure`, `task.Error`로 확인한다. |
 | `CurrentTick` | - | `int` | 지금까지 지난 tick 수. 첫 tick이 1이다. |
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 쿨타임 UI에서 쓴다. |
@@ -188,10 +190,10 @@
 | `Caster` | - | `GameObject` | 이 `FunctionTask`를 cast한 캐릭터. `PredefinedFunction`은 이것으로 캐릭터의 위치, 방향, 컴포넌트를 찾는다. |
 | `Name` | - | `string` | cast한 function의 이름 |
 | `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 대기, 아직 쓰지 않음), `Ended`(끝남) |
-| `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(실패. 실패 종류는 `Failure`) |
+| `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(플레이어 책임인 실패. 실패 종류는 `Failure`), `InternalError`(개발자 책임. 플레이어의 에러로 보여 주지 않음) |
 | `IsEnded` | - | `bool` | 끝났으면 `true` |
-| `IsFailed` | - | `bool` | 실패로 끝났으면 `true`. 실패 여부는 `Failure`가 아니라 이 값으로 판단한다. |
-| `Failure` | - | `FunctionFailure?` | 실패로 끝났을 때 실패 종류. 실패로 끝나지 않았으면 `null` |
+| `IsFailed` | - | `bool` | `Failed`(플레이어 책임)로 끝났으면 `true`. `InternalError`는 `false`. 실패 여부는 `Failure`가 아니라 이 값으로 판단한다. |
+| `Failure` | - | `FunctionFailure?` | `Failed`로 끝났을 때 실패 종류. 그 밖에는 `null` |
 | `Error` | - | `SkillError` | `Failure`가 `SkillFailed`일 때 스킬이 낸 에러. 그 밖에는 `null` |
 
 ### `LanguageRule` (캐릭터의 언어 컴포넌트)
@@ -202,7 +204,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `GetFailureCategory(FunctionFailure failure)` | 실패 종류 | `FailureCategory` | 이 캐릭터 언어에서 그 실패의 분류. `TaskEnded`의 `task.Failure`, `CastRejected`의 실패 종류를 화면에 보여 줄 때 쓴다. 언어 규칙 파일이 없거나 표에 없으면 `NotCodeError` (#90) |
+| `GetFailureCategory(FunctionFailure failure)` | 실패 종류 | `FailureCategory` | 이 캐릭터 언어에서 그 실패가 `CompileError`인지 `RuntimeError`인지. `TaskEnded`에서 `Failed`로 끝난 `task.Failure`를 화면에 보여 줄 때 쓴다. `Failed`로 끝난 작업은 언제나 표에 줄이 있음. 줄이 없는 실패 종류를 넘기면 `RuntimeError` (#90) |
 
 ### `LanguageRuleData` (언어 규칙 파일)
 
@@ -213,21 +215,19 @@
 - 기본값: 초기값을 비운 변수의 값. `int`, `float`, `bool`, `char`(글자 번호), `string` 칸. 포인터는 언제나 `NullPointer` (#90)
 - 숫자 타입 변환: `ImplicitAll`, `Strict`, `WideningOnly` 중 하나(「함수 데이터 실행」의 표) (#90)
 - `float %` 허용 여부 (#90)
-- 연결하지 않음: 콘솔 오류. 실패는 모두 `EndTask`, 기본값과 숫자 타입 변환은 처음 값(C 규칙)
+- 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값과 숫자 타입 변환은 처음 값(C 규칙)
 - C 파일(`Assets/_UL/Data/LanguageRule_C`)
 
 | 실패 종류 | 처리 | 분류 |
 | --- | --- | --- |
 | `Overflow` | `EndTask` | `RuntimeError` |
-| `NotEnoughMemory` | `Reject` | `NotCodeError` |
 | `SkillFailed` | `EndTask` | `RuntimeError` |
-| `OnCooldown` | `Reject` | `NotCodeError` |
 | `UndeclaredVariable` | `EndTask` | `CompileError` |
 | `InvalidLiteral` | `EndTask` | `CompileError` |
 | `DuplicateVariable` | `EndTask` | `CompileError` |
 | `TypeMismatch` | `EndTask` | `CompileError` |
 | `DivideByZero` | `EndTask` | `RuntimeError` |
-| `MissingReturnValue` | `EndTask` | `NotCodeError` |
+| `InvalidPointer` | `EndTask` | `RuntimeError` |
 
 - C 파일의 그 밖의 값: 기본값 0, 0, `false`, 글자 번호 0, 빈 글자열. 숫자 타입 변환 `ImplicitAll`, `float %` 허용하지 않음
 
@@ -311,9 +311,8 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
 - 박진우와 정할 것 (#90)
   - `malloc` 블록이 heap에 올린 `StructInstance`(예: `Sword`)와 실제 소환검 오브젝트를 잇는 방법. 지금은 화면에 소환검이 나타나지 않음
 - 임혜원과 확인할 것 (#90)
-  - 실패를 화면에 보여 줄 때 `LanguageRule.GetFailureCategory`로 compile error / runtime error 구분
+  - 실패를 화면에 보여 줄 때 `EndReason`으로 책임 구분(`Failed`: 플레이어, `InternalError`: 개발자), `Failed`이면 `LanguageRule.GetFailureCategory`로 compile error / runtime error 구분
 - 정할 것 (#90)
   - tick 비용 규칙 재검토: 지금은 블록 하나 = 1 tick. 반복문을 만드는 블록 실행 2 이슈에서 「문법 블록은 tick 없음, 반복 한 바퀴에 1 tick」 등과 비교
   - 플레이어가 만든 함수의 `return` 누락 규칙: 블록 실행 3 이슈. C는 컴파일러에 따라 경고(GCC) 또는 오류(MSVC C4716), 실행되면 값은 정의되지 않음
-  - 스킬 에러마다 분류 나누기: 지금은 `SkillFailed` 한 줄이라 모든 스킬 에러가 `RuntimeError`
   - 슬롯에서 함수 데이터를 바꿔 시전하는 연결: `FunctionDataConverter`를 부르는 곳([slot-caster.md](slot-caster.md))

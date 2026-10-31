@@ -18,14 +18,15 @@ public class LanguageRule : MonoBehaviour
 	LanguageRuleData fallbackRule;
 
 	/// <summary>
-	/// 이 캐릭터 언어에서 failure가 플레이어 코드의 어떤 잘못인지(compile error, runtime error 등).<br/>
-	/// 화면이 FunctionExecutor.TaskEnded의 task.Failure나 CastRejected의 실패 종류를 받아 보여 줄 때 쓴다.
+	/// 이 캐릭터 언어에서 failure가 compile error인지 runtime error인지.<br/>
+	/// 화면이 FunctionExecutor.TaskEnded에서 EndReason이 Failed인 작업의 task.Failure를 받아 보여 줄 때 쓴다.
 	/// </summary>
-	// 언어 규칙 파일이 없거나 표에 그 줄이 없으면 NotCodeError로 본다. 둘 다 Play를 시작할 때 이미 콘솔 오류로 알렸다
+	// Failed로 끝난 작업은 언제나 표에 줄이 있다. 줄이 없으면 실행기가 InternalError로 끝내기 때문
+	// 그래도 줄이 없는 실패 종류를 넘기면 RuntimeError로 본다. 그 실패는 실행 중에 났고, 줄이 없는 것은 Play를 시작할 때 이미 콘솔 오류로 알렸다
 	public FailureCategory GetFailureCategory(FunctionFailure failure)
 	{
 		if (ruleData != null && ruleData.TryGetCategory(failure, out FailureCategory category)) return category;
-		return FailureCategory.NotCodeError;
+		return FailureCategory.RuntimeError;
 	}
 
 	/// <summary>
@@ -49,17 +50,20 @@ public class LanguageRule : MonoBehaviour
 		}
 	}
 
-	// 실행기가 실패를 처리할 때 부른다. functionName은 표에 빠진 줄을 알릴 때 어느 함수에서 났는지 적기 위함
-	internal FailureHandling FindHandling(string functionName, FunctionFailure failure)
+	// 실행기가 플레이어 책임인 실패를 처리할 때 부른다. 처리를 찾지 못하면 false. 실행기는 그 작업을 InternalError(개발자 책임)로 끝낸다
+	// functionName은 어느 함수에서 났는지 콘솔 오류에 적기 위함
+	// 예외를 던지지 않는다. 예외를 던지면 이번 틱의 나머지 작업이 진행되지 않고, 끝난 작업도 목록에서 빠지지 않기 때문
+	internal bool TryFindHandling(string functionName, FunctionFailure failure, out FailureHandling handling)
 	{
-		if (ruleData != null && ruleData.TryGetHandling(failure, out FailureHandling handling)) return handling;
+		if (ruleData != null && ruleData.TryGetHandling(failure, out handling)) return true;
 
-		// 파일이 없는 경우는 Awake에서 이미 알렸다. 표에 빠진 줄은 어느 함수에서 났는지 알 수 있도록 실제로 났을 때 한 번 더 알린다
-		if (ruleData != null)
-			Debug.LogError($"{ruleData.name}: 실패 종류 {failure}의 처리가 표에 없습니다. {functionName}을 EndTask로 처리합니다.", ruleData);
-
-		// 예외를 던지지 않고 EndTask로 처리한다. 예외를 던지면 이번 틱의 나머지 작업이 진행되지 않고, 끝난 작업도 목록에서 빠지지 않기 때문
-		return FailureHandling.EndTask;
+		// Play를 시작할 때도 알렸지만, 어느 함수에서 났는지 알 수 있도록 실제로 났을 때 한 번 더 알린다
+		if (ruleData == null)
+			Debug.LogError($"{name}: LanguageRule에 언어 규칙 파일이 연결되지 않아 {functionName}의 {failure}를 처리할 수 없습니다. 작업을 InternalError로 끝냅니다.", this);
+		else
+			Debug.LogError($"{ruleData.name}: 실패 종류 {failure}의 처리가 표에 없습니다. {functionName}을 InternalError로 끝냅니다.", ruleData);
+		handling = default;
+		return false;
 	}
 
 	void Awake()
@@ -78,7 +82,7 @@ public class LanguageRule : MonoBehaviour
 	{
 		if (ruleData == null)
 		{
-			Debug.LogError($"{name}: LanguageRule에 언어 규칙 파일이 연결되지 않았습니다. 모든 실패를 EndTask로 처리합니다.", this);
+			Debug.LogError($"{name}: LanguageRule에 언어 규칙 파일이 연결되지 않았습니다. 플레이어 함수가 실패하면 작업을 InternalError로 끝냅니다.", this);
 			return;
 		}
 

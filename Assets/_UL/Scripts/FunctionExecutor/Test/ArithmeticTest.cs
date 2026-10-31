@@ -147,7 +147,7 @@ public class ArithmeticTest : MonoBehaviour
 
 	void CheckFailed(FunctionTask task, int tick, FunctionFailure expected, FailureCategory expectedCategory)
 	{
-		FailureCategory category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : FailureCategory.NotCodeError;
+		FailureCategory? category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : null;
 		Check($"{task.Name}: 틱 2에 {expected}({expectedCategory})로 실패",
 			task.Failure == expected && category == expectedCategory && tick == 2,
 			$"실제 틱 {tick}, {task.Failure}, {category}");

@@ -177,7 +177,7 @@ protected override void OnTick(FunctionTask task, int tick)
   - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
 - 이름: `Parameters`에 적은 `ParameterData`의 이름
 - 반환 값이 쓰이는 곳: 값 칸에 끼운 함수 블록(예: `int n = CountSwords();`). 함수 몸통에 놓으면 버림
-  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 실패 `MissingReturnValue`. 함수 몸통에 놓아도 같음
+  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 작업을 `InternalError`(개발자 책임)로 끝냄. 함수 몸통에 놓아도 같음
   - 반환 타입이 `Void`인데 `Return`을 부름, `OnCancel`에서 부름: 콘솔 오류, 무시
 - 값 만들기, 꺼내기: `RuntimeValue.FromInt(3)`, `value.AsInt()` 등
 
@@ -209,7 +209,7 @@ protected override void OnEnd(FunctionTask task)
     - `UnarmedError`: 맨손
     - `NoSummonedSwordError`: 소환검 없음
   - `Assets/_UL/Scripts/FunctionExecutor/PointerErrors.cs`
-    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)와 `free` 블록(`SourceName`은 `free`)이 냄
+    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄. 플레이어의 `free` 블록은 이 에러 대신 실패 종류 `InvalidPointer`
     - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
 
 ### `PredefinedFunctionRegistry` (고정 ID로 function 찾기)

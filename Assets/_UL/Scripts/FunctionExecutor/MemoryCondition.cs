@@ -14,9 +14,9 @@ public class MemoryCondition : CastCondition
 		this.memory = memory;
 	}
 
-	public override bool Check(FunctionBlock function, out FunctionFailure failure)
+	public override bool Check(FunctionBlock function, out CastRejection rejection)
 	{
-		failure = FunctionFailure.NotEnoughMemory;
+		rejection = CastRejection.NotEnoughMemory;
 		// 시전한 작업은 다음 틱에 stack을 쓰므로, 같은 틱에 연달아 시전하면 둘 다 같은 Free를 보고 통과할 수 있다
 		// 그때 나중에 시작한 쪽은 실행 중에 Overflow로 끝난다
 		return memory.Free >= function.FrameSize;

@@ -43,7 +43,22 @@
   - 플레이어의 잘못된 포인터: 플레이어 코드 에러 `InvalidPointer`를 새로 두고, `FreeBlock`이 `SkillFailed` 대신 이것으로 실패
   - 언어 규칙 표에 남는 것: 플레이어 코드 에러와 `SkillFailed`
 - 이유: 언어마다 달라지는 것(플레이어 코드 에러의 처리와 분류)만 표에 남김
-- 영향: `CastRejected` 이벤트의 모양이 바뀜. 임혜원에게 알림
+- 책임으로 나누기
+
+| 책임 | 예 | 실행기가 하는 일 | 화면 |
+| --- | --- | --- | --- |
+| 없음 | 쿨타임 중, 시전 전 메모리 부족 | 작업을 만들지 않고 `CastRejected` | 아직 쓸 수 없음 |
+| 플레이어 | 선언하지 않은 변수, 0으로 나누기, 잘못된 포인터 `free`, 맨손으로 찌르기 호출 | 작업을 `Failed`로 끝냄 | compile error 또는 runtime error |
+| 개발자 | 스킬의 `Return` 누락·반환 타입 불일치, 언어 규칙 표에 그 실패 종류의 줄이 없음, 언어 규칙 파일 미연결 | 콘솔 오류, 작업을 `InternalError`로 끝냄 | 플레이어의 에러로 보여 주지 않음 |
+
+  - `FunctionTaskEndReason.InternalError`: 새 값. `IsFailed` false, `Failure` null
+  - 스킬 실패(`SkillFailed`): 플레이어 책임, `RuntimeError`. 이유: 스킬을 함수로 부르는 컨셉이므로, 잘못된 때에 스킬 함수를 부른 runtime error
+    - 해당: `UnarmedError`, `NoSummonedSwordError`, 스킬의 heap 함수(`Free`, `TryGetHeapObject`)가 낸 `InvalidPointerError`
+    - 스킬의 `InvalidPointerError`: 개발자의 스킬 코드가 포인터를 확인하지 않아 나는 경우도 플레이어 책임과 구분하지 않음. 개발자 버그는 테스트에서 찾아 고침
+- 분류(`FailureCategory`): `CompileError`, `RuntimeError`만. `NotCodeError` 지움
+  - 이유: 표를 거쳐 `Failed`로 끝나는 작업은 모두 플레이어 책임이고, 언제나 표에 분류가 있음
+- C 표의 `InvalidPointer`: `EndTask`, `RuntimeError`
+- 영향: `CastRejected` 이벤트의 모양이 바뀜. 화면은 `EndReason`으로 책임을 나눔. 임혜원에게 알림
 - 주의: enum 중간의 값을 빼면 뒤 값들의 번호가 당겨짐. `LanguageRule_C.asset`의 표를 Inspector에서 다시 채움
 
 ## 스킬 호출 블록

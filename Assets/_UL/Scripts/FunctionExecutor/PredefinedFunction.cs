@@ -175,7 +175,7 @@ public abstract class PredefinedFunction : FunctionBlock
 	/// <summary>
 	/// 이 함수의 반환 값을 정한다. ReturnType이 Void가 아닌 함수는 끝나기 전에 반드시 부른다. OnStart, OnTick, OnEnd에서 부른다.<br/>
 	/// 여러 번 부르면 마지막 값을 쓴다. 값이 ReturnType과 다르면 실행기가 캐릭터 언어의 숫자 타입 변환 규칙으로 맞춘다.<br/>
-	/// 부르지 않고 끝나거나 ReturnType으로 맞출 수 없는 값을 넘기면, 이 함수를 부른 블록이 MissingReturnValue로 실패한다(함수 본문의 한 줄로 불러도 같다).
+	/// 부르지 않고 끝나거나 ReturnType으로 맞출 수 없는 값을 넘기면, 실행기가 콘솔 오류를 내고 작업을 InternalError(개발자 책임)로 끝낸다(함수 본문의 한 줄로 불러도 같다).
 	/// </summary>
 	// 실제 C의 return과 달리 함수를 끝내지 않는다. 끝내려면 Stop을 함께 부른다
 	protected void Return(RuntimeValue value)

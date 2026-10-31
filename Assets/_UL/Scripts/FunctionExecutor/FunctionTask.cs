@@ -12,7 +12,8 @@ public enum FunctionTaskState
 }
 
 /// <summary>
-/// 작업이 끝난 이유. Failed이면 어떤 실패였는지 FunctionTask.Failure로 확인한다.
+/// 작업이 끝난 이유. 실패는 책임에 따라 나눈다: Failed는 플레이어 책임, InternalError는 개발자 책임.<br/>
+/// Failed이면 어떤 실패였는지 FunctionTask.Failure로 확인한다.
 /// </summary>
 // 실패 종류마다 값을 두지 않는다. 실패 종류 목록(FunctionFailure)과 두 군데에서 함께 늘려야 하는 일을 막기 위함
 public enum FunctionTaskEndReason
@@ -21,7 +22,11 @@ public enum FunctionTaskEndReason
 	Completed,
 	// 실행 중단 공격으로 끊겼다. 작업 자신의 실패가 아니므로 Failed와 나눈다
 	Interrupted,
+	// 플레이어가 짠 함수에 잘못이 있었다(compile error, runtime error). 화면이 플레이어의 에러로 보여 준다
 	Failed,
+	// 개발자가 만든 것(스킬 코드, 언어 규칙 파일)에 잘못이 있었다. 실행기가 콘솔 오류를 내고, 화면은 플레이어의 에러로 보여 주지 않는다
+	// 예: 스킬이 Return을 빠뜨림, 언어 규칙 표에 그 실패 종류의 줄이 없음
+	InternalError,
 }
 
 /// <summary>
@@ -42,6 +47,8 @@ public class FunctionTask
 	FunctionFailure? recordedFailure;
 	// 스킬이 Fail로 낸 에러. 실패 종류가 SkillFailed일 때만 있다
 	SkillError recordedError;
+	// 개발자 책임인 잘못을 블록이 기록했는지. true이면 언어 규칙 표를 거치지 않고 InternalError로 끝난다
+	bool internalErrorRecorded;
 	// 실행 중인 사용자 정의 함수들의 지역 변수. 맨 뒤가 지금 실행 중인(가장 안쪽) 함수의 것이다
 	// 블록은 실행될 때 task만 받으므로, 자기를 실행하는 함수의 지역 변수를 task를 거쳐 찾는다
 	// 목록인 이유: 함수 안에서 다른 함수를 부르면 불린 함수의 것이 위에 쌓이고, 끝나면 내려가 부른 함수의 것이 다시 맨 위가 된다(C의 호출 스택)
@@ -120,9 +127,10 @@ public class FunctionTask
 
 		// 실패했으면 쌓여 있던 함수들은 Execute 안에서 이미 끊기며 메모리를 돌려줬다
 		// 무엇을 할지(이 작업만 끝낼지, C처럼 모든 작업을 끝낼지)는 실행기가 언어 규칙 표를 보고 정한다
-		// Failed를 돌려준 블록은 반드시 RecordFailure를 먼저 부른다. 빠뜨렸으면 Value가 예외를 던져 바로 드러난다
-		if (result == BlockResult.Failed) Executor.HandleFailure(this, recordedFailure.Value);
-		else End(FunctionTaskEndReason.Completed);
+		// Failed를 돌려준 블록은 반드시 RecordFailure나 RecordInternalError를 먼저 부른다. 빠뜨렸으면 Value가 예외를 던져 바로 드러난다
+		if (result != BlockResult.Failed) End(FunctionTaskEndReason.Completed);
+		else if (internalErrorRecorded) End(FunctionTaskEndReason.InternalError);
+		else Executor.HandleFailure(this, recordedFailure.Value);
 	}
 
 	/// <summary>
@@ -133,6 +141,15 @@ public class FunctionTask
 	{
 		recordedFailure = failure;
 		recordedError = error;
+	}
+
+	/// <summary>
+	/// 개발자 책임인 잘못(예: 스킬이 Return을 빠뜨림)을 블록이 그 자리에서 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
+	/// 콘솔 오류는 기록하는 블록이 낸다. 작업은 언어 규칙 표를 거치지 않고 InternalError로 끝난다.
+	/// </summary>
+	internal void RecordInternalError()
+	{
+		internalErrorRecorded = true;
 	}
 
 	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다

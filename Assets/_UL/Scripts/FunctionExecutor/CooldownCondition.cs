@@ -14,9 +14,9 @@ public class CooldownCondition : CastCondition
 		this.cooldowns = cooldowns;
 	}
 
-	public override bool Check(FunctionBlock function, out FunctionFailure failure)
+	public override bool Check(FunctionBlock function, out CastRejection rejection)
 	{
-		failure = FunctionFailure.OnCooldown;
+		rejection = CastRejection.OnCooldown;
 		return !cooldowns.IsRunning(function) && cooldowns.GetRemainingTicks(function) <= 0;
 	}
 }

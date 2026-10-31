@@ -8,7 +8,7 @@ using UnityEngine;
 /// - 비운 값 칸은 「값 없음」으로 넘긴다. 값을 파라미터 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
 /// - 틱: 값 칸에 끼운 블록이 없으면 스킬의 TickCount와 같다(슬롯에서 바로 시전했을 때와 같음). 끼운 블록이 있으면 그 블록들의 틱이 앞에 더해진다.<br/>
 /// - 반환 타입이 Void가 아니면 스킬이 끝난 뒤 반환 값을 반환 타입으로 맞춰 Result에 넣는다. 함수 본문의 한 줄로 놓이면 아무도 Result를 읽지 않으므로 값은 버려진다.<br/>
-/// - 스킬이 Return을 부르지 않았거나 반환 값을 반환 타입으로 맞출 수 없으면, 콘솔 오류를 내고 MissingReturnValue로 실패한다(스킬 작성자의 실수).<br/>
+/// - 스킬이 Return을 부르지 않았거나 반환 값을 반환 타입으로 맞출 수 없으면, 콘솔 오류를 내고 작업을 InternalError로 끝낸다(개발자 책임).<br/>
 /// - 비동기 스킬(IsAsync)은 새 작업으로 시전하고, 이 블록은 1틱 뒤 끝난다. 반환 값을 받을 수 없으므로 FunctionDataConverter가 값 칸에 넣지 않는다.
 /// </para>
 /// </summary>
@@ -90,19 +90,19 @@ public class PredefinedCallBlock : ValueBlock
 	}
 
 	// 스킬이 Return으로 정한 값을 반환 타입으로 맞춰 Result에 넣는다
-	// 맞추지 못하면 TypeMismatch가 아니라 MissingReturnValue로 기록한다. 반환 값은 스킬 작성자가 정하므로, 플레이어 코드의 잘못(compile error)으로 보이지 않게 하기 위함
+	// 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다. 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
 	bool TryTakeReturnValue(FunctionTask task)
 	{
 		if (!running.TryGetReturnValue(out RuntimeValue value))
 		{
 			Debug.LogError($"{function.Name}: 반환 타입이 {function.ReturnType.Kind}인데 Return을 부르지 않고 끝났습니다.");
-			task.RecordFailure(FunctionFailure.MissingReturnValue);
+			task.RecordInternalError();
 			return false;
 		}
 		if (!NumericRules.TryConvertForStore(value, function.ReturnType, task.Executor.Rule, out RuntimeValue converted))
 		{
 			Debug.LogError($"{function.Name}: Return으로 넘긴 {value.Type?.Kind} 값을 반환 타입 {function.ReturnType.Kind}(으)로 바꿀 수 없습니다.");
-			task.RecordFailure(FunctionFailure.MissingReturnValue);
+			task.RecordInternalError();
 			return false;
 		}
 

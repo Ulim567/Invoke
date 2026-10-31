@@ -3,20 +3,18 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 함수 실행이 실패한 이유. 언어 규칙 표가 이 종류마다 처리를 정한다.
+/// 플레이어 함수가 실행 중에 실패한 이유. 언어 규칙 표가 이 종류마다 처리와 분류를 정한다.<br/>
+/// 플레이어 책임인 실패만 있다. 시전 거부는 CastRejection, 개발자 책임은 FunctionTaskEndReason.InternalError로 따로 나타낸다.
 /// </summary>
 // 언어 규칙 파일은 이 값을 숫자로 저장한다. 중간에 끼워 넣거나 순서를 바꾸면 이미 만든 파일의 값이 다른 종류로 바뀌므로, 새 종류는 맨 끝에만 추가한다
 public enum FunctionFailure
 {
 	// 실행 중에 스택이 모자라 다음 함수를 시작하지 못했다
 	Overflow,
-	// 시전하는 순간 남은 메모리가 그 함수의 프레임 크기보다 적었다
-	NotEnoughMemory,
-	// 스킬 구현자가 PredefinedFunction.Fail로 에러를 냈다. 어떤 에러인지는 FunctionTask.Error로 확인한다
+	// 스킬이 PredefinedFunction.Fail로 에러를 냈다(예: 맨손으로 찌르기). 어떤 에러인지는 FunctionTask.Error로 확인한다
+	// 스킬을 함수로 부르는 컨셉이므로, 잘못된 때에 스킬 함수를 부른 플레이어의 runtime error로 본다
 	// 에러 종류마다 값을 두지 않는다. 스킬 구현자가 에러 클래스를 새로 만들어도 이 목록과 언어 규칙 표는 고치지 않게 하기 위함
 	SkillFailed,
-	// 시전한 함수가 아직 실행 중이거나 쿨타임 중이었다
-	OnCooldown,
 	// 값 칸의 변수가 지금 함수의 지역 변수에 없었다
 	UndeclaredVariable,
 	// 값 칸에 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없었다 (예: int 칸의 "abc")
@@ -27,8 +25,36 @@ public enum FunctionFailure
 	TypeMismatch,
 	// 0으로 나누거나 0으로 나머지를 구했다 (int, float 모두)
 	DivideByZero,
-	// 반환 타입이 있는 사전 정의 함수가 Return을 부르지 않고 끝났거나, 반환 타입으로 맞출 수 없는 값을 넘겼다. 플레이어가 아니라 스킬 작성자의 실수다
-	MissingReturnValue,
+	// free 블록에 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터)를 넣었다
+	InvalidPointer,
+}
+
+/// <summary>
+/// 플레이어 함수의 실패가 어떤 에러인지. 화면이 compile error와 runtime error를 나누어 보여 줄 때 쓴다.
+/// </summary>
+// 같은 실패라도 언어마다 분류가 다르므로(예: 선언하지 않은 변수는 C에서 compile error, Python에서 runtime error) 언어 규칙 표가 정한다
+// 「코드 에러가 아님」 같은 값은 두지 않는다. 표를 거쳐 Failed로 끝나는 작업은 모두 플레이어 책임이기 때문
+// FunctionFailure와 같은 이유로, 새 분류는 맨 끝에만 추가한다
+public enum FailureCategory
+{
+	// 그 언어에서 실행하기 전에 찾아내는 잘못
+	CompileError,
+	// 그 언어에서 실행 중에 찾아내는 잘못
+	RuntimeError,
+}
+
+
+/// <summary>
+/// 실패했을 때 실행기가 하는 처리.
+/// </summary>
+// FunctionFailure와 같은 이유로, 새 처리는 맨 끝에만 추가한다
+public enum FailureHandling
+{
+	// 실패한 작업만 끝낸다. 다른 작업은 계속 진행한다
+	EndTask,
+	// 시전 전 검사가 표를 거치던 때의 처리. 실행 중에는 EndTask와 같다
+	// 시전 거부(CastRejection)가 표를 거치지 않게 된 뒤로 쓰는 줄이 없다. 지우면 이미 만든 파일의 값이 바뀔 수 있어 남겨 둔다
+	Reject,
 }
 
 /// <summary>
@@ -47,39 +73,12 @@ public enum NumericConversion
 }
 
 /// <summary>
-/// 실패가 플레이어 코드의 어떤 잘못인지. 화면이 compile error와 runtime error를 나누어 보여 줄 때 쓴다.
-/// </summary>
-// 같은 실패라도 언어마다 분류가 다르므로(예: 선언하지 않은 변수는 C에서 compile error, Python에서 runtime error) 언어 규칙 표가 정한다
-// FunctionFailure와 같은 이유로, 새 분류는 맨 끝에만 추가한다
-public enum FailureCategory
-{
-	// 플레이어 코드의 잘못이 아니다 (쿨타임, 시전 전 메모리 부족 등)
-	NotCodeError,
-	// 그 언어에서 실행하기 전에 찾아내는 잘못
-	CompileError,
-	// 그 언어에서 실행 중에 찾아내는 잘못
-	RuntimeError,
-}
-
-/// <summary>
-/// 실패했을 때 실행기가 하는 처리.
-/// </summary>
-// FunctionFailure와 같은 이유로, 새 처리는 맨 끝에만 추가한다
-public enum FailureHandling
-{
-	// 실패한 작업만 끝낸다. 다른 작업은 계속 진행한다
-	EndTask,
-	// 시전하지 않는다. 이유만 알리고 페널티는 없다
-	Reject,
-}
-
-/// <summary>
 /// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지와 그 실패의 분류(실패 처리 표), 초기값을 비운 변수의 기본값, 숫자 타입 변환 규칙을 정한다.
 /// <para>
 /// 사용법<br/>
 /// - Project 창에서 Create → Invoke → Language Rule로 만들고, 모든 실패 종류마다 처리를 한 줄씩 넣는다.<br/>
 /// - 캐릭터의 LanguageRule 컴포넌트에 연결한다.<br/>
-/// - 표에 빠진 실패 종류가 있으면 Play를 시작할 때 LanguageRule 컴포넌트가 콘솔 오류로 알린다.
+/// - 표에 빠진 실패 종류가 있으면 Play를 시작할 때 LanguageRule 컴포넌트가 콘솔 오류로 알린다. 그 실패가 실제로 나면 실행기가 작업을 InternalError(개발자 책임)로 끝낸다.
 /// </para>
 /// <para>
 /// 언어마다 다른 처리(C의 재부팅, Java의 try 등)는 처리 종류를 추가하고 이 표의 내용만 다르게 채운다.

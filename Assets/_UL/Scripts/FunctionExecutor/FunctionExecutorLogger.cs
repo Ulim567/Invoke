@@ -37,7 +37,8 @@ public class FunctionExecutorLogger : MonoBehaviour
 
 	void LogEnded(FunctionTask task)
 	{
-		// 실패했으면 EndReason은 Failed뿐이므로, 어떤 실패였는지 함께 찍는다 (예: Failed: Overflow, Failed: SkillFailed - TestAttackFunction: 맨손)
+		// 플레이어 책임으로 실패했으면 어떤 실패였는지 함께 찍는다 (예: Failed: Overflow, Failed: SkillFailed - TestAttackFunction: 맨손)
+		// InternalError(개발자 책임)는 원인을 기록한 쪽이 이미 콘솔 오류로 찍었으므로 이유만 찍는다
 		string reason = task.EndReason.ToString();
 		if (task.IsFailed) reason += $": {task.Failure}";
 		if (task.Error != null) reason += $" - {task.Error.SourceName}: {task.Error.Message}";
@@ -47,9 +48,9 @@ public class FunctionExecutorLogger : MonoBehaviour
 		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 끝 ({reason}) / 스택 {memory.StackUsed}/{memory.Capacity}{cooldown}");
 	}
 
-	void LogRejected(FunctionBlock function, FunctionFailure failure)
+	void LogRejected(FunctionBlock function, CastRejection rejection)
 	{
-		// 거부는 게임 속 실패이므로 오류가 아니라 일반 로그로 찍는다
-		Debug.Log($"[틱 {executor.CurrentTick}] {name}: {function.Name} 시전 거부 ({failure}) / 남은 칸 {memory.Free}, 프레임 {function.FrameSize} / 남은 쿨타임 {executor.GetRemainingCooldownTicks(function)}틱");
+		// 거부는 게임 상황이므로 오류가 아니라 일반 로그로 찍는다
+		Debug.Log($"[틱 {executor.CurrentTick}] {name}: {function.Name} 시전 거부 ({rejection}) / 남은 칸 {memory.Free}, 프레임 {function.FrameSize} / 남은 쿨타임 {executor.GetRemainingCooldownTicks(function)}틱");
 	}
 }

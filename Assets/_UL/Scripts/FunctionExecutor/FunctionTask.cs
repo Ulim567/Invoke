@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -55,9 +56,6 @@ public class FunctionTask
 	/// </summary>
 	public string Name { get; }
 
-	// 이 작업을 만든 실행기. 블록이 실패했을 때 처리를 맡긴다
-	internal FunctionExecutor Executor { get; }
-
 	// 슬롯에서 시전할 때 넘긴 함수(원본). 이 작업이 끝나면 실행기가 이 함수의 쿨타임을 시작한다
 	// 함수 안의 비동기 시전으로 만든 작업은 null이다. 그 스킬의 쿨타임은 바깥 함수의 쿨타임에 이미 더해져 있기 때문
 	internal FunctionBlock CooldownSource { get; set; }
@@ -86,33 +84,47 @@ public class FunctionTask
 	public SkillError Error => IsFailed ? context.RecordedError : null;
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
-	internal FunctionTask(FunctionExecutor executor, ProcessMemory memory, LanguageRule language, FunctionBlock function)
+	// 실행기를 받지 않는다. 작업은 결과만 남기고, 실행기가 읽어서 처리하기 때문
+	internal FunctionTask(GameObject caster, ProcessMemory memory, LanguageRule language, FunctionBlock function)
 	{
-		Executor = executor;
-		Caster = executor.gameObject;
+		Caster = caster;
 		Name = function.Name;
 		this.function = function;
-		context = new FunctionContext(this, executor, memory, language);
+		context = new FunctionContext(this, caster, memory, language);
 	}
 
 	/// <summary>
-	/// 작업을 한 틱 진행한다. 실행기만 부른다.
+	/// 작업을 한 틱 진행한다. 실행기만 부른다.<br/>
+	/// 플레이어 책임으로 실패했으면 그 실패 종류를 돌려준다. 실행기가 언어 규칙 표로 처리한다. 그 밖에는 null이다.
 	/// </summary>
-	public void Step()
+	internal FunctionFailure? Step()
 	{
 		// 입력 대기 중이거나 이미 끝난 작업은 틱이 와도 진행하지 않는다
-		if (State != FunctionTaskState.Running) return;
+		if (State != FunctionTaskState.Running) return null;
 
 		BlockResult result = function.Execute(context);
-		if (result == BlockResult.Running) return;
+		if (result == BlockResult.Running) return null;
+
+		// 정상 종료와 개발자 책임은 언어 규칙 표가 필요 없으므로 작업이 스스로 끝낸다
+		if (result != BlockResult.Failed)
+		{
+			End(FunctionTaskEndReason.Completed);
+			return null;
+		}
+		if (context.InternalErrorRecorded)
+		{
+			End(FunctionTaskEndReason.InternalError);
+			return null;
+		}
 
 		// 실패했으면 쌓여 있던 함수들은 Execute 안에서 이미 끊기며 메모리를 돌려줬다
 		// 무엇을 할지(이 작업만 끝낼지, C처럼 모든 작업을 끝낼지)는 실행기가 언어 규칙 표를 보고 정한다
 		// Failed를 돌려준 블록은 반드시 RecordFailure나 RecordInternalError를 먼저 부른다. 빠뜨렸으면 Value가 예외를 던져 바로 드러난다
-		if (result != BlockResult.Failed) End(FunctionTaskEndReason.Completed);
-		else if (context.InternalErrorRecorded) End(FunctionTaskEndReason.InternalError);
-		else Executor.HandleFailure(this, context.RecordedFailure.Value);
+		return context.RecordedFailure.Value;
 	}
+
+	// 이번 틱에 블록이 요청한 비동기 시전을 꺼낸다. 실행기가 Step 다음에 부른다
+	internal IReadOnlyList<FunctionBlock> TakeAsyncRequests() => context.TakeAsyncRequests();
 
 	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다
 	internal void Interrupt()

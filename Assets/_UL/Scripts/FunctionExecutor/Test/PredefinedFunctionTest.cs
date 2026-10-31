@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 사전 정의 함수 규칙 테스트용 컴포넌트. 플레이를 시작하면 예시 스킬과 비동기 테스트 함수를 시전한다.<br/>
+/// 사전 정의 함수 규칙 테스트용 컴포넌트. 플레이를 시작하면 예시 스킬과 비동기 테스트 함수 두 개를 시전한다.<br/>
 /// 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// FunctionExecutorTest와 함께 붙이지 않는다. 두 테스트의 작업이 섞이면 로그를 알아보기 어렵기 때문
 /// </summary>
@@ -34,6 +34,11 @@ public class PredefinedFunctionTest : MonoBehaviour
 		executor.Cast(new UserFunction("UserFunction_AsyncA",
 			new TestAsyncFunction(),
 			new TestFunctionA()));
+
+		// 마지막 줄의 비동기: 바깥 함수는 비동기 시전을 요청한 틱 1에 끝나야 한다
+		// 바깥 작업이 끝났어도 요청은 시전되어, 비동기 함수가 틱 2부터 20틱 진행 = 틱 21에 끝나야 한다
+		executor.Cast(new UserFunction("UserFunction_AsyncLast",
+			new TestAsyncFunction()));
 	}
 
 	void FixedUpdate()

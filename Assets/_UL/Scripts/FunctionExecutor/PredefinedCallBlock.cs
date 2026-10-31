@@ -55,7 +55,7 @@ public class PredefinedCallBlock : ValueBlock
 			// 비동기 스킬은 끝나기를 기다리지 않는다. 새 작업으로 시전하고 이번 틱으로 끝난다
 			if (function.IsAsync)
 			{
-				context.CastAsync(copy);
+				context.RequestAsyncCast(copy);
 				return BlockResult.Done;
 			}
 			running = copy;

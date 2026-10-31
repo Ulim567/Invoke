@@ -32,7 +32,7 @@
 - stack과 heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - StackUsed - HeapUsed`다.
   - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, stack과 heap은 각각 칸 수만 센다.
   - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
-- `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다.
+- `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다. 바깥 function이 그 tick에 끝나도(마지막 줄의 비동기 호출) 새 `FunctionTask`는 만들어진다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
 
 ### 함수 데이터 실행 (#90)
@@ -201,13 +201,13 @@
 작업 하나의 실행 문맥. 블록과 `PredefinedFunction`이 `Step`, `OnStart`, `OnTick`, `OnEnd`, `OnCancel`, `OnFail`에서 받는다. `FunctionTask`가 만들어 가진다.
 - 작업마다 다른 것(지역 변수 목록, 실패 기록, malloc한 포인터의 주인)은 실행 문맥이 직접 가짐
 - 캐릭터에 하나인 것(메모리, heap, 언어 규칙)은 원래 주인이 가지고, 실행 문맥은 닿는 길만 줌. heap 규칙(루트 집합, 누수)은 `HeapStorage`
-- 블록에 실행기와 작업을 보여 주지 않음
+- 블록에 실행기와 작업을 보여 주지 않음. 실행 문맥도 실행기를 모름: 실패와 비동기 시전 요청은 기록만 하고, 실행기가 `Step` 다음에 읽어 처리
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Caster` | - | `GameObject` | 이 작업을 cast한 캐릭터. `PredefinedFunction`은 이것으로 캐릭터의 위치, 방향, 컴포넌트를 찾는다. |
 
-- 그 밖의 값(`Memory`, `Rule`, 지역 변수 목록, 실패 기록, 비동기 시전, `Malloc`)은 실행기 안에서만 씀(`internal`). 스킬은 `PredefinedFunction`의 함수로 씀([predefined-function.md](predefined-function.md))
+- 그 밖의 값(`Memory`, `Rule`, 지역 변수 목록, 실패 기록, 비동기 시전 요청, `Malloc`)은 실행기 안에서만 씀(`internal`). 스킬은 `PredefinedFunction`의 함수로 씀([predefined-function.md](predefined-function.md))
 
 ### `LanguageRule` (캐릭터의 언어 컴포넌트)
 

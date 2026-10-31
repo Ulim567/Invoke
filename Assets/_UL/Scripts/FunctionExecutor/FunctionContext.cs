@@ -16,13 +16,13 @@ using UnityEngine;
 /// </para>
 /// </summary>
 // 작업 상태(FunctionTask)와 나눈 이유: 멀티플레이에서 서버만 블록을 실행하고 화면에는 작업 상태만 보낼 때 나누기 쉽고, 블록만 따로 테스트하기 쉽기 때문
-// 블록에 실행기와 작업을 보여 주지 않는다. 블록이 실행기를 거꾸로 부르지 않고, 이 객체가 준 것만 쓰게 하기 위함
+// 실행기를 모른다. 비동기 시전도 요청만 기록하고, 실행기가 꺼내 간다. 블록과 실행 문맥이 실행기를 거꾸로 부르지 않게 하기 위함
 public class FunctionContext
 {
 	// 이 문맥으로 실행하는 작업. malloc한 포인터의 주인으로 HeapStorage에 넘긴다
 	readonly FunctionTask task;
-	// 비동기 시전에만 쓴다
-	readonly FunctionExecutor executor;
+	// 블록이 요청한 비동기 시전. 실행기가 Step 다음에 꺼내 가서 새 작업으로 만든다
+	readonly List<FunctionBlock> asyncRequests = new List<FunctionBlock>();
 	readonly LanguageRule language;
 	// 실행 중인 사용자 정의 함수들의 지역 변수. 맨 뒤가 지금 실행 중인(가장 안쪽) 함수의 것이다
 	// 목록인 이유: 함수 안에서 다른 함수를 부르면 불린 함수의 것이 위에 쌓이고, 끝나면 내려가 부른 함수의 것이 다시 맨 위가 된다(C의 호출 스택)
@@ -50,13 +50,12 @@ public class FunctionContext
 	// 개발자 책임인 잘못을 블록이 기록했는지. true이면 작업이 언어 규칙 표를 거치지 않고 InternalError로 끝난다
 	internal bool InternalErrorRecorded { get; private set; }
 
-	internal FunctionContext(FunctionTask task, FunctionExecutor executor, ProcessMemory memory, LanguageRule language)
+	internal FunctionContext(FunctionTask task, GameObject caster, ProcessMemory memory, LanguageRule language)
 	{
 		this.task = task;
-		this.executor = executor;
 		this.language = language;
 		Memory = memory;
-		Caster = executor.gameObject;
+		Caster = caster;
 	}
 
 	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
@@ -82,9 +81,18 @@ public class FunctionContext
 		InternalErrorRecorded = true;
 	}
 
-	// 비동기 함수를 새 작업으로 시전한다. 시전 전 검사를 하지 않는다
-	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이기 때문
-	internal void CastAsync(FunctionBlock function) => executor.CastUnchecked(function);
+	// 비동기 함수를 새 작업으로 시전해 달라고 요청한다. 실행기가 이번 틱의 Step 다음에 시전하므로, 새 작업은 다음 틱부터 진행한다
+	internal void RequestAsyncCast(FunctionBlock function) => asyncRequests.Add(function);
+
+	// 쌓인 요청을 꺼내고 비운다. 요청이 없는 틱이 대부분이므로, 없으면 빈 배열을 돌려주어 새 목록을 만들지 않는다
+	internal IReadOnlyList<FunctionBlock> TakeAsyncRequests()
+	{
+		if (asyncRequests.Count == 0) return System.Array.Empty<FunctionBlock>();
+
+		FunctionBlock[] taken = asyncRequests.ToArray();
+		asyncRequests.Clear();
+		return taken;
+	}
 
 	// obj를 heap에 올린다. 포인터의 주인은 이 작업이다. 주인을 채우는 것만 여기서 하고, 루트 집합과 누수 규칙은 HeapStorage가 맡는다
 	internal int Malloc(object obj, int size) => Memory.Heap.Malloc(task, obj, size);

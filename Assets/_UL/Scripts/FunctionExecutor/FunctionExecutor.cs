@@ -101,13 +101,11 @@ public class FunctionExecutor : MonoBehaviour
 	/// </summary>
 	public bool IsRunning(FunctionBlock function) => cooldowns.IsRunning(function);
 
-	/// <summary>
-	/// 시전 전 검사 없이 작업을 만든다. 사용자 정의 함수가 안쪽의 비동기 함수를 새 작업으로 시전할 때 쓴다.
-	/// </summary>
+	// 시전 전 검사 없이 작업을 만든다. Cast와, 블록이 요청한 비동기 시전이 쓴다
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
-	internal FunctionTask CastUnchecked(FunctionBlock function)
+	FunctionTask CastUnchecked(FunctionBlock function)
 	{
-		FunctionTask task = new FunctionTask(this, memory, language, (FunctionBlock)function.Clone());
+		FunctionTask task = new FunctionTask(gameObject, memory, language, (FunctionBlock)function.Clone());
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -127,11 +125,9 @@ public class FunctionExecutor : MonoBehaviour
 			pendingTasks[i].Interrupt();
 	}
 
-	/// <summary>
-	/// 작업이 플레이어 책임으로 실패했을 때 그 작업이 부른다. 언어 규칙 표에서 처리를 찾아 실행한다.
-	/// </summary>
+	// 작업이 플레이어 책임으로 실패했을 때, 작업의 Step이 돌려준 실패 종류로 실행기가 처리를 찾아 실행한다
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
-	internal void HandleFailure(FunctionTask task, FunctionFailure failure)
+	void HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
 		// 표에 줄이 없거나 언어 규칙 파일이 없으면 개발자 책임이다. 플레이어의 에러로 보이지 않게 InternalError로 끝낸다
 		if (!language.TryFindHandling(task.Name, failure, out FailureHandling handling))
@@ -187,8 +183,17 @@ public class FunctionExecutor : MonoBehaviour
 		for (int i = firstNew; i < tasks.Count; i++)
 			if (!tasks[i].IsEnded) TaskStarted?.Invoke(tasks[i]);
 
+		// 작업은 결과만 남기고, 실행기가 읽어서 처리한다. 작업과 블록이 실행기를 거꾸로 부르지 않게 하기 위함
 		foreach (FunctionTask task in GetTickOrder())
-			task.Step();
+		{
+			FunctionFailure? failure = task.Step();
+			if (failure.HasValue) HandleFailure(task, failure.Value);
+
+			// 작업이 이번 틱에 끝났어도 요청은 시전한다. 함수의 마지막 줄이 비동기 호출이면, 요청한 틱에 원래 작업이 끝나기 때문
+			// 새 작업은 pendingTasks에 들어가 다음 틱부터 진행한다. 지금 도는 tasks는 바뀌지 않는다
+			foreach (FunctionBlock function in task.TakeAsyncRequests())
+				CastUnchecked(function);
+		}
 
 		// 끝난 작업은 틱을 마친 뒤에 빼야, 이번 틱에 끝난 작업의 메모리가 진행 순서와 상관없이 항상 다음 틱부터 돌아온다
 		foreach (FunctionTask task in tasks)

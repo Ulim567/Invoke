@@ -15,9 +15,38 @@ MonoBehaviour:
   rules:
   - failure: 0
     handling: 0
+    category: 2
   - failure: 1
     handling: 1
+    category: 0
   - failure: 2
     handling: 0
+    category: 2
   - failure: 3
     handling: 1
+    category: 0
+  - failure: 4
+    handling: 0
+    category: 1
+  - failure: 5
+    handling: 0
+    category: 1
+  - failure: 6
+    handling: 0
+    category: 1
+  - failure: 7
+    handling: 0
+    category: 1
+  - failure: 8
+    handling: 0
+    category: 2
+  - failure: 9
+    handling: 0
+    category: 0
+  defaultInt: 0
+  defaultFloat: 0
+  defaultBool: 0
+  defaultCharCode: 0
+  defaultString: 
+  numericConversion: 0
+  allowFloatModulo: 0

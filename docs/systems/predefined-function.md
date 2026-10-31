@@ -7,11 +7,11 @@
 - 고정 ID로 사전 정의 함수 찾기
 - 스킬 코드에서 에러로 끝내기(`Fail`), 일찍 끝내기(`Stop`)와 스킬 에러(`SkillError`) 형식
 - 스킬 코드에서 heap 쓰기(`Malloc`, `Free`, `TryGetHeapObject`)
+- 스킬 코드에서 파라미터 값 읽기(`TryGetArgument`), 반환 값 정하기(`Return`) (#90)
 - 하지 않는 일
   - 에러가 났을 때의 처리(그 작업만 끝냄, 페널티 등): 캐릭터 언어의 언어 규칙 파일 (`function-executor.md` 「실패 처리」)
   - 실행: `FunctionExecutor` (`function-executor.md`)
-  - 실제 대상 입력, 파라미터 값 읽기: 「함수 실행 중 대상 입력 기다리기」 이슈
-  - 반환 값을 실제로 넘기기: 블록 실행 이슈
+  - 실제 대상 입력(`Target` 값 만들기): 「함수 실행 중 대상 입력 기다리기」 이슈
   - heap 칸 계산, 누수 판단: `ProcessMemory`, `HeapStorage` (`function-executor.md` 「heap」)
 
 ## 규칙
@@ -163,6 +163,34 @@ protected override void OnTick(FunctionTask task, int tick)
 }
 ```
 
+#### 파라미터 값 읽기, 반환 값 정하기 (#90)
+
+`OnStart`, `OnTick`, `OnEnd` 안에서 부른다.
+
+| 이름 | 돌려주는 값 | 하는 일 |
+| --- | --- | --- |
+| `TryGetArgument(string name, out RuntimeValue value)` | `bool` | 이름이 `name`인 파라미터의 값을 꺼냄. 값이 없으면(값 칸을 비움, 슬롯에서 바로 시전) `false`. 없는 이름이면 콘솔 오류 후 `false` |
+| `Return(RuntimeValue value)` | - | 반환 값을 정함. 함수를 끝내지는 않음(끝내려면 `Stop`). 여러 번 부르면 마지막 값 |
+
+- 파라미터 값을 넘기는 곳: 함수 블록의 값 칸. 값은 `Parameters`의 타입으로 맞춰서 넘어옴(캐릭터 언어의 숫자 타입 변환 규칙)
+  - 지금 넘어오는 타입: `int`, `float`, `bool`, `string`, `char`, 포인터. `Target` 등은 「함수 실행 중 대상 입력 기다리기」 이슈 전까지 언제나 「값 없음」
+  - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
+- 이름: `Parameters`에 적은 `ParameterData`의 이름
+- 반환 값이 쓰이는 곳: 값 칸에 끼운 함수 블록(예: `int n = CountSwords();`). 함수 몸통에 놓으면 버림
+  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남: 값 칸에 끼운 경우 콘솔 오류 + 실패 `MissingReturnValue`
+  - 반환 타입이 `Void`인데 `Return`을 부름, `OnCancel`에서 부름: 콘솔 오류, 무시
+- 값 만들기, 꺼내기: `RuntimeValue.FromInt(3)`, `value.AsInt()` 등
+
+```csharp
+// 예시. CountSwords는 실제로 있는 function이 아니다
+public override VariableType ReturnType => new VariableType(VariableTypeKind.Int);
+
+protected override void OnEnd(FunctionTask task)
+{
+	Return(RuntimeValue.FromInt(CountHeapObjects<Sword>(task)));
+}
+```
+
 #### `SkillError` (스킬 에러)
 
 스킬 에러 종류 하나가 `SkillError`를 상속한 클래스 하나다.
@@ -181,7 +209,7 @@ protected override void OnTick(FunctionTask task, int tick)
     - `UnarmedError`: 맨손
     - `NoSummonedSwordError`: 소환검 없음
   - `Assets/_UL/Scripts/FunctionExecutor/PointerErrors.cs`
-    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄
+    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)와 `free` 블록(`SourceName`은 `free`)이 냄
     - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
 
 ### `PredefinedFunctionRegistry` (고정 ID로 function 찾기)
@@ -209,6 +237,7 @@ protected override void OnTick(FunctionTask task, int tick)
   - 에러 클래스(`UnarmedError` 등)의 위치: 지금은 `_UL`. 박진우 폴더로 옮겨도 실행기 코드는 고치지 않음 (#38)
   - 쿨타임 `CooldownTicks`를 스킬마다 정함 (#38)
   - heap 쓰기 함수(`Malloc`, `Free`, `TryGetHeapObject`)와 `OnCancel`에서 heap 오브젝트를 없애지 않는 규칙 (#66)
+  - 파라미터 값을 이름으로 읽는 `TryGetArgument`, 반환 값을 정하는 `Return` (#90)
 - 박진우·임혜원과 확인할 것
   - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)
   - 누수된 소환검 연출: `ObjectLeaked`를 받아 그 자리에 멈추고 흐리게 (#66)

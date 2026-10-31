@@ -20,18 +20,30 @@ public class UserFunction : FunctionBlock
 	public override string Name { get; }
 
 	/// <summary>
+	/// 이 실행의 지역 변수. 실행을 시작할 때(OnStart) 새로 만들어지며, 시작하기 전에는 null이다.
+	/// </summary>
+	// 필드에 미리 만들어 두지 않는다. Clone은 얕은 복사라서, 같은 함수를 두 번 시전하면 두 작업이 같은 저장소를 함께 쓰게 되기 때문
+	internal VariableStore Variables { get; private set; }
+
+	/// <summary>
 	/// 위에서부터 차례로 실행할 블록들(원본).
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
 
+	// 만들 때 정한 쿨타임. 정하지 않았으면 null이고, 그때는 Blocks에서 계산한다
+	readonly int? cooldownTicks;
+
 	/// <summary>
-	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.
+	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.<br/>
+	/// 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 값 칸 안의 스킬까지 세어 넣는다.
 	/// </summary>
-	// 반복문 같은 문법 블록 안의 함수는 아직 세지 않는다. 몇 번 실행될지 미리 알 수 없으므로 블록 실행 이슈에서 정한다
+	// 직접 만든 함수(테스트 등)는 Blocks에 바로 들어 있는 함수 블록만 센다
 	public override int CooldownTicks
 	{
 		get
 		{
+			if (cooldownTicks.HasValue) return cooldownTicks.Value;
+
 			int sum = 0;
 			foreach (Block block in Blocks)
 				if (block is FunctionBlock function) sum += function.CooldownTicks;
@@ -39,10 +51,33 @@ public class UserFunction : FunctionBlock
 		}
 	}
 
-	public UserFunction(string name, params Block[] blocks)
+	/// <summary>
+	/// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수. 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 계산해 넣는다.
+	/// </summary>
+	public override int FrameSize { get; }
+
+	/// <summary>
+	/// 프레임 크기 1(파라미터, 지역 변수 없음)인 함수를 만든다.
+	/// </summary>
+	public UserFunction(string name, params Block[] blocks) : this(name, 1, blocks) { }
+
+	/// <summary>
+	/// 프레임 크기를 정해 함수를 만든다. 1보다 작으면 1로 본다.
+	/// </summary>
+	public UserFunction(string name, int frameSize, params Block[] blocks)
 	{
 		Name = name;
+		// 호출 자리 1칸은 언제나 쓴다
+		FrameSize = frameSize < 1 ? 1 : frameSize;
 		Blocks = blocks;
+	}
+
+	/// <summary>
+	/// 프레임 크기와 쿨타임을 정해 함수를 만든다. FunctionDataConverter가 쓴다.
+	/// </summary>
+	public UserFunction(string name, int frameSize, int cooldownTicks, params Block[] blocks) : this(name, frameSize, blocks)
+	{
+		this.cooldownTicks = cooldownTicks;
 	}
 
 	protected override BlockResult Step(FunctionTask task)
@@ -83,9 +118,24 @@ public class UserFunction : FunctionBlock
 		return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
 	}
 
+	// 안쪽 블록은 task만 받으므로, 이 함수의 지역 변수를 task에 올려 두어 안쪽 블록이 찾게 한다
+	// Block은 OnStart가 불린 뒤 OnEnd, OnCancel 중 정확히 하나를 부르므로, 올리고 내리는 짝이 어긋나지 않는다
+	protected override void OnStart(FunctionTask task)
+	{
+		Variables = new VariableStore();
+		task.PushVariables(Variables);
+	}
+
+	protected override void OnEnd(FunctionTask task)
+	{
+		task.PopVariables();
+	}
+
 	protected override void OnCancel(FunctionTask task)
 	{
 		// 실행 중인 안쪽 블록도 함께 끊어서, 안쪽 블록들도 정리할 기회를 갖게 한다
+		// 안쪽을 먼저 끊는다. 안쪽 사용자 정의 함수가 자기 지역 변수를 먼저 내려야 이 함수의 것이 맨 위가 되기 때문
 		runningBlock?.Cancel(task);
+		task.PopVariables();
 	}
 }

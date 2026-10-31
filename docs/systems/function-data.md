@@ -8,7 +8,7 @@
 - 슬롯에 넣은 함수들의 코드 영역 크기 계산
 - 하지 않는 일
   - 함수 실행: `FunctionExecutor`가 `UserFunction`으로 실행 (`function-executor.md`)
-  - 함수 데이터 → `UserFunction` 변환: 「블록 실행 1」 이슈
+  - 함수 데이터 → `UserFunction` 변환: `FunctionDataConverter` (`function-executor.md`, #90)
   - 구조 검사, 해금 검사: 「만든 함수를 서버로 보내 검사·저장하기」 이슈
   - 크기와 한도 비교: 슬롯에 넣는 쪽
   - 블록 UI, 칸을 채우는 화면: 편집 화면(임혜원)
@@ -45,7 +45,9 @@
   - `malloc`, `free` 추가: 코드 블록 (C 스킬 「검 소환」·「해제」는 모티브)
   - `malloc`: 게임이 미리 정한 타입의 실제 오브젝트 생성 (나중에 사용자 정의 타입도 생성 가능하게)
     - 값 칸에 끼우는 블록 (예: `Sword* s = malloc(Sword)`)
+    - 지금(#90): heap에 struct 객체만 올림. 실제 오브젝트 생성은 박진우와 정할 것 (`function-executor.md`)
   - 미리 정한 타입: struct로 취급 (`struct` 표시 / typedef 이름 표시는 나중에 결정)
+    - 목록: `PredefinedStructs` (아래 「다른 시스템이 쓰는 것」). 목록에 없는 struct 이름은 실행할 수 없음
   - 포인터 변수 타입 추가
 - 함수 블록: 놓으면 그 자리에서 그 함수 호출 (별도 호출 블록 없음)
 - 플레이어 입력: 정해진 사전 정의 함수로만 받음 (예: `GetPosition`), 별도 입력 블록 없음
@@ -178,6 +180,21 @@
 | `StructOf(string)` | struct 이름 | `VariableType` | 예: `Sword` |
 | `new ParameterData(string, VariableType)` | 이름, 타입 | `ParameterData` | |
 
+### `PredefinedStructs` (미리 정한 struct 목록, #90)
+- 위치: `Data/PredefinedStructs.cs`
+- 이름: 함수 데이터에 저장되므로(`VariableType.StructName`) 한 번 정한 이름은 바꾸기, 지우기 금지
+- heap 칸 수: 기획 수치. 이 파일의 숫자로 정함
+
+| struct | heap 칸 수 |
+| --- | --- |
+| `Sword` | 2 |
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `All` | - | `IReadOnlyList<StructDefinition>` | 모든 미리 정한 struct. 편집 화면의 `malloc` 드롭다운 목록 |
+| `TryGet(string name, out StructDefinition)` | struct 이름 | `bool` | 없는 이름이면 `false` |
+| `StructDefinition.Name`, `HeapSize` | - | `string`, `int` | struct 이름, `malloc`할 때 쓰는 heap 칸 수 |
+
 ### `BlockOptions.cs` (드롭다운 선택지)
 | enum | 값 |
 | --- | --- |
@@ -222,7 +239,7 @@ string json = FunctionDataJson.ToJson(function);
     - 함수 몸통, 블록 영역: `BlockData.CanBeStatement(블록 종류)`
 - 블록 UI와 블록 데이터: 블록 UI 하나가 자기 `BlockData` 하나를 들고 있음
 - 칸 고치기: 플레이어가 칸을 바꾸면 블록 UI가 `BlockData.Slots[칸 번호]`를 바로 고침 (칸 번호: 「블록마다 가진 칸」 순서)
-  - 직접 입력한 값: `Type`, `Literal` (`bool`은 `"true"` / `"false"`, 소수는 점으로 `"0.5"`)
+  - 직접 입력한 값: `Type`, `Literal` (`bool`은 `"true"` / `"false"`, 소수는 점으로 `"0.5"`, `char`는 글자 하나 `"a"`)
   - 변수: `VariableName`
   - 드롭다운에서 고른 연산자, 조건문 갈래: `Option`에 `BlockOptions`의 enum 이름 (예: `ArithmeticOperator.Add.ToString()` → `"Add"`)
   - 드롭다운에서 고른 타입: `Type`
@@ -243,3 +260,6 @@ string json = FunctionDataJson.ToJson(function);
   - 해금은 일단 보지 않음
 - 임혜원과 정할 것
   - 블록 종류, 블록별 칸 (「블럭코딩 화면 2」에서 값 칸 채우기와 함께)
+- 임혜원과 확인할 것 (#90)
+  - `char` 직접 입력 형식: 글자 하나(`"a"`). 실행기가 이 형식으로 읽음
+  - `malloc` 블록의 struct 드롭다운: `PredefinedStructs.All`

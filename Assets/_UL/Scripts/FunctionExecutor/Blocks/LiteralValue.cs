@@ -14,6 +14,9 @@ public class LiteralValue : ValueBlock
 	readonly RuntimeValue parsedValue;
 	readonly bool isValid;
 
+	// 키보드로 적은 값은 블록이 아니므로 틱을 쓰지 않는다
+	internal override bool UsesTick => false;
+
 	/// <summary>
 	/// type 타입의 글자열 literal로 만든다. 바꿀 수 없는 글자열이어도 만들어지고, 실행될 때 실패한다.
 	/// </summary>
@@ -22,9 +25,6 @@ public class LiteralValue : ValueBlock
 	{
 		isValid = TryParse(type, literal, out parsedValue);
 	}
-
-	// 키보드로 적은 값은 블록이 아니므로 틱을 쓰지 않는다
-	internal override bool UsesTick => false;
 
 	protected override BlockResult Step(FunctionContext context)
 	{

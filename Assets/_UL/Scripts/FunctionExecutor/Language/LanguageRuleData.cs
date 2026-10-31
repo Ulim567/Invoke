@@ -125,15 +125,6 @@ public class LanguageRuleData : ScriptableObject
 	/// </summary>
 	public bool AllowFloatModulo => allowFloatModulo;
 
-	// 테스트 코드가 C가 아닌 숫자 타입 변환 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
-	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo)
-	{
-		LanguageRuleData rule = CreateInstance<LanguageRuleData>();
-		rule.numericConversion = conversion;
-		rule.allowFloatModulo = allowFloatModulo;
-		return rule;
-	}
-
 	/// <summary>
 	/// failure의 처리를 찾는다. 표에 없으면 false를 돌려준다.
 	/// </summary>
@@ -200,5 +191,14 @@ public class LanguageRuleData : ScriptableObject
 
 		Debug.LogError($"{name}: {type.Kind} 타입의 기본값은 아직 없습니다. 이 타입은 이후 이슈에서 추가합니다.", this);
 		return false;
+	}
+
+	// 테스트 코드가 C가 아닌 숫자 타입 변환 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
+	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo)
+	{
+		LanguageRuleData rule = CreateInstance<LanguageRuleData>();
+		rule.numericConversion = conversion;
+		rule.allowFloatModulo = allowFloatModulo;
+		return rule;
 	}
 }

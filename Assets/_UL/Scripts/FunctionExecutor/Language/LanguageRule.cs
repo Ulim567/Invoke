@@ -18,6 +18,20 @@ public class LanguageRule : MonoBehaviour
 	LanguageRuleData fallbackRule;
 
 	/// <summary>
+	/// 블록이 따를 언어 규칙. 언어 규칙 파일이 없으면 처음 값(C 규칙)만 가진 임시 규칙이다.
+	/// </summary>
+	internal LanguageRuleData Rule
+	{
+		get
+		{
+			if (ruleData != null) return ruleData;
+
+			if (fallbackRule == null) fallbackRule = ScriptableObject.CreateInstance<LanguageRuleData>();
+			return fallbackRule;
+		}
+	}
+
+	/// <summary>
 	/// 이 캐릭터 언어에서 failure가 compile error인지 runtime error인지.<br/>
 	/// 화면이 FunctionExecutor.TaskEnded에서 EndReason이 Failed인 작업의 task.Failure를 받아 보여 줄 때 쓴다.
 	/// </summary>
@@ -35,20 +49,6 @@ public class LanguageRule : MonoBehaviour
 	// 언어 규칙 파일이 없으면 C 기본값으로 실행을 이어 간다. 연결하지 않은 것은 Awake에서 이미 알렸다
 	// 임시 규칙을 만들어 쓰는 이유: C 기본값을 이 파일에 한 번 더 적으면, 언어 규칙 파일의 처음 값과 어긋날 수 있기 때문
 	internal bool TryGetDefaultValue(VariableType type, out RuntimeValue value) => Rule.TryGetDefaultValue(type, out value);
-
-	/// <summary>
-	/// 블록이 따를 언어 규칙. 언어 규칙 파일이 없으면 처음 값(C 규칙)만 가진 임시 규칙이다.
-	/// </summary>
-	internal LanguageRuleData Rule
-	{
-		get
-		{
-			if (ruleData != null) return ruleData;
-
-			if (fallbackRule == null) fallbackRule = ScriptableObject.CreateInstance<LanguageRuleData>();
-			return fallbackRule;
-		}
-	}
 
 	// 실행기가 플레이어 책임인 실패를 처리할 때 부른다. 처리를 찾지 못하면 false. 실행기는 그 작업을 InternalError(개발자 책임)로 끝낸다
 	// functionName은 어느 함수에서 났는지 콘솔 오류에 적기 위함

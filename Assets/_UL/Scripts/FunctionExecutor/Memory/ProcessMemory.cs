@@ -49,12 +49,6 @@ public class ProcessMemory : MonoBehaviour
 	// 메모리 크기가 줄어 사용량보다 작아지면 계산 값이 음수가 되므로 0으로 막는다. 0이면 TryAllocateStack이 새 프레임을 거절한다
 	public int Free => Mathf.Max(0, Capacity - StackUsed - HeapUsed);
 
-	void Awake()
-	{
-		stats = GetComponent<PlayerStats>();
-		Heap = new HeapStorage(this);
-	}
-
 	/// <summary>
 	/// 스택을 size칸 쓴다. 남은 칸이 모자라면 쓰지 않고 false를 돌려준다(오버플로).
 	/// </summary>
@@ -93,5 +87,11 @@ public class ProcessMemory : MonoBehaviour
 	internal void ReleaseHeap(int size)
 	{
 		HeapUsed -= size;
+	}
+
+	void Awake()
+	{
+		stats = GetComponent<PlayerStats>();
+		Heap = new HeapStorage(this);
 	}
 }

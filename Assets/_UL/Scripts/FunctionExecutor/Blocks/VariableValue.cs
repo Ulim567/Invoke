@@ -6,13 +6,13 @@ public class VariableValue : ValueBlock
 {
 	readonly string variableName;
 
+	// 값 칸에 넣은 변수는 블록이 아니므로 틱을 쓰지 않는다
+	internal override bool UsesTick => false;
+
 	public VariableValue(string variableName)
 	{
 		this.variableName = variableName;
 	}
-
-	// 값 칸에 넣은 변수는 블록이 아니므로 틱을 쓰지 않는다
-	internal override bool UsesTick => false;
 
 	protected override BlockResult Step(FunctionContext context)
 	{

@@ -16,6 +16,8 @@ public class UserFunction : FunctionBlock
 	int blockIndex;
 	// 지금 실행 중인 블록의 복사본. 이 블록이 끝나야 다음 블록으로 넘어간다
 	Block runningBlock;
+	// 만들 때 정한 쿨타임. 정하지 않았으면 null이고, 그때는 Blocks에서 계산한다
+	readonly int? cooldownTicks;
 
 	public override string Name { get; }
 
@@ -29,9 +31,6 @@ public class UserFunction : FunctionBlock
 	/// 위에서부터 차례로 실행할 블록들(원본).
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
-
-	// 만들 때 정한 쿨타임. 정하지 않았으면 null이고, 그때는 Blocks에서 계산한다
-	readonly int? cooldownTicks;
 
 	/// <summary>
 	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.<br/>

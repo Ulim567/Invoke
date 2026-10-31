@@ -175,7 +175,7 @@ public abstract class PredefinedFunction : FunctionBlock
 	/// <summary>
 	/// 이 함수의 반환 값을 정한다. ReturnType이 Void가 아닌 함수는 끝나기 전에 반드시 부른다. OnStart, OnTick, OnEnd에서 부른다.<br/>
 	/// 여러 번 부르면 마지막 값을 쓴다. 값이 ReturnType과 다르면 실행기가 캐릭터 언어의 숫자 타입 변환 규칙으로 맞춘다.<br/>
-	/// 부르지 않고 끝나면, 값 칸에 끼운 이 함수는 MissingReturnValue로 실패한다.
+	/// 부르지 않고 끝나거나 ReturnType으로 맞출 수 없는 값을 넘기면, 이 함수를 부른 블록이 MissingReturnValue로 실패한다(함수 본문의 한 줄로 불러도 같다).
 	/// </summary>
 	// 실제 C의 return과 달리 함수를 끝내지 않는다. 끝내려면 Stop을 함께 부른다
 	protected void Return(RuntimeValue value)
@@ -194,14 +194,14 @@ public abstract class PredefinedFunction : FunctionBlock
 		returnValue = value;
 	}
 
-	// 값 칸의 함수 블록(PredefinedValueBlock)이 이 함수가 끝난 뒤 반환 값을 받아 간다
+	// 함수 호출 블록(PredefinedCallBlock)이 이 함수가 끝난 뒤 반환 값을 받아 간다
 	internal bool TryGetReturnValue(out RuntimeValue value)
 	{
 		value = returnValue ?? default;
 		return returnValue.HasValue;
 	}
 
-	// 함수 블록(CallPredefinedBlock)이 값 칸을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
+	// 함수 호출 블록(PredefinedCallBlock)이 값 칸을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
 	internal void SetArguments(RuntimeValue?[] values)
 	{
 		arguments = values;

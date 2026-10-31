@@ -177,7 +177,7 @@ protected override void OnTick(FunctionTask task, int tick)
   - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
 - 이름: `Parameters`에 적은 `ParameterData`의 이름
 - 반환 값이 쓰이는 곳: 값 칸에 끼운 함수 블록(예: `int n = CountSwords();`). 함수 몸통에 놓으면 버림
-  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남: 값 칸에 끼운 경우 콘솔 오류 + 실패 `MissingReturnValue`
+  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 실패 `MissingReturnValue`. 함수 몸통에 놓아도 같음
   - 반환 타입이 `Void`인데 `Return`을 부름, `OnCancel`에서 부름: 콘솔 오류, 무시
 - 값 만들기, 꺼내기: `RuntimeValue.FromInt(3)`, `value.AsInt()` 등
 

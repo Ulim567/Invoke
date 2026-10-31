@@ -53,4 +53,7 @@
   - `FunctionDataConverter`: 몸통의 호출과 값 칸의 호출을 모두 `CallBlock`으로
 - 이유: C에서 두 호출은 같은 함수 호출이고, 반환 값을 쓰는지만 다름
 - 바뀌는 동작: `Return`을 빠뜨린 스킬을 몸통에서 불러도 `MissingReturnValue`로 실패
+  - 반환 타입으로 맞출 수 없는 값을 넘긴 스킬: `TypeMismatch`(C에서 `CompileError`) 대신 `MissingReturnValue`. 몸통에서 불러도 같음
+  - 이유: 반환 값은 스킬 작성자(개발자)가 정하므로 플레이어의 compile error로 보이지 않게 함
+- 클래스 이름: `PredefinedCallBlock`. 사용자 정의 함수 호출과 합칠지는 블록 실행 3 이슈에서
 - 비동기 스킬: 지금처럼 `FunctionDataConverter`가 값 칸에 넣지 않음

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 스킬 호출 블록(CallPredefinedBlock) 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
+/// 스킬 호출 블록(PredefinedCallBlock) 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 메모리를 10칸 쓰므로 메모리 크기가 10칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다.<br/>
 /// 없는 고정 ID를 거부하는 테스트가 콘솔 오류 1개(「실행할 수 없습니다」)를 내는 것이 정상이다.
 /// </summary>

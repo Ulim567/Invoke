@@ -89,17 +89,17 @@ public static class FunctionDataConverter
 				return pointer == null ? null : new FreeBlock(pointer);
 			}
 
-			// 칸: 파라미터 수만큼의 값. 반환 값이 있어도 버린다
+			// 칸: 파라미터 수만큼의 값. 반환 값은 버리지만, Return 누락과 반환 타입 불일치는 값 칸에서처럼 실패한다
 			case BlockKind.Function:
 				return TryConvertCall(data, block, out PredefinedFunction function, out ValueBlock[] arguments)
-					? new CallPredefinedBlock(function, arguments)
+					? new PredefinedCallBlock(function, arguments)
 					: null;
 		}
 
 		return Reject(data, $"{block.Kind} 블록은 아직 실행할 수 없습니다.");
 	}
 
-	// 함수 블록의 부를 함수와 파라미터 값 칸을 바꾼다. 몸통의 함수 블록과 값 칸의 함수 블록이 함께 쓴다. 바꿀 수 없으면 콘솔 오류를 남기고 false
+	// 함수 블록의 부를 함수와 파라미터 값 칸을 바꾼다. 함수 본문의 호출과 값 칸의 호출이 함께 쓴다. 바꿀 수 없으면 콘솔 오류를 남기고 false
 	static bool TryConvertCall(FunctionData data, BlockData block, out PredefinedFunction function, out ValueBlock[] arguments)
 	{
 		function = null;
@@ -181,7 +181,7 @@ public static class FunctionDataConverter
 				if (function.IsAsync)
 					return Reject<ValueBlock>(data, $"{function.Name}은(는) 비동기 함수라 값 칸에 끼울 수 없습니다.");
 
-				return new PredefinedValueBlock(function, arguments);
+				return new PredefinedCallBlock(function, arguments);
 			}
 		}
 

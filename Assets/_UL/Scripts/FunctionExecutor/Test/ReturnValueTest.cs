@@ -2,9 +2,9 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// 값을 돌려주는 함수 블록(PredefinedValueBlock)과 스킬의 Return 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
+/// 값을 돌려주는 함수 호출 블록(PredefinedCallBlock)과 스킬의 Return 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 언어 규칙 파일의 실패 처리 표에 MissingReturnValue 줄(처리 EndTask, 분류 NotCodeError)이 있어야 모두 통과한다.<br/>
-/// 콘솔 오류 2개가 나는 것이 정상이다: 반환 값이 없는 함수를 값 칸에 끼운 함수의 변환 거부 1개, TestMissingReturnFunction의 「Return을 부르지 않고 끝났습니다」 1개.<br/>
+/// 콘솔 오류 3개가 나는 것이 정상이다: 반환 값이 없는 함수를 값 칸에 끼운 함수의 변환 거부 1개, TestMissingReturnFunction의 「Return을 부르지 않고 끝났습니다」 2개(값 칸, 함수 본문의 한 줄).<br/>
 /// 다른 테스트 컴포넌트와 함께 붙이지 않는다.
 /// </summary>
 [RequireComponent(typeof(FunctionExecutor))]
@@ -43,6 +43,12 @@ public class ReturnValueTest : MonoBehaviour
 		missing.Blocks.Add(BlockData.Declare(Int, "m", SlotData.FromBlock(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestMissingReturnFunction))));
 		CastConverted(missing);
 
+		// TestMissingReturnFunction(); → 함수 본문의 한 줄로 불러도 틱 1에 MissingReturnValue (콘솔 오류 1개가 정상)
+		// 같은 스킬이 놓인 자리에 따라 성공하거나 실패하지 않는지 확인한다
+		FunctionData missingStatement = FunctionData.Create("MissingReturnStatement");
+		missingStatement.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestMissingReturnFunction));
+		CastConverted(missingStatement);
+
 		// 이슈 완료 조건 3. int n = TestReturnFunction(4);
 		// 틱 1~3 스킬, 틱 4 선언, 틱 5 읽기(테스트용) → n 8. 값 칸 안의 스킬 쿨타임(4틱)도 함수의 쿨타임에 들어간다
 		FunctionData returned = FunctionData.Create("Returned");
@@ -56,7 +62,7 @@ public class ReturnValueTest : MonoBehaviour
 		}
 		else Check("Returned: 변환 성공", false);
 
-		// TestReturnFunction(1); → 함수 몸통에 놓으면 반환 값을 버리고 틱 3에 끝난다
+		// TestReturnFunction(1); → 함수 본문의 한 줄로 놓으면 반환 값을 버리고 틱 3에 끝난다
 		FunctionData discarded = FunctionData.Create("Discarded");
 		discarded.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestReturnFunction, SlotData.FromLiteral(Int, "1")));
 		CastConverted(discarded);
@@ -76,12 +82,18 @@ public class ReturnValueTest : MonoBehaviour
 			case "Returned": CheckCompleted(task, tick, 5); break;
 			case "Discarded": CheckCompleted(task, tick, 3); break;
 			case "MissingReturn":
-				FailureCategory category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : FailureCategory.CompileError;
-				Check("MissingReturn: 틱 1에 MissingReturnValue(NotCodeError)로 실패",
-					task.Failure == FunctionFailure.MissingReturnValue && category == FailureCategory.NotCodeError && tick == 1,
-					$"실제 틱 {tick}, {task.Failure}, {category}");
+			case "MissingReturnStatement":
+				CheckMissingReturn(task, tick);
 				break;
 		}
+	}
+
+	void CheckMissingReturn(FunctionTask task, int tick)
+	{
+		FailureCategory category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : FailureCategory.CompileError;
+		Check($"{task.Name}: 틱 1에 MissingReturnValue(NotCodeError)로 실패",
+			task.Failure == FunctionFailure.MissingReturnValue && category == FailureCategory.NotCodeError && tick == 1,
+			$"실제 틱 {tick}, {task.Failure}, {category}");
 	}
 
 	static void CheckCompleted(FunctionTask task, int tick, int expectedTick)

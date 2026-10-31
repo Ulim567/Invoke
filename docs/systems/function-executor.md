@@ -64,8 +64,10 @@
   - 찾기: 고정 ID로 `PredefinedFunctionRegistry`
   - 파라미터 값 칸: 왼쪽부터 실행 후 스킬 복사본에 넘김. 비운 칸은 「값 없음」. 스킬은 `TryGetArgument`로 읽음([predefined-function.md](predefined-function.md))
   - tick: 값 칸에 끼운 블록이 없으면 그 스킬의 `TickCount`(슬롯에서 바로 시전했을 때와 같음)
-  - 함수 몸통에 놓음: 반환 값은 버림
-  - 값 칸에 끼움: 스킬이 `Return`으로 정한 값을 반환 타입으로 맞춰 내놓음. `Return` 없이 끝나면 콘솔 오류 + `MissingReturnValue`
+  - 클래스: 함수 본문의 한 줄과 값 칸 모두 `PredefinedCallBlock`
+  - 함수 본문의 한 줄로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 값 칸에 끼웠을 때와 같이 실패
+  - 값 칸에 끼움: 스킬이 `Return`으로 정한 값을 반환 타입으로 맞춰 내놓음
+  - `Return` 없이 끝남, 반환 타입으로 맞출 수 없는 값: 콘솔 오류 + `MissingReturnValue` (스킬 작성자의 실수)
   - 값 칸에 끼울 수 없음(변환 거부): 반환 타입 `Void`, 비동기 함수, 아직 다루지 않는 반환 타입
 - 변환 거부: 지금 실행기가 실행할 수 없는 기능을 쓴 함수. 콘솔 오류, 시전하지 않음
   - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 비운 값 칸(사전 정의 함수의 파라미터 칸은 비워도 됨)
@@ -126,7 +128,7 @@
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
 | `TypeMismatch` | 값을 변수·파라미터·반환 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
-| `MissingReturnValue` | 값 칸에 끼운 사전 정의 함수가 `Return` 없이 끝남. 스킬 작성자의 실수 (#90) |
+| `MissingReturnValue` | 사전 정의 함수가 `Return` 없이 끝나거나, 반환 타입으로 맞출 수 없는 값을 넘김. 스킬 작성자의 실수 (#90) |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 플레이어 코드의 어떤 잘못인지. 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀

@@ -1,12 +1,12 @@
 /// <summary>
-/// 값 칸에 넣은 변수(예: x). 실행되면 지금 실행 중인 사용자 정의 함수의 지역 변수에서 그 값을 읽어, 그 틱 안에서 바로 내놓는다.<br/>
+/// value slot에 넣은 변수(예: x). 실행되면 지금 실행 중인 사용자 정의 함수의 지역 변수에서 그 값을 읽어, 그 틱 안에서 바로 내놓는다.<br/>
 /// 그 이름의 변수가 없으면 UndeclaredVariable로 실패한다.
 /// </summary>
 public class VariableValue : ValueBlock
 {
 	readonly string variableName;
 
-	// 값 칸에 넣은 변수는 블록이 아니므로 틱을 쓰지 않는다
+	// value slot에 넣은 변수는 블록이 아니므로 틱을 쓰지 않는다
 	internal override bool UsesTick => false;
 
 	public VariableValue(string variableName)

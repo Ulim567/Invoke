@@ -1,7 +1,7 @@
 using System.Globalization;
 
 /// <summary>
-/// 값 칸에 직접 입력한 값(예: 3, 0.5, true). 실행되면 그 틱 안에서 바로 값을 내놓는다.
+/// value slot에 직접 입력한 값(예: 3, 0.5, true). 실행되면 그 틱 안에서 바로 값을 내놓는다.
 /// <para>
 /// 글자열 규칙 (docs/systems/function-data.md)<br/>
 /// - int: "3", float: "0.5" (컴퓨터 설정과 상관없이 점), bool: "true" / "false", char: 글자 하나 "a", string: 그대로<br/>

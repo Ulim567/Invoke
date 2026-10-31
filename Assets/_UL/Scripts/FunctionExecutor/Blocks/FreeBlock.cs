@@ -1,15 +1,15 @@
 /// <summary>
-/// free 블록. 예: free(s). 함수 몸통에 놓는다. 1틱을 쓴다.
+/// free 블록. 예: free(s). function body에 놓는다. 1틱을 쓴다.
 /// <para>
-/// - 값 칸의 포인터가 가리키는 객체를 heap에서 해제하고 칸을 돌려준다. 화면의 오브젝트는 없애지 않는다.<br/>
+/// - value slot의 포인터가 가리키는 객체를 heap에서 해제하고 칸을 돌려준다. 화면의 오브젝트는 없애지 않는다.<br/>
 /// - 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터)이면 InvalidPointer로 실패한다(플레이어 코드 에러).<br/>
-/// - 값 칸이 포인터가 아니면 TypeMismatch로 실패한다.
+/// - value slot이 포인터가 아니면 TypeMismatch로 실패한다.
 /// </para>
 /// </summary>
 public class FreeBlock : Block
 {
 	readonly ValueBlock pointerOriginal;
-	// 이 실행에서 쓰는 값 칸. 블록 복사본마다 따로 가져야 하므로 OnStart에서 만든다
+	// 이 실행에서 쓰는 value slot. 블록 복사본마다 따로 가져야 하므로 OnStart에서 만든다
 	ValueSlots slots;
 
 	public FreeBlock(ValueBlock pointer)

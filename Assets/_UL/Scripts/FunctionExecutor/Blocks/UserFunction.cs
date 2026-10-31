@@ -34,7 +34,7 @@ public class UserFunction : FunctionBlock
 
 	/// <summary>
 	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.<br/>
-	/// 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 값 칸 안의 스킬까지 세어 넣는다.
+	/// 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 expression 안의 스킬까지 세어 넣는다.
 	/// </summary>
 	// 직접 만든 함수(테스트 등)는 Blocks에 바로 들어 있는 함수 블록만 센다
 	public override int CooldownTicks

@@ -1,5 +1,5 @@
 /// <summary>
-/// malloc 블록. 예: Sword* s = malloc(Sword). 값 칸에 끼워 쓴다. 1틱을 쓴다.
+/// malloc 블록. 예: Sword* s = malloc(Sword). expression으로 쓴다. 1틱을 쓴다.
 /// <para>
 /// - 미리 정한 struct의 객체(StructInstance)를 시전한 캐릭터의 heap에 올리고, 그 포인터를 내놓는다.<br/>
 /// - heap이 모자라면 NullPointer(0)를 내놓는다. C의 malloc처럼 실패로 끝내지 않는다.<br/>

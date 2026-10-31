@@ -63,7 +63,7 @@ public class SkillCallTest : MonoBehaviour
 		wrapped.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestFunctionA));
 		CastConverted(wrapped);
 
-		// TestArgumentFunction() (값 칸 비움) → 값 없음. 틱 1~5 스킬
+		// TestArgumentFunction() (value slot 비움) → 값 없음. 틱 1~5 스킬
 		FunctionData empty = FunctionData.Create("EmptyArgument");
 		empty.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestArgumentFunction, SlotData.EmptyValue()));
 		CastConverted(empty);

@@ -28,8 +28,8 @@ public abstract class PredefinedFunction : FunctionBlock
 	// OnStart, OnTick 도중에 바로 끝내면 그 뒤의 스킬 코드가 끝난 함수 위에서 계속 실행되기 때문
 	SkillError requestedError;
 	bool stopRequested;
-	// 함수 블록의 값 칸에서 받은 파라미터 값. Parameters와 같은 순서이고, 비운 칸은 null이다
-	// 슬롯에서 바로 시전했거나 값 칸이 없으면 배열 자체가 null이다
+	// 함수 블록의 value slot에서 받은 파라미터 값. Parameters와 같은 순서이고, 비운 칸은 null이다
+	// 슬롯에서 바로 시전했거나 value slot이 없으면 배열 자체가 null이다
 	RuntimeValue?[] arguments;
 	// Return으로 정한 반환 값. 정하지 않았으면 null
 	RuntimeValue? returnValue;
@@ -50,12 +50,12 @@ public abstract class PredefinedFunction : FunctionBlock
 	public virtual int CodeSize => 1;
 
 	/// <summary>
-	/// 파라미터 이름과 타입. 편집 화면은 이 수와 순서대로 함수 블록의 값 칸을 만든다.
+	/// 파라미터 이름과 타입. 편집 화면은 이 수와 순서대로 함수 블록의 value slot을 만든다.
 	/// </summary>
 	public virtual IReadOnlyList<ParameterData> Parameters => Array.Empty<ParameterData>();
 
 	/// <summary>
-	/// 돌려주는 값의 타입. Void가 아니면 함수 블록을 값 칸에 끼울 수 있다.
+	/// 돌려주는 값의 타입. Void가 아니면 함수 블록을 expression으로 쓸 수 있다.
 	/// </summary>
 	// 부를 때마다 새로 만든다. VariableType은 값을 바꿀 수 있어서, 하나를 함께 쓰면 한 곳에서 바꾼 값이 모든 함수에 퍼지기 때문
 	public virtual VariableType ReturnType => new VariableType(VariableTypeKind.Void);
@@ -150,7 +150,7 @@ public abstract class PredefinedFunction : FunctionBlock
 
 	/// <summary>
 	/// 이름이 name인 파라미터의 값을 꺼낸다. OnStart, OnTick, OnEnd에서 부른다.<br/>
-	/// 값 칸을 비웠거나 슬롯에서 바로 시전해 값이 없으면 false를 돌려준다. 그때는 슬롯에서 바로 시전했을 때처럼 동작한다.<br/>
+	/// value slot을 비웠거나 슬롯에서 바로 시전해 값이 없으면 false를 돌려준다. 그때는 슬롯에서 바로 시전했을 때처럼 동작한다.<br/>
 	/// name은 Parameters에 적은 이름이다. 없는 이름이면 콘솔 오류를 내고 false를 돌려준다.
 	/// </summary>
 	// 번호가 아니라 이름으로 읽는 이유: 코드에서 무엇을 읽는지 바로 보이고, 파라미터 순서가 바뀌어도 읽는 코드를 고치지 않기 위함
@@ -175,7 +175,7 @@ public abstract class PredefinedFunction : FunctionBlock
 	/// <summary>
 	/// 이 함수의 반환 값을 정한다. ReturnType이 Void가 아닌 함수는 끝나기 전에 반드시 부른다. OnStart, OnTick, OnEnd에서 부른다.<br/>
 	/// 여러 번 부르면 마지막 값을 쓴다. 값이 ReturnType과 다르면 실행기가 캐릭터 언어의 숫자 타입 변환 규칙으로 맞춘다.<br/>
-	/// 부르지 않고 끝나거나 ReturnType으로 맞출 수 없는 값을 넘기면, 실행기가 콘솔 오류를 내고 작업을 InternalError(개발자 책임)로 끝낸다(함수 본문의 한 줄로 불러도 같다).
+	/// 부르지 않고 끝나거나 ReturnType으로 맞출 수 없는 값을 넘기면, 실행기가 콘솔 오류를 내고 작업을 InternalError(개발자 책임)로 끝낸다(statement로 불러도 같다).
 	/// </summary>
 	// 실제 C의 return과 달리 함수를 끝내지 않는다. 끝내려면 Stop을 함께 부른다
 	protected void Return(RuntimeValue value)
@@ -201,7 +201,7 @@ public abstract class PredefinedFunction : FunctionBlock
 		return returnValue.HasValue;
 	}
 
-	// 함수 호출 블록(PredefinedCallBlock)이 값 칸을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
+	// 함수 호출 블록(PredefinedCallBlock)이 value slot을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
 	internal void SetArguments(RuntimeValue?[] values)
 	{
 		arguments = values;

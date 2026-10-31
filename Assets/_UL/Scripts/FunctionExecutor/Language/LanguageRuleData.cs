@@ -15,9 +15,9 @@ public enum FunctionFailure
 	// 스킬을 함수로 부르는 컨셉이므로, 잘못된 때에 스킬 함수를 부른 플레이어의 runtime error로 본다
 	// 에러 종류마다 값을 두지 않는다. 스킬 구현자가 에러 클래스를 새로 만들어도 이 목록과 언어 규칙 표는 고치지 않게 하기 위함
 	SkillFailed,
-	// 값 칸의 변수가 지금 함수의 지역 변수에 없었다
+	// value slot의 변수가 지금 함수의 지역 변수에 없었다
 	UndeclaredVariable,
-	// 값 칸에 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없었다 (예: int 칸의 "abc")
+	// value slot에 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없었다 (예: int 칸의 "abc")
 	InvalidLiteral,
 	// 같은 이름의 변수를 두 번 선언했다
 	DuplicateVariable,
@@ -98,7 +98,7 @@ public class LanguageRuleData : ScriptableObject
 	[SerializeField, Tooltip("실패 종류마다 할 처리. 모든 실패 종류가 한 줄씩 있어야 한다")]
 	List<Rule> rules = new List<Rule>();
 
-	// 초기값 칸을 비운 선언 블록이 변수에 넣는 값. 언어마다 기본값이 다르므로(예: Java의 String은 null) 언어 규칙 파일이 정한다
+	// initializer를 비운 선언 블록이 변수에 넣는 값. 언어마다 기본값이 다르므로(예: Java의 String은 null) 언어 규칙 파일이 정한다
 	// 처음 값은 C의 전역 변수 기본값이다. 이미 만든 C 파일도 Unity가 새 칸을 읽을 때 이 값을 넣는다
 	[Header("기본값 (초기값을 비운 변수)")]
 	[SerializeField] int defaultInt = 0;
@@ -169,7 +169,7 @@ public class LanguageRuleData : ScriptableObject
 	}
 
 	/// <summary>
-	/// type 타입 변수의 기본값을 돌려준다. 선언 블록의 초기값 칸이 비어 있을 때 쓴다.<br/>
+	/// type 타입 변수의 기본값을 돌려준다. 선언 블록의 initializer가 비어 있을 때 쓴다.<br/>
 	/// 포인터는 언어와 상관없이 언제나 HeapStorage.NullPointer다. 아직 다루지 않는 타입이면 콘솔 오류를 내고 false를 돌려준다.
 	/// </summary>
 	public bool TryGetDefaultValue(VariableType type, out RuntimeValue value)

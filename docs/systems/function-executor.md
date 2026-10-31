@@ -44,7 +44,7 @@
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
 - 지역 변수
   - 저장: 실행 중인 `UserFunction` 복사본마다 변수 저장소(`VariableStore`) 하나. 같은 function을 두 번 시전하면 저장소 두 개
-  - 찾기: 블록은 `FunctionTask`가 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
+  - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
   - 블록 범위(조건문 안에서만 보이는 변수): 블록 실행 2 이슈
 - 선언의 초기값 칸을 비움: 언어 규칙 파일의 기본값
 - 값 칸: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, `malloc`, 값을 돌려주는 사전 정의 함수)
@@ -187,7 +187,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `Caster` | - | `GameObject` | 이 `FunctionTask`를 cast한 캐릭터. `PredefinedFunction`은 이것으로 캐릭터의 위치, 방향, 컴포넌트를 찾는다. |
+| `Caster` | - | `GameObject` | 이 `FunctionTask`를 cast한 캐릭터 |
 | `Name` | - | `string` | cast한 function의 이름 |
 | `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 대기, 아직 쓰지 않음), `Ended`(끝남) |
 | `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(플레이어 책임인 실패. 실패 종류는 `Failure`), `InternalError`(개발자 책임. 플레이어의 에러로 보여 주지 않음) |
@@ -195,6 +195,19 @@
 | `IsFailed` | - | `bool` | `Failed`(플레이어 책임)로 끝났으면 `true`. `InternalError`는 `false`. 실패 여부는 `Failure`가 아니라 이 값으로 판단한다. |
 | `Failure` | - | `FunctionFailure?` | `Failed`로 끝났을 때 실패 종류. 그 밖에는 `null` |
 | `Error` | - | `SkillError` | `Failure`가 `SkillFailed`일 때 스킬이 낸 에러. 그 밖에는 `null` |
+
+### `FunctionContext` (실행 문맥)
+
+작업 하나의 실행 문맥. 블록과 `PredefinedFunction`이 `Step`, `OnStart`, `OnTick`, `OnEnd`, `OnCancel`, `OnFail`에서 받는다. `FunctionTask`가 만들어 가진다.
+- 작업마다 다른 것(지역 변수 목록, 실패 기록, malloc한 포인터의 주인)은 실행 문맥이 직접 가짐
+- 캐릭터에 하나인 것(메모리, heap, 언어 규칙)은 원래 주인이 가지고, 실행 문맥은 닿는 길만 줌. heap 규칙(루트 집합, 누수)은 `HeapStorage`
+- 블록에 실행기와 작업을 보여 주지 않음
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Caster` | - | `GameObject` | 이 작업을 cast한 캐릭터. `PredefinedFunction`은 이것으로 캐릭터의 위치, 방향, 컴포넌트를 찾는다. |
+
+- 그 밖의 값(`Memory`, `Rule`, 지역 변수 목록, 실패 기록, 비동기 시전, `Malloc`)은 실행기 안에서만 씀(`internal`). 스킬은 `PredefinedFunction`의 함수로 씀([predefined-function.md](predefined-function.md))
 
 ### `LanguageRule` (캐릭터의 언어 컴포넌트)
 

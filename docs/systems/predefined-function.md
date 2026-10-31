@@ -84,14 +84,14 @@
 
 | 이름 | 덮어쓰지 않으면 | 설명 |
 | --- | --- | --- |
-| `OnStart(FunctionTask task)` | 아무것도 하지 않음 | 첫 tick에 `OnTick`보다 먼저 한 번 불린다. |
-| `OnTick(FunctionTask task, int tick)` | 아무것도 하지 않음 | 매 tick 불린다. `tick`은 1부터 `TickCount`까지 센다. 몇 번째 tick에 무엇을 할지(예: 자세잡기 → 차징 → 발사) 여기서 정한다. |
-| `OnEnd(FunctionTask task)` | 아무것도 하지 않음 | 마지막 tick에 `OnTick` 다음으로 한 번 불린다. `Completed`일 때만 불린다. |
-| `OnCancel(FunctionTask task)` | 아무것도 하지 않음 | 도중에 cancel됐을 때(실패, `Interrupted`) `OnEnd` 대신 한 번 불린다. heap에 올리지 않은 오브젝트를 없애는 등의 정리를 한다. heap에 올린 오브젝트는 없애지 않는다. |
-| `OnFail(FunctionTask task, SkillError error)` | 아무것도 하지 않음 | 이 스킬이 `Fail`로 에러를 냈을 때 `OnCancel`보다 먼저 한 번 불린다. 이 스킬만의 결과(예: 시전자가 피해를 입음)를 적는다. |
+| `OnStart(FunctionContext context)` | 아무것도 하지 않음 | 첫 tick에 `OnTick`보다 먼저 한 번 불린다. |
+| `OnTick(FunctionContext context, int tick)` | 아무것도 하지 않음 | 매 tick 불린다. `tick`은 1부터 `TickCount`까지 센다. 몇 번째 tick에 무엇을 할지(예: 자세잡기 → 차징 → 발사) 여기서 정한다. |
+| `OnEnd(FunctionContext context)` | 아무것도 하지 않음 | 마지막 tick에 `OnTick` 다음으로 한 번 불린다. `Completed`일 때만 불린다. |
+| `OnCancel(FunctionContext context)` | 아무것도 하지 않음 | 도중에 cancel됐을 때(실패, `Interrupted`) `OnEnd` 대신 한 번 불린다. heap에 올리지 않은 오브젝트를 없애는 등의 정리를 한다. heap에 올린 오브젝트는 없애지 않는다. |
+| `OnFail(FunctionContext context, SkillError error)` | 아무것도 하지 않음 | 이 스킬이 `Fail`로 에러를 냈을 때 `OnCancel`보다 먼저 한 번 불린다. 이 스킬만의 결과(예: 시전자가 피해를 입음)를 적는다. |
 
 - 한 tick에서 부르는 순서: `OnStart`(첫 tick만) → `OnTick` → `OnEnd`(마지막 tick만)
-- 시전한 캐릭터의 정보: `task.Caster`의 컴포넌트 (예: `task.Caster.GetComponent<PlayerStats>()`). 값을 바꿀 때는 그 컴포넌트의 함수를 부른다(`CLAUDE.md` 코드 작성 규칙 2).
+- 시전한 캐릭터의 정보: `context.Caster`의 컴포넌트 (예: `context.Caster.GetComponent<PlayerStats>()`). 값을 바꿀 때는 그 컴포넌트의 함수를 부른다(`CLAUDE.md` 코드 작성 규칙 2).
 - 애니메이션 길이: `TickCount` × `FunctionExecutor.SecondsPerTick`초. `OnStart`에서 재생 속도를 맞추고, `OnEnd`·`OnCancel`에서 되돌림
 - 실행되는 것은 언제나 복사본이므로, 실행 중에 쓰는 값(예: 차징한 양)을 필드에 저장해도 된다.
   - 다만 `List` 같은 참조 형식 필드는 원본과 복사본이 함께 쓰게 된다. 실행 중에 쓰는 참조 형식 값은 `OnStart`에서 새로 만든다.
@@ -106,10 +106,10 @@ public class Thrust : PredefinedFunction
 	public override string Name => "Thrust";
 	public override int TickCount => 20;
 
-	protected override void OnTick(FunctionTask task, int tick)
+	protected override void OnTick(FunctionContext context, int tick)
 	{
 		// 10 tick째에 cast한 캐릭터 앞쪽으로 판정을 낸다
-		if (tick == 10) { /* task.Caster를 기준으로 판정 */ }
+		if (tick == 10) { /* context.Caster를 기준으로 판정 */ }
 	}
 }
 ```
@@ -129,9 +129,9 @@ public class Thrust : PredefinedFunction
 
 ```csharp
 // 예시. TempSwordState는 물리 검 관리가 생기기 전까지 쓰는 테스트용 임시 컴포넌트(맨손 여부만 가짐)
-protected override void OnStart(FunctionTask task)
+protected override void OnStart(FunctionContext context)
 {
-	if (task.Caster.GetComponent<TempSwordState>().IsUnarmed) Fail(new UnarmedError());
+	if (context.Caster.GetComponent<TempSwordState>().IsUnarmed) Fail(new UnarmedError());
 }
 ```
 
@@ -141,11 +141,11 @@ protected override void OnStart(FunctionTask task)
 
 | 이름 | 돌려주는 값 | 하는 일 |
 | --- | --- | --- |
-| `Malloc(FunctionTask task, object obj, int size)` | `int` | `obj`를 시전한 캐릭터의 heap `size`칸에 올리고 포인터를 돌려줌. heap이 모자라면 `HeapStorage.NullPointer`, 에러 없음 |
-| `Free(FunctionTask task, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음 |
-| `TryGetHeapObject<T>(FunctionTask task, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false` (C의 null 역참조) |
-| `GetGlobalPointers<T>(FunctionTask task)` | `List<int>` | 전역 포인터 목록의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
-| `CountHeapObjects<T>(FunctionTask task)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
+| `Malloc(FunctionContext context, object obj, int size)` | `int` | `obj`를 시전한 캐릭터의 heap `size`칸에 올리고 포인터를 돌려줌. heap이 모자라면 `HeapStorage.NullPointer`, 에러 없음 |
+| `Free(FunctionContext context, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음 |
+| `TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false` (C의 null 역참조) |
+| `GetGlobalPointers<T>(FunctionContext context)` | `List<int>` | 전역 포인터 목록의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
+| `CountHeapObjects<T>(FunctionContext context)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
 
 - 쓸 수 없는 포인터: `NullPointer`, 해제한 포인터, 누수된 포인터, 타입이 다른 객체의 포인터
 - 포인터의 주인: malloc한 작업. 그 작업이 정상으로 끝나면 전역 포인터 목록으로 옮겨지고, 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수
@@ -155,11 +155,11 @@ protected override void OnStart(FunctionTask task)
 
 ```csharp
 // 예시. Sword, SpawnSword는 실제로 있는 것이 아니다
-protected override void OnTick(FunctionTask task, int tick)
+protected override void OnTick(FunctionContext context, int tick)
 {
 	if (tick != 5) return;
-	Sword sword = SpawnSword(task.Caster);
-	if (Malloc(task, sword, 2) == HeapStorage.NullPointer) DespawnSword(sword); // heap 부족: 소환하지 못함
+	Sword sword = SpawnSword(context.Caster);
+	if (Malloc(context, sword, 2) == HeapStorage.NullPointer) DespawnSword(sword); // heap 부족: 소환하지 못함
 }
 ```
 
@@ -185,9 +185,9 @@ protected override void OnTick(FunctionTask task, int tick)
 // 예시. CountSwords는 실제로 있는 function이 아니다
 public override VariableType ReturnType => new VariableType(VariableTypeKind.Int);
 
-protected override void OnEnd(FunctionTask task)
+protected override void OnEnd(FunctionContext context)
 {
-	Return(RuntimeValue.FromInt(CountHeapObjects<Sword>(task)));
+	Return(RuntimeValue.FromInt(CountHeapObjects<Sword>(context)));
 }
 ```
 

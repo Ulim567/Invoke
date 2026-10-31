@@ -23,50 +23,50 @@ public class DeclareBlock : Block
 		initialValueOriginal = initialValue;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		slots = new ValueSlots(initialValueOriginal);
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		BlockResult result = slots.Step(task);
+		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
-		LanguageRuleData rule = task.Executor.Rule;
+		LanguageRuleData rule = context.Rule;
 		RuntimeValue value;
 		if (initialValueOriginal != null)
 		{
 			if (!NumericRules.TryConvertForStore(slots[0], type, rule, out value))
 			{
-				task.RecordFailure(FunctionFailure.TypeMismatch);
+				context.RecordFailure(FunctionFailure.TypeMismatch);
 				return BlockResult.Failed;
 			}
 		}
 		// 다룰 수 없는 타입은 FunctionDataConverter가 미리 거르므로 여기까지 오지 않는다. 온다면 LanguageRuleData가 콘솔 오류를 낸다
 		else if (!rule.TryGetDefaultValue(type, out value))
 		{
-			task.RecordFailure(FunctionFailure.TypeMismatch);
+			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;
 		}
 
 		// 선언 블록은 사용자 정의 함수 안에만 있으므로 지역 변수가 언제나 있다
-		VariableStore variables = task.CurrentVariables;
+		VariableStore variables = context.CurrentVariables;
 		if (variables.Contains(name))
 		{
-			task.RecordFailure(FunctionFailure.DuplicateVariable);
+			context.RecordFailure(FunctionFailure.DuplicateVariable);
 			return BlockResult.Failed;
 		}
 		if (!variables.TryDeclare(name, type, value))
 		{
-			task.RecordFailure(FunctionFailure.TypeMismatch);
+			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;
 		}
 		return BlockResult.Done;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		slots?.Cancel(task);
+		slots?.Cancel(context);
 	}
 }

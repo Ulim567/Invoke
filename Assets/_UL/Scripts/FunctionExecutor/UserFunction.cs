@@ -80,7 +80,7 @@ public class UserFunction : FunctionBlock
 		this.cooldownTicks = cooldownTicks;
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
 		// 블록이 하나도 없는 함수도 최소 1틱은 쓰게 한다
 		if (Blocks.Count == 0) return BlockResult.Done;
@@ -94,7 +94,7 @@ public class UserFunction : FunctionBlock
 			// 조건문, for, while 블록이 생기면 그 블록들도 안쪽 블록을 실행하므로 같은 처리가 필요하다. 그때 이 처리를 한 함수로 빼서 함께 쓴다
 			if (next is PredefinedFunction function && function.IsAsync)
 			{
-				task.Executor.CastUnchecked(function);
+				context.CastAsync(function);
 				blockIndex++;
 				return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
 			}
@@ -103,7 +103,7 @@ public class UserFunction : FunctionBlock
 			runningBlock = next.Clone();
 		}
 
-		BlockResult result = runningBlock.Execute(task);
+		BlockResult result = runningBlock.Execute(context);
 		if (result == BlockResult.Running) return BlockResult.Running;
 
 		runningBlock = null;
@@ -118,24 +118,24 @@ public class UserFunction : FunctionBlock
 		return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
 	}
 
-	// 안쪽 블록은 task만 받으므로, 이 함수의 지역 변수를 task에 올려 두어 안쪽 블록이 찾게 한다
+	// 안쪽 블록은 실행 문맥만 받으므로, 이 함수의 지역 변수를 실행 문맥에 올려 두어 안쪽 블록이 찾게 한다
 	// Block은 OnStart가 불린 뒤 OnEnd, OnCancel 중 정확히 하나를 부르므로, 올리고 내리는 짝이 어긋나지 않는다
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		Variables = new VariableStore();
-		task.PushVariables(Variables);
+		context.PushVariables(Variables);
 	}
 
-	protected override void OnEnd(FunctionTask task)
+	protected override void OnEnd(FunctionContext context)
 	{
-		task.PopVariables();
+		context.PopVariables();
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
 		// 실행 중인 안쪽 블록도 함께 끊어서, 안쪽 블록들도 정리할 기회를 갖게 한다
 		// 안쪽을 먼저 끊는다. 안쪽 사용자 정의 함수가 자기 지역 변수를 먼저 내려야 이 함수의 것이 맨 위가 되기 때문
-		runningBlock?.Cancel(task);
-		task.PopVariables();
+		runningBlock?.Cancel(context);
+		context.PopVariables();
 	}
 }

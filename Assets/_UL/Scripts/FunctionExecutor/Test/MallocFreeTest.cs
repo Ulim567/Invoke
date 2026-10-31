@@ -62,8 +62,8 @@ public class MallocFreeTest : MonoBehaviour
 		}
 
 		List<Block> blocks = new List<Block>(converted.Blocks);
-		blocks.Insert(1, new TestProbeBlock(task => CheckHeap("malloc 뒤", 2)));
-		blocks.Add(new TestProbeBlock(task => CheckHeap("free 뒤", 0)));
+		blocks.Insert(1, new TestProbeBlock(context => CheckHeap("malloc 뒤", 2)));
+		blocks.Add(new TestProbeBlock(context => CheckHeap("free 뒤", 0)));
 		BeginStage();
 		executor.Cast(new UserFunction(converted.Name, converted.FrameSize, blocks.ToArray()));
 	}

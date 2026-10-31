@@ -3,8 +3,8 @@
 /// <para>
 /// 사용법<br/>
 /// - 블록의 OnStart에서 new ValueSlots(값 칸 원본들)로 만든다. 블록 복사본마다 따로 가져야 하기 때문이다.<br/>
-/// - 블록의 Step에서 Step(task)를 부른다. Done이면 모든 값 칸이 끝났고 이번 틱에 블록이 자기 일을 하면 된다. Running, Failed이면 그대로 돌려준다.<br/>
-/// - 블록의 OnCancel에서 Cancel(task)를 부른다.
+/// - 블록의 Step에서 Step(context)를 부른다. Done이면 모든 값 칸이 끝났고 이번 틱에 블록이 자기 일을 하면 된다. Running, Failed이면 그대로 돌려준다.<br/>
+/// - 블록의 OnCancel에서 Cancel(context)를 부른다.
 /// </para>
 /// <para>
 /// 틱 규칙(ValueBlock): 값 칸에 끼운 블록이 자기 틱을 쓰고 끝나면, 다음 값 칸이나 바깥 블록의 일은 다음 틱으로 넘긴다.
@@ -28,7 +28,7 @@ internal class ValueSlots
 	/// </summary>
 	public RuntimeValue this[int i] => running[i].Result;
 
-	public BlockResult Step(FunctionTask task)
+	public BlockResult Step(FunctionContext context)
 	{
 		while (index < running.Length)
 		{
@@ -39,7 +39,7 @@ internal class ValueSlots
 				continue;
 			}
 
-			BlockResult result = slot.Execute(task);
+			BlockResult result = slot.Execute(context);
 			if (result != BlockResult.Done) return result;
 
 			index++;
@@ -49,9 +49,9 @@ internal class ValueSlots
 		return BlockResult.Done;
 	}
 
-	public void Cancel(FunctionTask task)
+	public void Cancel(FunctionContext context)
 	{
 		foreach (ValueBlock slot in running)
-			slot?.Cancel(task);
+			slot?.Cancel(context);
 	}
 }

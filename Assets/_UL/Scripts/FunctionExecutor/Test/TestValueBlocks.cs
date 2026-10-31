@@ -15,9 +15,9 @@ public class TestDeclareBlock : Block
 		this.value = value;
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		task.CurrentVariables.TryDeclare(name, value.Type, value);
+		context.CurrentVariables.TryDeclare(name, value.Type, value);
 		return BlockResult.Done;
 	}
 }
@@ -39,23 +39,23 @@ public class TestReadBlock : Block
 		this.onRead = onRead;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		value = (ValueBlock)valueOriginal.Clone();
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		BlockResult result = value.Execute(task);
+		BlockResult result = value.Execute(context);
 		if (result != BlockResult.Done) return result;
 
 		onRead(value.Result);
 		return BlockResult.Done;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		value?.Cancel(task);
+		value?.Cancel(context);
 	}
 }
 
@@ -65,16 +65,16 @@ public class TestReadBlock : Block
 /// </summary>
 public class TestProbeBlock : Block
 {
-	readonly Action<FunctionTask> onRun;
+	readonly Action<FunctionContext> onRun;
 
-	public TestProbeBlock(Action<FunctionTask> onRun)
+	public TestProbeBlock(Action<FunctionContext> onRun)
 	{
 		this.onRun = onRun;
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		onRun(task);
+		onRun(context);
 		return BlockResult.Done;
 	}
 }

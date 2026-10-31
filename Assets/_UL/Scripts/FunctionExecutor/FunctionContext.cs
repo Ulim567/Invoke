@@ -1,0 +1,91 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// 작업 하나의 실행 문맥. 블록과 사전 정의 함수가 실행 중에 닿을 수 있는 것들의 입구다.
+/// <para>
+/// 사용법<br/>
+/// - 블록과 사전 정의 함수는 Step, OnStart, OnTick, OnEnd, OnCancel에서 이 객체를 받는다.<br/>
+/// - 사전 정의 함수는 Caster로 시전한 캐릭터의 위치, 방향, 컴포넌트를 찾는다.<br/>
+/// - 실행 문맥은 작업마다 하나다. 작업(FunctionTask)이 만들어 가진다.
+/// </para>
+/// <para>
+/// 가지는 것<br/>
+/// - 작업마다 다른 것(지역 변수 목록, 실패 기록, malloc한 포인터의 주인)은 실행 문맥이 직접 가진다.<br/>
+/// - 캐릭터에 하나인 것(메모리, heap, 언어 규칙)은 원래 주인이 가지고, 실행 문맥은 그 주인에게 닿는 길만 준다. heap 규칙은 HeapStorage에 있다.
+/// </para>
+/// </summary>
+// 작업 상태(FunctionTask)와 나눈 이유: 멀티플레이에서 서버만 블록을 실행하고 화면에는 작업 상태만 보낼 때 나누기 쉽고, 블록만 따로 테스트하기 쉽기 때문
+// 블록에 실행기와 작업을 보여 주지 않는다. 블록이 실행기를 거꾸로 부르지 않고, 이 객체가 준 것만 쓰게 하기 위함
+public class FunctionContext
+{
+	// 이 문맥으로 실행하는 작업. malloc한 포인터의 주인으로 HeapStorage에 넘긴다
+	readonly FunctionTask task;
+	// 비동기 시전에만 쓴다
+	readonly FunctionExecutor executor;
+	readonly LanguageRule language;
+	// 실행 중인 사용자 정의 함수들의 지역 변수. 맨 뒤가 지금 실행 중인(가장 안쪽) 함수의 것이다
+	// 목록인 이유: 함수 안에서 다른 함수를 부르면 불린 함수의 것이 위에 쌓이고, 끝나면 내려가 부른 함수의 것이 다시 맨 위가 된다(C의 호출 스택)
+	readonly List<VariableStore> variableStack = new List<VariableStore>();
+
+	/// <summary>
+	/// 이 작업을 시전한 캐릭터.
+	/// </summary>
+	public GameObject Caster { get; }
+
+	// 시전한 캐릭터의 메모리. 함수 블록이 프레임 칸을 쓰고 돌려주고, heap 함수가 HeapStorage를 찾을 때 쓴다
+	internal ProcessMemory Memory { get; }
+
+	// 블록이 따를 언어 규칙(기본값, 숫자 타입 변환). 언어 규칙 파일이 없으면 C 규칙만 가진 임시 규칙이다
+	internal LanguageRuleData Rule => language.Rule;
+
+	// 지금 실행 중인 사용자 정의 함수의 지역 변수. 사용자 정의 함수 밖(사전 정의 함수만 시전한 작업)이면 null이다
+	internal VariableStore CurrentVariables => variableStack.Count > 0 ? variableStack[variableStack.Count - 1] : null;
+
+	// 실패한 블록이 기록한 실패 종류. 작업이 Failure로 바깥에 보여 준다
+	// null을 쓰는 이유: enum 기본값은 첫 값인 Overflow라서, 기록하지 않았는데도 Overflow로 보이기 때문
+	internal FunctionFailure? RecordedFailure { get; private set; }
+	// 스킬이 Fail로 낸 에러. 실패 종류가 SkillFailed일 때만 있다
+	internal SkillError RecordedError { get; private set; }
+	// 개발자 책임인 잘못을 블록이 기록했는지. true이면 작업이 언어 규칙 표를 거치지 않고 InternalError로 끝난다
+	internal bool InternalErrorRecorded { get; private set; }
+
+	internal FunctionContext(FunctionTask task, FunctionExecutor executor, ProcessMemory memory, LanguageRule language)
+	{
+		this.task = task;
+		this.executor = executor;
+		this.language = language;
+		Memory = memory;
+		Caster = executor.gameObject;
+	}
+
+	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
+	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
+	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);
+
+	/// <summary>
+	/// 실패한 블록이 그 자리에서 실패 종류(플레이어 책임)를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
+	/// 스킬이 Fail로 낸 에러이면 error도 함께 넘긴다.
+	/// </summary>
+	internal void RecordFailure(FunctionFailure failure, SkillError error = null)
+	{
+		RecordedFailure = failure;
+		RecordedError = error;
+	}
+
+	/// <summary>
+	/// 개발자 책임인 잘못(예: 스킬이 Return을 빠뜨림)을 블록이 그 자리에서 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
+	/// 콘솔 오류는 기록하는 블록이 낸다. 작업은 언어 규칙 표를 거치지 않고 InternalError로 끝난다.
+	/// </summary>
+	internal void RecordInternalError()
+	{
+		InternalErrorRecorded = true;
+	}
+
+	// 비동기 함수를 새 작업으로 시전한다. 시전 전 검사를 하지 않는다
+	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이기 때문
+	internal void CastAsync(FunctionBlock function) => executor.CastUnchecked(function);
+
+	// obj를 heap에 올린다. 포인터의 주인은 이 작업이다. 주인을 채우는 것만 여기서 하고, 루트 집합과 누수 규칙은 HeapStorage가 맡는다
+	internal int Malloc(object obj, int size) => Memory.Heap.Malloc(task, obj, size);
+}

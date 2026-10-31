@@ -51,13 +51,13 @@ public class TestAttackFunction : PredefinedFunction
 	public override string Name => "TestAttackFunction";
 	public override int TickCount => 10;
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
-		if (task.Caster.GetComponent<TempSwordState>().IsUnarmed) Fail(new UnarmedError());
+		if (context.Caster.GetComponent<TempSwordState>().IsUnarmed) Fail(new UnarmedError());
 	}
 
 	// 실제 스킬은 여기서 시전자에게 피해를 주는 등 이 스킬만의 결과를 적는다. 테스트는 불렸는지만 확인한다
-	protected override void OnFail(FunctionTask task, SkillError error)
+	protected override void OnFail(FunctionContext context, SkillError error)
 	{
 		Debug.Log($"{Name}: OnFail ({error.Message})");
 	}
@@ -72,9 +72,9 @@ public class TestSummonedSwordFunction : PredefinedFunction
 	public override string Name => "TestSummonedSwordFunction";
 	public override int TickCount => 10;
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
-		if (GetGlobalPointers<TestSword>(task).Count <= 0) Fail(new NoSummonedSwordError());
+		if (GetGlobalPointers<TestSword>(context).Count <= 0) Fail(new NoSummonedSwordError());
 	}
 }
 
@@ -87,7 +87,7 @@ public class TestStopFunction : PredefinedFunction
 	public override string Name => "TestStopFunction";
 	public override int TickCount => 50;
 
-	protected override void OnTick(FunctionTask task, int tick)
+	protected override void OnTick(FunctionContext context, int tick)
 	{
 		if (tick == 5) Stop();
 	}
@@ -118,11 +118,11 @@ public class TestMallocFunction : PredefinedFunction
 	public override string Name => "TestMallocFunction";
 	public override int TickCount => 5;
 
-	protected override void OnTick(FunctionTask task, int tick)
+	protected override void OnTick(FunctionContext context, int tick)
 	{
 		if (tick != 1) return;
 
-		int pointer = Malloc(task, new TestSword(), 2);
+		int pointer = Malloc(context, new TestSword(), 2);
 		Debug.Log($"{Name}: malloc → {(pointer == HeapStorage.NullPointer ? "NullPointer" : pointer.ToString())}");
 	}
 }
@@ -136,11 +136,11 @@ public class TestLongMallocFunction : PredefinedFunction
 	public override string Name => "TestLongMallocFunction";
 	public override int TickCount => 20;
 
-	protected override void OnTick(FunctionTask task, int tick)
+	protected override void OnTick(FunctionContext context, int tick)
 	{
 		if (tick != 1) return;
 
-		int pointer = Malloc(task, new TestSword(), 2);
+		int pointer = Malloc(context, new TestSword(), 2);
 		Debug.Log($"{Name}: malloc → {pointer}");
 	}
 }
@@ -155,11 +155,11 @@ public class TestFreeFunction : PredefinedFunction
 	public override string Name => "TestFreeFunction";
 	public override int TickCount => 1;
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
-		var pointers = GetGlobalPointers<TestSword>(task);
+		var pointers = GetGlobalPointers<TestSword>(context);
 		int pointer = pointers.Count > 0 ? pointers[0] : HeapStorage.NullPointer;
-		if (Free(task, pointer)) Debug.Log($"{Name}: free {pointer}");
+		if (Free(context, pointer)) Debug.Log($"{Name}: free {pointer}");
 	}
 }
 
@@ -180,7 +180,7 @@ public class TestArgumentFunction : PredefinedFunction
 	/// </summary>
 	public static event System.Action<string> ArgumentRead;
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		ArgumentRead?.Invoke(TryGetArgument("amount", out RuntimeValue amount) ? amount.ToString() : "값 없음");
 	}
@@ -199,7 +199,7 @@ public class TestReturnFunction : PredefinedFunction
 	public override System.Collections.Generic.IReadOnlyList<ParameterData> Parameters =>
 		new[] { new ParameterData("amount", new VariableType(VariableTypeKind.Int)) };
 
-	protected override void OnEnd(FunctionTask task)
+	protected override void OnEnd(FunctionContext context)
 	{
 		int amount = TryGetArgument("amount", out RuntimeValue value) ? value.AsInt() : 0;
 		Return(RuntimeValue.FromInt(amount * 2));

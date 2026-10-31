@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -35,24 +34,16 @@ public enum FunctionTaskEndReason
 /// <para>
 /// 사용법<br/>
 /// - 작업은 실행기가 만든다. 다른 스크립트는 작업을 직접 만들거나 진행시키지 않는다.<br/>
-/// - 사전 정의 함수는 OnStart, OnTick, OnEnd, OnCancel에서 받은 작업의 Caster로 시전한 캐릭터를 찾는다.
+/// - 다른 스크립트(화면 등)는 작업 상태(State, EndReason, Failure, Error)를 읽기만 한다.<br/>
+/// - 블록이 실행 중에 쓰는 것(지역 변수, 실패 기록, 메모리)은 작업이 아니라 실행 문맥(FunctionContext)에 있다.
 /// </para>
 /// </summary>
 public class FunctionTask
 {
 	// 실행 중인 함수 블록의 복사본. 안에 든 블록들도 이 블록이 실행한다
 	readonly FunctionBlock function;
-	// 실패한 블록이 기록한 실패 종류. 바깥에는 Failure로, 실패로 끝났을 때만 보여 준다
-	// null을 쓰는 이유: enum 기본값은 첫 값인 Overflow라서, 기록하지 않았는데도 Overflow로 보이기 때문
-	FunctionFailure? recordedFailure;
-	// 스킬이 Fail로 낸 에러. 실패 종류가 SkillFailed일 때만 있다
-	SkillError recordedError;
-	// 개발자 책임인 잘못을 블록이 기록했는지. true이면 언어 규칙 표를 거치지 않고 InternalError로 끝난다
-	bool internalErrorRecorded;
-	// 실행 중인 사용자 정의 함수들의 지역 변수. 맨 뒤가 지금 실행 중인(가장 안쪽) 함수의 것이다
-	// 블록은 실행될 때 task만 받으므로, 자기를 실행하는 함수의 지역 변수를 task를 거쳐 찾는다
-	// 목록인 이유: 함수 안에서 다른 함수를 부르면 불린 함수의 것이 위에 쌓이고, 끝나면 내려가 부른 함수의 것이 다시 맨 위가 된다(C의 호출 스택)
-	readonly List<VariableStore> variableStack = new List<VariableStore>();
+	// 블록에 넘기는 실행 문맥. 작업마다 하나다
+	readonly FunctionContext context;
 
 	/// <summary>
 	/// 이 작업을 시전한 캐릭터.
@@ -64,18 +55,8 @@ public class FunctionTask
 	/// </summary>
 	public string Name { get; }
 
-	// 시전한 캐릭터의 메모리. 함수 블록이 실행을 시작하고 끝날 때 스택을 요청하고 반환한다
-	internal ProcessMemory Memory { get; }
-
-	// 이 작업을 만든 실행기. 사용자 정의 함수가 비동기 함수를 새 작업으로 시전할 때 쓴다
+	// 이 작업을 만든 실행기. 블록이 실패했을 때 처리를 맡긴다
 	internal FunctionExecutor Executor { get; }
-
-	// 지금 실행 중인 사용자 정의 함수의 지역 변수. 사용자 정의 함수 밖(사전 정의 함수만 시전한 작업)이면 null이다
-	internal VariableStore CurrentVariables => variableStack.Count > 0 ? variableStack[variableStack.Count - 1] : null;
-
-	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
-	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
-	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);
 
 	// 슬롯에서 시전할 때 넘긴 함수(원본). 이 작업이 끝나면 실행기가 이 함수의 쿨타임을 시작한다
 	// 함수 안의 비동기 시전으로 만든 작업은 null이다. 그 스킬의 쿨타임은 바깥 함수의 쿨타임에 이미 더해져 있기 때문
@@ -96,22 +77,22 @@ public class FunctionTask
 	/// </summary>
 	// 기록한 값을 그대로 보여 주지 않고 IsFailed일 때만 보여 준다
 	// 이후 Java의 try처럼 실패를 잡고 계속 진행해 Completed로 끝나는 경우에도, 이 값만 보고 실패로 오해하지 않게 하기 위함
-	public FunctionFailure? Failure => IsFailed ? recordedFailure : null;
+	public FunctionFailure? Failure => IsFailed ? context.RecordedFailure : null;
 
 	/// <summary>
 	/// 스킬이 낸 에러로 끝났을 때 그 에러(Failure가 SkillFailed일 때). 그 밖에는 null이다.
 	/// </summary>
 	// Failure와 같은 이유로 실패로 끝났을 때만 보여 준다
-	public SkillError Error => IsFailed ? recordedError : null;
+	public SkillError Error => IsFailed ? context.RecordedError : null;
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
-	internal FunctionTask(FunctionExecutor executor, ProcessMemory memory, FunctionBlock function)
+	internal FunctionTask(FunctionExecutor executor, ProcessMemory memory, LanguageRule language, FunctionBlock function)
 	{
 		Executor = executor;
 		Caster = executor.gameObject;
-		Memory = memory;
 		Name = function.Name;
 		this.function = function;
+		context = new FunctionContext(this, executor, memory, language);
 	}
 
 	/// <summary>
@@ -122,34 +103,15 @@ public class FunctionTask
 		// 입력 대기 중이거나 이미 끝난 작업은 틱이 와도 진행하지 않는다
 		if (State != FunctionTaskState.Running) return;
 
-		BlockResult result = function.Execute(this);
+		BlockResult result = function.Execute(context);
 		if (result == BlockResult.Running) return;
 
 		// 실패했으면 쌓여 있던 함수들은 Execute 안에서 이미 끊기며 메모리를 돌려줬다
 		// 무엇을 할지(이 작업만 끝낼지, C처럼 모든 작업을 끝낼지)는 실행기가 언어 규칙 표를 보고 정한다
 		// Failed를 돌려준 블록은 반드시 RecordFailure나 RecordInternalError를 먼저 부른다. 빠뜨렸으면 Value가 예외를 던져 바로 드러난다
 		if (result != BlockResult.Failed) End(FunctionTaskEndReason.Completed);
-		else if (internalErrorRecorded) End(FunctionTaskEndReason.InternalError);
-		else Executor.HandleFailure(this, recordedFailure.Value);
-	}
-
-	/// <summary>
-	/// 실패한 블록이 그 자리에서 실패 종류를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
-	/// 스킬이 Fail로 낸 에러이면 error도 함께 넘긴다.
-	/// </summary>
-	internal void RecordFailure(FunctionFailure failure, SkillError error = null)
-	{
-		recordedFailure = failure;
-		recordedError = error;
-	}
-
-	/// <summary>
-	/// 개발자 책임인 잘못(예: 스킬이 Return을 빠뜨림)을 블록이 그 자리에서 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
-	/// 콘솔 오류는 기록하는 블록이 낸다. 작업은 언어 규칙 표를 거치지 않고 InternalError로 끝난다.
-	/// </summary>
-	internal void RecordInternalError()
-	{
-		internalErrorRecorded = true;
+		else if (context.InternalErrorRecorded) End(FunctionTaskEndReason.InternalError);
+		else Executor.HandleFailure(this, context.RecordedFailure.Value);
 	}
 
 	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다
@@ -158,7 +120,7 @@ public class FunctionTask
 		if (IsEnded) return;
 
 		// 실행 중인 블록들이 안쪽까지 차례로 OnCancel을 받아 정리하게 한다
-		function.Cancel(this);
+		function.Cancel(context);
 		End(FunctionTaskEndReason.Interrupted);
 	}
 

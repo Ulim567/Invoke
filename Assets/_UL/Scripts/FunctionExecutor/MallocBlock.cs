@@ -18,9 +18,9 @@ public class MallocBlock : ValueBlock
 		pointerType = VariableType.PointerTo(VariableType.StructOf(definition.Name));
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		int pointer = task.Memory.Heap.Malloc(task, new StructInstance(definition), definition.HeapSize);
+		int pointer = context.Malloc(new StructInstance(definition), definition.HeapSize);
 		Result = RuntimeValue.FromPointer(pointerType, pointer);
 		return BlockResult.Done;
 	}

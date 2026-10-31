@@ -10,7 +10,7 @@ public enum BlockResult
 	// return을 만나 끝났다. 이 블록을 담은 함수도 남은 블록을 실행하지 않고 끝나야 한다
 	Returned,
 	// 실패해서 실행하지 못했다. 바깥 함수들도 끝까지 실행하지 못하고 끝난다
-	// 실패 종류마다 값을 따로 두지 않는다. 종류는 실패한 블록이 FunctionTask.RecordFailure로 기록하므로, 종류가 늘어도 블록 결과를 받는 쪽은 고치지 않는다
+	// 실패 종류마다 값을 따로 두지 않는다. 종류는 실패한 블록이 FunctionContext.RecordFailure로 기록하므로, 종류가 늘어도 블록 결과를 받는 쪽은 고치지 않는다
 	Failed,
 }
 
@@ -66,27 +66,27 @@ public abstract class Block
 	/// 이 블록을 1틱 실행한다. 실행기와 바깥 블록만 부른다.
 	/// </summary>
 	// 함수 블록만 덮어써서 앞뒤로 프레임을 쓰고 돌려준다
-	internal virtual BlockResult Execute(FunctionTask task)
+	internal virtual BlockResult Execute(FunctionContext context)
 	{
 		if (state == BlockState.NotStarted)
 		{
 			state = BlockState.Running;
-			OnStart(task);
+			OnStart(context);
 		}
 
-		BlockResult result = Step(task);
+		BlockResult result = Step(context);
 		if (result == BlockResult.Running) return result;
 
 		// 안쪽에서 실패하면 이 블록도 끝까지 실행하지 못한 것이므로 끊긴 것으로 정리한다
 		if (result == BlockResult.Failed)
 		{
 			state = BlockState.Cancelled;
-			OnCancel(task);
+			OnCancel(context);
 		}
 		else
 		{
 			state = BlockState.Ended;
-			OnEnd(task);
+			OnEnd(context);
 		}
 
 		return result;
@@ -96,13 +96,13 @@ public abstract class Block
 	/// 실행 도중에 이 블록을 끊는다. 외부 중단 등으로 작업이 끊길 때 부른다.
 	/// </summary>
 	// 함수 블록만 덮어써서 OnCancel 뒤에 프레임을 돌려준다
-	internal virtual void Cancel(FunctionTask task)
+	internal virtual void Cancel(FunctionContext context)
 	{
 		// 시작했고 아직 끝나지 않은 블록만 정리한다. 이미 끝난 블록을 두 번 정리하지 않기 위함
 		if (state != BlockState.Running) return;
 
 		state = BlockState.Cancelled;
-		OnCancel(task);
+		OnCancel(context);
 	}
 
 	// 원본은 여러 작업이 함께 쓰므로 직접 실행하지 않고, 실행할 때마다 이 복사본을 만든다
@@ -111,22 +111,22 @@ public abstract class Block
 	/// <summary>
 	/// 1틱 분량을 실행하고 결과를 돌려준다.
 	/// </summary>
-	protected abstract BlockResult Step(FunctionTask task);
+	protected abstract BlockResult Step(FunctionContext context);
 
 	/// <summary>
 	/// 처음 실행될 때 Step보다 먼저 한 번 불린다.
 	/// </summary>
-	protected virtual void OnStart(FunctionTask task) { }
+	protected virtual void OnStart(FunctionContext context) { }
 
 	/// <summary>
 	/// 끝까지 실행했을 때(return 포함) Step 다음으로 한 번 불린다.
 	/// </summary>
-	protected virtual void OnEnd(FunctionTask task) { }
+	protected virtual void OnEnd(FunctionContext context) { }
 
 	/// <summary>
 	/// 실행 도중에 끊겼을 때 한 번 불린다. 이때는 OnEnd가 불리지 않는다.
 	/// </summary>
-	protected virtual void OnCancel(FunctionTask task) { }
+	protected virtual void OnCancel(FunctionContext context) { }
 }
 
 /// <summary>
@@ -134,5 +134,5 @@ public abstract class Block
 /// </summary>
 public class ReturnBlock : Block
 {
-	protected override BlockResult Step(FunctionTask task) => BlockResult.Returned;
+	protected override BlockResult Step(FunctionContext context) => BlockResult.Returned;
 }

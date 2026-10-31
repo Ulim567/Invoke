@@ -12,7 +12,7 @@
 ## `FunctionTask`
 - 작업 상태와 실행 문맥으로 나누기
   - `FunctionTask`(작업 상태): `Name`, `Caster`, `State`, `EndReason`, `IsEnded`, `IsFailed`, `Failure`, `Error`, `Step`, `Interrupt`, `End`
-  - 실행 문맥(새 클래스, 블록이 받는 파라미터): `Caster`, `Memory`, 언어 규칙, 비동기 시전, 지역 변수 목록, `RecordFailure`
+  - 실행 문맥(새 클래스 `FunctionContext`, 블록이 받는 파라미터): `Caster`, `Memory`, 언어 규칙, 비동기 시전, 지역 변수 목록, `RecordFailure`
   - 이유: Mirror에서 서버만 실행하고 화면에는 작업 상태만 보낼 때 나누기 쉬움. 블록만 따로 테스트하기 쉬움
   - 영향: 모든 블록과 스킬의 함수 모양(`OnStart(FunctionTask task)` 등)이 바뀜. 박진우에게 알림
   - 함께 고칠 것: `Block` 개편과 같은 이슈에서
@@ -24,7 +24,9 @@
 
 ## `PredefinedFunction`
 - heap 함수(`Malloc`, `Free` 등)
-  - 규칙의 실제 코드(포인터 주인, 잘못된 포인터일 때의 에러): 실행 문맥으로. 플레이어의 `free` 블록(`FreeBlock`)과 같은 코드를 씀
+  - 포인터 주인: 실행 문맥이 채움(`FunctionContext.Malloc`). heap 규칙(루트 집합, 옮기기, 누수)은 `HeapStorage`에 그대로
+    - 이유: 실행 문맥은 작업마다 하나이고, heap과 앞으로의 전역 변수는 캐릭터에 하나. 실행 문맥은 상태와 규칙의 주인이 아니라 닿는 길만 줌
+  - 잘못된 포인터일 때의 에러: 부른 쪽이 냄. `FreeBlock`은 `InvalidPointer`, `PredefinedFunction`은 `Fail(InvalidPointerError)` (`FunctionFailure` 항목의 책임 구분)
   - `PredefinedFunction`에 남는 것: 스킬 작성자가 부르는 입구, `OnCancel` 중이면 막기, 실패면 `Fail`
   - 스킬 작성자가 쓰는 이름과 방법: 그대로 (파라미터 타입만 실행 문맥으로)
 

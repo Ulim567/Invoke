@@ -107,7 +107,7 @@ public class FunctionExecutor : MonoBehaviour
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
 	internal FunctionTask CastUnchecked(FunctionBlock function)
 	{
-		FunctionTask task = new FunctionTask(this, memory, (FunctionBlock)function.Clone());
+		FunctionTask task = new FunctionTask(this, memory, language, (FunctionBlock)function.Clone());
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -149,12 +149,6 @@ public class FunctionExecutor : MonoBehaviour
 				break;
 		}
 	}
-
-	/// <summary>
-	/// 블록이 따를 언어 규칙. 캐릭터의 LanguageRule 컴포넌트가 가진 규칙을 그대로 돌려준다.
-	/// </summary>
-	// 블록이 task.Executor.Rule로 읽고 있어서 남긴다. 블록이 실행 문맥에서 언어 규칙을 읽게 되면 지운다
-	internal LanguageRuleData Rule => language.Rule;
 
 	void Awake()
 	{

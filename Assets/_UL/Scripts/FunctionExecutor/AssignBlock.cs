@@ -20,34 +20,34 @@ public class AssignBlock : Block
 		valueOriginal = value;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		slots = new ValueSlots(valueOriginal);
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		BlockResult result = slots.Step(task);
+		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
 		// 대입 블록은 사용자 정의 함수 안에만 있으므로 지역 변수가 언제나 있다
-		VariableStore variables = task.CurrentVariables;
+		VariableStore variables = context.CurrentVariables;
 		if (!variables.TryGetType(variableName, out VariableType type))
 		{
-			task.RecordFailure(FunctionFailure.UndeclaredVariable);
+			context.RecordFailure(FunctionFailure.UndeclaredVariable);
 			return BlockResult.Failed;
 		}
-		if (!NumericRules.TryConvertForStore(slots[0], type, task.Executor.Rule, out RuntimeValue value)
+		if (!NumericRules.TryConvertForStore(slots[0], type, context.Rule, out RuntimeValue value)
 			|| !variables.TrySet(variableName, value))
 		{
-			task.RecordFailure(FunctionFailure.TypeMismatch);
+			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;
 		}
 		return BlockResult.Done;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		slots?.Cancel(task);
+		slots?.Cancel(context);
 	}
 }

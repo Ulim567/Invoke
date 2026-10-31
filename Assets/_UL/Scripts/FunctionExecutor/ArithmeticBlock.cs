@@ -21,19 +21,19 @@ public class ArithmeticBlock : ValueBlock
 		rightOriginal = right;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		slots = new ValueSlots(leftOriginal, rightOriginal);
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		BlockResult result = slots.Step(task);
+		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
-		if (!NumericRules.TryCalculate(op, slots[0], slots[1], task.Executor.Rule, out RuntimeValue value, out FunctionFailure failure))
+		if (!NumericRules.TryCalculate(op, slots[0], slots[1], context.Rule, out RuntimeValue value, out FunctionFailure failure))
 		{
-			task.RecordFailure(failure);
+			context.RecordFailure(failure);
 			return BlockResult.Failed;
 		}
 
@@ -41,8 +41,8 @@ public class ArithmeticBlock : ValueBlock
 		return BlockResult.Done;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		slots?.Cancel(task);
+		slots?.Cancel(context);
 	}
 }

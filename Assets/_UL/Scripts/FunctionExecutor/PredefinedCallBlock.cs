@@ -31,21 +31,21 @@ public class PredefinedCallBlock : ValueBlock
 		argumentOriginals = arguments;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		slots = new ValueSlots(argumentOriginals);
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
 		if (running == null)
 		{
-			BlockResult slotResult = slots.Step(task);
+			BlockResult slotResult = slots.Step(context);
 			if (slotResult != BlockResult.Done) return slotResult;
 
-			if (!TryMakeArguments(task, out RuntimeValue?[] arguments))
+			if (!TryMakeArguments(context, out RuntimeValue?[] arguments))
 			{
-				task.RecordFailure(FunctionFailure.TypeMismatch);
+				context.RecordFailure(FunctionFailure.TypeMismatch);
 				return BlockResult.Failed;
 			}
 
@@ -55,35 +55,35 @@ public class PredefinedCallBlock : ValueBlock
 			// 비동기 스킬은 끝나기를 기다리지 않는다. 새 작업으로 시전하고 이번 틱으로 끝난다
 			if (function.IsAsync)
 			{
-				task.Executor.CastUnchecked(copy);
+				context.CastAsync(copy);
 				return BlockResult.Done;
 			}
 			running = copy;
 		}
 
 		// 스킬 복사본을 틱마다 진행한다. 스택 프레임은 스킬이 실행을 시작할 때 스스로 쓴다
-		BlockResult result = running.Execute(task);
+		BlockResult result = running.Execute(context);
 		if (result != BlockResult.Done) return result;
 
 		if (function.ReturnType.Kind == VariableTypeKind.Void) return BlockResult.Done;
-		return TryTakeReturnValue(task) ? BlockResult.Done : BlockResult.Failed;
+		return TryTakeReturnValue(context) ? BlockResult.Done : BlockResult.Failed;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		slots?.Cancel(task);
-		running?.Cancel(task);
+		slots?.Cancel(context);
+		running?.Cancel(context);
 	}
 
 	// 값 칸의 결과를 파라미터 타입으로 바꿔 스킬에 넘길 배열을 만든다
-	bool TryMakeArguments(FunctionTask task, out RuntimeValue?[] arguments)
+	bool TryMakeArguments(FunctionContext context, out RuntimeValue?[] arguments)
 	{
 		IReadOnlyList<ParameterData> parameters = function.Parameters;
 		arguments = new RuntimeValue?[parameters.Count];
 		for (int i = 0; i < argumentOriginals.Length && i < parameters.Count; i++)
 		{
 			if (argumentOriginals[i] == null) continue;
-			if (!NumericRules.TryConvertForStore(slots[i], parameters[i].Type, task.Executor.Rule, out RuntimeValue value)) return false;
+			if (!NumericRules.TryConvertForStore(slots[i], parameters[i].Type, context.Rule, out RuntimeValue value)) return false;
 			arguments[i] = value;
 		}
 		return true;
@@ -91,18 +91,18 @@ public class PredefinedCallBlock : ValueBlock
 
 	// 스킬이 Return으로 정한 값을 반환 타입으로 맞춰 Result에 넣는다
 	// 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다. 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
-	bool TryTakeReturnValue(FunctionTask task)
+	bool TryTakeReturnValue(FunctionContext context)
 	{
 		if (!running.TryGetReturnValue(out RuntimeValue value))
 		{
 			Debug.LogError($"{function.Name}: 반환 타입이 {function.ReturnType.Kind}인데 Return을 부르지 않고 끝났습니다.");
-			task.RecordInternalError();
+			context.RecordInternalError();
 			return false;
 		}
-		if (!NumericRules.TryConvertForStore(value, function.ReturnType, task.Executor.Rule, out RuntimeValue converted))
+		if (!NumericRules.TryConvertForStore(value, function.ReturnType, context.Rule, out RuntimeValue converted))
 		{
 			Debug.LogError($"{function.Name}: Return으로 넘긴 {value.Type?.Kind} 값을 반환 타입 {function.ReturnType.Kind}(으)로 바꿀 수 없습니다.");
-			task.RecordInternalError();
+			context.RecordInternalError();
 			return false;
 		}
 

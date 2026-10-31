@@ -24,7 +24,7 @@ public class ArithmeticTest : MonoBehaviour
 		startTick = executor.CurrentTick;
 		executor.TaskEnded += OnTaskEnded;
 
-		TestCRules(executor.Rule);
+		TestCRules(GetComponent<LanguageRule>().Rule);
 		TestOtherRules();
 		CastFunctions();
 	}

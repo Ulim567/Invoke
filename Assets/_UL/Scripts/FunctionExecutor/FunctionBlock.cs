@@ -32,44 +32,44 @@ public abstract class FunctionBlock : Block
 	// 순서: 프레임 쓰기 → OnStart → … → OnEnd/OnCancel → 프레임 돌려주기
 	// 이 순서여야 UserFunction이 OnStart/OnEnd에서 쌓고 내리는 변수 저장소와 프레임이 어긋나지 않는다
 	// sealed: C 스킬이나 사용자 정의 함수가 덮어써서 이 순서를 깨지 못하게 한다. OnStart에 두지 않는 이유도 같다(C 스킬이 base를 부르지 않아도 됨)
-	internal sealed override BlockResult Execute(FunctionTask task)
+	internal sealed override BlockResult Execute(FunctionContext context)
 	{
 		if (State == BlockState.NotStarted)
 		{
 			// 프레임을 쌓을 공간이 없으면 시작하지 않는다. 시작하지 않았으므로 정리할 것도 없다
-			if (!TryAllocateFrame(task))
+			if (!TryAllocateFrame(context))
 			{
-				task.RecordFailure(FunctionFailure.Overflow);
+				context.RecordFailure(FunctionFailure.Overflow);
 				return BlockResult.Failed;
 			}
 		}
 
-		BlockResult result = base.Execute(task);
+		BlockResult result = base.Execute(context);
 		// 함수가 끝나는 즉시 프레임을 반환한다. 실제 프로그램에서 return하는 순간 프레임이 빠지는 것과 같다
-		if (result != BlockResult.Running) ReleaseFrame(task);
+		if (result != BlockResult.Running) ReleaseFrame(context);
 		return result;
 	}
 
-	internal sealed override void Cancel(FunctionTask task)
+	internal sealed override void Cancel(FunctionContext context)
 	{
-		base.Cancel(task);
-		ReleaseFrame(task);
+		base.Cancel(context);
+		ReleaseFrame(context);
 	}
 
-	bool TryAllocateFrame(FunctionTask task)
+	bool TryAllocateFrame(FunctionContext context)
 	{
-		if (!task.Memory.TryAllocateStack(FrameSize)) return false;
+		if (!context.Memory.TryAllocateStack(FrameSize)) return false;
 
 		allocatedStack = FrameSize;
 		return true;
 	}
 
 	// 받은 칸이 없으면(시작하지 않음, 이미 돌려줌) 아무것도 하지 않는다. 메모리를 두 번 돌려주지 않기 위함
-	void ReleaseFrame(FunctionTask task)
+	void ReleaseFrame(FunctionContext context)
 	{
 		if (allocatedStack == 0) return;
 
-		task.Memory.ReleaseStack(allocatedStack);
+		context.Memory.ReleaseStack(allocatedStack);
 		allocatedStack = 0;
 	}
 }

@@ -17,35 +17,35 @@ public class FreeBlock : Block
 		pointerOriginal = pointer;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		slots = new ValueSlots(pointerOriginal);
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		BlockResult result = slots.Step(task);
+		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
 		RuntimeValue value = slots[0];
 		if (value.Type?.Kind != VariableTypeKind.Pointer)
 		{
-			task.RecordFailure(FunctionFailure.TypeMismatch);
+			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;
 		}
 
 		int pointer = value.AsPointer();
-		if (!task.Memory.Heap.Free(pointer))
+		if (!context.Memory.Heap.Free(pointer))
 		{
 			// 스킬의 Free와 달리 SkillFailed로 내지 않는다. 플레이어가 짠 free이므로 언어 규칙 표가 분류하는 플레이어 코드 에러다
-			task.RecordFailure(FunctionFailure.InvalidPointer);
+			context.RecordFailure(FunctionFailure.InvalidPointer);
 			return BlockResult.Failed;
 		}
 		return BlockResult.Done;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		slots?.Cancel(task);
+		slots?.Cancel(context);
 	}
 }

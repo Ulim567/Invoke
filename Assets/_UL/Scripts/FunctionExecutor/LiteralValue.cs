@@ -26,11 +26,11 @@ public class LiteralValue : ValueBlock
 	// 키보드로 적은 값은 블록이 아니므로 틱을 쓰지 않는다
 	internal override bool UsesTick => false;
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
 		if (!isValid)
 		{
-			task.RecordFailure(FunctionFailure.InvalidLiteral);
+			context.RecordFailure(FunctionFailure.InvalidLiteral);
 			return BlockResult.Failed;
 		}
 

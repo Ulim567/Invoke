@@ -15,6 +15,27 @@ public enum BlockResult
 }
 
 /// <summary>
+/// 블록 복사본 하나의 진행 상태.
+/// </summary>
+// 시작·끝·끊김을 bool 세 개로 두면 "끝나지 않았는데 끊김" 같은 있을 수 없는 조합이 생기므로 값 하나로 둔다
+// BlockResult와 따로 두는 이유: 두 값은 읽는 쪽과 남는 기간이 다르다
+// - BlockResult: Execute 한 번(1틱)의 결과. 바깥 블록이나 실행기가 받아 다음에 할 일(같은 블록 계속, 다음 블록, 함수 끝내기, 실패 처리)을 정하고 버린다.
+//   Done과 Returned처럼 블록 자신에게는 같은 "끝남"이어도 바깥 함수가 다르게 처리해야 하는 차이를 담는다
+// - BlockState: 블록 복사본이 틱을 넘어 기억하는 자기 상태. 블록 자신이 읽어 OnStart를 부를지, Cancel에서 정리할 것이 있는지,
+//   지금 OnCancel 안인지(사전 정의 함수의 Malloc·Return 막기)를 정한다. 아직 실행하지 않은 NotStarted처럼 틱 결과로는 나타낼 수 없는 값도 담는다
+public enum BlockState
+{
+	// 아직 실행하지 않았다. 프레임을 쓰지 못해 시작하지 못한 블록은 Ended다
+	NotStarted,
+	// OnStart가 불렸고 아직 끝나지 않았다
+	Running,
+	// 끝까지 실행했다(return 포함). OnEnd가 불릴 때는 이미 이 값이다
+	Ended,
+	// 도중에 끊겼다(실패 포함). OnCancel이 불릴 때는 이미 이 값이다
+	Cancelled,
+}
+
+/// <summary>
 /// 모든 블록(사전 정의 함수, 사용자 정의 함수, return 같은 문법)의 기반 클래스.
 /// <para>
 /// 실행 방법<br/>
@@ -29,47 +50,48 @@ public enum BlockResult
 /// </summary>
 public abstract class Block
 {
-	bool started;
-	bool ended;
-	bool cancelled;
+	BlockState state;
 
 	// 이 블록이 끝났는지. OnEnd, OnCancel이 불릴 때는 이미 true다
-	internal bool HasEnded => ended;
+	internal bool HasEnded => state == BlockState.Ended || state == BlockState.Cancelled;
 
 	// 이 블록이 끊겼는지. OnCancel이 불릴 때는 이미 true다
 	// 사전 정의 함수가 OnCancel 안에서 힙을 바꾸지 못하게 막을 때 쓴다. HasEnded만으로는 OnEnd와 OnCancel을 구분할 수 없기 때문
-	internal bool WasCancelled => cancelled;
+	internal bool WasCancelled => state == BlockState.Cancelled;
 
 	/// <summary>
 	/// 이 블록을 1틱 실행한다. 실행기와 바깥 블록만 부른다.
 	/// </summary>
 	internal BlockResult Execute(FunctionTask task)
 	{
-		if (!started)
+		if (state == BlockState.NotStarted)
 		{
 			// 프레임을 쌓을 공간이 없으면 시작하지 않는다. 시작하지 않았으므로 정리할 것도 없다
 			if (!AllocateMemory(task))
 			{
-				ended = true;
+				state = BlockState.Ended;
 				task.RecordFailure(FunctionFailure.Overflow);
 				return BlockResult.Failed;
 			}
 
-			started = true;
+			state = BlockState.Running;
 			OnStart(task);
 		}
 
 		BlockResult result = Step(task);
 		if (result == BlockResult.Running) return result;
 
-		ended = true;
 		// 안쪽에서 실패하면 이 블록도 끝까지 실행하지 못한 것이므로 끊긴 것으로 정리한다
 		if (result == BlockResult.Failed)
 		{
-			cancelled = true;
+			state = BlockState.Cancelled;
 			OnCancel(task);
 		}
-		else OnEnd(task);
+		else
+		{
+			state = BlockState.Ended;
+			OnEnd(task);
+		}
 
 		// 함수가 끝나는 즉시 프레임을 반환한다. 실제 프로그램에서 return하는 순간 프레임이 빠지는 것과 같다
 		ReleaseMemory(task);
@@ -82,10 +104,9 @@ public abstract class Block
 	internal void Cancel(FunctionTask task)
 	{
 		// 시작했고 아직 끝나지 않은 블록만 정리한다. 이미 끝난 블록을 두 번 정리하거나 메모리를 두 번 반환하지 않기 위함
-		if (!started || ended) return;
+		if (state != BlockState.Running) return;
 
-		ended = true;
-		cancelled = true;
+		state = BlockState.Cancelled;
 		OnCancel(task);
 		ReleaseMemory(task);
 	}

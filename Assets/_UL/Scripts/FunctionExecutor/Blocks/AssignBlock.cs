@@ -1,9 +1,9 @@
 /// <summary>
-/// 대입 블록. 예: x = 5. value slot을 읽어 지금 함수의 지역 변수 값을 바꾼다. 1틱을 쓴다.
+/// 대입 블록. 예: x = 5. value slot을 읽어 지금 함수의 지역 변수 값을 바꾼다. 지역 변수에 없으면 캐릭터의 전역 변수 값을 바꾼다. 1틱을 쓴다.
 /// <para>
 /// - expression으로 쓴 블록(연산 등)이 있으면 그 블록이 자기 틱을 쓴 뒤, 다음 틱에 값을 바꾼다.<br/>
 /// - 값은 캐릭터 언어의 숫자 타입 변환 규칙으로 변수 타입에 맞춘다(C: float 변수에 3 → 3.0, int 변수에 0.5 → 0).<br/>
-/// - 변수가 없으면 UndeclaredVariable, 값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
+/// - 지역·전역 모두에 변수가 없으면 UndeclaredVariable, 값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
 /// - array 변수에는 대입할 수 없다(TypeMismatch). C에서도 arr = other는 compile error다. 원소는 ArraySetBlock으로 바꾼다.
 /// </para>
 /// </summary>
@@ -31,9 +31,8 @@ public class AssignBlock : Block
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
-		// 대입 블록은 사용자 정의 함수 안에만 있으므로 지역 변수가 언제나 있다
-		VariableStore variables = context.CurrentVariables;
-		if (!variables.TryGetType(variableName, out VariableType type))
+		VariableStore variables = context.FindVariables(variableName);
+		if (variables == null || !variables.TryGetType(variableName, out VariableType type))
 		{
 			context.RecordFailure(FunctionFailure.UndeclaredVariable);
 			return BlockResult.Failed;

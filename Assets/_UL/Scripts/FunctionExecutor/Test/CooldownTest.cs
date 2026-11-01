@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 쿨타임 테스트용 컴포넌트. 사용자 정의 함수와 스킬 하나를 정해진 틱마다 다시 시전해, 실행 중·쿨타임 중에는 거부되는지 확인한다.<br/>
-/// 함수 안의 같은 스킬과 반복문 안의 스킬이 쿨타임 동안 실패하지 않고 기다리는지도 확인한다.<br/>
+/// 함수 안의 같은 스킬, 반복문 안의 스킬, 비동기 스킬이 실행 중·쿨타임 중에 실패하지 않고 기다리는지도 확인한다.<br/>
 /// 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 다른 테스트 컴포넌트와 함께 붙이지 않는다. 다른 테스트의 작업이 섞이면 로그를 알아보기 어렵기 때문
 /// </summary>
@@ -19,6 +19,9 @@ public class CooldownTest : MonoBehaviour
 	// 반복문 안의 스킬. 반복할 때마다 쿨타임이 끝날 때까지 기다려야 한다
 	readonly UserFunction repeat = new UserFunction("CooldownRepeat",
 		new TestRepeatBlock(2, new TestCooldownFunction()));
+	// 비동기 스킬 하나만 부르는 함수. 같은 비동기 스킬이 실행 중이면 부른 함수가 기다렸다가 시전해야 한다
+	readonly UserFunction asyncWait = new UserFunction("CooldownAsyncWait",
+		new TestAsyncFunction());
 
 	FunctionExecutor executor;
 	// 지금 진행할 단계. 그 단계의 틱이 되면 FixedUpdate가 실행하고 다음 단계로 넘어간다
@@ -63,6 +66,18 @@ public class CooldownTest : MonoBehaviour
 				// 틱 127 「반복 2회째 / 스택 1」, 틱 146까지 기다린 뒤 틱 146~155 스킬, 틱 155에 Completed
 				// 예전 규칙이면 기다리지 않고 틱 99~118에 두 번 연달아 실행되었다
 				executor.Cast(repeat);
+				break;
+
+			case 4 when tick >= 156:
+				// 슬롯에서 비동기 스킬을 바로 시전한다. 틱 157~176 진행
+				executor.Cast(new TestAsyncFunction());
+				break;
+
+			case 5 when tick >= 161:
+				// 기대: 틱 162에 시작하고, 같은 비동기 스킬이 실행 중이라 다음 블록으로 넘어가지 않고 기다린다
+				// 틱 176에 앞의 스킬이 끝나면 그 틱에 시전을 요청하고 끝난다(마지막 줄의 비동기). 비동기 스킬은 틱 177~196
+				// 예전 규칙이면 기다리지 않고 틱 162에 끝났고, 두 비동기 스킬이 함께 실행되었다
+				executor.Cast(asyncWait);
 				break;
 
 			default:

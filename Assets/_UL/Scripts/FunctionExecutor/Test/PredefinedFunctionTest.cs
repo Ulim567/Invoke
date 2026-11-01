@@ -28,7 +28,7 @@ public class PredefinedFunctionTest : MonoBehaviour
 			return;
 		}
 
-		// 예시 스킬: 20틱 = 틱 20에 끝나야 하고, 틱 10에 판정 로그가 찍혀야 한다
+		// 예시 스킬: 20틱 = 틱 20에 끝나야 하고, 시작할 때 「[Skill] … 검 찌르기 시전 (20틱)」 로그가 찍혀야 한다
 		// 실행 중 스택은 2칸 (호출 1 + 파라미터 1)
 		executor.Cast(thrust);
 

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 사전 정의 함수 규칙 테스트용 컴포넌트. 플레이를 시작하면 예시 스킬과 비동기 테스트 함수 두 개를 시전한다.<br/>
+/// 사전 정의 함수 규칙 테스트용 컴포넌트. 플레이를 시작하면 예시 스킬과 비동기 테스트 함수 하나를 시전하고, 비동기 테스트 함수가 끝나면 나머지 하나를 시전한다.<br/>
 /// 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// FunctionExecutorTest와 함께 붙이지 않는다. 두 테스트의 작업이 섞이면 로그를 알아보기 어렵기 때문
 /// </summary>
@@ -13,6 +13,9 @@ public class PredefinedFunctionTest : MonoBehaviour
 
 	FunctionExecutor executor;
 	bool interrupted;
+	// 비동기 함수를 먼저 쓰는 작업. 이 작업이 끝난 뒤에 마지막 줄의 비동기 테스트를 시전한다
+	FunctionTask asyncA;
+	bool asyncLastCast;
 
 	void Start()
 	{
@@ -31,18 +34,25 @@ public class PredefinedFunctionTest : MonoBehaviour
 
 		// 비동기: 비동기 함수 시전(1틱) + A(30틱) = 틱 31에 끝나야 한다
 		// 비동기 함수는 새 작업으로 틱 2부터 20틱 진행 = 틱 21에 끝나야 한다
-		executor.Cast(new UserFunction("UserFunction_AsyncA",
+		asyncA = executor.Cast(new UserFunction("UserFunction_AsyncA",
 			new TestAsyncFunction(),
 			new TestFunctionA()));
-
-		// 마지막 줄의 비동기: 바깥 함수는 비동기 시전을 요청한 틱 1에 끝나야 한다
-		// 바깥 작업이 끝났어도 요청은 시전되어, 비동기 함수가 틱 2부터 20틱 진행 = 틱 21에 끝나야 한다
-		executor.Cast(new UserFunction("UserFunction_AsyncLast",
-			new TestAsyncFunction()));
 	}
 
 	void FixedUpdate()
 	{
+		// 마지막 줄의 비동기: UserFunction_AsyncA가 틱 31에 끝난 뒤에 시전한다
+		// 같은 비동기 함수는 동시에 실행되지 않고 기다리므로, 함께 시전하면 기다린 틱이 섞이기 때문
+		// 바깥 함수는 비동기 시전을 요청한 틱(시작 로그의 틱)에 끝나야 한다
+		// 바깥 작업이 끝났어도 요청은 시전되어, 비동기 함수가 그다음 틱부터 20틱 진행해야 한다
+		// 실행 중단 테스트를 했으면 시전하지 않는다. 끊긴 뒤에 시전하면 실행 중단 로그와 섞이기 때문
+		if (!asyncLastCast && !interrupted && asyncA != null && asyncA.IsEnded)
+		{
+			asyncLastCast = true;
+			executor.Cast(new UserFunction("UserFunction_AsyncLast",
+				new TestAsyncFunction()));
+		}
+
 		// 실행 중단: 정한 틱이 지나면 모든 작업을 끊는다
 		// 끊긴 작업은 Interrupted로 끝나야 하고, 실행 중이던 검 찌르기는 OnCancel 로그를 남겨야 한다
 		if (interrupted || interruptAfterTick <= 0 || executor.CurrentTick < interruptAfterTick) return;

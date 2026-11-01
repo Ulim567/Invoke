@@ -61,6 +61,15 @@ public class CooldownTracker
 	}
 
 	/// <summary>
+	/// 고정 ID가 skillId인 스킬을 지금 시작할 수 있으면 true. 어느 작업에서도 실행 중이 아니고 쿨타임 중도 아니어야 한다.<br/>
+	/// 함수 안의 스킬은 false인 동안 실패하지 않고 기다린다.
+	/// </summary>
+	public bool CanUseSkill(string skillId)
+	{
+		return !IsSkillRunning(skillId) && GetRemainingTicks(skillId) <= 0;
+	}
+
+	/// <summary>
 	/// 슬롯에서 시전한 원본 function의 작업이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.<br/>
 	/// 스킬이면 같은 고정 ID의 스킬이 다른 함수 안에서 실행 중일 때도 true다.
 	/// </summary>

@@ -12,6 +12,7 @@ using System.Collections.Generic;
 /// <para>
 /// - statement 하나가 끝나면 다음 statement는 다음 틱에 시작한다.<br/>
 /// - 블록 목록에 바로 들어 있는 비동기 함수(IsAsync)는 끝나기를 기다리지 않는다. 새 작업으로 시전하고, 1틱을 쓴 것으로 보고 다음 statement로 넘어간다.<br/>
+///   단, 같은 스킬이 실행 중이거나 쿨타임 중이면 쓸 수 있을 때까지 기다렸다가 시전한다.<br/>
 /// - opensScope가 true이면 처음 Step에서 지금 함수의 지역 변수에 범위를 열고, 끝나거나 끊길 때 닫는다. 그 안에서 선언한 변수는 닫을 때 사라진다(C의 { }).
 /// </para>
 /// </summary>
@@ -73,6 +74,10 @@ internal class Statements
 			// 원본을 그대로 넘겨도 Cast가 복사본을 만들어 실행한다
 			if (next is PredefinedFunction function && function.IsAsync)
 			{
+				// 같은 스킬이 실행 중이거나 쿨타임 중이면 쓸 수 있을 때까지 기다렸다가 요청한다
+				// 바로 요청하면 반복문이 틱마다 기다리는 작업을 하나씩 쌓아, 쿨타임이 끝날 때마다 차례로 실행되기 때문
+				if (!context.Cooldowns.CanUseSkill(function.Id)) return BlockResult.Running;
+
 				context.RequestAsyncCast(function);
 				index++;
 				return index >= blocks.Count ? BlockResult.Done : BlockResult.Running;

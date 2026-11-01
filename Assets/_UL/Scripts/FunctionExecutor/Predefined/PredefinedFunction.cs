@@ -85,8 +85,10 @@ public abstract class PredefinedFunction : FunctionBlock
 	// 스킬마다 직접 정하지 않고 계산한다. 파라미터를 고치고 프레임 크기를 고치지 않아 둘이 어긋나는 일을 막기 위함
 	public sealed override int FrameSize => 1 + Parameters.Count + LocalVariableCount;
 
+	// 같은 스킬이 실행 중이거나 쿨타임 중이면 시작하지 않고 기다린다. 슬롯 직접 시전, 함수 안의 호출, 비동기 시전이 모두 여기를 지난다
 	// 스킬이 실제로 실행된 동안만 실행 중으로 세고, 끝날 때 쿨타임을 건다
-	// sealed: 스킬 작성자가 덮어써서 쿨타임 기록을 빠뜨리지 못하게 한다
+	// sealed: 스킬 작성자가 덮어써서 쿨타임 검사나 기록을 빠뜨리지 못하게 한다
+	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
 	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
 	internal sealed override void BeforeFrameReleased(FunctionContext context) => context.Cooldowns.SkillEnded(this);
 

@@ -29,6 +29,10 @@ public abstract class FunctionBlock : Block
 	{
 		if (State == BlockState.NotStarted)
 		{
+			// 아직 시작할 수 없으면(예: 같은 스킬이 쿨타임 중) 프레임을 받지 않고 다음 틱에 다시 확인한다
+			// 실패로 끝내지 않는 이유: 반복문 안의 스킬이 쿨타임 때문에 함수 전체를 실패시키지 않고, 쓸 수 있을 때까지 기다리게 하기 위함
+			if (!CanStartNow(context)) return BlockResult.Running;
+
 			// 프레임을 쌓을 공간이 없으면 시작하지 않는다. 시작하지 않았으므로 정리할 것도 없다
 			if (!TryAllocateFrame(context))
 			{
@@ -49,6 +53,10 @@ public abstract class FunctionBlock : Block
 		base.Cancel(context);
 		ReleaseFrame(context);
 	}
+
+	// 시작하기 전, 틱마다 불린다. false이면 이번 틱에는 시작하지 않고 기다린다
+	// 기다리는 동안 끊기면 시작하지 않은 것이므로 정리할 것이 없다
+	internal virtual bool CanStartNow(FunctionContext context) => true;
 
 	// 프레임을 받은 직후에 한 번 불린다. 프레임을 받지 못해(Overflow) 시작하지 않은 함수에는 불리지 않는다
 	// 블록의 실행 단계(OnStart)가 아니라 프레임 시점에 두는 이유: 스킬 작성자가 덮어쓰는 OnStart와 섞이지 않고, BeforeFrameReleased와 짝이 항상 맞게 하기 위함

@@ -30,11 +30,11 @@ public class DeclareAssignTest : MonoBehaviour
 	{
 		FunctionData withIf = FunctionData.Create("WithIf");
 		withIf.Blocks.Add(BlockData.Conditional(ConditionalBranch.If, SlotData.FromLiteral(new VariableType(VariableTypeKind.Bool), "true")));
-		Check("조건문이 든 함수 거부", !FunctionDataConverter.TryConvert(withIf, out _));
+		Check("조건문이 든 함수 거부", !FunctionDataConverter.TryConvert(withIf, System.Array.Empty<FunctionData>(), out _));
 
 		FunctionData withPosition = FunctionData.Create("WithPosition");
 		withPosition.Blocks.Add(BlockData.Declare(new VariableType(VariableTypeKind.Position), "p"));
-		Check("위치 타입 변수를 선언한 함수 거부", !FunctionDataConverter.TryConvert(withPosition, out _));
+		Check("위치 타입 변수를 선언한 함수 거부", !FunctionDataConverter.TryConvert(withPosition, System.Array.Empty<FunctionData>(), out _));
 	}
 
 	// 테스트 2: 바꾼 함수를 실행. 모두 틱 1부터 함께 진행하고, 끝나는 틱은 OnTaskEnded가 확인한다
@@ -84,7 +84,7 @@ public class DeclareAssignTest : MonoBehaviour
 
 	static bool Convert(FunctionData data, int expectedFrameSize, out UserFunction converted)
 	{
-		bool ok = FunctionDataConverter.TryConvert(data, out converted);
+		bool ok = FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out converted);
 		Check($"{data.Name}: 변환 성공, 프레임 {expectedFrameSize}", ok && converted.FrameSize == expectedFrameSize,
 			ok ? $"실제 프레임 {converted.FrameSize}" : "변환 실패");
 		return ok;

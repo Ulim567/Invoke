@@ -3,7 +3,8 @@
 /// <para>
 /// - expression으로 쓴 블록(연산 등)이 있으면 그 블록이 자기 틱을 쓴 뒤, 다음 틱에 값을 바꾼다.<br/>
 /// - 값은 캐릭터 언어의 숫자 타입 변환 규칙으로 변수 타입에 맞춘다(C: float 변수에 3 → 3.0, int 변수에 0.5 → 0).<br/>
-/// - 변수가 없으면 UndeclaredVariable, 값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.
+/// - 변수가 없으면 UndeclaredVariable, 값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
+/// - array 변수에는 대입할 수 없다(TypeMismatch). C에서도 arr = other는 compile error다. 원소는 ArraySetBlock으로 바꾼다.
 /// </para>
 /// </summary>
 public class AssignBlock : Block
@@ -37,7 +38,9 @@ public class AssignBlock : Block
 			context.RecordFailure(FunctionFailure.UndeclaredVariable);
 			return BlockResult.Failed;
 		}
-		if (!NumericRules.TryConvertForStore(valueOriginal, slots[0], type, context.Rule, out RuntimeValue value)
+		// array는 같은 타입끼리 TryConvertForStore를 통과하므로 따로 막는다. 막지 않으면 두 변수가 같은 원소를 보게 되기 때문
+		if (type.Kind == VariableTypeKind.Array
+			|| !NumericRules.TryConvertForStore(valueOriginal, slots[0], type, context.Rule, out RuntimeValue value)
 			|| !variables.TrySet(variableName, value))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);

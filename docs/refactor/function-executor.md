@@ -76,4 +76,5 @@
   - 반환 타입으로 맞출 수 없는 값을 넘긴 스킬: `TypeMismatch`(C에서 `CompileError`) 대신 `MissingReturnValue`. 몸통에서 불러도 같음
   - 이유: 반환 값은 스킬 작성자(개발자)가 정하므로 플레이어의 compile error로 보이지 않게 함
 - 클래스 이름: `PredefinedCallBlock`. 사용자 정의 함수 호출과 합칠지는 블록 실행 3 이슈에서
+  - #132에서 합침: `CallBlock`
 - 비동기 스킬: 지금처럼 `FunctionDataConverter`가 값 칸에 넣지 않음

@@ -36,6 +36,13 @@ public class FunctionData
 	public List<BlockData> Blocks { get; set; } = new List<BlockData>();
 
 	/// <summary>
+	/// 다른 함수 안에서 불렸을 때 기다리지 않으면 true. 이때 부른 쪽은 이 함수를 새 작업으로 시전하고 바로 다음 블록으로 넘어간다.<br/>
+	/// 비동기 함수는 반환 값을 받을 수 없으므로 값 칸에 끼울 수 없다.
+	/// </summary>
+	// 형식을 넓힐 때 규칙에 따라 맨 뒤에 더한 칸이다. 이 칸이 없는 예전 데이터는 false(동기)로 읽힌다
+	public bool IsAsync { get; set; }
+
+	/// <summary>
 	/// 새 함수를 만든다. GUID를 새로 붙이고, 반환 타입은 Void, 파라미터와 블록은 비운다.
 	/// </summary>
 	public static FunctionData Create(string name) => new FunctionData

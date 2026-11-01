@@ -28,6 +28,12 @@ internal class ValueSlots
 	/// </summary>
 	public RuntimeValue this[int i] => running[i].Result;
 
+	/// <summary>
+	/// i번째 value slot의 복사본. Step이 Done을 돌려준 뒤에만 쓴다. 비운 칸이면 null.<br/>
+	/// 값과 함께 그 값이 어디서 왔는지(직접 입력한 0인지 등)를 다른 블록에 넘길 때 쓴다.
+	/// </summary>
+	public ValueBlock Get(int i) => running[i];
+
 	public BlockResult Step(FunctionContext context)
 	{
 		while (index < running.Length)

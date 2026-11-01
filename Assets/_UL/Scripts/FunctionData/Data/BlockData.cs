@@ -26,6 +26,10 @@ public enum BlockKind
 	Function,
 	Return,
 	Wait,
+	// array 원소 읽기(arr[i]). 값 칸에 끼운다
+	ArrayGet,
+	// array 원소 쓰기(arr[i] = 값)
+	ArraySet,
 }
 
 /// <summary>
@@ -102,7 +106,7 @@ public class BlockData
 	public static bool CanBeValue(BlockKind kind) => kind switch
 	{
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not
-			or BlockKind.Malloc or BlockKind.Function => true,
+			or BlockKind.Malloc or BlockKind.Function or BlockKind.ArrayGet => true,
 		_ => false,
 	};
 
@@ -126,6 +130,51 @@ public class BlockData
 		}
 		return false;
 	}
+
+	/// <summary>
+	/// blocks(function body 등)를 실행하면 어느 갈래로 가든 반드시 값을 넣은 return을 만나면 true.<br/>
+	/// 저장할 때 반환 타입이 있는 함수의 return 누락(compile error)을 찾는 검사가 쓴다. 실행기는 이 함수를 쓰지 않고, 실행 중에 만나면 MissingReturn으로 실패시킨다.
+	/// </summary>
+	// 판정 규칙(MSVC처럼 블록 모양만 본다): 값을 넣은 return, 또는 else까지 있고 모든 갈래가 반드시 return하는 조건문이 있으면 true
+	// 반복문은 한 번도 돌지 않을 수 있으므로 안쪽의 return을 세지 않는다. 조건의 값(예: while (true))은 보지 않는다
+	public static bool AlwaysReturnsValue(IReadOnlyList<BlockData> blocks)
+	{
+		for (int i = 0; i < blocks.Count; i++)
+		{
+			BlockData block = blocks[i];
+			if (block.Kind == BlockKind.Return) return block.Slots.Count >= 1 && HasValue(block.Slots[0]);
+			if (!IsBranch(block, ConditionalBranch.If)) continue;
+
+			// i번째 if에서 시작해 이어지는 else if, else를 한 조건문으로 본다
+			bool allBranchesReturn = true;
+			bool hasElse = false;
+			int j = i;
+			for (; j < blocks.Count; j++)
+			{
+				BlockData branch = blocks[j];
+				if (j > i && !(IsBranch(branch, ConditionalBranch.ElseIf) || IsBranch(branch, ConditionalBranch.Else))) break;
+
+				allBranchesReturn &= branch.InnerBlocks != null && AlwaysReturnsValue(branch.InnerBlocks);
+				if (IsBranch(branch, ConditionalBranch.Else))
+				{
+					hasElse = true;
+					j++;
+					break;
+				}
+			}
+			if (hasElse && allBranchesReturn) return true;
+			// 조건문의 마지막 갈래로 옮긴다. for의 i++로 그 다음 블록부터 본다
+			i = j - 1;
+		}
+		return false;
+	}
+
+	// 값 칸에 직접 입력한 값, 변수, 블록 중 하나라도 들어 있으면 true
+	// SlotData의 프로퍼티로 두지 않는 이유: public 프로퍼티는 Newtonsoft Json이 JSON에 함께 적기 때문
+	static bool HasValue(SlotData slot) => slot.Block != null || slot.VariableName != null || slot.Literal != null;
+
+	static bool IsBranch(BlockData block, ConditionalBranch branch) =>
+		block.Kind == BlockKind.Conditional && block.Slots.Count >= 1 && block.Slots[0].Option == branch.ToString();
 
 	// 만들기 함수 ----------------------------------------------------------
 
@@ -201,6 +250,18 @@ public class BlockData
 	/// </summary>
 	public static BlockData ArrayDeclare(VariableType elementType, string name, SlotData length) =>
 		Create(BlockKind.ArrayDeclare, SlotData.FromTypeOption(elementType), SlotData.FromName(name), length);
+
+	/// <summary>
+	/// array 원소 읽기 블록. 값 칸에 끼워 쓴다. 예: arr[i]. arrayName은 배열 만들기 블록이나 파라미터로 만든 array 변수의 이름이다.
+	/// </summary>
+	public static BlockData ArrayGet(string arrayName, SlotData index) =>
+		Create(BlockKind.ArrayGet, SlotData.VariableOnly(arrayName), index);
+
+	/// <summary>
+	/// array 원소 쓰기 블록. 예: arr[i] = 5
+	/// </summary>
+	public static BlockData ArraySet(string arrayName, SlotData index, SlotData value) =>
+		Create(BlockKind.ArraySet, SlotData.VariableOnly(arrayName), index, value);
 
 	/// <summary>
 	/// malloc 블록. 값 칸에 끼워 쓴다. 예: Sword* s = malloc(Sword)

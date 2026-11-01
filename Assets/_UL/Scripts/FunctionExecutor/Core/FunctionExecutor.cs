@@ -160,7 +160,7 @@ public class FunctionExecutor : MonoBehaviour
 	FunctionTask CastUnchecked(FunctionBlock function, RuntimeValue?[] arguments = null)
 	{
 		FunctionBlock copy = (FunctionBlock)function.Clone();
-		if (arguments != null) ((PredefinedFunction)copy).SetArguments(arguments);
+		if (arguments != null) copy.SetArguments(arguments);
 
 		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, copy);
 		pendingTasks.Add(task);

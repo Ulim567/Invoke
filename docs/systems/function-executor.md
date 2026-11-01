@@ -18,11 +18,11 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `InputFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors`, `Input/GetBug` | 스킬 작성자가 쓰는 것, 입력 함수 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
-| `Values` | `RuntimeValue`, `VariableStore` | 실행 중의 값, 지역 변수 |
+| `Values` | `RuntimeValue`, `VariableStore`, `ArrayStorage` | 실행 중의 값, 지역 변수, array 원소 |
 | `Conversion` | `FunctionDataConverter` | 함수 데이터 → `UserFunction` |
 | `Test` | 테스트 컴포넌트, 테스트용 함수·블록 | 테스트 |
 
@@ -33,8 +33,8 @@
 - 모든 `Block`은 최소 1 tick을 쓴다. 플레이어가 놓은 블록 하나 = 1 tick (#90)
   - `PredefinedFunction`: `TickCount` tick
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
-  - `ReturnBlock`, 선언, 대입, 연산, 비교, 논리(`&& || !`), `malloc`, `free`: 1 tick
-  - expression으로 쓴 블록(연산, 비교, 논리, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
+  - `ReturnBlock`, 선언, 대입, 연산, 비교, 논리(`&& || !`), `malloc`, `free`, 배열 만들기(길이와 상관없음), 원소 읽기·쓰기: 1 tick
+  - expression으로 쓴 블록(연산, 비교, 논리, `malloc`, 값을 돌려주는 함수, 원소 읽기): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
   - value slot에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
   - value slot이 여럿: 왼쪽부터 차례로 실행
   - 논리 블록의 short-circuit으로 실행하지 않은 오른쪽 value slot: tick을 쓰지 않음 (#120)
@@ -47,6 +47,8 @@
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
   - 반복문도 문법 `Block`이므로 stack을 쓰지 않는다. 반복문 안의 `FunctionBlock`은 한 번 끝날 때마다 stack을 돌려주므로, 반복 횟수와 상관없이 그 `FunctionBlock`의 `FrameSize`만큼만 쓴다.
   - `PredefinedFunction`의 `FrameSize`: 1 + 파라미터 수 + `LocalVariableCount`
+  - function 안에서 다른 function을 부름(동기): 불린 function의 프레임이 위에 쌓이고, 끝나는 즉시 내려감. 예: 프레임 2칸인 A가 3칸인 B를 부르면 B 실행 중 5칸, B가 끝나면 2칸 (#132)
+  - 재귀 호출: 부를 때마다 프레임이 쌓임. 끝나지 않는 재귀는 stack이 모자라 `Overflow` (#132)
 - stack이 모자라면 실패 `Overflow`가 난다. 이미 실행 중이던 바깥 `FunctionBlock`들은 cancel되며 stack을 돌려준다. 그다음은 아래 「실패 처리」를 따른다.
 - memory 전체 칸 수는 `PlayerStats.MemorySize`다.
   - 레벨업, 버프 등으로 `MemorySize`가 바뀌면 다음 `FunctionBlock`이 stack을 쓸 때부터 바로 반영된다.
@@ -54,9 +56,10 @@
 - stack과 heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - StackUsed - HeapUsed`다.
   - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, stack과 heap은 각각 칸 수만 센다.
   - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
-- `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다. 바깥 function이 그 tick에 끝나도(마지막 줄의 비동기 호출) 새 `FunctionTask`는 만들어진다.
+- `UserFunction` 안에서 `IsAsync`가 `true`인 function(사전 정의 함수, 사용자 정의 함수 #132)을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다. 바깥 function이 그 tick에 끝나도(마지막 줄의 비동기 호출) 새 `FunctionTask`는 만들어진다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
 - 스킬의 동기·비동기 (#131): 모든 스킬이 동기(`IsAsync` 기본값 `false`). 비동기 스킬이 생기면 그 스킬의 `IsAsync`만 `true`로 바꿈
+- 사용자 정의 함수의 동기·비동기 (#132): 함수 데이터의 `FunctionData.IsAsync`. 기본값 `false`(동기). 편집 화면에서 고르는 UI는 아직 없음
 
 ### 입력 대기 (#131)
 - 입력 함수(`InputFunction`을 상속한 사전 정의 함수, 예: `GetBug`)가 입력을 요청하면 그 `FunctionTask`만 `WaitingInput`으로 멈춤. 다른 `FunctionTask`는 그대로 진행
@@ -75,10 +78,12 @@
 
 ### 함수 데이터 실행 (#90)
 - 실행 순서: 함수 데이터(`FunctionData`)를 `FunctionDataConverter`가 `UserFunction`으로 바꾼 뒤 `Cast`. 블록 목록을 위에서부터 차례로 실행
-- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), `for`, `while`, `break`, `continue`(#120), 사전 정의 함수 블록, `malloc`, `free`
-  - 사용자 정의 함수 호출, list: 블록 실행 3 이슈
-- 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`), 대상(`Target`, 종류 `Bug`, #131)
+- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), `for`, `while`, `break`, `continue`(#120), 사전 정의 함수 블록, `malloc`, `free`, 사용자 정의 함수 블록, `return`, 배열 만들기, 원소 읽기·쓰기(#132)
+  - list: 없음. list가 문법에 있는 언어(Java, Python)의 캐릭터가 생길 때 (#132)
+- 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`), 대상(`Target`, 종류 `Bug`, #131), 그 타입들의 array(#132)
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
+  - array 지역 변수: 길이만큼. 예: `int x; int arr[5];` → 1 + 1 + 5 = 7칸 (#132)
+  - array 파라미터: 1칸. C처럼 원소가 아니라 array를 가리키는 값 하나만 넘어옴 (#132)
 - 대상(`Target`) (#131)
   - 타입: `VariableType.TargetOf(TargetKind.Bug)`. 종류(`TargetKind`)는 지금 `Bug`(몬스터)만
   - 종류를 정하지 않은 `Target`(예: `DataDrivenSkill`의 파라미터): 어떤 종류의 대상이든 받음. 값은 언제나 자기 종류를 가짐
@@ -147,13 +152,53 @@
   - argument: 왼쪽부터 실행 후 스킬 복사본에 넘김. 비운 칸은 「값 없음」. 스킬은 `TryGetArgument`로 읽음([predefined-function.md](predefined-function.md))
     - 쓸 수 없는 대상(「대상 없음」, 죽음, 없어짐): 스킬이 시작하기 직전(쿨타임 기다림 뒤)에 `InvalidTarget`. 스킬은 시작하지 않고 쿨타임도 걸리지 않음. 슬롯 직접 시전(`Cast(스킬, 대상)`)도 같음 (#131)
   - tick: argument에 expression으로 쓴 블록이 없으면 그 스킬의 `TickCount`(슬롯에서 바로 시전했을 때와 같음)
-  - 클래스: statement와 expression 모두 `PredefinedCallBlock`
+  - 클래스: statement와 expression, 사전 정의 함수와 사용자 정의 함수 모두 `CallBlock` (#132)
   - statement로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 expression으로 썼을 때와 같이 실패
   - expression으로 씀: 스킬이 `Return`으로 정한 값을 반환 타입으로 맞춰 내놓음
   - `Return` 없이 끝남, 반환 타입으로 맞출 수 없는 값: 콘솔 오류 + 작업을 `InternalError`로 끝냄 (개발자 책임)
+    - 확인 시점: 스킬이 끝날 때(`FunctionBlock.TryValidateEnd`). 슬롯에서 바로 시전한 스킬도 같음 (#132)
   - expression으로 쓸 수 없음(변환 거부): 반환 타입 `Void`, 비동기 함수, 아직 다루지 않는 반환 타입
+- 사용자 정의 함수 블록 (#132)
+  - 찾기: 함수 블록의 GUID(`BlockData.FunctionId`)로, `TryConvert`에 넘긴 캐릭터의 함수 목록에서
+  - 변환: 한 번의 `TryConvert`에서 같은 GUID는 한 번만. 같은 함수를 부르는 블록들이 바꾼 함수 하나를 함께 씀
+  - 재귀 호출(자기 자신, 서로 부름): 허용
+  - argument: 왼쪽부터 실행 후 파라미터 타입으로 맞춰 복사본에 넘김. 맞출 수 없으면 `TypeMismatch`
+    - 받는 쪽: 실행을 시작할 때 파라미터를 function body의 맨 바깥 범위에 지역 변수로 선언. 같은 이름의 지역 변수를 선언하면 `DuplicateVariable`(C와 같음)
+    - 넘기는 방식: 값 복사. 포인터는 주소, array는 같은 array
+    - 슬롯에서 바로 시전(argument 없음): 언어 규칙 파일의 기본값. array 파라미터는 길이 0인 array
+  - 비운 argument, argument 수가 파라미터 수와 다름: 변환 거부(C는 argument를 빠뜨릴 수 없음)
+  - 비동기 함수(`FunctionData.IsAsync`): 새 `FunctionTask`로 시전. expression으로 쓸 수 없음(변환 거부)
+- `return` 블록 (#132)
+  - 칸: value slot 하나(비워도 됨). 값에 쓴 블록이 있으면 그 블록의 tick 다음 tick에 함수를 끝냄
+  - 반환 값 확인: 그 `return`을 담은 함수가 끝날 때. 슬롯에서 바로 시전해 반환 값을 쓰지 않아도 같음
+
+| 끝난 방식 | `void` 함수 | 반환 타입이 있는 함수 |
+| --- | --- | --- |
+| 마지막 블록까지 실행함 | 정상 종료 | `MissingReturn` |
+| `return;` | 정상 종료 | `MissingReturn` |
+| `return 값;` | `TypeMismatch` | 반환 타입으로 맞춤. 맞출 수 없으면 `TypeMismatch` |
+
+  - return 누락의 compile error: 원래는 편집 화면에서 저장할 때 찾아낼 잘못(MSVC 방식). 저장 검사가 생기기 전까지는 실행 중에 `MissingReturn`
+  - 저장 검사용 판정: `BlockData.AlwaysReturnsValue(blocks)`. 값을 넣은 `return`, 또는 `else`까지 있고 모든 갈래가 반드시 `return`하는 조건문이 있으면 `true`. 반복문 안의 `return`은 세지 않음. 실행기는 쓰지 않음
+- array (#132)
+  - 만들기: 배열 만들기 블록(`int arr[5]`). 일반 선언 블록의 array 타입은 변환 거부
+  - 길이: 직접 입력한 1 이상의 정수만(C89). 변수, 값 블록, 0 이하는 변환 거부
+  - 처음 값: 모든 원소가 언어 규칙 파일의 기본값. 초기값 목록(`{1, 2, 3}`) 없음
+  - 원소 타입: 변수로 선언할 수 있는 타입. 2차원 array는 변환 거부
+  - memory: 그 array를 만든 function의 stack 프레임. function이 시작할 때 프레임과 함께 받고, 끝날 때 함께 돌려줌. `free` 필요 없음
+  - 범위: 일반 변수와 같음. `{ }` 안의 array는 `}`에서 사라지고, 반복문 안이면 바퀴마다 새 array
+  - 원소 읽기 `arr[i]`, 원소 쓰기 `arr[i] = 값`
+    - index: 정수 타입(`int`, `char`, C의 `bool`)만. `float` 등은 `TypeMismatch`(C의 `arr[0.5]`도 compile error)
+    - 쓸 값: 원소 타입으로 맞춤(대입과 같은 규칙)
+    - 범위 밖, 음수 index: `IndexOutOfRange`. 실제 C는 검사하지 않고 이웃 메모리를 건드림
+    - 없는 변수: `UndeclaredVariable`. array가 아닌 변수(`int x`에 `x[0]`): `TypeMismatch`
+  - array 통째로 쓰기(`arr = other`, 계산, 비교, 조건): `TypeMismatch`
+  - 함수에 넘기기: 같은 array를 가리킴. 불린 함수가 원소를 바꾸면 부른 쪽도 바뀜
+    - 파라미터 타입: `VariableType.ArrayOf(원소 타입)`. 길이를 적지 않음(C의 `int a[]`)
+    - 원소 타입이 다른 array: `TypeMismatch`
+    - 반환 타입 array, 비동기 함수의 array 파라미터에 값 넘기기: 변환 거부. 비동기 작업이 부른 function보다 오래 남으면, 프레임과 함께 돌아간 array를 memory 없이 계속 쓰게 되기 때문(C의 dangling pointer)
 - 변환 거부: 지금 실행기가 실행할 수 없는 기능을 쓴 함수. 콘솔 오류, 시전하지 않음
-  - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 비운 value slot(사전 정의 함수의 argument는 비워도 됨)
+  - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 없는 GUID(지운 함수), 비운 value slot(사전 정의 함수의 argument는 비워도 됨)
   - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등): 거부하지 않음. 실행 중 실패로 처리
 
 ### heap
@@ -224,6 +269,8 @@
 | `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣음. `NULL`은 실패가 아님 (#120) |
 | `NotInLoop` | 반복문 밖에서 `break`, `continue`를 만남 (#120) |
 | `InvalidTarget` | 스킬에 넘긴 대상이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어짐 (#131) |
+| `MissingReturn` | 반환 타입이 있는 사용자 정의 함수가 return 없이 끝나거나 `return;`을 만남 (#132) |
+| `IndexOutOfRange` | array의 범위 밖 원소를 읽거나 씀(음수 포함) (#132) |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
@@ -347,6 +394,8 @@
 | `InvalidPointer` | `EndTask` | `RuntimeError` |
 | `NotInLoop` | `EndTask` | `CompileError` |
 | `InvalidTarget` | `EndTask` | `RuntimeError` |
+| `MissingReturn` | `EndTask` | `CompileError` |
+| `IndexOutOfRange` | `EndTask` | `RuntimeError` |
 
 - C 파일의 그 밖의 값: 기본값 0, 0, `false`, 글자 번호 0, 빈 글자열. 숫자 타입 변환 `ImplicitAll`, `float %` 허용하지 않음
 
@@ -391,7 +440,11 @@
 | --- | --- | --- | --- |
 | `new UserFunction(string name, params Block[] blocks)` | 이름, 위에서부터 실행할 `Block`들 | `UserFunction` | `Block`에는 `PredefinedFunction`, `UserFunction`, `ReturnBlock`을 넣을 수 있다. 같은 객체를 여러 `UserFunction`의 `Block`으로 넣어도 된다. 프레임 크기는 1 |
 | `new UserFunction(string name, int frameSize, params Block[] blocks)` | 이름, 프레임 크기, `Block`들 | `UserFunction` | 프레임 크기를 정해 만든다. 1보다 작으면 1 |
-| `new ReturnBlock()` | - | `ReturnBlock` | 남은 `Block`을 실행하지 않고 이 `ReturnBlock`을 담은 `UserFunction`을 끝낸다. 1 tick을 쓴다. |
+| `new ReturnBlock()` | - | `ReturnBlock` | 남은 `Block`을 실행하지 않고 이 `ReturnBlock`을 담은 `UserFunction`을 끝낸다(`return;`). 1 tick을 쓴다. |
+| `new ReturnBlock(ValueBlock value)` | 돌려줄 값의 value slot | `ReturnBlock` | `return 값;`. 값은 `ReturnBlock`을 담은 `UserFunction`이 끝날 때 반환 타입으로 맞춘다 (#132) |
+
+- 코드로 만든 `UserFunction`: 파라미터 없음, `Void`, 동기. 파라미터·반환 타입·비동기 여부가 있는 함수는 `FunctionDataConverter`가 함수 데이터에서 만듦 (#132)
+- `Parameters`, `ReturnType`, `IsAsync`: `FunctionBlock`의 값. 사전 정의 함수와 사용자 정의 함수가 함께 가짐 (#132)
 
 ```csharp
 // 예시. Dash, Thrust는 실제로 있는 function이 아니다
@@ -403,13 +456,16 @@ executor.Cast(dashThrust);
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TryConvert(FunctionData data, out UserFunction function)` | 함수 데이터 | `bool` | 바꾼 `UserFunction`(원본)을 `function`에 담는다. 프레임 크기도 계산해 넣는다. 지금 실행할 수 없는 함수이면 콘솔 오류를 내고 `false` |
+| `TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, out UserFunction function)` | 함수 데이터, 캐릭터가 가진 모든 함수 | `bool` | 바꾼 `UserFunction`(원본)을 `function`에 담는다. 프레임 크기도 계산해 넣는다. 지금 실행할 수 없는 함수이면 콘솔 오류를 내고 `false` (#132에서 `ownedFunctions` 추가) |
 
+- `ownedFunctions`: 함수 블록이 부르는 사용자 정의 함수를 GUID로 찾는 곳. 다른 사용자 정의 함수를 부르지 않으면 빈 목록. `CodeSizeCalculator.Calculate`의 `ownedFunctions`와 같은 목록 (#132)
+  - static 저장소가 아닌 이유: 사용자 정의 함수는 캐릭터마다 다르므로, 서버 한 곳에서 여러 캐릭터의 함수를 바꿀 때 섞이지 않게 하기 위함
 - 바꾼 함수: 원본. 슬롯은 같은 객체를 계속 `Cast`에 넘겨야 실행 중 검사가 이어짐
+- 부른 함수를 고쳤을 때: 그 함수를 부르는 함수도 다시 바꿔야 함. 바꾼 함수는 바꾼 순간의 함수 데이터로 만들어짐 (#132)
 
 ```csharp
 // 예시. 슬롯에 넣은 함수 데이터를 바꿔서 시전
-if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) executor.Cast(function);
+if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunction function)) executor.Cast(function);
 ```
 
 ## 맞춘 결과
@@ -444,6 +500,7 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
   - tick 비용 규칙 재검토: 지금은 블록 하나 = 1 tick. 반복문을 만드는 블록 실행 2 이슈에서 「문법 블록은 tick 없음, 반복 한 바퀴에 1 tick」 등과 비교
     - #120에서 정함: 블록 하나 = 1 tick 유지. 조건문은 닿은 갈래마다 1 tick, 반복문은 검사 한 번마다 1 tick
   - 플레이어가 만든 함수의 `return` 누락 규칙: 블록 실행 3 이슈. C는 컴파일러에 따라 경고(GCC) 또는 오류(MSVC C4716), 실행되면 값은 정의되지 않음
+    - #132에서 정함: 저장할 때 compile error(MSVC 방식). 저장 검사가 생기기 전까지는 실행 중 `MissingReturn`(C는 `CompileError`)
   - 슬롯에서 함수 데이터를 바꿔 시전하는 연결: `FunctionDataConverter`를 부르는 곳([slot-caster.md](slot-caster.md))
 - 임혜원과 확인할 것 (#120)
   - 반복문 밖의 `break`, `continue`: 편집 화면에서 놓지 못하게 막을지, 저장할 때 `BlockData.HasJumpOutsideLoop`로 compile error를 보여 줄지. 지금은 실행 중에 `NotInLoop`(`CompileError`)로 끝남
@@ -468,7 +525,21 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
     - 작업과 슬롯 짝짓기: `Cast`가 돌려준 `FunctionTask`
     - 기다리는 중에 작업이 끝남(`TaskEnded`): 고르기를 끝냄
   - 슬롯에서 스킬을 바로 시전할 때(단일): 키를 뗄 때 `CastRequested` 대신 `executor.Cast(function, RuntimeValue.FromBug(target.GetComponent<Monster>()))`. 여러 명 선택(`Target` list)은 list 값이 생기는 블록 실행 3 이슈에서
+    - #132에서 list 대신 array로 정함. 아래 「박진우와 확인할 것 (#132)」
   - 스킬의 `Target` 파라미터: 종류 없이 둬도 `Bug` 값을 받음. 몬스터는 `TryGetArgument("target", out RuntimeValue v)` 뒤 `v.AsBug()`. 쓸 수 없는 대상은 실행기가 `InvalidTarget`으로 막으므로 스킬이 시작하지 않음
 - 임혜원과 정할 것 (#131)
   - 선언 블록의 타입 목록(`BlockView.DeclareTypes`)에 `Target`(종류 `Bug`) 추가, 화면 이름(`BlockLabels.TypeName`)은 `Bug`. 그 전까지 플레이어는 `Thrust(GetBug())`처럼 값 칸에 바로 끼워서만 씀
   - `GetBug` 블록: 고정 ID가 `input.`으로 시작하므로 블록 목록에 이미 나옴
+- 박진우와 확인할 것 (#132)
+  - `Parameters`, `ReturnType`, `IsAsync` 위치: `PredefinedFunction` → `FunctionBlock`. 스킬의 `override`는 그대로
+  - 슬롯에서 스킬을 바로 시전해도 `Return` 누락·반환 타입 불일치가 콘솔 오류 + `InternalError`
+  - 스킬 호출 블록 클래스 이름: `PredefinedCallBlock` → `CallBlock`
+  - 여러 몬스터 고르기(#131에서 미룸): list 대신 `Target` array. 스킬이 array 파라미터의 원소를 읽는 함수는 그 기능을 만들 때 정함
+- 임혜원과 확인할 것 (#132)
+  - 새 블록 UI: 원소 읽기 `ArrayGet`(value slot에 끼움), 원소 쓰기 `ArraySet` ([function-data.md](function-data.md))
+  - 배열 만들기 블록의 길이 칸: 1 이상의 숫자를 직접 입력하는 것만. 다른 값이 든 함수는 변환 거부
+  - `FunctionData.IsAsync`: 칸만 있고 편집 화면 UI는 아직 없음
+  - return 누락 저장 검사: `BlockData.AlwaysReturnsValue`
+- 정할 것 (#132)
+  - 실행 중 실패한 블록을 편집 화면에 표시: 별도 이슈. 실행기가 실패한 `BlockData`와 함수 GUID를 작업에 담고, 편집 화면은 같은 `BlockData`를 든 블록 UI를 칠함
+  - 범위 밖 index에서 C처럼 이웃 변수를 덮어쓰는 연출: 하려면 별도 이슈(프레임 안의 변수 위치 규칙이 새로 필요)

@@ -33,6 +33,11 @@ public enum FunctionFailure
 	// 스킬에 넘긴 대상(Target)이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어졌다
 	// 변수에 담을 때가 아니라 스킬에 넘길 때 검사한다. C의 해제한 포인터도 쓰는 순간에 에러가 나는 것과 같다
 	InvalidTarget,
+	// 반환 타입이 있는 사용자 정의 함수가 return 없이 끝났거나, 값을 비운 return;을 만났다
+	// 실제로는 편집 화면에서 저장할 때 찾아낼 잘못이지만, 그 검사가 생기기 전까지는 실행 중에 찾아낸다
+	MissingReturn,
+	// array의 범위 밖 원소를 읽거나 썼다(음수 포함). 실제 C는 검사하지 않고 이웃 메모리를 건드리지만, 게임은 runtime error로 멈춘다
+	IndexOutOfRange,
 }
 
 /// <summary>

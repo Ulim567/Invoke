@@ -6,6 +6,7 @@ using UnityEngine;
 /// <para>
 /// - argument를 왼쪽부터 실행한 뒤, 그 값을 넘긴 스킬 복사본을 실행한다. 스킬은 TryGetArgument로 값을 읽는다.<br/>
 /// - 비운 value slot은 「값 없음」으로 넘긴다. 값을 파라미터 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
+/// - 대상(Target) argument가 「대상 없음」이거나 죽었거나 오브젝트가 없어졌으면 InvalidTarget으로 실패한다.<br/>
 /// - 틱: expression으로 쓴 블록이 없으면 스킬의 TickCount와 같다(슬롯에서 바로 시전했을 때와 같음). 끼운 블록이 있으면 그 블록들의 틱이 앞에 더해진다.<br/>
 /// - 같은 스킬이 실행 중이거나 쿨타임 중이면, argument를 계산한 뒤 쓸 수 있을 때까지 실패 없이 기다린다. 기다린 틱도 더해진다.<br/>
 /// - 반환 타입이 Void가 아니면 스킬이 끝난 뒤 반환 값을 반환 타입으로 맞춰 Result에 넣는다. statement로 놓이면 아무도 Result를 읽지 않으므로 값은 버려진다.<br/>
@@ -47,9 +48,9 @@ public class PredefinedCallBlock : ValueBlock
 			BlockResult slotResult = slots.Step(context);
 			if (slotResult != BlockResult.Done) return slotResult;
 
-			if (!TryMakeArguments(context, out RuntimeValue?[] arguments))
+			if (!TryMakeArguments(context, out RuntimeValue?[] arguments, out FunctionFailure failure))
 			{
-				context.RecordFailure(FunctionFailure.TypeMismatch);
+				context.RecordFailure(failure);
 				return BlockResult.Failed;
 			}
 
@@ -87,14 +88,22 @@ public class PredefinedCallBlock : ValueBlock
 	}
 
 	// value slot의 결과를 파라미터 타입으로 바꿔 스킬에 넘길 배열을 만든다
-	bool TryMakeArguments(FunctionContext context, out RuntimeValue?[] arguments)
+	// 바꿀 수 없으면 TypeMismatch, 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 InvalidTarget을 failure에 담는다
+	// 대상을 여기서 검사하는 이유: 스킬마다 검사 코드를 넣지 않고, 스킬에 넘기는 한 곳에서 막기 위함
+	bool TryMakeArguments(FunctionContext context, out RuntimeValue?[] arguments, out FunctionFailure failure)
 	{
+		failure = FunctionFailure.TypeMismatch;
 		IReadOnlyList<ParameterData> parameters = function.Parameters;
 		arguments = new RuntimeValue?[parameters.Count];
 		for (int i = 0; i < argumentOriginals.Length && i < parameters.Count; i++)
 		{
 			if (argumentOriginals[i] == null) continue;
 			if (!NumericRules.TryConvertForStore(argumentOriginals[i], slots[i], parameters[i].Type, context.Rule, out RuntimeValue value)) return false;
+			if (value.Type.Kind == VariableTypeKind.Target && !value.IsUsableTarget)
+			{
+				failure = FunctionFailure.InvalidTarget;
+				return false;
+			}
 			arguments[i] = value;
 		}
 		return true;

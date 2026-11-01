@@ -129,13 +129,16 @@ public class VariableStore
 		return false;
 	}
 
-	// 두 타입이 같은지. 포인터, 배열, list는 원소 타입까지, struct는 이름까지 같아야 한다
+	// 두 타입이 같은지. 포인터, 배열, list는 원소 타입까지, struct는 이름까지, 대상은 종류까지 같아야 한다
 	// VariableType은 클래스라서 ==로 비교하면 같은 객체인지만 보므로 따로 비교한다
 	internal static bool IsSameType(VariableType a, VariableType b)
 	{
 		if (a == null || b == null) return a == b;
 		if (a.Kind != b.Kind) return false;
 		if (a.Kind == VariableTypeKind.Struct) return a.StructName == b.StructName;
+		// 한쪽이 종류를 정하지 않은 Target이면 어떤 종류의 대상이든 같다고 본다
+		// 값은 언제나 자기 종류를 가지므로, 종류 없는 변수에 담았던 Bug를 Player 변수에 옮기면 그때 다르다고 걸린다
+		if (a.Kind == VariableTypeKind.Target) return a.TargetKind == null || b.TargetKind == null || a.TargetKind == b.TargetKind;
 		if (a.ElementType != null || b.ElementType != null) return IsSameType(a.ElementType, b.ElementType);
 		return true;
 	}

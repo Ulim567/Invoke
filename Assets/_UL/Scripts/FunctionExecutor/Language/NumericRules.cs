@@ -122,6 +122,28 @@ internal static class NumericRules
 		VariableTypeKind rightKind = right.Type?.Kind ?? VariableTypeKind.Void;
 		bool isEquality = op == CompareOperator.Equal || op == CompareOperator.NotEqual;
 
+		// 대상(Target)은 ==, !=만 된다. 대상끼리는 같은 대상인지, NULL과는 「대상 없음」인지 비교한다
+		// 포인터보다 먼저 본다. NULL은 포인터 타입이라, 아래 포인터 규칙이 먼저 받으면 대상과 NULL의 비교를 거부하기 때문
+		// 죽었거나 없어진 대상은 NULL과 같지 않다(RuntimeValue.IsNoTarget). 직접 입력한 0은 NULL로 보지 않는다. zeroIsNull은 포인터 자리의 규칙이기 때문
+		// 종류가 다른 대상끼리(예: Bug와 Player)는 다른 타입의 포인터끼리처럼 비교하지 않는다
+		if (leftKind == VariableTypeKind.Target || rightKind == VariableTypeKind.Target)
+		{
+			if (!isEquality) return false;
+
+			bool same;
+			if (leftKind == rightKind)
+			{
+				if (!VariableStore.IsSameType(left.Type, right.Type)) return false;
+				same = ReferenceEquals(left.TargetObject, right.TargetObject);
+			}
+			else if (RuntimeValue.IsNullType(left.Type)) same = right.IsNoTarget;
+			else if (RuntimeValue.IsNullType(right.Type)) same = left.IsNoTarget;
+			else return false;
+
+			result = same == (op == CompareOperator.Equal);
+			return true;
+		}
+
 		// 포인터는 ==, !=만 된다. 같은 타입의 포인터끼리, 또는 한쪽이 NULL이면 주소를 비교한다
 		// 크기 비교를 막는 이유: C에서도 포인터의 크기 비교는 같은 배열 안의 포인터끼리만 뜻이 있는데, 지금 heap에는 배열이 없기 때문
 		if (leftKind == VariableTypeKind.Pointer || rightKind == VariableTypeKind.Pointer)

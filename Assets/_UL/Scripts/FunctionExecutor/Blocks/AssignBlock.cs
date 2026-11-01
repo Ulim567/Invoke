@@ -37,7 +37,7 @@ public class AssignBlock : Block
 			context.RecordFailure(FunctionFailure.UndeclaredVariable);
 			return BlockResult.Failed;
 		}
-		if (!NumericRules.TryConvertForStore(slots[0], type, context.Rule, out RuntimeValue value)
+		if (!NumericRules.TryConvertForStore(valueOriginal, slots[0], type, context.Rule, out RuntimeValue value)
 			|| !variables.TrySet(variableName, value))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);

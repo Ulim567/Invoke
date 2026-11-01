@@ -2,7 +2,7 @@
 /// 비교 블록. 예: x &lt; 3. value slot 두 개를 비교해 bool 값 하나를 내놓는다. 1틱을 쓴다.
 /// <para>
 /// - expression으로 쓴 블록이 있으면 그 블록들이 왼쪽부터 자기 틱을 쓴 뒤, 다음 틱에 비교한다.<br/>
-/// - 비교 규칙(타입이 섞일 때 등)은 NumericRules와 캐릭터 언어의 LanguageRule을 따른다.<br/>
+/// - 비교 규칙(타입이 섞일 때, 포인터와 NULL, string 등)은 NumericRules와 캐릭터 언어의 LanguageRule을 따른다.<br/>
 /// - 비교할 수 없는 타입이면 TypeMismatch로 실패한다.
 /// </para>
 /// </summary>
@@ -31,7 +31,7 @@ public class CompareBlock : ValueBlock
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
-		if (!NumericRules.TryCompare(op, slots[0], slots[1], context.Rule, out bool compared))
+		if (!NumericRules.TryCompare(op, leftOriginal, slots[0], rightOriginal, slots[1], context.Rule, out bool compared))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;

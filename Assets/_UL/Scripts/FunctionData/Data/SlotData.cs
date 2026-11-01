@@ -70,8 +70,19 @@ public class SlotData
 	/// </summary>
 	public string Name { get; set; }
 
+	/// <summary>
+	/// NULL 직접 입력의 Literal 값. 화면에 보이는 글자(C의 NULL)가 아니라 언어와 상관없는 이름을 담는다.
+	/// </summary>
+	public const string NullLiteral = "Null";
+
 	public static SlotData FromLiteral(VariableType type, string literal) =>
 		new SlotData { Kind = SlotKind.Value, Type = type, Literal = literal };
+
+	/// <summary>
+	/// 직접 입력한 NULL. Type은 가리키는 타입이 없는 포인터(PointerTo(null))로, 어떤 포인터 타입과도 비교하고 대입할 수 있다.
+	/// </summary>
+	// 포인터 타입마다 NULL을 따로 두지 않는다. 편집 화면은 플레이어가 NULL을 입력한 칸이 어떤 포인터 자리인지 알 수 없기 때문
+	public static SlotData FromNull() => FromLiteral(VariableType.PointerTo(null), NullLiteral);
 
 	public static SlotData FromVariable(string variableName) =>
 		new SlotData { Kind = SlotKind.Value, VariableName = variableName };

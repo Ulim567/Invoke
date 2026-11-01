@@ -58,6 +58,17 @@ public readonly struct RuntimeValue
 	}
 
 	/// <summary>
+	/// 직접 입력한 NULL의 값. 타입은 가리키는 타입이 없는 포인터(PointerTo(null))이고, 값은 HeapStorage.NullPointer다.<br/>
+	/// 비교 블록은 어떤 포인터와도 비교하고, 선언·대입 블록은 어떤 포인터 변수에도 넣는다.
+	/// </summary>
+	public static RuntimeValue Null => FromPointer(VariableType.PointerTo(null), HeapStorage.NullPointer);
+
+	/// <summary>
+	/// 직접 입력한 NULL의 타입(가리키는 타입이 없는 포인터)이면 true.
+	/// </summary>
+	internal static bool IsNullType(VariableType type) => type?.Kind == VariableTypeKind.Pointer && type.ElementType == null;
+
+	/// <summary>
 	/// 지금 실행기가 값으로 다룰 수 있는 타입이면 true. int, float, bool, string, char, 미리 정한 struct의 포인터(예: Sword*).
 	/// </summary>
 	// 함수 데이터를 바꿀 때 아직 다루지 않는 타입(위치, 배열, 정의되지 않은 struct 등)의 변수를 미리 거르기 위함

@@ -35,13 +35,32 @@ internal static class NumericRules
 	}
 
 	/// <summary>
-	/// value를 target 타입의 변수에 넣을 값으로 바꾼다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).
+	/// value slot의 값을 target 타입의 변수·파라미터에 넣을 값으로 바꾼다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).<br/>
+	/// source는 그 값을 내놓은 value slot의 블록(원본)이다. target이 포인터이면 직접 입력한 0을 언어 규칙에 따라 NULL로 본다(C의 Sword* p = 0).
+	/// </summary>
+	public static bool TryConvertForStore(ValueBlock source, RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted)
+	{
+		if (target?.Kind == VariableTypeKind.Pointer) value = NullIfZeroLiteral(source, value, rule);
+		return TryConvertForStore(value, target, rule, out converted);
+	}
+
+	/// <summary>
+	/// value를 target 타입의 변수에 넣을 값으로 바꾼다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).<br/>
+	/// value slot에서 나오지 않은 값(스킬의 반환 값 등)에 쓴다. value slot의 값은 source를 받는 함수를 쓴다.
 	/// </summary>
 	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted)
 	{
 		converted = value;
 		if (VariableStore.IsSameType(target, value.Type)) return true;
 		if (target == null || value.Type == null) return false;
+
+		// NULL은 어떤 포인터 변수에도 넣는다. 넣은 뒤에는 그 변수의 포인터 타입을 가진 null이 된다
+		if (RuntimeValue.IsNullType(value.Type))
+		{
+			if (target.Kind != VariableTypeKind.Pointer) return false;
+			converted = RuntimeValue.FromPointer(target, HeapStorage.NullPointer);
+			return true;
+		}
 
 		VariableTypeKind from = value.Type.Kind;
 		VariableTypeKind to = target.Kind;
@@ -80,6 +99,19 @@ internal static class NumericRules
 	}
 
 	/// <summary>
+	/// value slot 두 개의 값을 비교해 결과를 result에 담는다. 비교할 수 없는 타입이면 false를 돌려준다(TypeMismatch).<br/>
+	/// leftSource, rightSource는 그 값을 내놓은 value slot의 블록(원본)이다. 한쪽이 포인터이면 다른 쪽의 직접 입력한 0을 언어 규칙에 따라 NULL로 본다(C의 p == 0).
+	/// </summary>
+	// 포인터와 비교할 때만 바꾼다. 숫자끼리 비교하는 0(x == 0)은 그대로 0이어야 하기 때문
+	public static bool TryCompare(CompareOperator op, ValueBlock leftSource, RuntimeValue left, ValueBlock rightSource, RuntimeValue right,
+		LanguageRuleData rule, out bool result)
+	{
+		if (right.Type?.Kind == VariableTypeKind.Pointer) left = NullIfZeroLiteral(leftSource, left, rule);
+		if (left.Type?.Kind == VariableTypeKind.Pointer) right = NullIfZeroLiteral(rightSource, right, rule);
+		return TryCompare(op, left, right, rule, out result);
+	}
+
+	/// <summary>
 	/// left op right를 비교해 결과를 result에 담는다. 비교할 수 없는 타입이면 false를 돌려준다(TypeMismatch).
 	/// </summary>
 	// 타입이 섞이면 TryCalculate와 같은 규칙으로 맞춘 뒤 비교한다. C의 3 == 3.0처럼, 계산할 때와 같은 값으로 비교해야 하기 때문
@@ -88,13 +120,34 @@ internal static class NumericRules
 		result = false;
 		VariableTypeKind leftKind = left.Type?.Kind ?? VariableTypeKind.Void;
 		VariableTypeKind rightKind = right.Type?.Kind ?? VariableTypeKind.Void;
+		bool isEquality = op == CompareOperator.Equal || op == CompareOperator.NotEqual;
+
+		// 포인터는 ==, !=만 된다. 같은 타입의 포인터끼리, 또는 한쪽이 NULL이면 주소를 비교한다
+		// 크기 비교를 막는 이유: C에서도 포인터의 크기 비교는 같은 배열 안의 포인터끼리만 뜻이 있는데, 지금 heap에는 배열이 없기 때문
+		if (leftKind == VariableTypeKind.Pointer || rightKind == VariableTypeKind.Pointer)
+		{
+			if (leftKind != rightKind || !isEquality) return false;
+			bool comparable = RuntimeValue.IsNullType(left.Type) || RuntimeValue.IsNullType(right.Type) || VariableStore.IsSameType(left.Type, right.Type);
+			if (!comparable) return false;
+
+			result = (left.AsPointer() == right.AsPointer()) == (op == CompareOperator.Equal);
+			return true;
+		}
+
+		// string은 언어 규칙이 ByContent일 때만 ==, !=로 글자 내용을 비교한다. 다른 타입과 섞이면 아래 숫자 규칙에서 TypeMismatch가 된다
+		if (leftKind == VariableTypeKind.String && rightKind == VariableTypeKind.String)
+		{
+			if (rule.StringEquality != StringEquality.ByContent || !isEquality) return false;
+
+			result = (left.AsString() == right.AsString()) == (op == CompareOperator.Equal);
+			return true;
+		}
 
 		// 같은 타입끼리는 언어와 상관없이 비교한다. char, bool 계산을 막는 언어도 'a' == 'b', true == false는 쓸 수 있기 때문
 		// bool의 크기 비교(true > false)만은 bool을 int로 올리는 언어(C)에서만 된다
 		if (leftKind == rightKind && IsNumeric(leftKind))
 		{
-			bool isOrdering = op != CompareOperator.Equal && op != CompareOperator.NotEqual;
-			if (leftKind == VariableTypeKind.Bool && isOrdering && rule.NumericConversion != NumericConversion.ImplicitAll) return false;
+			if (leftKind == VariableTypeKind.Bool && !isEquality && rule.NumericConversion != NumericConversion.ImplicitAll) return false;
 
 			result = leftKind == VariableTypeKind.Float ? Compare(op, left.AsFloat(), right.AsFloat()) : Compare(op, ToInt(left), ToInt(right));
 			return true;
@@ -110,6 +163,14 @@ internal static class NumericRules
 		result = isFloat ? Compare(op, ToFloat(left), ToFloat(right)) : Compare(op, ToInt(left), ToInt(right));
 		return true;
 	}
+
+	/// <summary>
+	/// source가 직접 입력한 0이고 언어 규칙이 ZeroIsNull이면 NULL(RuntimeValue.Null)을, 아니면 value를 그대로 돌려준다.<br/>
+	/// 포인터 자리에서만 부른다. 숫자 자리의 0은 그대로 0이어야 하기 때문<br/>
+	/// 비교와 변수에 넣기는 source를 받는 TryCompare, TryConvertForStore가 이 함수를 부른다. 블록은 free처럼 언제나 포인터 자리인 곳에서만 직접 부른다.
+	/// </summary>
+	public static RuntimeValue NullIfZeroLiteral(ValueBlock source, RuntimeValue value, LanguageRuleData rule) =>
+		rule.ZeroIsNull && source != null && source.IsZeroLiteral ? RuntimeValue.Null : value;
 
 	static bool IsNumeric(VariableTypeKind kind) =>
 		kind == VariableTypeKind.Int || kind == VariableTypeKind.Float || kind == VariableTypeKind.Char || kind == VariableTypeKind.Bool;

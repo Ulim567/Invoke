@@ -62,7 +62,7 @@
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
   - 블록 범위(조건문 안에서만 보이는 변수): 블록 실행 2 이슈
 - 선언의 initializer를 비움: 언어 규칙 파일의 기본값
-- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, 비교, `malloc`, 값을 돌려주는 사전 정의 함수)
+- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`, `NULL`), 변수, 값 블록(연산, 비교, `malloc`, 값을 돌려주는 사전 정의 함수)
 - 숫자 계산과 타입 변환: 언어 규칙 파일의 「숫자 타입 변환」. C는 `ImplicitAll`
   - `int / int`: 정수 나눗셈(`7 / 2` = 3). `%`의 부호는 왼쪽 값을 따름(`-7 % 2` = -1)
   - `int` 범위를 넘음: 반대쪽 끝으로 돌아감
@@ -71,7 +71,13 @@
 - 비교 (#120): 결과는 `bool`
   - 타입이 섞임: 아래 표의 「연산에서 타입이 섞임」 규칙으로 맞춘 뒤 비교(`3 == 3.0` → `true`). `int`끼리는 `float`으로 바꾸지 않음
   - 같은 타입끼리: 언어와 상관없이 비교 가능. 단 `bool`의 크기 비교(`true > false`)는 `ImplicitAll`만
-  - 비교할 수 없는 타입(`string`, 포인터): `TypeMismatch`
+  - 포인터: `==`, `!=`만. 같은 타입의 포인터끼리, 또는 한쪽이 `NULL`이면 주소 비교. 크기 비교, 다른 타입과의 비교는 `TypeMismatch`
+  - `string`: 언어 규칙 파일의 `stringEquality`. C는 `Disallowed`(`TypeMismatch`), `ByContent`이면 `==`, `!=`로 글자 내용 비교. 크기 비교는 언제나 `TypeMismatch`
+  - 그 밖의 타입이 섞임(예: `string`과 `int`): `TypeMismatch`
+- `NULL` (#120)
+  - 직접 입력: 함수 데이터에 `Type = PointerTo(null)`, `Literal = "Null"`(`SlotData.FromNull()`). 실행기는 `NullPointer`로 읽음
+  - 어떤 포인터와도 비교하고, 어떤 포인터 변수에도 넣음(`Sword* p = NULL`)
+  - 직접 입력한 `0`: 언어 규칙 파일의 `zeroIsNull`이 켜져 있으면(C) 포인터 자리(포인터와 비교, 포인터 변수에 넣기, `free`)에서 `NULL`. 계산하거나 변수에서 읽은 0은 `NULL`이 아님
 
 | 규칙 | 연산에서 타입이 섞임 | 대입·선언에서 다른 타입 | 쓰는 언어 |
 | --- | --- | --- | --- |
@@ -97,7 +103,8 @@
 - free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
 - `malloc` 블록 (#90): 미리 정한 struct(`PredefinedStructs`)의 객체(`StructInstance`)를 heap에 올리고 포인터를 내놓음. 칸 수는 그 struct의 `HeapSize`. 모자라면 `NullPointer`, 에러 없음
   - 화면의 오브젝트(예: 소환검): 만들지 않음. 연결 방법은 박진우와 정할 것
-- `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터이면 `InvalidPointer`(플레이어 코드 에러)
+- `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)이면 `InvalidPointer`(플레이어 코드 에러)
+  - `NULL`(`NullPointer`, 직접 입력한 `NULL`, C에서 직접 입력한 `0`): C처럼 아무 일도 하지 않고 1 tick 뒤 끝남 (#120). 스킬이 쓰는 `PredefinedFunction.Free`는 그대로 `NullPointer`를 에러로 봄
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
   - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
 - 루트 집합: 포인터를 보관하는 목록들
@@ -154,7 +161,7 @@
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
 | `TypeMismatch` | 값을 변수·파라미터 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
-| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(`NullPointer`, 해제한 포인터, 누수된 포인터)를 넣음 |
+| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣음. `NULL`은 실패가 아님 (#120) |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
@@ -248,7 +255,8 @@
 - 기본값: 초기값을 비운 변수의 값. `int`, `float`, `bool`, `char`(글자 번호), `string` 칸. 포인터는 언제나 `NullPointer` (#90)
 - 숫자 타입 변환: `ImplicitAll`, `Strict`, `WideningOnly` 중 하나(「함수 데이터 실행」의 표) (#90)
 - `float %` 허용 여부 (#90)
-- 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값과 숫자 타입 변환은 처음 값(C 규칙)
+- `NULL`과 비교 (#120): `zeroIsNull`(직접 입력한 0을 `NULL`로 볼지, C는 켬), `stringEquality`(string 비교 방법 `Disallowed`·`ByContent`, C는 `Disallowed`)
+- 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값, 숫자 타입 변환, `NULL`과 비교는 처음 값(C 규칙)
 - C 파일(`Assets/_UL/Data/LanguageRule_C`)
 
 | 실패 종류 | 처리 | 분류 |

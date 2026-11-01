@@ -195,7 +195,7 @@ MonoBehaviour:
   projectilePrefab: {fileID: 4266484544849432736, guid: a918335594367b94f8d49ffadd2c5af3, type: 3}
   speed: 7
   firePointOffset: {x: 3.5, y: -2.5}
-  fireDelay: 0.5
+  fireDelay: 0.58
 --- !u!114 &8018174992941989125
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -217,7 +217,7 @@ MonoBehaviour:
   detectRange: 20
   detectInterval: 0.2
   fallingPacketPrefab: {fileID: 7454365375502019294, guid: febdee519fada5544af0bd4eccc61fb5, type: 3}
-  slamDelay: 0.5
+  slamDelay: 0.42
   extraDrops: 2
   dropArea: {x: 24, y: 12}
   groundLayers:
@@ -248,7 +248,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
   sceneId: 0
-  _assetId: 0
+  _assetId: 3889713433
   serverOnly: 0
   visibility: 0
   hasSpawned: 0

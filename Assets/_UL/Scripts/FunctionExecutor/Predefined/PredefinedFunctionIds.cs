@@ -44,6 +44,9 @@ public static class PredefinedFunctionIds
 	public const string Dash = "common.dash";
 	public const string DoubleJump = "common.double_jump";
 
+	// 입력 함수 (이우림, #131). 플레이어에게 값을 입력받아 돌려준다
+	public const string GetBug = "input.get_bug";
+
 	// 테스트용 함수
 	public const string TestFunctionA = "test.function_a";
 	public const string TestFunctionB = "test.function_b";

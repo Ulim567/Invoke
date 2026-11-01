@@ -64,10 +64,13 @@ public static class FunctionDataConverter
 			VariableType returnType = data.ReturnType ?? new VariableType(VariableTypeKind.Void);
 			if (returnType.Kind != VariableTypeKind.Void && !RuntimeValue.IsSupportedType(returnType))
 				return Reject<UserFunction>(data, $"반환 타입 {returnType.Kind}은(는) 아직 실행할 수 없습니다.");
+			// C에서도 array는 돌려줄 수 없다
+			if (returnType.Kind == VariableTypeKind.Array) return Reject<UserFunction>(data, "array는 반환 타입으로 쓸 수 없습니다.");
 			if (!TryCheckParameters(data)) return null;
 
-			// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수
-			int frameSize = 1 + data.Parameters.Count + data.LocalVariables().Count;
+			// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수. array 지역 변수는 1칸이 아니라 길이만큼 센다
+			// array 파라미터는 1칸이다. C처럼 원소가 아니라 array를 가리키는 값 하나만 넘어오기 때문
+			int frameSize = 1 + data.Parameters.Count + data.LocalVariables().Count + ExtraArrayCells(data);
 			// 블록보다 먼저 만들어 기록한다. 블록 안의 재귀 호출이 이 객체를 가리키게 하기 위함
 			UserFunction function = new UserFunction(data.Name, frameSize, data.Parameters, returnType, data.IsAsync);
 			if (data.Guid != null) convertedByGuid[data.Guid] = function;
@@ -75,6 +78,30 @@ public static class FunctionDataConverter
 			if (!TryConvertStatements(data, data.Blocks, out Block[] blocks)) return null;
 			function.SetBlocks(blocks);
 			return function;
+		}
+
+		// 배열 만들기 블록마다 길이 - 1칸. LocalVariables가 array 하나를 이미 1칸으로 세기 때문
+		// 길이가 잘못된 블록은 블록을 바꿀 때 거부되므로 여기서는 세지 않는다
+		static int ExtraArrayCells(FunctionData data)
+		{
+			int cells = 0;
+			foreach (BlockData block in data.AllBlocks())
+			{
+				if (block.Kind == BlockKind.ArrayDeclare && block.Slots.Count >= 3 && TryGetArrayLength(block.Slots[2], out int length))
+					cells += length - 1;
+			}
+			return cells;
+		}
+
+		// 배열 길이 칸의 값. 직접 입력한 1 이상의 int만 받는다
+		// 변수나 블록을 받지 않는 이유: 함수가 시작할 때 프레임을 한 번에 받으므로, 길이를 실행 전에 알아야 하기 때문(C89와 같음)
+		static bool TryGetArrayLength(SlotData slot, out int length)
+		{
+			length = 0;
+			if (slot == null || slot.Block != null || slot.VariableName != null || slot.Literal == null) return false;
+			if (slot.Type?.Kind != VariableTypeKind.Int) return false;
+			return int.TryParse(slot.Literal, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out length)
+				&& length >= 1;
 		}
 
 		// 파라미터마다 이름이 있고, 이름이 겹치지 않고, 실행할 수 있는 타입인지 본다
@@ -168,6 +195,8 @@ public static class FunctionDataConverter
 					VariableType type = block.Slots[0].Type;
 					string name = block.Slots[1].Name;
 					if (!RuntimeValue.IsSupportedType(type)) return Reject(data, $"{type?.Kind} 타입의 변수는 아직 실행할 수 없습니다.");
+					// array는 길이가 있어야 프레임 크기를 정할 수 있으므로 배열 만들기 블록으로만 만든다
+					if (type.Kind == VariableTypeKind.Array) return Reject(data, "array는 선언 블록이 아니라 배열 만들기 블록으로 만듭니다.");
 					if (string.IsNullOrEmpty(name)) return Reject(data, "선언 블록의 이름 칸이 비어 있습니다.");
 
 					// initializer는 비워도 된다. 그때는 실행할 때 기본값을 넣는다
@@ -176,6 +205,33 @@ public static class FunctionDataConverter
 
 					ValueBlock initialValue = ConvertValue(data, initialSlot);
 					return initialValue == null ? null : new DeclareBlock(name, type, initialValue);
+				}
+
+				// 칸: 원소 타입, 이름, 길이
+				case BlockKind.ArrayDeclare when block.Slots.Count >= 3:
+				{
+					VariableType elementType = block.Slots[0].Type;
+					string name = block.Slots[1].Name;
+					if (!RuntimeValue.IsSupportedType(VariableType.ArrayOf(elementType)))
+						return Reject(data, $"{elementType?.Kind} 원소의 array는 아직 실행할 수 없습니다.");
+					if (string.IsNullOrEmpty(name)) return Reject(data, "배열 만들기 블록의 이름 칸이 비어 있습니다.");
+					// 편집 화면도 길이 칸에 1 이상의 숫자만 직접 입력하게 막지만, 저장된 데이터를 한 번 더 확인한다
+					if (!TryGetArrayLength(block.Slots[2], out int length))
+						return Reject(data, $"array {name}의 길이는 직접 입력한 1 이상의 정수여야 합니다.");
+
+					return new ArrayDeclareBlock(name, elementType, length);
+				}
+
+				// 칸: array 변수, index, 쓸 값
+				case BlockKind.ArraySet when block.Slots.Count >= 3:
+				{
+					string arrayName = block.Slots[0].VariableName;
+					if (string.IsNullOrEmpty(arrayName)) return Reject(data, "원소 쓰기 블록의 array 칸이 비어 있습니다.");
+
+					ValueBlock index = ConvertValue(data, block.Slots[1]);
+					if (index == null) return null;
+					ValueBlock value = ConvertValue(data, block.Slots[2]);
+					return value == null ? null : new ArraySetBlock(arrayName, index, value);
 				}
 
 				// 칸: 변수, 값
@@ -261,6 +317,17 @@ public static class FunctionDataConverter
 			{
 				Reject(data, $"{function.Name}의 argument가 파라미터 수({function.Parameters.Count})보다 많습니다.");
 				return false;
+			}
+			// 비동기 함수는 부른 함수보다 늦게 끝날 수 있다. 부른 함수가 끝나 프레임과 함께 array의 칸이 돌아가도, 비동기 작업이 메모리 없이 그 array를 계속 쓰게 되므로 막는다
+			// C에서는 끝난 함수의 array를 가리키는 포인터(dangling pointer)라서 정의되지 않은 동작이다
+			if (function.IsAsync)
+			{
+				foreach (ParameterData parameter in function.Parameters)
+				{
+					if (parameter.Type?.Kind != VariableTypeKind.Array) continue;
+					Reject(data, $"{function.Name}은(는) 비동기 함수라 array 파라미터 {parameter.Name}에 값을 넘길 수 없습니다.");
+					return false;
+				}
 			}
 			// 사용자 정의 함수는 argument를 빠뜨릴 수 없다. C와 같다. 비운 칸을 「값 없음」으로 받는 것은 사전 정의 함수(스킬)만이다
 			if (block.IsUserFunction && block.Slots.Count < function.Parameters.Count)
@@ -371,6 +438,16 @@ public static class FunctionDataConverter
 					return new MallocBlock(definition);
 				}
 
+				// 칸: array 변수, index
+				case BlockKind.ArrayGet when block.Slots.Count >= 2:
+				{
+					string arrayName = block.Slots[0].VariableName;
+					if (string.IsNullOrEmpty(arrayName)) return Reject<ValueBlock>(data, "원소 읽기 블록의 array 칸이 비어 있습니다.");
+
+					ValueBlock index = ConvertValue(data, block.Slots[1]);
+					return index == null ? null : new ArrayGetBlock(arrayName, index);
+				}
+
 				// 값을 돌려주는 함수(사전 정의 함수, 사용자 정의 함수). 칸: 파라미터 수만큼의 값
 				case BlockKind.Function:
 				{
@@ -379,7 +456,7 @@ public static class FunctionDataConverter
 					VariableType returnType = function.ReturnType;
 					if (returnType.Kind == VariableTypeKind.Void)
 						return Reject<ValueBlock>(data, $"{function.Name}은(는) 값을 돌려주지 않으므로 expression으로 쓸 수 없습니다.");
-					if (!RuntimeValue.IsSupportedType(returnType))
+					if (!RuntimeValue.IsSupportedType(returnType) || returnType.Kind == VariableTypeKind.Array)
 						return Reject<ValueBlock>(data, $"{function.Name}의 반환 타입 {returnType.Kind}은(는) 아직 실행할 수 없습니다.");
 					// 비동기 함수는 끝나기를 기다리지 않으므로 반환 값을 받을 수 없다
 					if (function.IsAsync)

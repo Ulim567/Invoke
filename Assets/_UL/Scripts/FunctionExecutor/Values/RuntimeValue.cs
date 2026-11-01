@@ -80,6 +80,19 @@ public readonly struct RuntimeValue
 	}
 
 	/// <summary>
+	/// array 값. arrayType은 array 타입 자체다(예: ArrayOf(Int)). 원소는 storage가 가지며, 이 값은 storage를 가리키기만 한다.
+	/// </summary>
+	// 이 값만은 원소가 바뀔 수 있다. C에서 array를 함수에 넘기면 같은 원소를 보는 것과 같게 하기 위함
+	// 다른 변수에 통째로 옮기는 일(arr = other)은 대입 블록이 TypeMismatch로 막는다. C에서도 array는 통째로 대입할 수 없기 때문
+	internal static RuntimeValue FromArray(VariableType arrayType, ArrayStorage storage)
+	{
+		if (arrayType == null) throw new ArgumentNullException(nameof(arrayType));
+		if (arrayType.Kind != VariableTypeKind.Array)
+			throw new ArgumentException($"array 타입이 아닙니다: {arrayType.Kind}", nameof(arrayType));
+		return new RuntimeValue(arrayType, storage);
+	}
+
+	/// <summary>
 	/// 「대상 없음」이면 true. 죽었거나 오브젝트가 없어진 대상은 「대상 없음」이 아니다.
 	/// </summary>
 	// C의 해제한 포인터가 NULL이 아닌 것과 같다. 그래서 if (b != NULL)을 지나도, 스킬에 넘기는 순간 InvalidTarget이 난다
@@ -113,7 +126,7 @@ public readonly struct RuntimeValue
 	internal static bool IsNullType(VariableType type) => type?.Kind == VariableTypeKind.Pointer && type.ElementType == null;
 
 	/// <summary>
-	/// 지금 실행기가 값으로 다룰 수 있는 타입이면 true. int, float, bool, string, char, 미리 정한 struct의 포인터(예: Sword*), 대상(Target).
+	/// 지금 실행기가 값으로 다룰 수 있는 타입이면 true. int, float, bool, string, char, 미리 정한 struct의 포인터(예: Sword*), 대상(Target), 그 타입들의 array.
 	/// </summary>
 	// 함수 데이터를 바꿀 때 아직 다루지 않는 타입(위치, 배열, 정의되지 않은 struct 등)의 변수를 미리 거르기 위함
 	internal static bool IsSupportedType(VariableType type)
@@ -127,6 +140,8 @@ public readonly struct RuntimeValue
 			// 지금 포인터를 만드는 곳은 malloc뿐이고, malloc은 미리 정한 struct만 만든다
 			VariableTypeKind.Pointer => type.ElementType?.Kind == VariableTypeKind.Struct
 				&& PredefinedStructs.TryGet(type.ElementType.StructName, out _),
+			// 2차원 array(array의 array)는 아직 다루지 않는다
+			VariableTypeKind.Array => type.ElementType != null && type.ElementType.Kind != VariableTypeKind.Array && IsSupportedType(type.ElementType),
 			_ => false,
 		};
 	}
@@ -140,6 +155,7 @@ public readonly struct RuntimeValue
 	public int AsPointer() => (int)value;
 	// 종류가 Bug인 대상의 몬스터. 「대상 없음」이면 null이다
 	public Monster AsBug() => (Monster)value;
+	internal ArrayStorage AsArray() => (ArrayStorage)value;
 
 	// 종류와 상관없이 대상 오브젝트를 꺼낸다. 대상끼리 비교하거나 로그에 이름을 적을 때 쓴다. 「대상 없음」이면 null이다
 	internal UnityEngine.Object TargetObject => (UnityEngine.Object)value;
@@ -160,6 +176,7 @@ public readonly struct RuntimeValue
 			VariableTypeKind.String => $"\"{AsString()}\"",
 			VariableTypeKind.Pointer => $"포인터 {AsPointer()}",
 			// 없어진 오브젝트의 name을 읽으면 예외가 나므로 먼저 거른다
+			VariableTypeKind.Array => $"array (길이 {AsArray().Length})",
 			VariableTypeKind.Target => IsNoTarget ? "(대상 없음)" : TargetObject == null ? "(없어진 대상)" : TargetObject.name,
 			_ => value.ToString(),
 		};

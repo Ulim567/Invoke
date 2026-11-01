@@ -26,6 +26,10 @@ public enum BlockKind
 	Function,
 	Return,
 	Wait,
+	// array 원소 읽기(arr[i]). 값 칸에 끼운다
+	ArrayGet,
+	// array 원소 쓰기(arr[i] = 값)
+	ArraySet,
 }
 
 /// <summary>
@@ -102,7 +106,7 @@ public class BlockData
 	public static bool CanBeValue(BlockKind kind) => kind switch
 	{
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not
-			or BlockKind.Malloc or BlockKind.Function => true,
+			or BlockKind.Malloc or BlockKind.Function or BlockKind.ArrayGet => true,
 		_ => false,
 	};
 
@@ -246,6 +250,18 @@ public class BlockData
 	/// </summary>
 	public static BlockData ArrayDeclare(VariableType elementType, string name, SlotData length) =>
 		Create(BlockKind.ArrayDeclare, SlotData.FromTypeOption(elementType), SlotData.FromName(name), length);
+
+	/// <summary>
+	/// array 원소 읽기 블록. 값 칸에 끼워 쓴다. 예: arr[i]. arrayName은 배열 만들기 블록이나 파라미터로 만든 array 변수의 이름이다.
+	/// </summary>
+	public static BlockData ArrayGet(string arrayName, SlotData index) =>
+		Create(BlockKind.ArrayGet, SlotData.VariableOnly(arrayName), index);
+
+	/// <summary>
+	/// array 원소 쓰기 블록. 예: arr[i] = 5
+	/// </summary>
+	public static BlockData ArraySet(string arrayName, SlotData index, SlotData value) =>
+		Create(BlockKind.ArraySet, SlotData.VariableOnly(arrayName), index, value);
 
 	/// <summary>
 	/// malloc 블록. 값 칸에 끼워 쓴다. 예: Sword* s = malloc(Sword)

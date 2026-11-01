@@ -174,6 +174,10 @@ public class UserFunction : FunctionBlock
 
 	static RuntimeValue DefaultValue(FunctionContext context, VariableType type)
 	{
+		// array 파라미터는 길이 0인 array로 둔다. 어떤 원소를 읽어도 IndexOutOfRange가 난다
+		// 언어 규칙에 array의 기본값이 없고, 넘겨받은 array가 없다는 것을 실행 중에 바로 드러내기 위함
+		if (type.Kind == VariableTypeKind.Array) return RuntimeValue.FromArray(type, new ArrayStorage(type.ElementType, 0, default));
+
 		context.Rule.TryGetDefaultValue(type, out RuntimeValue value);
 		return value;
 	}

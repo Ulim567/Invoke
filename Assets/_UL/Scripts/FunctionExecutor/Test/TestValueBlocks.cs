@@ -15,22 +15,22 @@ public class TestDeclareBlock : Block
 		this.value = value;
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		task.CurrentVariables.TryDeclare(name, value.Type, value);
+		context.CurrentVariables.TryDeclare(name, value.Type, value);
 		return BlockResult.Done;
 	}
 }
 
 /// <summary>
-/// 값 블록 테스트용 읽기 블록. 값 칸 하나를 실행하고, 읽은 값을 onRead로 넘긴다. 값 칸이 실패하면 이 블록도 실패한다.<br/>
-/// 값 칸을 가진 실제 블록(선언, 대입 등)이 값 블록을 쓰는 방식과 같다.
+/// 값 블록 테스트용 읽기 블록. value slot 하나를 실행하고, 읽은 값을 onRead로 넘긴다. value slot이 실패하면 이 블록도 실패한다.<br/>
+/// value slot을 가진 실제 블록(선언, 대입 등)이 값 블록을 쓰는 방식과 같다.
 /// </summary>
 public class TestReadBlock : Block
 {
 	readonly ValueBlock valueOriginal;
 	readonly Action<RuntimeValue> onRead;
-	// 이 실행에서 쓰는 값 칸의 복사본. 원본은 여러 작업이 함께 쓰므로 실행을 시작할 때 만든다
+	// 이 실행에서 쓰는 value slot의 복사본. 원본은 여러 작업이 함께 쓰므로 실행을 시작할 때 만든다
 	ValueBlock value;
 
 	public TestReadBlock(ValueBlock value, Action<RuntimeValue> onRead)
@@ -39,23 +39,23 @@ public class TestReadBlock : Block
 		this.onRead = onRead;
 	}
 
-	protected override void OnStart(FunctionTask task)
+	protected override void OnStart(FunctionContext context)
 	{
 		value = (ValueBlock)valueOriginal.Clone();
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		BlockResult result = value.Execute(task);
+		BlockResult result = value.Execute(context);
 		if (result != BlockResult.Done) return result;
 
 		onRead(value.Result);
 		return BlockResult.Done;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
-		value?.Cancel(task);
+		value?.Cancel(context);
 	}
 }
 
@@ -65,16 +65,16 @@ public class TestReadBlock : Block
 /// </summary>
 public class TestProbeBlock : Block
 {
-	readonly Action<FunctionTask> onRun;
+	readonly Action<FunctionContext> onRun;
 
-	public TestProbeBlock(Action<FunctionTask> onRun)
+	public TestProbeBlock(Action<FunctionContext> onRun)
 	{
 		this.onRun = onRun;
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
-		onRun(task);
+		onRun(context);
 		return BlockResult.Done;
 	}
 }

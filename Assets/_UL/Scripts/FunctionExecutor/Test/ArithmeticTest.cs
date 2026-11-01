@@ -24,13 +24,13 @@ public class ArithmeticTest : MonoBehaviour
 		startTick = executor.CurrentTick;
 		executor.TaskEnded += OnTaskEnded;
 
-		TestCRules(executor.Rule);
+		TestCRules(GetComponent<LanguageRule>().Rule);
 		TestOtherRules();
 		CastFunctions();
 	}
 
 	// 테스트 1: C 규칙(연결한 언어 규칙 파일)의 계산과 변환
-	void TestCRules(LanguageRule c)
+	void TestCRules(LanguageRuleData c)
 	{
 		Check("C 파일의 규칙이 ImplicitAll, float % 금지", c.NumericConversion == NumericConversion.ImplicitAll && !c.AllowFloatModulo);
 
@@ -60,7 +60,7 @@ public class ArithmeticTest : MonoBehaviour
 	// 테스트 2: C가 아닌 언어의 규칙(이후 다른 언어를 더할 때 쓸 규칙)
 	void TestOtherRules()
 	{
-		LanguageRule widening = LanguageRule.CreateForTest(NumericConversion.WideningOnly, true);
+		LanguageRuleData widening = LanguageRuleData.CreateForTest(NumericConversion.WideningOnly, true);
 		CheckCalc(widening, "[WideningOnly] 3 + 0.5", RuntimeValue.FromInt(3), ArithmeticOperator.Add, RuntimeValue.FromFloat(0.5f), "3.5");
 		CheckCalc(widening, "[WideningOnly] 'a' + 1", RuntimeValue.FromChar('a'), ArithmeticOperator.Add, RuntimeValue.FromInt(1), "98");
 		CheckCalc(widening, "[WideningOnly] 5.5 % 2", RuntimeValue.FromFloat(5.5f), ArithmeticOperator.Modulo, RuntimeValue.FromInt(2), "1.5");
@@ -68,7 +68,7 @@ public class ArithmeticTest : MonoBehaviour
 		CheckStore(widening, "[WideningOnly] float에 3", RuntimeValue.FromInt(3), Float, "3");
 		CheckStoreFails(widening, "[WideningOnly] int에 0.5", RuntimeValue.FromFloat(0.5f), Int);
 
-		LanguageRule strict = LanguageRule.CreateForTest(NumericConversion.Strict, false);
+		LanguageRuleData strict = LanguageRuleData.CreateForTest(NumericConversion.Strict, false);
 		CheckCalcFails(strict, "[Strict] 3 + 0.5", RuntimeValue.FromInt(3), ArithmeticOperator.Add, RuntimeValue.FromFloat(0.5f), FunctionFailure.TypeMismatch);
 		CheckCalcFails(strict, "[Strict] 'a' + 1", RuntimeValue.FromChar('a'), ArithmeticOperator.Add, RuntimeValue.FromInt(1), FunctionFailure.TypeMismatch);
 		CheckStoreFails(strict, "[Strict] float에 3", RuntimeValue.FromInt(3), Float);
@@ -147,31 +147,31 @@ public class ArithmeticTest : MonoBehaviour
 
 	void CheckFailed(FunctionTask task, int tick, FunctionFailure expected, FailureCategory expectedCategory)
 	{
-		FailureCategory category = task.Failure.HasValue ? executor.GetFailureCategory(task.Failure.Value) : FailureCategory.NotCodeError;
+		FailureCategory? category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : null;
 		Check($"{task.Name}: 틱 2에 {expected}({expectedCategory})로 실패",
 			task.Failure == expected && category == expectedCategory && tick == 2,
 			$"실제 틱 {tick}, {task.Failure}, {category}");
 	}
 
-	static void CheckCalc(LanguageRule rule, string name, RuntimeValue left, ArithmeticOperator op, RuntimeValue right, string expected)
+	static void CheckCalc(LanguageRuleData rule, string name, RuntimeValue left, ArithmeticOperator op, RuntimeValue right, string expected)
 	{
 		bool ok = NumericRules.TryCalculate(op, left, right, rule, out RuntimeValue result, out FunctionFailure failure);
 		Check($"{name} = {expected}", ok && result.ToString() == expected, ok ? $"실제 {result}" : $"실패 {failure}");
 	}
 
-	static void CheckCalcFails(LanguageRule rule, string name, RuntimeValue left, ArithmeticOperator op, RuntimeValue right, FunctionFailure expected)
+	static void CheckCalcFails(LanguageRuleData rule, string name, RuntimeValue left, ArithmeticOperator op, RuntimeValue right, FunctionFailure expected)
 	{
 		bool ok = NumericRules.TryCalculate(op, left, right, rule, out RuntimeValue result, out FunctionFailure failure);
 		Check($"{name} → {expected}", !ok && failure == expected, ok ? $"실제 결과 {result}" : $"실제 {failure}");
 	}
 
-	static void CheckStore(LanguageRule rule, string name, RuntimeValue value, VariableType target, string expected)
+	static void CheckStore(LanguageRuleData rule, string name, RuntimeValue value, VariableType target, string expected)
 	{
 		bool ok = NumericRules.TryConvertForStore(value, target, rule, out RuntimeValue converted);
 		Check($"{name} → {expected}", ok && converted.ToString() == expected, ok ? $"실제 {converted}" : "바꾸지 못함");
 	}
 
-	static void CheckStoreFails(LanguageRule rule, string name, RuntimeValue value, VariableType target)
+	static void CheckStoreFails(LanguageRuleData rule, string name, RuntimeValue value, VariableType target)
 	{
 		Check($"{name} → TypeMismatch", !NumericRules.TryConvertForStore(value, target, rule, out _));
 	}

@@ -5,7 +5,7 @@ using UnityEngine;
 /// malloc 블록, free 블록 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 두 단계를 차례로 진행한다. 1단계가 끝나면 2단계를 시작한다.<br/>
 /// - 1단계(이슈 완료 조건 4): malloc에서 HeapUsed가 오르고 free에서 내려가는지<br/>
-/// - 2단계(이슈 완료 조건 5): heap이 모자라면 변수에 NullPointer가 담기고, 그 변수로 free하면 InvalidPointerError로 실패하는지<br/>
+/// - 2단계(이슈 완료 조건 5): heap이 모자라면 변수에 NullPointer가 담기고, 그 변수로 free하면 InvalidPointer로 실패하는지<br/>
 /// 메모리 크기가 4칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다.
 /// </summary>
 [RequireComponent(typeof(FunctionExecutor))]
@@ -62,14 +62,14 @@ public class MallocFreeTest : MonoBehaviour
 		}
 
 		List<Block> blocks = new List<Block>(converted.Blocks);
-		blocks.Insert(1, new TestProbeBlock(task => CheckHeap("malloc 뒤", 2)));
-		blocks.Add(new TestProbeBlock(task => CheckHeap("free 뒤", 0)));
+		blocks.Insert(1, new TestProbeBlock(context => CheckHeap("malloc 뒤", 2)));
+		blocks.Add(new TestProbeBlock(context => CheckHeap("free 뒤", 0)));
 		BeginStage();
 		executor.Cast(new UserFunction(converted.Name, converted.FrameSize, blocks.ToArray()));
 	}
 
 	// 2단계. heap을 이 함수의 프레임(2칸)만 남기고 채운 뒤 시전한다
-	// 틱 1 malloc(실패), 틱 2 선언, 틱 3 s 읽기, 틱 4 free → InvalidPointerError
+	// 틱 1 malloc(실패), 틱 2 선언, 틱 3 s 읽기, 틱 4 free → InvalidPointer
 	void CastHeapFull()
 	{
 		if (!FunctionDataConverter.TryConvert(MakeMallocFree("HeapFull"), out UserFunction converted))
@@ -104,10 +104,10 @@ public class MallocFreeTest : MonoBehaviour
 				break;
 
 			case "HeapFull":
-				InvalidPointerError error = task.Error as InvalidPointerError;
-				Check("HeapFull: 틱 4에 InvalidPointerError(포인터 0)로 실패",
-					task.Failure == FunctionFailure.SkillFailed && error != null && error.Pointer == HeapStorage.NullPointer && tick == 4,
-					$"실제 틱 {tick}, {task.Failure}, {task.Error?.Message}");
+				FailureCategory? category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : null;
+				Check("HeapFull: 틱 4에 InvalidPointer(RuntimeError)로 실패",
+					task.Failure == FunctionFailure.InvalidPointer && category == FailureCategory.RuntimeError && tick == 4,
+					$"실제 틱 {tick}, {task.Failure}, {category}");
 				memory.Heap.Free(fillerPointer);
 				Check("테스트가 끝난 뒤 HeapUsed가 시작할 때와 같음", memory.HeapUsed == heapAtStart, $"시작 {heapAtStart}, 지금 {memory.HeapUsed}");
 				break;

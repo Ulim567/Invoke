@@ -23,7 +23,7 @@ public class TestRepeatBlock : Block
 		this.body = body;
 	}
 
-	protected override BlockResult Step(FunctionTask task)
+	protected override BlockResult Step(FunctionContext context)
 	{
 		// 반복 횟수가 0이어도 최소 1틱은 쓰게 한다
 		if (count <= 0) return BlockResult.Done;
@@ -36,11 +36,11 @@ public class TestRepeatBlock : Block
 			iterationStarted = true;
 		}
 
-		BlockResult result = runningBlock.Execute(task);
+		BlockResult result = runningBlock.Execute(context);
 
 		// 안쪽 함수가 프레임을 받은 뒤에 찍어야 반복 중의 스택 사용량이 보인다
 		if (iterationStarted)
-			Debug.Log($"[틱 {task.Executor.CurrentTick}] {task.Name}: 반복 {doneCount + 1}회째 / 스택 {task.Memory.StackUsed}/{task.Memory.Capacity}");
+			Debug.Log($"[틱 {context.Caster.GetComponent<FunctionExecutor>().CurrentTick}] {context.Caster.name}: 반복 {doneCount + 1}회째 / 스택 {context.Memory.StackUsed}/{context.Memory.Capacity}");
 
 		if (result == BlockResult.Running) return BlockResult.Running;
 
@@ -53,9 +53,9 @@ public class TestRepeatBlock : Block
 		return doneCount >= count ? BlockResult.Done : BlockResult.Running;
 	}
 
-	protected override void OnCancel(FunctionTask task)
+	protected override void OnCancel(FunctionContext context)
 	{
 		// 실행 중인 안쪽 블록도 함께 끊어서, 안쪽 함수가 프레임을 돌려주게 한다
-		runningBlock?.Cancel(task);
+		runningBlock?.Cancel(context);
 	}
 }

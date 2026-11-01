@@ -183,6 +183,37 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 슬롯에서 넘긴 함수(원본)로 시전한 작업만 끊는다. 플레이어가 그 슬롯의 작업을 취소할 때 부른다.<br/>
+	/// 진행 중인 작업과 다음 틱을 기다리는 작업이 모두 대상이다. 끊은 작업이 있으면 true, 없으면 false를 돌려준다.<br/>
+	/// 끊긴 작업은 EndReason이 Cancelled가 된다. 그 밖의 처리(OnCancel, 스택 반환, 누수, 쿨타임)는 InterruptAll과 같다.<br/>
+	/// 같은 스킬이 다른 함수 안에서 실행 중이어도 그 작업은 끊지 않는다. 그 작업이 비동기 호출로 만든 작업도 따로 시전된 작업이라 끊지 않는다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool Cancel(FunctionBlock function)
+	{
+		if (function == null) throw new ArgumentNullException(nameof(function));
+
+		bool cancelled = false;
+		// InterruptAll과 같은 이유로 번호로 돌고 Count를 매번 다시 읽는다(OnCancel에서 Cast를 부를 수 있음)
+		for (int i = 0; i < tasks.Count; i++)
+			cancelled |= TryCancel(tasks[i], function);
+		for (int i = 0; i < pendingTasks.Count; i++)
+			cancelled |= TryCancel(pendingTasks[i], function);
+		return cancelled;
+	}
+
+	// 슬롯에서 그 원본으로 시전한 작업이면 끊는다. 이미 끝난 작업은 끊은 것으로 세지 않는다
+	// 원본(CastSource)으로 찾는 이유: 플레이어가 누른 그 슬롯의 작업만 끊기 위함(사용자 결정)
+	// 스킬은 다른 함수 안에서 실행 중이기만 해도 IsRunning이 true지만, 그때 Cancel은 아무것도 끊지 않고 false다
+	static bool TryCancel(FunctionTask task, FunctionBlock function)
+	{
+		if (task.IsEnded || task.CastSource != function) return false;
+
+		task.Interrupt(FunctionTaskEndReason.Cancelled);
+		return true;
+	}
+
+	/// <summary>
 	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다.<br/>
 	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
 	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.

@@ -28,6 +28,8 @@ public enum FunctionTaskEndReason
 	// 개발자가 만든 것(스킬 코드, 언어 규칙 파일)에 잘못이 있었다. 실행기가 콘솔 오류를 내고, 화면은 플레이어의 에러로 보여 주지 않는다
 	// 예: 스킬이 Return을 빠뜨림, 언어 규칙 표에 그 실패 종류의 줄이 없음
 	InternalError,
+	// 플레이어가 그 슬롯의 작업을 취소했다(FunctionExecutor.Cancel). 끊는 처리는 Interrupted와 같고, 화면이 실행 중단 공격과 나누어 보여 주도록 따로 둔다
+	Cancelled,
 }
 
 /// <summary>
@@ -167,14 +169,15 @@ public class FunctionTask
 		return true;
 	}
 
-	// 실행 도중에 작업을 끊는다. 실행 중단 공격을 받으면 실행기의 InterruptAll이 부른다
-	internal void Interrupt()
+	// 실행 도중에 작업을 끊는다. 실행 중단 공격(InterruptAll)은 Interrupted로, 플레이어의 취소(Cancel)는 Cancelled로 부른다
+	// 끊는 과정은 하나로 둔다. 끊은 이유에 따라 heap·쿨타임·프레임 처리가 달라지지 않게 하기 위함
+	internal void Interrupt(FunctionTaskEndReason reason = FunctionTaskEndReason.Interrupted)
 	{
 		if (IsEnded) return;
 
 		// 실행 중인 블록들이 안쪽까지 차례로 OnCancel을 받아 정리하게 한다
 		function.Cancel(context);
-		End(FunctionTaskEndReason.Interrupted);
+		End(reason);
 	}
 
 	// 실행기가 실패를 처리하며 이 작업을 끝낼 때도 부른다

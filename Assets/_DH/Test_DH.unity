@@ -1280,7 +1280,7 @@ PrefabInstance:
       objectReference: {fileID: 1350488849343141080, guid: e46fe45528e6d3b479f27e00ab0479f5, type: 3}
     - target: {fileID: 9053282932516694083, guid: 0d67938a1d1d3e147961e8211aeef698, type: 3}
       propertyPath: spawnPrefabs.Array.size
-      value: 2
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 9053282932516694083, guid: 0d67938a1d1d3e147961e8211aeef698, type: 3}
       propertyPath: 'spawnPrefabs.Array.data[0]'
@@ -1290,6 +1290,10 @@ PrefabInstance:
       propertyPath: 'spawnPrefabs.Array.data[1]'
       value: 
       objectReference: {fileID: 4097032019296542800, guid: 1ae893bbf5142a4458dda1f205a0a15e, type: 3}
+    - target: {fileID: 9053282932516694083, guid: 0d67938a1d1d3e147961e8211aeef698, type: 3}
+      propertyPath: 'spawnPrefabs.Array.data[2]'
+      value: 
+      objectReference: {fileID: 1479847432320999303, guid: febdee519fada5544af0bd4eccc61fb5, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2148,6 +2152,67 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+--- !u!1001 &8630720295027418311
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -2.7931
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.63628
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 247586136778702321, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1495201610127570355, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_Name
+      value: Gateway
+      objectReference: {fileID: 0}
+    - target: {fileID: 1822836462144901155, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: sceneId
+      value: 523493663
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2161,3 +2226,4 @@ SceneRoots:
   - {fileID: 1653660839}
   - {fileID: 5596201441315253939}
   - {fileID: 689834509}
+  - {fileID: 8630720295027418311}

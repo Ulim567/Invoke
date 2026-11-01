@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 /// <summary>
 /// array 하나의 원소들. 배열 만들기 블록이 만들고, array 변수에는 이 저장소를 가리키는 값(RuntimeValue.FromArray)이 담긴다.
 /// <para>
@@ -30,15 +32,19 @@ internal class ArrayStorage
 
 	public void Set(int index, RuntimeValue value) => elements[index] = value;
 
+	// 모든 원소. HeapStorage가 지역 array에 담긴 포인터를 루트 집합으로 볼 때 쓴다
+	public IReadOnlyList<RuntimeValue> Elements => elements;
+
 	/// <summary>
-	/// 지금 함수의 지역 변수에서 이름이 name인 array의 원소를 찾는다. 원소 읽기·쓰기 블록이 쓴다.<br/>
+	/// 이름이 name인 array의 원소를 찾는다. 지금 함수의 지역 변수를 먼저 찾고, 없으면 캐릭터의 전역 변수를 찾는다. 원소 읽기·쓰기 블록이 쓴다.<br/>
 	/// 변수가 없으면 UndeclaredVariable, array가 아니면(예: int x에 x[0]) TypeMismatch를 기록하고 false를 돌려준다.
 	/// </summary>
+	// 전역 array는 만들 수 없지만 전역 변수도 찾는다. 전역 int x에 x[0]을 쓰면 「선언되지 않음」이 아니라 「array가 아님」으로 알려 주기 위함
 	public static bool TryFind(FunctionContext context, string name, out ArrayStorage storage)
 	{
 		storage = null;
-		// 원소 블록은 사용자 정의 함수 안에만 있으므로 지역 변수가 언제나 있다
-		if (!context.CurrentVariables.TryGet(name, out RuntimeValue value))
+		VariableStore variables = context.FindVariables(name);
+		if (variables == null || !variables.TryGet(name, out RuntimeValue value))
 		{
 			context.RecordFailure(FunctionFailure.UndeclaredVariable);
 			return false;

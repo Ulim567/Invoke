@@ -10,6 +10,7 @@ using UnityEngine;
 /// - Shadow: 지역 int count = 10을 선언하면 함수 안에서는 10, 전역 count는 4 그대로<br/>
 /// - LocalMalloc: 지역 변수에만 담은 malloc은 함수가 끝나면 누수<br/>
 /// - GlobalMalloc: mySword = malloc → 누수가 아니고 플레이어 전역 heap 2칸<br/>
+/// - HoldLocal: mySword를 지역 변수에 옮기고 mySword = NULL. 그동안 다른 작업이 끝나도 누수가 아니고, free(s)가 성공<br/>
 /// - SummonThenFail: 함수 안에서 사전 정의 malloc 함수를 부른 뒤 실패해도 그 객체는 숨은 시스템 전역에 남음<br/>
 /// - 초기화: count 3, mySword NULL, HeapUsed 0<br/>
 /// 끝나면 시작할 때의 전역 변수 파일로 되돌린다. 메모리 크기가 10칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다.
@@ -58,12 +59,16 @@ public class GlobalVariableTest : MonoBehaviour
 	// 저장: int count = 3; Sword* mySword;
 	void TestSave()
 	{
+		// 빈 파일로 먼저 초기화해, 전역 변수가 없을 때의 Free를 기준으로 삼는다
+		executor.TrySaveGlobalVariables(new GlobalVariablesData());
+		int freeWithoutGlobals = memory.Free;
+
 		bool saved = executor.TrySaveGlobalVariables(FileOf(
 			BlockData.Declare(Int, "count", SlotData.FromLiteral(Int, "3")),
 			BlockData.Declare(SwordPointer, "mySword")));
 		Check("저장 성공", saved);
 		Check("DataUsed 2", memory.DataUsed == 2, $"실제 {memory.DataUsed}");
-		Check("Free에 DataUsed가 빠짐", memory.Free == memory.Capacity - memory.DataUsed - memory.StackUsed - memory.HeapUsed, $"Free {memory.Free}");
+		Check("전역 변수 2개를 저장하면 Free가 2칸 줄어듦", freeWithoutGlobals - memory.Free == 2, $"저장 전 {freeWithoutGlobals}, 저장 후 {memory.Free}");
 		CheckGlobal("count 초기값 3", "count", "3");
 		CheckGlobal("mySword 초기값 NULL", "mySword", "포인터 0");
 	}
@@ -102,6 +107,15 @@ public class GlobalVariableTest : MonoBehaviour
 				HeapUsage usage = memory.Heap.GetUsageByOwner();
 				Check("GlobalMalloc: 전역 변수에 담은 객체는 누수가 아님", leakedCount == 1, $"누수 {leakedCount}개");
 				Check("GlobalMalloc: 플레이어 전역 heap 2칸, 누수 2칸", usage.PlayerGlobals == 2 && usage.Leaked == 2, usage.ToString());
+				CastHoldLocal();
+				break;
+
+			case "Blip":
+				break;
+
+			case "HoldLocal":
+				CheckCompleted(task);
+				Check("HoldLocal: 지역 변수로 쥔 객체를 free함 (누수로 보지 않음)", leakedCount == 1 && memory.HeapUsed == 2, $"누수 {leakedCount}개, HeapUsed {memory.HeapUsed}");
 				// 사전 정의 malloc 함수(5틱)가 끝난 뒤 없는 변수를 읽어 UndeclaredVariable로 실패한다
 				executor.Cast(new UserFunction("SummonThenFail", 1,
 					new TestMallocFunction(),
@@ -117,6 +131,32 @@ public class GlobalVariableTest : MonoBehaviour
 				TestRestart();
 				break;
 		}
+	}
+
+	// HoldLocal: 다른 작업이 malloc한 객체(mySword)를 지역 변수에만 쥔 채, 다른 작업이 끝나도 누수로 보지 않는지 (#141 검토 1번)
+	// Sword* s = mySword; mySword = NULL; (Blip 시전) (확인) (확인) free(s);
+	void CastHoldLocal()
+	{
+		FunctionData data = FunctionData.Create("HoldLocal");
+		data.Blocks.Add(BlockData.Declare(SwordPointer, "s", SlotData.FromVariable("mySword")));
+		data.Blocks.Add(BlockData.Assign("mySword", SlotData.FromNull()));
+		data.Blocks.Add(BlockData.Free(SlotData.FromVariable("s")));
+		if (!FunctionDataConverter.TryConvert(data, Array.Empty<FunctionData>(), out UserFunction converted))
+		{
+			Check("HoldLocal: 변환 성공", false);
+			return;
+		}
+
+		var blocks = new System.Collections.Generic.List<Block>(converted.Blocks);
+		// Blip은 1틱짜리 작업이다. 끝나면서 누수 판단을 부른다
+		blocks.Insert(2, new TestProbeBlock(_ => executor.Cast(new UserFunction("Blip", 1, new TestProbeBlock(__ => { })))));
+		blocks.Insert(3, new TestProbeBlock(_ => { }));
+		blocks.Insert(4, new TestProbeBlock(_ =>
+		{
+			HeapUsage usage = memory.Heap.GetUsageByOwner();
+			Check("HoldLocal: Blip이 끝난 뒤에도 지역 변수의 객체는 지역 2칸", leakedCount == 1 && usage.TaskLocals == 2, $"누수 {leakedCount}개, {usage}");
+		}));
+		executor.Cast(new UserFunction(converted.Name, converted.FrameSize, blocks.ToArray()));
 	}
 
 	// 초기화: 전역 변수는 초기값으로, heap(시스템 전역과 누수 포함)은 0으로

@@ -12,8 +12,8 @@ using System.Collections.Generic;
 /// </para>
 /// <para>
 /// 루트 집합과 누수<br/>
-/// - 루트 집합: 포인터를 보관하는 곳들. 작업마다의 포인터 목록(taskPointers), 숨은 시스템 전역(globalPointers), 플레이어의 전역 변수(ProcessMemory.Globals)에 담긴 포인터 세 가지다.<br/>
-/// - 작업이 malloc하면 그 작업의 포인터 목록에 포인터가 들어간다(C의 지역 포인터). 작업이 끝나면 그 목록은 사라진다.<br/>
+/// - 루트 집합: 포인터를 보관하는 곳들. 작업의 지역 루트, 숨은 시스템 전역(globalPointers), 플레이어의 전역 변수(ProcessMemory.Globals)에 담긴 포인터 세 가지다.<br/>
+/// - 작업의 지역 루트: 진행 중인 작업이 malloc한 포인터 목록(taskPointers)과, 실행 중인 작업들의 지역 변수에 담긴 포인터(실행기가 알려 줌). 작업이 끝나면 사라진다.<br/>
 /// - 사전 정의 함수가 정상으로 끝나면, 그 함수가 malloc한 포인터는 숨은 시스템 전역으로 옮겨진다(C 라이브러리의 static 전역 변수처럼 플레이어에게 보이지 않음).<br/>
 /// - 작업이 끝날 때 루트 집합의 어디에도 포인터가 없는 객체는 누수가 된다. 누수 객체는 힙을 계속 차지하고, 포인터로 찾을 수 없다.
 /// </para>
@@ -243,12 +243,17 @@ public class HeapStorage
 		MarkUnreachableAsLeaked();
 	}
 
+	// 실행 중인 작업들의 지역 변수에 담긴 포인터를 알려 주는 함수. 작업 목록은 실행기만 가지므로 실행기가 넣어 준다(SetRunningLocalPointers)
+	Func<IEnumerable<int>> runningLocalPointers;
+
+	// 실행기가 처음 한 번 부른다. 실행기가 없는 캐릭터(테스트 등)는 부르지 않으며, 그때는 malloc 목록만 지역 루트로 본다
+	internal void SetRunningLocalPointers(Func<IEnumerable<int>> provider) => runningLocalPointers = provider;
+
 	// 누수 판단. 루트 집합의 어디에도 포인터가 없는 객체를 누수로 표시한다(실제 C의 누수 검사, Java GC와 같은 도달 가능성 검사)
 	void MarkUnreachableAsLeaked()
 	{
 		HashSet<int> reachable = new HashSet<int>(globalPointers);
-		foreach (List<int> pointers in taskPointers.Values)
-			reachable.UnionWith(pointers);
+		reachable.UnionWith(GetTaskLocalPointers());
 		reachable.UnionWith(GetPlayerGlobalPointers());
 
 		List<object> leakedObjects = null;
@@ -270,14 +275,13 @@ public class HeapStorage
 
 	/// <summary>
 	/// 힙 칸 수를 주인별로 나눈 값. 메모리 화면이나 테스트 로그에서 읽는다.<br/>
-	/// 한 객체를 여러 곳이 가리켜도 한 번만 센다. 우선순위: 플레이어 전역 변수 → 숨은 시스템 전역 → 작업의 지역 포인터. 네 값의 합은 ProcessMemory.HeapUsed와 같다.
+	/// 한 객체를 여러 곳이 가리켜도 한 번만 센다. 우선순위: 플레이어 전역 변수 → 숨은 시스템 전역 → 작업의 지역 루트. 네 값의 합은 ProcessMemory.HeapUsed와 같다.<br/>
+	/// 아무도 쥐지 않아 다음 누수 판단 때 누수가 될 객체는 이미 누수로 센다.
 	/// </summary>
 	public HeapUsage GetUsageByOwner()
 	{
 		HashSet<int> playerGlobals = new HashSet<int>(GetPlayerGlobalPointers());
-		HashSet<int> taskLocals = new HashSet<int>();
-		foreach (List<int> pointers in taskPointers.Values)
-			taskLocals.UnionWith(pointers);
+		HashSet<int> taskLocals = new HashSet<int>(GetTaskLocalPointers());
 
 		int playerGlobalSize = 0, systemGlobalSize = 0, taskLocalSize = 0, leakedSize = 0;
 		foreach (KeyValuePair<int, HeapEntry> pair in entries)
@@ -287,23 +291,46 @@ public class HeapStorage
 			else if (playerGlobals.Contains(pair.Key)) playerGlobalSize += size;
 			else if (globalPointers.Contains(pair.Key)) systemGlobalSize += size;
 			else if (taskLocals.Contains(pair.Key)) taskLocalSize += size;
-			// 루트 집합에 없지만 아직 누수로 표시되지 않은 객체(작업이 끝나기 전에 전역 변수의 포인터를 바꾼 경우)는 다음 누수 판단 전까지 지역으로 센다
-			else taskLocalSize += size;
+			// 루트 집합의 어디에도 없어 다음 누수 판단 때 누수로 표시될 객체(예: 실행 중에 g = NULL로 놓친 객체)도 누수로 센다
+			else leakedSize += size;
 		}
 		return new HeapUsage(playerGlobalSize, systemGlobalSize, taskLocalSize, leakedSize);
 	}
 
-	// 플레이어의 전역 변수에 담긴 포인터 값들(루트 집합 3). NULL은 뺀다
-	IEnumerable<int> GetPlayerGlobalPointers()
+	// 작업의 지역 루트(루트 집합 1): 진행 중인 작업이 malloc한 포인터와, 실행 중인 작업들의 지역 변수에 담긴 포인터
+	// malloc 목록도 함께 보는 이유: malloc한 값이 아직 변수에 담기기 전(예: 선언 블록이 값을 넣기 직전의 틱)에도 누수로 보지 않기 위함
+	IEnumerable<int> GetTaskLocalPointers()
 	{
-		if (memory.Globals == null) yield break;
+		foreach (List<int> pointers in taskPointers.Values)
+			foreach (int pointer in pointers)
+				yield return pointer;
 
-		foreach (RuntimeValue value in memory.Globals.AllValues())
+		if (runningLocalPointers == null) yield break;
+		foreach (int pointer in runningLocalPointers())
+			yield return pointer;
+	}
+
+	// 플레이어의 전역 변수에 담긴 포인터 값들(루트 집합 3)
+	IEnumerable<int> GetPlayerGlobalPointers() =>
+		memory.Globals == null ? Array.Empty<int>() : PointersIn(memory.Globals.AllValues());
+
+	// 값들에 담긴 포인터 값. 포인터 값과, 원소 타입이 포인터인 array의 원소를 모은다. NULL은 뺀다
+	// 누수 판단에 쓰는 루트(전역 변수, 지역 변수)를 같은 규칙으로 읽기 위함
+	internal static IEnumerable<int> PointersIn(IEnumerable<RuntimeValue> values)
+	{
+		foreach (RuntimeValue value in values)
 		{
-			if (value.Type?.Kind != VariableTypeKind.Pointer) continue;
+			switch (value.Type?.Kind)
+			{
+				case VariableTypeKind.Pointer:
+					if (value.AsPointer() != NullPointer) yield return value.AsPointer();
+					break;
 
-			int pointer = value.AsPointer();
-			if (pointer != NullPointer) yield return pointer;
+				case VariableTypeKind.Array when value.Type.ElementType?.Kind == VariableTypeKind.Pointer:
+					foreach (RuntimeValue element in value.AsArray().Elements)
+						if (element.AsPointer() != NullPointer) yield return element.AsPointer();
+					break;
+			}
 		}
 	}
 

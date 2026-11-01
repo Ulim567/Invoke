@@ -111,8 +111,12 @@ public class ProcessMemory : MonoBehaviour
 	internal void ResetGlobals(IEnumerable<(string Name, VariableType Type, RuntimeValue Value)> variables)
 	{
 		VariableStore globals = new VariableStore();
-		foreach ((string name, VariableType type, RuntimeValue value) in variables)
-			globals.TryDeclare(name, type, value);
+		foreach ((string variableName, VariableType type, RuntimeValue value) in variables)
+		{
+			// 검사를 통과한 목록이므로 실패하지 않아야 한다. 실패하면 검사와 선언 규칙이 어긋난 코드 실수이므로 조용히 넘기지 않는다
+			if (!globals.TryDeclare(variableName, type, value))
+				Debug.LogError($"{name}: 전역 변수 {variableName}({type?.Kind})을(를) 만들지 못했습니다. GlobalVariablesConverter의 검사와 VariableStore.TryDeclare의 규칙이 어긋났습니다.", this);
+		}
 		Globals = globals;
 	}
 

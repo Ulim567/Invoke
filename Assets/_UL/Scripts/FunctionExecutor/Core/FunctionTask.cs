@@ -46,6 +46,9 @@ public class FunctionTask
 	readonly FunctionBlock function;
 	// 블록에 넘기는 실행 문맥. 작업마다 하나다
 	readonly FunctionContext context;
+
+	// 이 작업의 지역 변수에 담긴 포인터 값. 실행기가 HeapStorage에 누수 판단의 루트로 알려 준다
+	internal IEnumerable<int> GetLocalPointers() => context.GetLocalPointers();
 	// 지금 입력 요청을 실행기가 이미 InputRequested로 알렸는지. 같은 요청을 두 번 알리지 않기 위함
 	bool inputRequestAnnounced;
 

@@ -95,6 +95,15 @@ public class FunctionContext
 	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
 	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);
 
+	// 실행 중인 사용자 정의 함수들(부른 함수 포함)의 지역 변수, 파라미터, 지역 array 원소에 담긴 포인터 값
+	// HeapStorage가 누수를 판단할 때 루트로 본다. 다른 작업이 malloc한 객체를 지역 변수에만 담아 쓰는 동안 누수로 보지 않기 위함
+	internal IEnumerable<int> GetLocalPointers()
+	{
+		foreach (VariableStore variables in variableStack)
+			foreach (int pointer in HeapStorage.PointersIn(variables.AllValues()))
+				yield return pointer;
+	}
+
 	/// <summary>
 	/// 실패한 블록이 그 자리에서 실패 종류(플레이어 책임)를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
 	/// 스킬이 Fail로 낸 에러이면 error도 함께 넘긴다.

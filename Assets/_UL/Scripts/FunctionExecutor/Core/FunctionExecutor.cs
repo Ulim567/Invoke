@@ -241,9 +241,23 @@ public class FunctionExecutor : MonoBehaviour
 	// 접속하면 저장한 전역 변수를 만든다. 접속 직후에는 끊을 작업도 비울 heap도 없으므로 RestartProcess의 나머지는 하지 않는다
 	// RestartProcess를 부르지 않는 이유: 같은 오브젝트의 다른 컴포넌트가 Start에서 먼저 시전하면, 그 작업까지 끊기 때문(Start 순서는 Unity가 정하지 않음)
 	// Awake가 아니라 Start에서 하는 이유: ProcessMemory가 Awake에서 전역 변수 저장소를 만든 뒤여야 하기 때문
+	// heap이 누수를 판단할 때 실행 중인 작업들의 지역 변수도 루트로 보게 연결한다. ProcessMemory가 Awake에서 heap을 만든 뒤여야 하므로 Start에서 한다
 	void Start()
 	{
+		memory.Heap.SetRunningLocalPointers(GetRunningLocalPointers);
 		LoadGlobalVariables();
+	}
+
+	// 실행 중인 작업들의 지역 변수에 담긴 포인터
+	// 끝난 작업은 뺀다. 이번 틱에 끝나 아직 목록에 남아 있어도, 끝난 순간 지역 변수는 사라졌기 때문
+	IEnumerable<int> GetRunningLocalPointers()
+	{
+		foreach (FunctionTask task in tasks)
+		{
+			if (task.IsEnded) continue;
+			foreach (int pointer in task.GetLocalPointers())
+				yield return pointer;
+		}
 	}
 
 	void FixedUpdate()

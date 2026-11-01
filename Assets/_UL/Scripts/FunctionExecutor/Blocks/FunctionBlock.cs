@@ -33,6 +33,9 @@ public abstract class FunctionBlock : Block
 			// 실패로 끝내지 않는 이유: 반복문 안의 스킬이 쿨타임 때문에 함수 전체를 실패시키지 않고, 쓸 수 있을 때까지 기다리게 하기 위함
 			if (!CanStartNow(context)) return BlockResult.Running;
 
+			// 시작할 수 없는 값을 받았으면(예: 죽은 대상) 프레임을 받지 않고 실패한다. 실패 종류는 TryValidateStart가 기록한다
+			if (!TryValidateStart(context)) return BlockResult.Failed;
+
 			// 프레임을 쌓을 공간이 없으면 시작하지 않는다. 시작하지 않았으므로 정리할 것도 없다
 			if (!TryAllocateFrame(context))
 			{
@@ -57,6 +60,10 @@ public abstract class FunctionBlock : Block
 	// 시작하기 전, 틱마다 불린다. false이면 이번 틱에는 시작하지 않고 기다린다
 	// 기다리는 동안 끊기면 시작하지 않은 것이므로 정리할 것이 없다
 	internal virtual bool CanStartNow(FunctionContext context) => true;
+
+	// 기다림이 끝난 뒤, 프레임을 받기 직전에 한 번 불린다. false이면 시작하지 않고 실패하며, 실패 종류를 이 함수가 기록한다
+	// 기다림(CanStartNow)이 끝난 뒤에 보는 이유: 쿨타임을 기다리는 동안 대상이 죽을 수 있기 때문
+	internal virtual bool TryValidateStart(FunctionContext context) => true;
 
 	// 프레임을 받은 직후에 한 번 불린다. 프레임을 받지 못해(Overflow) 시작하지 않은 함수에는 불리지 않는다
 	// 블록의 실행 단계(OnStart)가 아니라 프레임 시점에 두는 이유: 스킬 작성자가 덮어쓰는 OnStart와 섞이지 않고, BeforeFrameReleased와 짝이 항상 맞게 하기 위함

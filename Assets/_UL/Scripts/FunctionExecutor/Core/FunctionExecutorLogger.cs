@@ -21,6 +21,7 @@ public class FunctionExecutorLogger : MonoBehaviour
 		executor.TaskStarted += LogStarted;
 		executor.TaskEnded += LogEnded;
 		executor.CastRejected += LogRejected;
+		executor.InputRequested += LogInputRequested;
 	}
 
 	void OnDisable()
@@ -28,6 +29,7 @@ public class FunctionExecutorLogger : MonoBehaviour
 		executor.TaskStarted -= LogStarted;
 		executor.TaskEnded -= LogEnded;
 		executor.CastRejected -= LogRejected;
+		executor.InputRequested -= LogInputRequested;
 	}
 
 	void LogStarted(FunctionTask task)
@@ -46,6 +48,12 @@ public class FunctionExecutorLogger : MonoBehaviour
 		// 슬롯에서 시전한 작업이면, 그 함수의 남은 쿨타임도 찍는다. 스킬이면 방금 시작된 쿨타임이고, 사용자 정의 함수는 0이다
 		string cooldown = task.CastSource != null ? $" / 쿨타임 {executor.GetRemainingCooldownTicks(task.CastSource)}틱" : "";
 		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 끝 ({reason}) / 스택 {memory.StackUsed}/{memory.Capacity}{cooldown}");
+	}
+
+	// 기다리는 동안에도 프레임이 스택에 남는지 보이도록 스택 사용량을 함께 찍는다
+	void LogInputRequested(FunctionTask task, PredefinedFunction requester)
+	{
+		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 입력 대기 ({requester.Name}) / 스택 {memory.StackUsed}/{memory.Capacity}");
 	}
 
 	void LogRejected(FunctionBlock function, CastRejection rejection)

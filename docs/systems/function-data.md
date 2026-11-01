@@ -178,6 +178,8 @@
 | `new VariableType(VariableTypeKind)` | 타입 종류 | `VariableType` | 기본 타입 (예: `Int`) |
 | `ArrayOf`, `ListOf`, `PointerTo` | 원소 타입 | `VariableType` | 예: `Sword*` = `PointerTo(StructOf("Sword"))` |
 | `StructOf(string)` | struct 이름 | `VariableType` | 예: `Sword` |
+| `TargetOf(TargetKind?)` | 대상 종류 | `VariableType` | 대상 타입. 예: 몬스터 = `TargetOf(TargetKind.Bug)`. 종류를 `null`로 두면 어떤 종류의 대상이든 받는 타입 (#131) |
+| `TargetKind` | - | `TargetKind?` | 대상의 종류. `Target`이 아니면 `null`. 지금 값은 `Bug`(몬스터)만. JSON에는 `null`이 아닐 때만 적힘(예: `{"Kind":"Target","TargetKind":"Bug"}`) (#131) |
 | `new ParameterData(string, VariableType)` | 이름, 타입 | `ParameterData` | |
 
 ### `PredefinedStructs` (미리 정한 struct 목록, #90)

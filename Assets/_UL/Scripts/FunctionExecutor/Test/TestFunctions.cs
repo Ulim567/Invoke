@@ -187,6 +187,28 @@ public class TestArgumentFunction : PredefinedFunction
 }
 
 /// <summary>
+/// 대상 파라미터 테스트용 함수. Target(종류 Bug) 파라미터 target 하나를 받고, 시작할 때 읽은 대상을 TargetRead로 알린다. 1틱 동안 진행한다.
+/// </summary>
+public class TestTargetFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestTargetFunction;
+	public override string Name => "TestTargetFunction";
+	public override int TickCount => 1;
+	public override System.Collections.Generic.IReadOnlyList<ParameterData> Parameters =>
+		new[] { new ParameterData("target", VariableType.TargetOf(TargetKind.Bug)) };
+
+	/// <summary>
+	/// 시작할 때 읽은 대상의 몬스터. 값이 없으면 null을 넘긴다. 테스트 컴포넌트가 결과를 확인할 때 쓴다.
+	/// </summary>
+	public static event System.Action<Monster> TargetRead;
+
+	protected override void OnStart(FunctionContext context)
+	{
+		TargetRead?.Invoke(TryGetArgument("target", out RuntimeValue target) ? target.AsBug() : null);
+	}
+}
+
+/// <summary>
 /// 반환 값 테스트용 함수. int 파라미터 amount를 받아 마지막 틱에 amount × 2를 돌려준다. 3틱 동안 진행하고 쿨타임은 4틱이다.
 /// </summary>
 public class TestReturnFunction : PredefinedFunction

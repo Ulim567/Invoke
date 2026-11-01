@@ -8,10 +8,11 @@
 - 스킬 코드에서 에러로 끝내기(`Fail`), 일찍 끝내기(`Stop`)와 스킬 에러(`SkillError`) 형식
 - 스킬 코드에서 heap 쓰기(`Malloc`, `Free`, `TryGetHeapObject`)
 - 스킬 코드에서 파라미터 값 읽기(`TryGetArgument`), 반환 값 정하기(`Return`) (#90)
+- 입력 함수(`InputFunction`) 만드는 형식, 대상 입력 함수 `GetBug` (#131)
 - 하지 않는 일
   - 에러가 났을 때의 처리(그 작업만 끝냄, 페널티 등): 캐릭터 언어의 언어 규칙 파일 (`function-executor.md` 「실패 처리」)
-  - 실행: `FunctionExecutor` (`function-executor.md`)
-  - 실제 대상 입력(`Target` 값 만들기): 「함수 실행 중 대상 입력 기다리기」 이슈
+  - 실행, 입력 대기: `FunctionExecutor` (`function-executor.md` 「입력 대기」)
+  - 플레이어가 대상을 고르는 화면 흐름: 입력을 받는 쪽(`SlotCaster`)
   - heap 칸 계산, 누수 판단: `ProcessMemory`, `HeapStorage` (`function-executor.md` 「heap」)
 
 ## 규칙
@@ -172,8 +173,9 @@ protected override void OnTick(FunctionContext context, int tick)
 | `TryGetArgument(string name, out RuntimeValue value)` | `bool` | 이름이 `name`인 파라미터의 값을 꺼냄. 값이 없으면(argument를 비움, 슬롯에서 바로 시전) `false`. 없는 이름이면 콘솔 오류 후 `false` |
 | `Return(RuntimeValue value)` | - | 반환 값을 정함. 함수를 끝내지는 않음(끝내려면 `Stop`). 여러 번 부르면 마지막 값 |
 
-- 파라미터 값을 넘기는 곳: 함수 블록의 argument. 값은 `Parameters`의 타입으로 맞춰서 넘어옴(캐릭터 언어의 숫자 타입 변환 규칙)
-  - 지금 넘어오는 타입: `int`, `float`, `bool`, `string`, `char`, 포인터. `Target` 등은 「함수 실행 중 대상 입력 기다리기」 이슈 전까지 언제나 「값 없음」
+- 파라미터 값을 넘기는 곳: 함수 블록의 argument, 슬롯 직접 시전의 `FunctionExecutor.Cast(스킬, argument)` (#131). 값은 `Parameters`의 타입으로 맞춰서 넘어옴(캐릭터 언어의 숫자 타입 변환 규칙)
+  - 지금 넘어오는 타입: `int`, `float`, `bool`, `string`, `char`, 포인터, 대상(`Target`, #131). 위치, 방향 등은 아직 언제나 「값 없음」
+  - 대상: 몬스터는 `value.AsBug()`. 「대상 없음」, 죽은 대상, 없어진 대상은 실행기가 넘기기 전에 `InvalidTarget`으로 막으므로 스킬은 쓸 수 있는 대상만 받음
   - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
 - 이름: `Parameters`에 적은 `ParameterData`의 이름
 - 반환 값이 쓰이는 곳: expression으로 쓴 함수 블록(예: `int n = CountSwords();`). statement로 놓으면 버림
@@ -212,6 +214,34 @@ protected override void OnEnd(FunctionContext context)
     - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄. 플레이어의 `free` 블록은 이 에러 대신 실패 종류 `InvalidPointer`
     - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
 
+### `InputFunction` (입력 함수 만들기, #131)
+
+플레이어에게 값을 입력받아 돌려주는 사전 정의 함수의 기반 클래스다. `PredefinedFunction`을 상속한다.
+- 고정 ID: `input.`으로 시작. 편집 화면의 블록 목록에 자동으로 나옴
+- 입력 요청: `InputFunction`만 함. C 스킬은 대상을 파라미터로만 받음
+- tick: 기다리는 동안은 `TickCount`에 넣지 않음. 기다리는 동안의 규칙은 `function-executor.md` 「입력 대기」
+
+| 이름 | 돌려주는 값 | 하는 일 |
+| --- | --- | --- |
+| `RequestInput(FunctionContext context, VariableType type)` | - | 플레이어에게 `type` 타입의 값을 입력받음. `OnStart`, `OnTick`에서 부름. 이미 요청했거나 끝난 뒤에 부르면 콘솔 오류, 무시 |
+| `TryTakeInput(FunctionContext context, out RuntimeValue value)` | `bool` | 들어온 값을 꺼냄. 값이 들어온 뒤의 `OnTick`, `OnEnd`에서 부름. 아직 없으면 `false` |
+
+- 있는 입력 함수
+
+| 고정 ID | 이름 | 반환 타입 | 하는 일 |
+| --- | --- | --- | --- |
+| `input.get_bug` | `GetBug` | `Target`(종류 `Bug`) | 플레이어가 고른 몬스터를 돌려줌. 고를 몬스터가 없으면 「대상 없음」. `TickCount` 1 |
+
+```csharp
+// GetBug의 실행 단계
+protected override void OnStart(FunctionContext context) => RequestInput(context, VariableType.TargetOf(TargetKind.Bug));
+
+protected override void OnTick(FunctionContext context, int tick)
+{
+	if (TryTakeInput(context, out RuntimeValue value)) Return(value);
+}
+```
+
 ### `PredefinedFunctionRegistry` (고정 ID로 function 찾기)
 
 - 필요한 이유: 함수 데이터에는 고정 ID 글자(예: `"c.thrust"`)만 저장됨. 이 글자로 실제 function을 찾는 곳
@@ -239,6 +269,8 @@ protected override void OnEnd(FunctionContext context)
   - heap 쓰기 함수(`Malloc`, `Free`, `TryGetHeapObject`)와 `OnCancel`에서 heap 오브젝트를 없애지 않는 규칙 (#66)
   - 파라미터 값을 이름으로 읽는 `TryGetArgument`, 반환 값을 정하는 `Return` (#90)
   - 쿨타임 기준: 사용자 정의 함수 → 스킬(고정 ID). 스킬이 끝날 때 시작하고, 실패·실행 중단도 쿨타임 전체 (#122)
+  - 대상 파라미터 값: 이제 함수 블록의 argument로 넘어옴. 몬스터는 `TryGetArgument("target", ...)` 뒤 `AsBug()`. 쓸 수 없는 대상이면 실행기가 `InvalidTarget`으로 끝내고 스킬은 시작하지 않음 (#131)
+  - 스킬의 동기·비동기: 모든 스킬 동기(`IsAsync` 기본값) (#131)
 - 박진우·임혜원과 확인할 것
   - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)
   - 누수된 소환검 연출: `ObjectLeaked`를 받아 그 자리에 멈추고 흐리게 (#66)

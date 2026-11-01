@@ -19,7 +19,7 @@
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
 | `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
-| `Predefined` | `PredefinedFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors` | 스킬 작성자가 쓰는 것 |
+| `Predefined` | `PredefinedFunction`, `InputFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors`, `Input/GetBug` | 스킬 작성자가 쓰는 것, 입력 함수 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
 | `Values` | `RuntimeValue`, `VariableStore` | 실행 중의 값, 지역 변수 |
@@ -56,13 +56,38 @@
   - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
 - `UserFunction` 안에서 `IsAsync`가 `true`인 `PredefinedFunction`을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다. 바깥 function이 그 tick에 끝나도(마지막 줄의 비동기 호출) 새 `FunctionTask`는 만들어진다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
+- 스킬의 동기·비동기 (#131): 모든 스킬이 동기(`IsAsync` 기본값 `false`). 비동기 스킬이 생기면 그 스킬의 `IsAsync`만 `true`로 바꿈
+
+### 입력 대기 (#131)
+- 입력 함수(`InputFunction`을 상속한 사전 정의 함수, 예: `GetBug`)가 입력을 요청하면 그 `FunctionTask`만 `WaitingInput`으로 멈춤. 다른 `FunctionTask`는 그대로 진행
+- 기다리는 동안
+  - tick: 세지 않음. 입력을 요청한 tick은 1 tick으로 셈
+  - stack: 프레임을 돌려주지 않음. 기다리는 `FunctionTask`의 프레임도 memory 게이지에 남음
+  - 캐릭터 이동 막기: 입력을 받는 쪽이 함(`SlotCaster`가 대상을 고르는 동안 Player 액션 맵 비활성화)
+- 순서
+  1. `FunctionExecutor`가 그 tick의 `Step` 다음에 `InputRequested`를 부름
+  2. 입력을 받는 쪽이 요청한 입력 함수의 고정 ID로 자기 입력인지 확인하고, 값을 정해 `ProvideInput`을 부름. `InputRequested` 안에서 바로 불러도 됨
+  3. `FunctionTask`가 다음 tick부터 이어서 진행. 입력 함수는 그 tick에 값을 돌려줌
+- `GetBug`의 tick: 요청 1 tick + 값을 돌려주는 1 tick. 예: `Target b = GetBug(); Thrust(b);`에서 대기 tick을 빼면 `GetBug` 2, 선언 1, `Thrust`의 `TickCount`
+- 기다리는 중에 실행 중단 공격(`InterruptAll`): `Interrupted`로 끝나고 프레임을 돌려줌. 끝난 `FunctionTask`에 `ProvideInput`을 부르면 `false`
+- 입력 함수가 값을 받기 전에 끝남(`Stop`, `Fail`, 실행 중단): 남은 입력 요청을 지움
+- 입력 요청: 입력 함수(`InputFunction`)만 함. C 스킬은 대상을 파라미터로만 받음
 
 ### 함수 데이터 실행 (#90)
 - 실행 순서: 함수 데이터(`FunctionData`)를 `FunctionDataConverter`가 `UserFunction`으로 바꾼 뒤 `Cast`. 블록 목록을 위에서부터 차례로 실행
 - 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), `for`, `while`, `break`, `continue`(#120), 사전 정의 함수 블록, `malloc`, `free`
   - 사용자 정의 함수 호출, list: 블록 실행 3 이슈
-- 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`)
+- 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`), 대상(`Target`, 종류 `Bug`, #131)
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
+- 대상(`Target`) (#131)
+  - 타입: `VariableType.TargetOf(TargetKind.Bug)`. 종류(`TargetKind`)는 지금 `Bug`(몬스터)만
+  - 종류를 정하지 않은 `Target`(예: `DataDrivenSkill`의 파라미터): 어떤 종류의 대상이든 받음. 값은 언제나 자기 종류를 가짐
+  - 값: `RuntimeValue.FromBug(몬스터)`. 「대상 없음」은 `FromBug(null)`
+  - 초기값을 비운 `Target` 변수: 「대상 없음」(언어와 상관없음)
+  - 비교: `==`, `!=`만. 같은 종류의 대상끼리는 같은 대상인지, `NULL`과는 「대상 없음」인지. 죽었거나 없어진 대상은 `NULL`과 같지 않음. 크기 비교, 다른 종류끼리 비교: `TypeMismatch`
+  - 직접 입력한 `0`: `NULL`로 보지 않음(`zeroIsNull`은 포인터 자리의 규칙)
+  - 계산, 조건으로 쓰기(`if (b)`): `TypeMismatch`
+  - 스킬에 argument로 넘길 때: 「대상 없음」, 죽은 대상(`Monster.IsDead`), 오브젝트가 없어진 대상이면 `InvalidTarget`. 변수에 담거나 비교할 때는 검사하지 않음(C의 해제한 포인터처럼 쓰는 순간에 에러)
 - 지역 변수
   - 저장: 실행 중인 `UserFunction` 복사본마다 변수 저장소(`VariableStore`) 하나. 같은 function을 두 번 시전하면 저장소 두 개
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
@@ -120,6 +145,7 @@
 - 사전 정의 함수 블록
   - 찾기: 고정 ID로 `PredefinedFunctionRegistry`
   - argument: 왼쪽부터 실행 후 스킬 복사본에 넘김. 비운 칸은 「값 없음」. 스킬은 `TryGetArgument`로 읽음([predefined-function.md](predefined-function.md))
+    - 쓸 수 없는 대상(「대상 없음」, 죽음, 없어짐): 스킬이 시작하기 직전(쿨타임 기다림 뒤)에 `InvalidTarget`. 스킬은 시작하지 않고 쿨타임도 걸리지 않음. 슬롯 직접 시전(`Cast(스킬, 대상)`)도 같음 (#131)
   - tick: argument에 expression으로 쓴 블록이 없으면 그 스킬의 `TickCount`(슬롯에서 바로 시전했을 때와 같음)
   - 클래스: statement와 expression 모두 `PredefinedCallBlock`
   - statement로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 expression으로 썼을 때와 같이 실패
@@ -197,6 +223,7 @@
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
 | `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣음. `NULL`은 실패가 아님 (#120) |
 | `NotInLoop` | 반복문 밖에서 `break`, `continue`를 만남 (#120) |
+| `InvalidTarget` | 스킬에 넘긴 대상이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어짐 (#131) |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
@@ -244,9 +271,12 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Cast(FunctionBlock function)` | cast할 function (`PredefinedFunction` 또는 `UserFunction`) | `FunctionTask` | function을 cast한다. 넘긴 객체는 원본으로 남고 복사본이 실행되므로, 같은 객체를 여러 번 넘겨도 된다. `FunctionTask`는 다음 tick부터 진행한다. 시전 전 검사에 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`를 알린 뒤 `null`을 돌려준다. |
+| `Cast(PredefinedFunction function, params RuntimeValue[] arguments)` | 사전 정의 함수, argument(`Parameters` 순서) | `FunctionTask` | argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 고른 대상을 넘긴다. 예: `Cast(thrust, RuntimeValue.FromBug(몬스터))`. 스킬은 `TryGetArgument`로 읽는다. 쓸 수 없는 대상이면 작업이 시작할 때 `InvalidTarget`. 파라미터 타입으로 맞출 수 없거나 파라미터보다 많으면 예외 (#131) |
 | `CastRejected` (event) | `FunctionBlock`, `CastRejection` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 거부 이유(`OnCooldown`, `NotEnoughMemory`)를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. |
 | `TaskStarted` (event) | `FunctionTask` | - | `FunctionTask`가 첫 tick을 진행하기 직전에 불린다. 연출을 시작할 때 쓴다. |
 | `TaskEnded` (event) | `FunctionTask` | - | `FunctionTask`가 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 `task.EndReason`, 플레이어 책임으로 실패(`Failed`)했으면 `task.Failure`, `task.Error`로 확인한다. |
+| `InputRequested` (event) | `FunctionTask`, `PredefinedFunction` | - | `FunctionTask`가 입력 함수를 만나 입력을 기다리기 시작할 때 한 번 불린다. 기다리는 작업과 요청한 입력 함수를 넘긴다. 받는 쪽은 입력 함수의 `Id`(예: `input.get_bug`)로 자기가 맡은 입력인지 확인한다. (#131) |
+| `ProvideInput(FunctionTask task, RuntimeValue value)` | 기다리는 작업, 넣을 값 | `bool` | 입력을 기다리는 작업에 값을 넣는다. 작업은 다음 tick부터 이어서 진행한다. 대상 입력이면 `RuntimeValue.FromBug(몬스터)`, 고를 대상이 없으면 `FromBug(null)`. 작업이 이미 끝났거나 입력을 기다리지 않으면 `false`. 값의 타입이 요청한 타입과 다르면 예외. (#131) |
 | `CurrentTick` | - | `int` | 지금까지 지난 tick 수. 첫 tick이 1이다. |
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. |
@@ -261,7 +291,7 @@
 | --- | --- | --- | --- |
 | `Caster` | - | `GameObject` | 이 `FunctionTask`를 cast한 캐릭터 |
 | `Name` | - | `string` | cast한 function의 이름 |
-| `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 대기, 아직 쓰지 않음), `Ended`(끝남) |
+| `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 함수가 입력을 기다리는 중, #131), `Ended`(끝남) |
 | `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(플레이어 책임인 실패. 실패 종류는 `Failure`), `InternalError`(개발자 책임. 플레이어의 에러로 보여 주지 않음) |
 | `IsEnded` | - | `bool` | 끝났으면 `true` |
 | `IsFailed` | - | `bool` | `Failed`(플레이어 책임)로 끝났으면 `true`. `InternalError`는 `false`. 실패 여부는 `Failure`가 아니라 이 값으로 판단한다. |
@@ -316,6 +346,7 @@
 | `DivideByZero` | `EndTask` | `RuntimeError` |
 | `InvalidPointer` | `EndTask` | `RuntimeError` |
 | `NotInLoop` | `EndTask` | `CompileError` |
+| `InvalidTarget` | `EndTask` | `RuntimeError` |
 
 - C 파일의 그 밖의 값: 기본값 0, 0, `false`, 글자 번호 0, 빈 글자열. 숫자 타입 변환 `ImplicitAll`, `float %` 허용하지 않음
 
@@ -428,3 +459,16 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
 - 임혜원과 확인할 것 (#122)
   - 사용자 정의 함수 슬롯의 쿨타임 UI에 보여 줄 내용. 지금 `GetRemainingCooldownTicks`는 0
   - function이 스킬의 쿨타임을 기다리는 동안의 표시. 필요한 함수는 정한 뒤 이 문서에 추가
+- 박진우와 정할 것 (#131)
+  - `SlotCaster`의 입력 대기 연결
+    - `InputRequested`에서 입력 함수의 `Id`가 `input.get_bug`이면 그 작업의 대상 입력
+    - 그 작업을 시전한 슬롯 키가 눌려 있으면: 지금의 대상 고르기(누른 채 ← →, Player 액션 맵 비활성화)를 시작하고, 키를 떼면 그때 선택된 몬스터로 `ProvideInput`
+    - 슬롯 키가 눌려 있지 않으면(함수 안의 비동기 호출로 생긴 작업 포함): 가장 가까운 몬스터로 바로 `ProvideInput`
+    - 후보 몬스터가 없음(고르는 중에 모두 죽음 포함): `RuntimeValue.FromBug(null)`로 `ProvideInput`
+    - 작업과 슬롯 짝짓기: `Cast`가 돌려준 `FunctionTask`
+    - 기다리는 중에 작업이 끝남(`TaskEnded`): 고르기를 끝냄
+  - 슬롯에서 스킬을 바로 시전할 때(단일): 키를 뗄 때 `CastRequested` 대신 `executor.Cast(function, RuntimeValue.FromBug(target.GetComponent<Monster>()))`. 여러 명 선택(`Target` list)은 list 값이 생기는 블록 실행 3 이슈에서
+  - 스킬의 `Target` 파라미터: 종류 없이 둬도 `Bug` 값을 받음. 몬스터는 `TryGetArgument("target", out RuntimeValue v)` 뒤 `v.AsBug()`. 쓸 수 없는 대상은 실행기가 `InvalidTarget`으로 막으므로 스킬이 시작하지 않음
+- 임혜원과 정할 것 (#131)
+  - 선언 블록의 타입 목록(`BlockView.DeclareTypes`)에 `Target`(종류 `Bug`) 추가, 화면 이름(`BlockLabels.TypeName`)은 `Bug`. 그 전까지 플레이어는 `Thrust(GetBug())`처럼 값 칸에 바로 끼워서만 씀
+  - `GetBug` 블록: 고정 ID가 `input.`으로 시작하므로 블록 목록에 이미 나옴

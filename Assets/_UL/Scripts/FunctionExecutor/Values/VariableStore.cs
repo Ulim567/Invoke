@@ -61,6 +61,27 @@ public class VariableStore
 	public bool Contains(string name) => TryFind(name, out _);
 
 	/// <summary>
+	/// 모든 범위의 변수 수. 전역 변수 저장소에서는 데이터 영역이 쓰는 칸 수(ProcessMemory.DataUsed)가 된다.
+	/// </summary>
+	public int Count
+	{
+		get
+		{
+			int count = 0;
+			foreach (Dictionary<string, Variable> scope in scopes) count += scope.Count;
+			return count;
+		}
+	}
+
+	// 모든 범위의 변수 값. HeapStorage가 전역 변수에 담긴 포인터를 루트 집합으로 볼 때 쓴다
+	internal IEnumerable<RuntimeValue> AllValues()
+	{
+		foreach (Dictionary<string, Variable> scope in scopes)
+			foreach (Variable variable in scope.Values)
+				yield return variable.Value;
+	}
+
+	/// <summary>
 	/// 새 범위를 연다. 이 뒤에 선언한 변수는 CloseScope를 부를 때 사라진다.
 	/// </summary>
 	public void OpenScope() => scopes.Add(new Dictionary<string, Variable>());

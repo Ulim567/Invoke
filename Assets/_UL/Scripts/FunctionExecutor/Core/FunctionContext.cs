@@ -45,6 +45,19 @@ public class FunctionContext
 	// 지금 실행 중인 사용자 정의 함수의 지역 변수. 사용자 정의 함수 밖(사전 정의 함수만 시전한 작업)이면 null이다
 	internal VariableStore CurrentVariables => variableStack.Count > 0 ? variableStack[variableStack.Count - 1] : null;
 
+	// 변수 name을 가진 저장소. 지금 함수의 지역 변수를 먼저 찾고, 없으면 캐릭터의 전역 변수를 찾는다. 어디에도 없으면 null이다
+	// 지역을 먼저 보는 이유: C처럼 같은 이름이면 지역 변수가 전역 변수를 가리기 때문
+	// 선언은 이 함수를 쓰지 않는다. 함수 안의 선언은 언제나 지역 변수(CurrentVariables)에 만든다
+	internal VariableStore FindVariables(string name)
+	{
+		VariableStore locals = CurrentVariables;
+		if (locals != null && locals.Contains(name)) return locals;
+
+		VariableStore globals = Memory != null ? Memory.Globals : null;
+		if (globals != null && globals.Contains(name)) return globals;
+		return null;
+	}
+
 	// 실패한 블록이 기록한 실패 종류. 작업이 Failure로 바깥에 보여 준다
 	// null을 쓰는 이유: enum 기본값은 첫 값인 Overflow라서, 기록하지 않았는데도 Overflow로 보이기 때문
 	internal FunctionFailure? RecordedFailure { get; private set; }
@@ -81,6 +94,15 @@ public class FunctionContext
 	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
 	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
 	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);
+
+	// 실행 중인 사용자 정의 함수들(부른 함수 포함)의 지역 변수, 파라미터, 지역 array 원소에 담긴 포인터 값
+	// HeapStorage가 누수를 판단할 때 루트로 본다. 다른 작업이 malloc한 객체를 지역 변수에만 담아 쓰는 동안 누수로 보지 않기 위함
+	internal IEnumerable<int> GetLocalPointers()
+	{
+		foreach (VariableStore variables in variableStack)
+			foreach (int pointer in HeapStorage.PointersIn(variables.AllValues()))
+				yield return pointer;
+	}
 
 	/// <summary>
 	/// 실패한 블록이 그 자리에서 실패 종류(플레이어 책임)를 기록한다. 기록한 뒤 그 블록은 BlockResult.Failed를 돌려준다.<br/>
@@ -158,4 +180,7 @@ public class FunctionContext
 
 	// obj를 heap에 올린다. 포인터의 주인은 이 작업이다. 주인을 채우는 것만 여기서 하고, 루트 집합과 누수 규칙은 HeapStorage가 맡는다
 	internal int Malloc(object obj, int size) => Memory.Heap.Malloc(task, obj, size);
+
+	// 사전 정의 함수가 정상으로 끝날 때, 그 함수가 malloc한 포인터를 이 작업의 포인터 목록에서 숨은 시스템 전역으로 옮긴다. PredefinedFunction만 부른다
+	internal void MoveToSystemGlobals(IEnumerable<int> pointers) => Memory.Heap.MoveToSystemGlobals(task, pointers);
 }

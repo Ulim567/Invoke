@@ -182,6 +182,46 @@ public class FunctionExecutor : MonoBehaviour
 			pendingTasks[i].Interrupt();
 	}
 
+	/// <summary>
+	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다.<br/>
+	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
+	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서만 실행되도록 [Server]를 붙인다
+	public void RestartProcess()
+	{
+		// 작업을 먼저 끊는다. 끊기 전에 heap을 비우면, 이번 틱에 남은 작업이 사라진 객체의 포인터를 쓰게 되기 때문
+		InterruptAll();
+		memory.Heap.Clear();
+		LoadGlobalVariables();
+	}
+
+	// 저장한 전역 변수 파일을 읽어 전역 변수를 초기값으로 다시 만든다
+	// 실행 중에 메모리 크기가 줄었어도 전역 변수는 모두 만든다. 칸 검사는 저장할 때만 하고, 줄어든 만큼은 Free가 0이 되는 것으로 드러난다(스택 규칙과 같음)
+	// 파일이 깨졌으면 GlobalVariablesConverter가 콘솔 오류를 남기고, 전역 변수 없이 시작한다
+	void LoadGlobalVariables()
+	{
+		GlobalVariablesData file = GlobalVariablesStorage.Load();
+		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, int.MaxValue, out var variables))
+			variables = new List<(string, VariableType, RuntimeValue)>();
+		memory.ResetGlobals(variables);
+	}
+
+	/// <summary>
+	/// 전역 변수 파일을 검사해서 저장하고, 프로세스를 새로 시작한다(RestartProcess).<br/>
+	/// 검사에 걸리면(칸 부족, 대상 타입, 직접 입력한 값이 아닌 초기값 등) 저장하지 않고 false를 돌려준다. 거부 이유는 콘솔 오류로 남는다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool TrySaveGlobalVariables(GlobalVariablesData file)
+	{
+		if (file == null) throw new ArgumentNullException(nameof(file));
+		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _)) return false;
+
+		GlobalVariablesStorage.Save(file);
+		RestartProcess();
+		return true;
+	}
+
 	void Awake()
 	{
 		memory = GetComponent<ProcessMemory>();
@@ -196,6 +236,28 @@ public class FunctionExecutor : MonoBehaviour
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));
 		castConditions.Add(new MemoryCondition(memory));
+	}
+
+	// 접속하면 저장한 전역 변수를 만든다. 접속 직후에는 끊을 작업도 비울 heap도 없으므로 RestartProcess의 나머지는 하지 않는다
+	// RestartProcess를 부르지 않는 이유: 같은 오브젝트의 다른 컴포넌트가 Start에서 먼저 시전하면, 그 작업까지 끊기 때문(Start 순서는 Unity가 정하지 않음)
+	// Awake가 아니라 Start에서 하는 이유: ProcessMemory가 Awake에서 전역 변수 저장소를 만든 뒤여야 하기 때문
+	// heap이 누수를 판단할 때 실행 중인 작업들의 지역 변수도 루트로 보게 연결한다. ProcessMemory가 Awake에서 heap을 만든 뒤여야 하므로 Start에서 한다
+	void Start()
+	{
+		memory.Heap.SetRunningLocalPointers(GetRunningLocalPointers);
+		LoadGlobalVariables();
+	}
+
+	// 실행 중인 작업들의 지역 변수에 담긴 포인터
+	// 끝난 작업은 뺀다. 이번 틱에 끝나 아직 목록에 남아 있어도, 끝난 순간 지역 변수는 사라졌기 때문
+	IEnumerable<int> GetRunningLocalPointers()
+	{
+		foreach (FunctionTask task in tasks)
+		{
+			if (task.IsEnded) continue;
+			foreach (int pointer in task.GetLocalPointers())
+				yield return pointer;
+		}
 	}
 
 	void FixedUpdate()

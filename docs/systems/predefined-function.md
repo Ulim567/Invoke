@@ -147,12 +147,16 @@ protected override void OnStart(FunctionContext context)
 | `Malloc(FunctionContext context, object obj, int size)` | `int` | `obj`를 시전한 캐릭터의 heap `size`칸에 올리고 포인터를 돌려줌. heap이 모자라면 `HeapStorage.NullPointer`, 에러 없음 |
 | `Free(FunctionContext context, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음 |
 | `TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false` (C의 null 역참조) |
-| `GetGlobalPointers<T>(FunctionContext context)` | `List<int>` | 전역 포인터 목록의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
+| `GetGlobalPointers<T>(FunctionContext context)` | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
 | `CountHeapObjects<T>(FunctionContext context)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
 
 - 쓸 수 없는 포인터: `NullPointer`, 해제한 포인터, 누수된 포인터, 타입이 다른 객체의 포인터
-- 포인터의 주인: malloc한 작업. 그 작업이 정상으로 끝나면 전역 포인터 목록으로 옮겨지고, 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수
-- 진행 중인 다른 작업이 malloc한 객체: `GetGlobalPointers`에 나오지 않음
+- 숨은 시스템 전역 (#139): C 라이브러리의 `static` 전역 변수처럼 플레이어에게 보이지 않는 캐릭터의 포인터 목록
+- 포인터의 주인 (#139에서 바뀜)
+  - 이 함수가 정상으로 끝나면: 이 함수가 malloc한 포인터가 숨은 시스템 전역으로 옮겨짐. 사용자 정의 함수 안에서 불렸어도 이 함수가 끝나는 순간 옮겨지므로, 부른 함수가 나중에 실패해도 남음
+  - 실행 중단이나 실패로 끝나면: 해제하지 않은 객체는 누수
+- 진행 중인 다른 함수가 malloc한 객체: `GetGlobalPointers`에 나오지 않음
+- 만든 객체를 플레이어도 쓰게 하려면: 포인터를 반환 값으로 넘김(`ReturnType`을 그 struct의 포인터로, `Return`). 플레이어가 지역 변수에 받아도 숨은 시스템 전역이 붙잡고 있어 누수가 아님 (#139, 검 소환에 적용은 박진우에게 요청)
 - `OnCancel` 안에서 `Malloc`, `Free`를 부름: 콘솔 오류, 무시 (`OnCancel`에서 해제하면 누수가 생기지 않기 때문)
 - `size`가 음수이거나 `obj`가 `null`: 예외 (스킬 코드의 실수)
 

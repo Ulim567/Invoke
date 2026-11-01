@@ -53,9 +53,10 @@
 - memory 전체 칸 수는 `PlayerStats.MemorySize`다.
   - 레벨업, 버프 등으로 `MemorySize`가 바뀌면 다음 `FunctionBlock`이 stack을 쓸 때부터 바로 반영된다.
   - `MemorySize`가 `StackUsed`보다 작아져도 실행 중인 `FunctionTask`는 cancel되지 않는다. `Free`가 0이 되어, 새로 실행을 시작하는 `FunctionBlock`만 `Overflow`로 끝난다.
-- stack과 heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - StackUsed - HeapUsed`다.
-  - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, stack과 heap은 각각 칸 수만 센다.
+- 데이터 영역(전역 변수), stack, heap은 memory 한 영역을 함께 쓴다. 남은 칸(`Free`)은 `Capacity - DataUsed - StackUsed - HeapUsed`다. (#139)
+  - 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, 세 영역은 각각 칸 수만 센다.
   - memory 게이지는 stack을 위에서부터, heap을 아래에서부터 그린다.
+  - 데이터 영역: 아직 게이지에 그리지 않음. 맨 아래에 따로 그리고 heap을 그 위부터 그리는 것을 임혜원에게 요청할 예정 (#139)
 - `UserFunction` 안에서 `IsAsync`가 `true`인 function(사전 정의 함수, 사용자 정의 함수 #132)을 만나면 끝나기를 기다리지 않는다. 그 function을 새 `FunctionTask`로 cast하고, 1 tick 뒤 다음 `Block`으로 넘어간다. 새 `FunctionTask`는 다음 tick부터 진행한다. 바깥 function이 그 tick에 끝나도(마지막 줄의 비동기 호출) 새 `FunctionTask`는 만들어진다.
 - `FunctionTask`는 function을 끝까지 실행하면 `Completed`로 끝난다. `UserFunction` 안에서 `ReturnBlock`을 만나면, 그 `ReturnBlock`을 담은 `UserFunction`만 끝나고 바깥 `UserFunction`은 다음 `Block`으로 넘어간다.
 - 스킬의 동기·비동기 (#131): 모든 스킬이 동기(`IsAsync` 기본값 `false`). 비동기 스킬이 생기면 그 스킬의 `IsAsync`만 `true`로 바꿈
@@ -201,6 +202,31 @@
   - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 없는 GUID(지운 함수), 비운 value slot(사전 정의 함수의 argument는 비워도 됨)
   - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등): 거부하지 않음. 실행 중 실패로 처리
 
+### 전역 변수 (#139)
+- 선언: 캐릭터마다 전역 변수 파일 1개(`GlobalVariablesData`, [function-data.md](function-data.md)). 함수 안의 선언은 언제나 지역 변수
+- 쓰기: 모든 사용자 정의 함수가 함께 읽고 대입
+  - 찾는 순서: 지금 함수의 지역 변수 → 캐릭터의 전역 변수. 변수 읽기, 대입, array 원소 읽기·쓰기 모두 같음
+  - 전역 변수에 원소 읽기·쓰기(전역 `int x`에 `x[0]`): `TypeMismatch` (전역 array는 없음)
+  - 이름이 같을 때: 지역 변수가 전역 변수를 가림 (C 규칙)
+- 초기값: 직접 입력한 값만. 비우면 언어 규칙 파일의 기본값. 포인터는 `NULL`만
+- memory: 전역 변수 하나 = 데이터 영역 1칸(`DataUsed`). 초기화 때 자동으로 잡히고 다음 초기화까지 유지. `malloc` 아님
+  - 포인터 전역 변수: 변수 자체는 데이터 영역 1칸, 가리키는 객체는 heap
+  - 실행 중에 `Capacity`가 줄어도 잡힌 칸은 유지. `Free`가 0이 됨 (stack 규칙과 같음)
+- 저장 검사(`FunctionExecutor.TrySaveGlobalVariables`): 걸리면 저장하지 않음. 콘솔 오류
+  - 선언 수 > `Capacity`
+  - 대상(Target) 타입, array, 다룰 수 없는 타입
+  - 빈 이름, 같은 이름 두 번
+  - 직접 입력한 값이 아닌 초기값(연산, 변수, `malloc`), 읽을 수 없는 글자열, 변수 타입으로 바꿀 수 없는 값
+- 초기화(`FunctionExecutor.RestartProcess`): 프로세스를 새로 시작
+  - 순서: 진행 중인 작업 모두 끊기(`Interrupted`) → heap 비우기(`Clear`, 숨은 시스템 전역 포함) → 전역 변수 파일의 초기값으로 전역 변수 다시 만들기
+  - 부르는 곳: 전역 변수 파일 저장, 사망(박진우), 재부팅(재부팅 이슈), 장소 이동(사냥터 ↔ 로비, 장소 이동 이슈), 연습장 초기화
+  - 접속: `FunctionExecutor.Start`가 전역 변수만 만듦. 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전한 작업을 끊지 않기 위함
+- 전역 변수 파일 저장 위치: 이 컴퓨터의 `GlobalVariables.json` 하나(`GlobalVariablesStorage`). 서버 저장 전까지의 임시 저장소
+- 아직 없음: 전역 array, 전역 변수 파일 편집 화면, 서버 저장, Mirror 동기화
+- 지금 한계 (서버 저장 이슈에서 해결)
+  - 전역 변수 파일이 컴퓨터마다 하나: 호스트(서버)에서는 모든 플레이어가 같은 파일을 읽고 덮어씀. 캐릭터 ID로 나눠 저장해야 함
+  - 접속 직후 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전하면, 그 순간의 `Free`에 데이터 영역이 빠져 있음. 서버에서 불러오기를 기다린 뒤 전역 변수를 만드는 흐름으로 바꿀 때 함께 정리
+
 ### heap
 - malloc: 스킬 코드가 객체를 heap에 올리고 포인터를 받음. `Free`가 모자라면 `NullPointer`(0), 에러 없음
 - free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
@@ -210,27 +236,30 @@
   - `NULL`(`NullPointer`, 직접 입력한 `NULL`, C에서 직접 입력한 `0`): C처럼 아무 일도 하지 않고 1 tick 뒤 끝남 (#120). 스킬이 쓰는 `PredefinedFunction.Free`는 그대로 `NullPointer`를 에러로 봄
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
   - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
-- 루트 집합: 포인터를 보관하는 목록들
+- 루트 집합: 포인터를 보관하는 곳들 (#139에서 바뀜)
 
-| 목록 | 들어가는 포인터 | C에서 |
+| 루트 | 들어가는 포인터 | C에서 |
 | --- | --- | --- |
-| 작업의 포인터 목록 | 그 작업이 malloc한 포인터 | 지역 포인터 |
-| 전역 포인터 목록 (캐릭터 하나에 하나) | 정상 종료한 작업에서 옮겨진 포인터. 어느 작업에서든 씀 | 전역 포인터 |
+| 작업의 지역 루트 | 진행 중인 작업이 malloc한 포인터, 실행 중인 작업들의 지역 변수·파라미터·지역 array 원소에 담긴 포인터. 작업이 끝나면 사라짐 | 지역 포인터 |
+| 숨은 시스템 전역 (캐릭터 하나에 하나) | 사전 정의 함수가 정상으로 끝날 때 옮겨진, 그 함수가 malloc한 포인터(예: 소환검). 플레이어에게 보이지 않음 | C 라이브러리의 `static` 전역 변수 |
+| 플레이어의 전역 변수 | 전역 변수에 담긴 포인터 값 | 전역 포인터 |
 
-- 작업이 끝날 때
-  - `Completed`: 그 작업의 포인터를 전역 포인터 목록으로 옮김
-  - `Interrupted`, `Failed`, `InternalError`: 그 작업의 포인터를 버림 (정리 블록이 실행되지 못함)
-  - 그다음 루트 집합 어디에도 포인터가 없는 객체: 누수
+- 사전 정의 함수가 정상으로 끝날 때: 그 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮김
+  - 작업이 아니라 그 함수가 끝나는 순간. 사용자 정의 함수 안에서 불린 검 소환도, 그 함수가 나중에 실패해도 소환검이 남음
+  - 실행 중단·실패로 끝난 사전 정의 함수: 옮기지 않음 (정리 블록이 실행되지 못함)
+- 작업이 끝날 때(끝난 이유와 상관없이): 그 작업의 지역 루트가 사라짐 → 루트 집합 어디에도 포인터가 없는 객체는 누수
+  - 다른 작업이 malloc한 객체를 지역 변수에만 쥐고 있는 동안(예: `Sword* s = g; g = NULL;`): 다른 작업이 끝나도 누수가 아님 (#141 검토)
+  - 사용자 정의 함수가 malloc해서 지역 변수에만 담은 객체: 함수가 끝나면 누수 (C와 같음)
+  - malloc하지 않은 작업도 누수를 판단함. 전역 변수의 포인터를 바꿔(`g = NULL`) 예전 객체를 놓쳤을 수 있기 때문
 - 누수 객체
   - heap 칸: 계속 차지
   - 객체 수(`CountObjects`): 포함. 소환검 최대 개수에 들어감
   - 포인터로 꺼내기·해제: 불가. 포인터 값을 알아도 같음
   - 반환: 영역 비우기(`Clear`)만
 - 영역 비우기(`Clear`): heap 전부 비움. 아직 쓰던 객체까지 포함
-  - 부르는 곳: 재부팅, 메모리 비우기 스킬 (이후 이슈)
-- 지금 규칙의 한계: 정상 종료한 작업이 해제하지 않은 포인터는 지역 변수에만 담겼어도 모두 전역 포인터 목록으로 옮겨짐
-  - 실제 C: 전역 변수에 담지 않은 지역 포인터는 함수가 끝나면 누수
-  - 전역 변수 이슈: 전역 변수에 담긴 포인터를 루트 집합에 추가, 옮기는 규칙(`HeapStorage.HandOverPointers`)만 바꿈. 누수 판단은 그대로
+  - 부르는 곳: 초기화(`RestartProcess`, #139), 메모리 비우기 스킬 (이후 이슈)
+- 주인별 heap 칸(`GetUsageByOwner`, #139): 플레이어 전역 / 숨은 시스템 전역 / 작업의 지역 루트 / 누수. 한 객체는 한 번만 셈(우선순위 플레이어 전역 → 시스템 전역 → 지역). 합은 `HeapUsed`
+  - 누수: 누수로 표시된 객체 + 아무도 쥐지 않아 다음 누수 판단 때 누수가 될 객체
 
 ### 시전 전 검사
 - `Cast`가 `FunctionTask`를 만들기 전에 공통 조건을 차례로 검사한다. 하나라도 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`로 거부 이유(`CastRejection`)를 알린다.
@@ -261,7 +290,7 @@
 | --- | --- |
 | `Overflow` | 실행 중에 stack이 모자람 |
 | `SkillFailed` | 스킬 코드가 `Fail`로 에러를 냄(예: 맨손으로 찌르기). 어떤 에러인지는 `task.Error`. 스킬을 함수로 부르는 컨셉이므로 잘못된 때에 스킬 함수를 부른 플레이어의 에러 |
-| `UndeclaredVariable` | value slot이나 대입 블록의 변수가 지금 함수의 지역 변수에 없음 (#90) |
+| `UndeclaredVariable` | value slot이나 대입 블록의 변수가 지금 함수의 지역 변수와 캐릭터의 전역 변수 어디에도 없음 (#90, #139) |
 | `InvalidLiteral` | 직접 입력한 글자열을 그 타입의 값으로 바꿀 수 없음. 예: `int` 칸의 `"abc"` (#90) |
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
 | `TypeMismatch` | 값을 변수·파라미터 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
@@ -329,6 +358,8 @@
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. |
 | `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
+| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화에서 부른다. (#139) |
+| `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장한 뒤 `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
 
 ### `FunctionTask`
 
@@ -406,9 +437,10 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Capacity` | - | `int` | memory 전체 칸 수. `PlayerStats.MemorySize`와 같다. |
+| `DataUsed` | - | `int` | 지금 데이터 영역이 쓰는 칸 수. 선언한 전역 변수 수 (#139) |
 | `StackUsed` | - | `int` | 지금 stack이 쓰는 칸 수. 실행 중인 모든 `FunctionBlock`의 `FrameSize` 합 |
 | `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. 해제하지 않은 객체와 누수 객체의 크기 합 |
-| `Free` | - | `int` | 남은 칸 수. `Capacity - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. |
+| `Free` | - | `int` | 남은 칸 수. `Capacity - DataUsed - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. (#139) |
 | `Heap` | - | `HeapStorage` | 이 캐릭터의 heap 객체 저장소 |
 
 ### `HeapStorage` (heap 객체 저장소)
@@ -420,11 +452,12 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `NullPointer` | - | `int` | null 포인터(0). malloc 실패 값. 이 값으로는 어떤 객체도 찾을 수 없음 |
-| `Malloc(FunctionTask owner, object obj, int size)` | malloc하는 작업, 올릴 객체, 칸 수 | `int` | 포인터. 그 포인터는 `owner`의 포인터 목록에 들어감(`owner`가 `null`이면 전역 포인터 목록). heap이 모자라면 `NullPointer` |
+| `Malloc(FunctionTask owner, object obj, int size)` | malloc하는 작업, 올릴 객체, 칸 수 | `int` | 포인터. 그 포인터는 `owner`의 포인터 목록에 들어감(`owner`가 `null`이면 숨은 시스템 전역). heap이 모자라면 `NullPointer` |
 | `Free(int pointer)` | 포인터 | `bool` | 해제하고 heap 칸 반환. `NullPointer`, 없는·해제한·누수된 포인터이면 `false` |
 | `TryGet<T>(int pointer, out T obj)` | 포인터 | `bool` | 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터, 타입이 다른 객체, `Destroy`된 Unity 오브젝트이면 `false` |
-| `GetGlobalPointers<T>()` | - | `List<int>` | 전역 포인터 목록의 `T` 객체 포인터. malloc한 순서 |
+| `GetGlobalPointers<T>()` | - | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. malloc한 순서. 이름은 다른 시스템이 쓰고 있어 그대로 둠 |
 | `CountObjects<T>()` | - | `int` | heap의 `T` 객체 수. 누수 객체 포함 |
+| `GetUsageByOwner()` | - | `HeapUsage` | 주인별 heap 칸 수(`PlayerGlobals`, `SystemGlobals`, `TaskLocals`, `Leaked`). 합은 `HeapUsed`. memory 화면에서 읽는다 (#139) |
 | `Clear()` | - | - | 영역 비우기. heap 전부 비우고 `HeapUsed`를 0으로 |
 | `ObjectLeaked` (event) | `object` | - | 객체가 누수될 때. 누수된 소환검을 멈추고 흐리게 그리는 일은 받은 쪽 |
 | `ObjectCleared` (event) | `object` | - | `Clear`로 객체를 지울 때 객체마다. 소환검 오브젝트 삭제는 받은 쪽 |
@@ -467,6 +500,14 @@ executor.Cast(dashThrust);
 // 예시. 슬롯에 넣은 함수 데이터를 바꿔서 시전
 if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunction function)) executor.Cast(function);
 ```
+
+### `GlobalVariablesConverter` (전역 변수 파일 검사, #139)
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables)` | 전역 변수 파일, 캐릭터의 언어 규칙 파일, memory 전체 칸 수 | `bool` | 검사하고 선언할 목록(이름, 타입, 초기값)을 돌려준다. 걸리면 콘솔 오류를 내고 `false` |
+
+- 보통은 직접 부르지 않고 `FunctionExecutor.TrySaveGlobalVariables`를 부른다
 
 ## 맞춘 결과
 - 김도훈과 정한 것

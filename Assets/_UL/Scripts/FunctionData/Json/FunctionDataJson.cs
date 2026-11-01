@@ -2,12 +2,13 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
 /// <summary>
-/// 함수 데이터와 JSON 글자열을 서로 바꾼다. 서버 전송과 DB 저장에 쓴다.<br/>
+/// 함수 데이터, 전역 변수 파일과 JSON 글자열을 서로 바꾼다. 서버 전송과 DB 저장에 쓴다.<br/>
 /// Newtonsoft Json을 직접 부르는 곳은 이 클래스뿐이다. (설정을 바꿀 때 이곳만 고치면 되게 하기 위함)
 /// <para>
 /// 사용법<br/>
 /// - 저장: string json = FunctionDataJson.ToJson(function);<br/>
 /// - 불러오기: if (FunctionDataJson.TryFromJson(json, out FunctionData function)) { ... }<br/>
+/// - 전역 변수 파일: ToJson(globals), TryGlobalVariablesFromJson(json, out GlobalVariablesData globals)<br/>
 ///   서버는 조작되거나 깨진 글자열을 받을 수 있으므로, 실패하면 오류를 던지지 않고 false를 돌려준다.
 /// </para>
 /// </summary>
@@ -39,14 +40,27 @@ public static class FunctionDataJson
 	/// <summary>
 	/// JSON 글자열을 함수 데이터로 되돌린다. 실패하면 false를 돌려주고 function은 null이다.
 	/// </summary>
-	public static bool TryFromJson(string json, out FunctionData function)
+	public static bool TryFromJson(string json, out FunctionData function) => TryDeserialize(json, out function);
+
+	/// <summary>
+	/// 전역 변수 파일을 JSON 글자열로 바꾼다.
+	/// </summary>
+	public static string ToJson(GlobalVariablesData globals) => JsonConvert.SerializeObject(globals, Settings);
+
+	/// <summary>
+	/// JSON 글자열을 전역 변수 파일로 되돌린다. 실패하면 false를 돌려주고 globals는 null이다.
+	/// </summary>
+	// TryFromJson과 이름을 나눈 이유: 같은 이름이면 TryFromJson(json, out _)처럼 부른 곳이 어느 쪽인지 정하지 못해 컴파일되지 않기 때문
+	public static bool TryGlobalVariablesFromJson(string json, out GlobalVariablesData globals) => TryDeserialize(json, out globals);
+
+	static bool TryDeserialize<T>(string json, out T result) where T : class
 	{
-		function = null;
+		result = null;
 		if (string.IsNullOrEmpty(json)) return false;
 
 		try
 		{
-			function = JsonConvert.DeserializeObject<FunctionData>(json, Settings);
+			result = JsonConvert.DeserializeObject<T>(json, Settings);
 		}
 		catch (JsonException)
 		{
@@ -54,6 +68,6 @@ public static class FunctionDataJson
 		}
 
 		// "null"처럼 객체가 아닌 JSON은 오류 없이 null이 되므로 따로 확인한다
-		return function != null;
+		return result != null;
 	}
 }

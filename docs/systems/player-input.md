@@ -47,16 +47,6 @@
 | `PickUpPressed` | - | `bool` | 이번 프레임에 검 줍기 키(Z)를 눌렀으면 true |
 | `InteractPressed` | - | `bool` | 이번 프레임에 상호작용 키(↑)를 눌렀으면 true. 입구 들어가기, 스킬 트리 해금 장소에 씀 |
 
-### 임시 시험용 (#143)
-
-| 이름 | 받는 값 | 돌려주는 값 | 설명 |
-| --- | --- | --- | --- |
-| `InterruptTestPressed` | - | `bool` | 이번 프레임에 실행 중단 시험 키(F9)를 눌렀으면 true. `InterruptKeyTest`가 읽고 `FunctionExecutor.InterruptAll`을 부름 |
-
-- 액션 맵: `Debug`(액션 `InterruptTest`). Player·Attack 액션 맵을 비활성화한 동안(대상 선택 중 등)에도 받음
-- `InterruptKeyTest`: 시험할 때만 `Player_UL`에 붙임. 붙여 두면 Host로 Play할 때마다 작업 3개를 시전해 다른 시험의 memory 값이 달라짐
-- 지우는 때: 몬스터의 실행 중단 공격이 생길 때. `Debug` 액션 맵, `InterruptTestPressed`, `InterruptKeyTest`, `TestHoldMallocFunction`을 함께 지움
-
 ### 액션 맵 활성화·비활성화
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |

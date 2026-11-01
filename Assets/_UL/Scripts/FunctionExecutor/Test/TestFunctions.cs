@@ -146,8 +146,8 @@ public class TestLongMallocFunction : PredefinedFunction
 }
 
 /// <summary>
-/// 실행 중단 키 시험용 malloc 함수(#143). 1틱째에 TestSword를 힙 2칸에 올리고, 3000틱(약 1분) 동안 진행한다.<br/>
-/// 사람이 키를 눌러 끊을 때까지 끝나지 않도록 길게 둔다. InterruptKeyTest가 쓴다.
+/// 끊기 시험용 malloc 함수(#143). 1틱째에 TestSword를 힙 2칸에 올리고, 3000틱(약 1분) 동안 진행한다.<br/>
+/// 시험이 끊을 때까지 끝나지 않도록 길게 둔다. CancelTest, OverflowRestartTest가 쓴다.
 /// </summary>
 public class TestHoldMallocFunction : PredefinedFunction
 {

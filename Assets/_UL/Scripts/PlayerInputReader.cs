@@ -15,7 +15,6 @@ using UnityEngine.InputSystem;
 /// 이동 담당: MoveX, JumpPressed, RunHeld, DropPressed<br/>
 /// 시전 담당: HeldSlot, TargetStep, MarkPressed, SlotPressed(), SlotReleased()<br/>
 /// 그 밖: PickUpPressed(검 줍기), InteractPressed(입구 들어가기, 스킬 트리 해금 장소)<br/>
-/// 임시 시험용: InterruptTestPressed(실행 중단, #143)<br/>
 /// 액션 맵 활성화·비활성화: SetPlayerMapEnabled(), SetAttackMapEnabled()
 /// </para>
 /// <para>
@@ -29,8 +28,6 @@ public class PlayerInputReader : NetworkBehaviour
 
 	InputActionMap playerMap, attackMap;
 	InputAction move, jump, run, down, pickUp, interact, targetPrev, targetNext, mark;
-	// 임시 시험용 키(#143). 몬스터의 실행 중단 공격이 생기면 Debug 액션 맵과 함께 지운다
-	InputAction interruptTest;
 	readonly InputAction[] slots = new InputAction[SlotCount];
 
 	// 내 캐릭터가 사라질 때 -=로 등록을 해제하려면 등록할 때와 같은 함수 객체가 필요하므로 보관
@@ -105,13 +102,6 @@ public class PlayerInputReader : NetworkBehaviour
 	public bool SlotReleased(int index) => slots[index].WasReleasedThisFrame();
 
 	/// <summary>
-	/// [임시 시험용, #143] 이번 프레임에 실행 중단 시험 키(F9)를 눌렀으면 true. InterruptKeyTest가 읽는다.<br/>
-	/// Debug 액션 맵에 있어 Player·Attack 액션 맵을 비활성화한 동안(대상 선택 중 등)에도 받는다.<br/>
-	/// 몬스터의 실행 중단 공격이 생기면 지운다.
-	/// </summary>
-	public bool InterruptTestPressed => interruptTest != null && interruptTest.WasPressedThisFrame();
-
-	/// <summary>
 	/// Player 액션 맵(Move, Jump, Run, Down, PickUp, Interact)을 활성화하거나 비활성화한다.<br/>
 	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유(UI, 슬롯 키 등)가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
 	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
@@ -172,10 +162,6 @@ public class PlayerInputReader : NetworkBehaviour
 			slots[i].started += onSlotStarted[i];
 			slots[i].canceled += onSlotCanceled[i];
 		}
-
-		// 임시 시험 키는 없어도 예외를 던지지 않고, 다른 입력을 모두 연결한 뒤에 찾는다
-		// Debug 액션 맵을 먼저 지웠을 때 이 줄의 예외로 슬롯 입력 연결까지 멈추지 않게 하기 위함
-		interruptTest = InputSystem.actions.FindActionMap("Debug")?.FindAction("InterruptTest");
 	}
 
 	public override void OnStopLocalPlayer()

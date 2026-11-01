@@ -62,4 +62,5 @@ public static class PredefinedFunctionIds
 	public const string TestArgumentFunction = "test.argument_function";
 	public const string TestReturnFunction = "test.return_function";
 	public const string TestMissingReturnFunction = "test.missing_return_function";
+	public const string TestTargetFunction = "test.target_function";
 }

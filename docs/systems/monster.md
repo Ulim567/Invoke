@@ -74,8 +74,8 @@
 - 보스 Gateway (`GatewayAI`, #128)
   - `Monster`(Is Boss 체크) + `ContactDamage` + `ProjectileAttack` + `GatewayAI` + `StatusEffects`. 제자리에 서 있고 움직이지 않는다. 체력 3000, 접촉 피해 10, 사망 대기 1.5초 (전부 임시)
   - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(2초) 뒤, 그다음엔 `Attack Interval`(3초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
-  - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
-  - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.5초) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area` 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
+  - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 0.58초 = Throw 모션 8번째 장면에 손을 떠남. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
+  - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area` 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
   - 기절 중에는 공격을 고르지 않는다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
 - 낙하 (`FallingPacket`)
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
@@ -247,7 +247,7 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
   - Loop는 맞으면 쏘던 플레이어 반대쪽으로 살짝 밀린다(`FlyingShooterAI`). 그림의 휘청 모션과 함께 보인다
   - 투사체 그림 `Loop_Bullet`은 `MonsterBullet` 프리팹에 임혜원이 붙인다
   - 보스 Gateway·웜 그림과 애니메이션은 `_HW/Boss`(#126). 보스 프리팹도 김도훈이 판정을 먼저 만들고, 임혜원이 그림·Animator를 붙인다
+  - Gateway 공격 타이밍: Throw 8번째 장면(0.58초)에 패킷이 손을 떠나고(`Fire Delay` 0.58), Slam 6번째 장면(0.42초)에 내려친다(`Slam Delay` 0.42). 두 모션 모두 9장면 0.75초
 - 임혜원과 정해야 할 것
-  - 패킷 공격 그림: 던지는 패킷 덩어리, 떨어지는 패킷, 바닥 그림자 (지금은 임시 그림)
-  - Gateway Throw 모션에서 패킷이 손을 떠나는 프레임(→ `Fire Delay`), Slam 모션에서 내려치는 프레임(→ `Slam Delay`). 지금은 임시 0.5초
+  - 패킷 공격 그림(`Packet_Throw` 2×2칸, `Packet_Fall` 1.5칸, `Packet_Shadow` 가로 2칸, 4장면 12fps)을 임혜원이 PacketThrow·FallingPacket 프리팹에 붙인다. 임시 그림 크기용 Scale은 1로 돌린다. PacketThrow는 `ProjectileFacing`으로 왼쪽일 때 flipX
   - Gateway Slam 모션은 `GatewayAI.SlamEffectPlayed`, Throw는 `ProjectileAttack.FireEffectPlayed`를 받는다

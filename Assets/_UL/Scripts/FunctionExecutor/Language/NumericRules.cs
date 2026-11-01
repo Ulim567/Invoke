@@ -1,5 +1,5 @@
 /// <summary>
-/// 연산 블록의 계산과, 선언·대입 때 값을 변수 타입으로 바꾸는 규칙.<br/>
+/// 연산 블록의 계산, 비교 블록의 비교, 선언·대입 때 값을 변수 타입으로 바꾸는 규칙.<br/>
 /// 언어마다 다른 부분(타입을 섞을 때, float의 %)은 LanguageRuleData의 칸을 따른다.
 /// <para>
 /// 모든 언어에 같은 규칙<br/>
@@ -77,6 +77,38 @@ internal static class NumericRules
 				return true;
 		}
 		return false;
+	}
+
+	/// <summary>
+	/// left op right를 비교해 결과를 result에 담는다. 비교할 수 없는 타입이면 false를 돌려준다(TypeMismatch).
+	/// </summary>
+	// 타입이 섞이면 TryCalculate와 같은 규칙으로 맞춘 뒤 비교한다. C의 3 == 3.0처럼, 계산할 때와 같은 값으로 비교해야 하기 때문
+	public static bool TryCompare(CompareOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, out bool result)
+	{
+		result = false;
+		VariableTypeKind leftKind = left.Type?.Kind ?? VariableTypeKind.Void;
+		VariableTypeKind rightKind = right.Type?.Kind ?? VariableTypeKind.Void;
+
+		// 같은 타입끼리는 언어와 상관없이 비교한다. char, bool 계산을 막는 언어도 'a' == 'b', true == false는 쓸 수 있기 때문
+		// bool의 크기 비교(true > false)만은 bool을 int로 올리는 언어(C)에서만 된다
+		if (leftKind == rightKind && IsNumeric(leftKind))
+		{
+			bool isOrdering = op != CompareOperator.Equal && op != CompareOperator.NotEqual;
+			if (leftKind == VariableTypeKind.Bool && isOrdering && rule.NumericConversion != NumericConversion.ImplicitAll) return false;
+
+			result = leftKind == VariableTypeKind.Float ? Compare(op, left.AsFloat(), right.AsFloat()) : Compare(op, ToInt(left), ToInt(right));
+			return true;
+		}
+
+		if (!TryGetOperandKind(left, rule, out VariableTypeKind leftOperand)) return false;
+		if (!TryGetOperandKind(right, rule, out VariableTypeKind rightOperand)) return false;
+		// 여기까지 와서 타입이 다르면 한쪽은 int, 한쪽은 float이다
+		if (leftOperand != rightOperand && rule.NumericConversion == NumericConversion.Strict) return false;
+
+		// int끼리는 float으로 바꾸지 않고 비교한다. 큰 int는 float으로 바꾸면 값이 달라지기 때문(16777217 → 16777216)
+		bool isFloat = leftOperand == VariableTypeKind.Float || rightOperand == VariableTypeKind.Float;
+		result = isFloat ? Compare(op, ToFloat(left), ToFloat(right)) : Compare(op, ToInt(left), ToInt(right));
+		return true;
 	}
 
 	static bool IsNumeric(VariableTypeKind kind) =>
@@ -163,4 +195,27 @@ internal static class NumericRules
 		result = RuntimeValue.FromFloat(value);
 		return true;
 	}
+
+	// 연산자는 FunctionDataConverter가 정의된 값인지 미리 확인하므로 default에 오지 않는다
+	static bool Compare(CompareOperator op, int left, int right) => op switch
+	{
+		CompareOperator.Greater => left > right,
+		CompareOperator.Less => left < right,
+		CompareOperator.Equal => left == right,
+		CompareOperator.NotEqual => left != right,
+		CompareOperator.GreaterOrEqual => left >= right,
+		CompareOperator.LessOrEqual => left <= right,
+		_ => throw new System.ArgumentOutOfRangeException(nameof(op)),
+	};
+
+	static bool Compare(CompareOperator op, float left, float right) => op switch
+	{
+		CompareOperator.Greater => left > right,
+		CompareOperator.Less => left < right,
+		CompareOperator.Equal => left == right,
+		CompareOperator.NotEqual => left != right,
+		CompareOperator.GreaterOrEqual => left >= right,
+		CompareOperator.LessOrEqual => left <= right,
+		_ => throw new System.ArgumentOutOfRangeException(nameof(op)),
+	};
 }

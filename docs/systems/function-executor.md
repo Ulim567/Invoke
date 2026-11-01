@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors` | 스킬 작성자가 쓰는 것 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
@@ -33,8 +33,8 @@
 - 모든 `Block`은 최소 1 tick을 쓴다. 플레이어가 놓은 블록 하나 = 1 tick (#90)
   - `PredefinedFunction`: `TickCount` tick
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
-  - `ReturnBlock`, 선언, 대입, 연산, `malloc`, `free`: 1 tick
-  - expression으로 쓴 블록(연산, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
+  - `ReturnBlock`, 선언, 대입, 연산, 비교, `malloc`, `free`: 1 tick
+  - expression으로 쓴 블록(연산, 비교, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
   - value slot에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
   - value slot이 여럿: 왼쪽부터 차례로 실행
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
@@ -52,8 +52,8 @@
 
 ### 함수 데이터 실행 (#90)
 - 실행 순서: 함수 데이터(`FunctionData`)를 `FunctionDataConverter`가 `UserFunction`으로 바꾼 뒤 `Cast`. 블록 목록을 위에서부터 차례로 실행
-- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 사전 정의 함수 블록, `malloc`, `free`
-  - 조건문, `for`, `while`, 비교·논리: 블록 실행 2 이슈
+- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 사전 정의 함수 블록, `malloc`, `free`
+  - 조건문, `for`, `while`, 논리: 블록 실행 2 이슈
   - 사용자 정의 함수 호출, list: 블록 실행 3 이슈
 - 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`)
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
@@ -62,12 +62,16 @@
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
   - 블록 범위(조건문 안에서만 보이는 변수): 블록 실행 2 이슈
 - 선언의 initializer를 비움: 언어 규칙 파일의 기본값
-- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, `malloc`, 값을 돌려주는 사전 정의 함수)
+- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, 비교, `malloc`, 값을 돌려주는 사전 정의 함수)
 - 숫자 계산과 타입 변환: 언어 규칙 파일의 「숫자 타입 변환」. C는 `ImplicitAll`
   - `int / int`: 정수 나눗셈(`7 / 2` = 3). `%`의 부호는 왼쪽 값을 따름(`-7 % 2` = -1)
   - `int` 범위를 넘음: 반대쪽 끝으로 돌아감
   - 0으로 나누기, `% 0`: `int`, `float` 모두 `DivideByZero`
   - 계산할 수 없는 타입(`string`, 포인터): `TypeMismatch`
+- 비교 (#120): 결과는 `bool`
+  - 타입이 섞임: 아래 표의 「연산에서 타입이 섞임」 규칙으로 맞춘 뒤 비교(`3 == 3.0` → `true`). `int`끼리는 `float`으로 바꾸지 않음
+  - 같은 타입끼리: 언어와 상관없이 비교 가능. 단 `bool`의 크기 비교(`true > false`)는 `ImplicitAll`만
+  - 비교할 수 없는 타입(`string`, 포인터): `TypeMismatch`
 
 | 규칙 | 연산에서 타입이 섞임 | 대입·선언에서 다른 타입 | 쓰는 언어 |
 | --- | --- | --- | --- |

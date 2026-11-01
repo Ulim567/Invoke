@@ -157,6 +157,19 @@ public static class FunctionDataConverter
 				return right == null ? null : new ArithmeticBlock(left, op, right);
 			}
 
+			// 칸: 왼쪽 값, 연산자, 오른쪽 값
+			case BlockKind.Compare when block.Slots.Count >= 3:
+			{
+				// 연산 블록과 같은 이유로 정의된 값인지 한 번 더 본다
+				if (!System.Enum.TryParse(block.Slots[1].Option, out CompareOperator op) || !System.Enum.IsDefined(typeof(CompareOperator), op))
+					return Reject<ValueBlock>(data, $"비교 연산자 {block.Slots[1].Option}을(를) 알 수 없습니다.");
+
+				ValueBlock left = ConvertValue(data, block.Slots[0]);
+				if (left == null) return null;
+				ValueBlock right = ConvertValue(data, block.Slots[2]);
+				return right == null ? null : new CompareBlock(left, op, right);
+			}
+
 			// 칸: struct 타입 (드롭다운)
 			case BlockKind.Malloc when block.Slots.Count >= 1:
 			{

@@ -82,7 +82,38 @@ public class FunctionExecutor : MonoBehaviour
 	{
 		// 빈 슬롯은 시전하는 쪽(키 입력 처리)이 걸러 Cast를 부르지 않는다. 그래서 null은 코드 실수로 보고 바로 드러나게 한다
 		if (function == null) throw new ArgumentNullException(nameof(function));
+		return CastChecked(function, null);
+	}
 
+	/// <summary>
+	/// 사전 정의 함수에 argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 플레이어가 고른 대상을 넘기는 데 쓴다.<br/>
+	/// 예: Cast(thrust, RuntimeValue.FromBug(몬스터)). 스킬은 함수 안에서 불렸을 때와 같이 TryGetArgument로 읽는다.<br/>
+	/// arguments는 Parameters 순서이고, 뒤쪽 파라미터는 비워도 된다(「값 없음」). argument가 없으면 Cast(function)과 같다.<br/>
+	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 InvalidTarget으로 끝난다.
+	/// </summary>
+	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments)
+	{
+		if (function == null) throw new ArgumentNullException(nameof(function));
+		if (arguments == null || arguments.Length == 0) return CastChecked(function, null);
+
+		// 값을 파라미터 타입으로 맞춘다. 맞출 수 없거나 파라미터보다 많으면 부르는 쪽의 코드 실수이므로 예외를 던진다
+		IReadOnlyList<ParameterData> parameters = function.Parameters;
+		if (arguments.Length > parameters.Count)
+			throw new ArgumentException($"{function.Name}의 파라미터는 {parameters.Count}개인데 argument {arguments.Length}개를 넘겼습니다.", nameof(arguments));
+
+		RuntimeValue?[] converted = new RuntimeValue?[parameters.Count];
+		for (int i = 0; i < arguments.Length; i++)
+		{
+			if (!NumericRules.TryConvertForStore(arguments[i], parameters[i].Type, language.Rule, out RuntimeValue value))
+				throw new ArgumentException($"{function.Name}의 파라미터 {parameters[i].Name}({parameters[i].Type.Kind})에 {arguments[i].Type?.Kind} 값을 넘겼습니다.", nameof(arguments));
+			converted[i] = value;
+		}
+		return CastChecked(function, converted);
+	}
+
+	// 시전 전 검사를 한 뒤 작업을 만든다. arguments는 사전 정의 함수의 복사본에 넘길 값이고, 없으면 null
+	FunctionTask CastChecked(FunctionBlock function, RuntimeValue?[] arguments)
+	{
 		foreach (CastCondition condition in castConditions)
 		{
 			if (condition.Check(function, out CastRejection rejection)) continue;
@@ -92,7 +123,7 @@ public class FunctionExecutor : MonoBehaviour
 			return null;
 		}
 
-		FunctionTask task = CastUnchecked(function);
+		FunctionTask task = CastUnchecked(function, arguments);
 		task.CastSource = function;
 		cooldowns.Register(task);
 		return task;
@@ -125,9 +156,13 @@ public class FunctionExecutor : MonoBehaviour
 
 	// 시전 전 검사 없이 작업을 만든다. Cast와, 블록이 요청한 비동기 시전이 쓴다
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
-	FunctionTask CastUnchecked(FunctionBlock function)
+	// arguments가 있으면 복사본에 넘긴다. 원본에 넘기면 같은 원본을 쓰는 다른 시전과 값이 섞이기 때문
+	FunctionTask CastUnchecked(FunctionBlock function, RuntimeValue?[] arguments = null)
 	{
-		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, (FunctionBlock)function.Clone());
+		FunctionBlock copy = (FunctionBlock)function.Clone();
+		if (arguments != null) ((PredefinedFunction)copy).SetArguments(arguments);
+
+		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, copy);
 		pendingTasks.Add(task);
 		return task;
 	}

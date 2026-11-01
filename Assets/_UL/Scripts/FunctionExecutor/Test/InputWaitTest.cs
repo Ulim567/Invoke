@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 입력 대기(GetBug, InputRequested, ProvideInput)와 안쪽 함수 호출(동기 호출의 프레임, 비동기 호출의 작업 수) 테스트용 컴포넌트.<br/>
+/// 입력 대기(GetBug, InputRequested, ProvideInput), 안쪽 함수 호출(동기 호출의 프레임, 비동기 호출의 작업 수), 슬롯 직접 시전의 대상 argument(Cast(스킬, 대상)) 테스트용 컴포넌트.<br/>
 /// 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고, Inspector의 Bug 칸에 씬의 몬스터 하나를 연결한다. 콘솔 로그로 결과를 확인한다.<br/>
 /// 슬롯 키 대신 이 컴포넌트가 InputRequested를 받아 ProvideInput을 직접 부른다.<br/>
 /// 마지막 테스트가 연결한 몬스터를 죽인다. 다른 테스트 컴포넌트와 함께 붙이지 않는다. 「[InputWaitTest] 전체 통과」가 나오면 통과다.
@@ -18,7 +18,7 @@ public class InputWaitTest : MonoBehaviour
 	static readonly VariableType BugType = VariableType.TargetOf(TargetKind.Bug);
 
 	// 테스트 단계. 앞 단계의 작업이 끝나야 다음 단계를 시전한다. 다른 작업의 프레임이 스택 사용량에 섞이지 않게 하기 위함
-	enum Step { Wait, Immediate, NoTarget, Interrupt, Sync, Async, Dead, Done }
+	enum Step { Wait, Immediate, NoTarget, Interrupt, Sync, Async, SlotCast, SlotCastNoTarget, Dead, Done }
 
 	FunctionExecutor executor;
 	ProcessMemory memory;
@@ -120,6 +120,15 @@ public class InputWaitTest : MonoBehaviour
 				current = executor.Cast(new UserFunction("Async", new TestAsyncFunction()));
 				break;
 
+			case Step.SlotCast:
+				// 슬롯에서 스킬을 바로 시전하며 고른 몬스터를 argument로 넘긴다(SlotCaster가 키를 뗄 때 하는 일)
+				current = executor.Cast(new TestTargetFunction(), RuntimeValue.FromBug(bug));
+				break;
+
+			case Step.SlotCastNoTarget:
+				current = executor.Cast(new TestTargetFunction(), RuntimeValue.FromBug(null));
+				break;
+
 			case Step.Dead:
 				// 몬스터를 죽인 뒤, 죽은 몬스터를 입력으로 넣어 스킬에 넘긴다
 				bug.TakeDamage(bug.MaxHp);
@@ -190,12 +199,14 @@ public class InputWaitTest : MonoBehaviour
 		{
 			case Step.Wait:
 			case Step.Immediate:
+			case Step.SlotCast:
 				if (task != current) return;
 				Check($"{step}: 정상 종료", task.EndReason == FunctionTaskEndReason.Completed, $"실제 {task.EndReason}");
 				Check($"{step}: TestTargetFunction이 넣은 몬스터를 받음", readTarget == bug, $"실제 {(readTarget == null ? "없음" : readTarget.name)}");
 				break;
 
 			case Step.NoTarget:
+			case Step.SlotCastNoTarget:
 			case Step.Dead:
 				if (task != current) return;
 				Check($"{step}: InvalidTarget으로 실패", task.IsFailed && task.Failure == FunctionFailure.InvalidTarget, $"실제 {task.EndReason}, {task.Failure}");

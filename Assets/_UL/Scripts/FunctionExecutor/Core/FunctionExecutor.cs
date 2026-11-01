@@ -8,7 +8,8 @@ using UnityEngine;
 /// 사용법<br/>
 /// - 캐릭터에 하나만 붙인다.<br/>
 /// - 함수를 시전할 때 Cast(함수)를 부른다. 같은 함수든 다른 함수든 여러 번 부를 수 있다.<br/>
-/// - 작업이 진행을 시작하거나 끝날 때 TaskStarted, TaskEnded로 알린다. 로그·이펙트 같은 연출은 이 이벤트를 받아서 한다.
+/// - 작업이 진행을 시작하거나 끝날 때 TaskStarted, TaskEnded로 알린다. 로그·이펙트 같은 연출은 이 이벤트를 받아서 한다.<br/>
+/// - 작업이 입력 함수를 만나면 InputRequested로 알린다. 입력을 받는 쪽이 값을 정해 ProvideInput을 부르면 작업이 이어서 진행한다.
 /// </para>
 /// <para>
 /// 틱 규칙<br/>
@@ -66,6 +67,13 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<FunctionBlock, CastRejection> CastRejected;
 
 	/// <summary>
+	/// 작업이 입력 함수(예: GetBug)를 만나 플레이어의 입력을 기다리기 시작할 때 불린다. 작업과 요청한 입력 함수를 넘긴다.<br/>
+	/// 입력을 받는 쪽은 입력 함수의 Id로 자기가 맡은 입력인지 확인하고, 값을 정하면 ProvideInput을 부른다.<br/>
+	/// 이 event 안에서 바로 ProvideInput을 불러도 된다(예: 슬롯 키가 눌려 있지 않아 기본값으로 진행).
+	/// </summary>
+	public event Action<FunctionTask, PredefinedFunction> InputRequested;
+
+	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
 	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
 	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
@@ -102,6 +110,18 @@ public class FunctionExecutor : MonoBehaviour
 	/// 스킬이면 같은 스킬이 다른 함수 안에서 실행 중일 때도 true다.
 	/// </summary>
 	public bool IsRunning(FunctionBlock function) => cooldowns.IsRunning(function);
+
+	/// <summary>
+	/// 입력을 기다리는 작업에 플레이어가 고른 값을 넣는다. 작업은 다음 틱부터 이어서 진행한다.<br/>
+	/// 작업이 이미 끝났거나(예: 실행 중단 공격) 입력을 기다리지 않으면 아무것도 하지 않고 false를 돌려준다.<br/>
+	/// 값의 타입이 요청한 타입과 다르면 예외를 던진다. 대상 입력이면 RuntimeValue.FromBug(몬스터), 고를 대상이 없으면 RuntimeValue.FromBug(null)을 넘긴다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool ProvideInput(FunctionTask task, RuntimeValue value)
+	{
+		if (task == null) throw new ArgumentNullException(nameof(task));
+		return task.ProvideInput(value);
+	}
 
 	// 시전 전 검사 없이 작업을 만든다. Cast와, 블록이 요청한 비동기 시전이 쓴다
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
@@ -169,6 +189,10 @@ public class FunctionExecutor : MonoBehaviour
 		{
 			FunctionFailure? failure = task.Step();
 			if (failure.HasValue) HandleFailure(task, failure.Value);
+
+			// 상태를 WaitingInput으로 바꾼 뒤에 알린다. 받은 쪽이 이 안에서 바로 ProvideInput을 불러도 다음 틱부터 진행되게 하기 위함
+			if (task.TryTakeNewInputRequest(out PredefinedFunction requester))
+				InputRequested?.Invoke(task, requester);
 
 			// 작업이 이번 틱에 끝났어도 요청은 시전한다. 함수의 마지막 줄이 비동기 호출이면, 요청한 틱에 원래 작업이 끝나기 때문
 			// 새 작업은 pendingTasks에 들어가 다음 틱부터 진행한다. 지금 도는 tasks는 바뀌지 않는다

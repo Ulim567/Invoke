@@ -90,12 +90,18 @@ public abstract class PredefinedFunction : FunctionBlock
 	// sealed: 스킬 작성자가 덮어써서 쿨타임 검사나 기록을 빠뜨리지 못하게 한다
 	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
 	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
-	internal sealed override void BeforeFrameReleased(FunctionContext context) => context.Cooldowns.SkillEnded(this);
+	internal sealed override void BeforeFrameReleased(FunctionContext context)
+	{
+		// 값을 받기 전에 끝났으면(Stop, Fail, 실행 중단) 남은 입력 요청을 지운다. 남겨 두면 같은 작업의 다음 스킬이 입력을 기다리는 것으로 보기 때문
+		context.ClearInputRequest(this);
+		context.Cooldowns.SkillEnded(this);
+	}
 
 	protected sealed override BlockResult Step(FunctionContext context)
 	{
 		// OnStart에서 이미 Fail이나 Stop을 불렀으면 OnTick을 부르지 않는다
-		if (requestedError == null && !stopRequested)
+		// 입력을 요청한 틱(OnStart에서 요청)에도 부르지 않는다. 입력을 기다리는 동안은 동작 시간(TickCount)에 넣지 않기 때문
+		if (requestedError == null && !stopRequested && !context.IsWaitingInput)
 		{
 			elapsedTicks++;
 			OnTick(context, elapsedTicks);
@@ -109,6 +115,8 @@ public abstract class PredefinedFunction : FunctionBlock
 			return BlockResult.Failed;
 		}
 		if (stopRequested) return BlockResult.Done;
+		// 입력이 들어올 때까지 끝나지 않는다. TickCount가 지났어도 입력값으로 할 일이 남았기 때문
+		if (context.IsWaitingInput) return BlockResult.Running;
 
 		return elapsedTicks >= TickCount ? BlockResult.Done : BlockResult.Running;
 	}

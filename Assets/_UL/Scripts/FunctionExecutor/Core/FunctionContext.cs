@@ -98,6 +98,48 @@ public class FunctionContext
 		return taken;
 	}
 
+	// 입력을 요청한 사전 정의 함수(입력 함수). 요청이 없거나 값을 꺼내 갔으면 null이다
+	// 동기 함수는 한 작업 안에서 하나씩만 실행되므로, 한 작업에 요청은 언제나 하나뿐이다
+	internal PredefinedFunction InputRequester { get; private set; }
+	// 요청한 값의 타입. ProvideInput이 받은 값의 타입을 검사할 때 쓴다
+	internal VariableType RequestedInputType { get; private set; }
+	// 입력을 받는 쪽이 넣은 값. 아직 넣지 않았으면 null이다
+	RuntimeValue? providedInput;
+
+	// 입력을 요청했고 아직 값이 들어오지 않았으면 true. 작업은 이 동안 WaitingInput으로 멈추고, 사전 정의 함수는 틱을 세지 않는다
+	internal bool IsWaitingInput => InputRequester != null && !providedInput.HasValue;
+
+	// 입력 함수가 type 타입의 값을 입력받아야 한다고 기록한다. 실행기가 Step 다음에 읽어 InputRequested로 알린다
+	internal void RequestInput(PredefinedFunction requester, VariableType type)
+	{
+		InputRequester = requester;
+		RequestedInputType = type;
+		providedInput = null;
+	}
+
+	// 입력을 받는 쪽이 넣은 값을 기록한다. 실행기의 ProvideInput만 부른다
+	internal void ProvideInput(RuntimeValue value) => providedInput = value;
+
+	// 들어온 값을 꺼내고 요청을 지운다. 값이 아직 없으면 false
+	internal bool TryTakeInput(out RuntimeValue value)
+	{
+		value = providedInput ?? default;
+		if (!providedInput.HasValue) return false;
+
+		ClearInputRequest(InputRequester);
+		return true;
+	}
+
+	// requester가 한 요청이 남아 있으면 지운다. 사전 정의 함수가 끝날 때 부른다
+	internal void ClearInputRequest(PredefinedFunction requester)
+	{
+		if (InputRequester != requester) return;
+
+		InputRequester = null;
+		RequestedInputType = null;
+		providedInput = null;
+	}
+
 	// obj를 heap에 올린다. 포인터의 주인은 이 작업이다. 주인을 채우는 것만 여기서 하고, 루트 집합과 누수 규칙은 HeapStorage가 맡는다
 	internal int Malloc(object obj, int size) => Memory.Heap.Malloc(task, obj, size);
 }

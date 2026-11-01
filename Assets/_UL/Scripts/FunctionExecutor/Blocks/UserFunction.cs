@@ -8,15 +8,14 @@ using System.Collections.Generic;
 /// - 블록에는 사전 정의 함수, 사용자 정의 함수, return 같은 문법 블록을 넣을 수 있다.
 /// </para>
 /// <para>
-/// 동작 시간은 따로 정하지 않는다. 실제로 실행된 블록들의 틱을 더한 만큼 걸린다.
+/// 동작 시간은 따로 정하지 않는다. 실제로 실행된 블록들의 틱을 더한 만큼 걸린다.<br/>
+/// 자기 쿨타임은 없다. 쿨타임은 안에서 실행된 스킬마다 그 스킬이 끝날 때 걸린다.
 /// </para>
 /// </summary>
 public class UserFunction : FunctionBlock
 {
 	// 이 실행에서 블록 목록을 실행하는 도우미. 블록 복사본마다 따로 가져야 하므로 OnStart에서 만든다
 	Statements statements;
-	// 만들 때 정한 쿨타임. 정하지 않았으면 null이고, 그때는 Blocks에서 계산한다
-	readonly int? cooldownTicks;
 
 	public override string Name { get; }
 
@@ -30,24 +29,6 @@ public class UserFunction : FunctionBlock
 	/// 위에서부터 차례로 실행할 블록들(원본).
 	/// </summary>
 	public IReadOnlyList<Block> Blocks { get; }
-
-	/// <summary>
-	/// 안에 든 함수 블록들의 쿨타임을 더한 값. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다.<br/>
-	/// 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 expression 안의 스킬까지 세어 넣는다.
-	/// </summary>
-	// 직접 만든 함수(테스트 등)는 Blocks에 바로 들어 있는 함수 블록만 센다
-	public override int CooldownTicks
-	{
-		get
-		{
-			if (cooldownTicks.HasValue) return cooldownTicks.Value;
-
-			int sum = 0;
-			foreach (Block block in Blocks)
-				if (block is FunctionBlock function) sum += function.CooldownTicks;
-			return sum;
-		}
-	}
 
 	/// <summary>
 	/// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수. 함수 데이터에서 바꾼 함수는 FunctionDataConverter가 계산해 넣는다.
@@ -68,14 +49,6 @@ public class UserFunction : FunctionBlock
 		// 호출 자리 1칸은 언제나 쓴다
 		FrameSize = frameSize < 1 ? 1 : frameSize;
 		Blocks = blocks;
-	}
-
-	/// <summary>
-	/// 프레임 크기와 쿨타임을 정해 함수를 만든다. FunctionDataConverter가 쓴다.
-	/// </summary>
-	public UserFunction(string name, int frameSize, int cooldownTicks, params Block[] blocks) : this(name, frameSize, blocks)
-	{
-		this.cooldownTicks = cooldownTicks;
 	}
 
 	protected override BlockResult Step(FunctionContext context)

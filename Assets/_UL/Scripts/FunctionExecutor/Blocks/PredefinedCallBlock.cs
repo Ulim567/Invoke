@@ -7,9 +7,11 @@ using UnityEngine;
 /// - argument를 왼쪽부터 실행한 뒤, 그 값을 넘긴 스킬 복사본을 실행한다. 스킬은 TryGetArgument로 값을 읽는다.<br/>
 /// - 비운 value slot은 「값 없음」으로 넘긴다. 값을 파라미터 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
 /// - 틱: expression으로 쓴 블록이 없으면 스킬의 TickCount와 같다(슬롯에서 바로 시전했을 때와 같음). 끼운 블록이 있으면 그 블록들의 틱이 앞에 더해진다.<br/>
+/// - 같은 스킬이 실행 중이거나 쿨타임 중이면, argument를 계산한 뒤 쓸 수 있을 때까지 실패 없이 기다린다. 기다린 틱도 더해진다.<br/>
 /// - 반환 타입이 Void가 아니면 스킬이 끝난 뒤 반환 값을 반환 타입으로 맞춰 Result에 넣는다. statement로 놓이면 아무도 Result를 읽지 않으므로 값은 버려진다.<br/>
 /// - 스킬이 Return을 부르지 않았거나 반환 값을 반환 타입으로 맞출 수 없으면, 콘솔 오류를 내고 작업을 InternalError로 끝낸다(개발자 책임).<br/>
-/// - 비동기 스킬(IsAsync)은 새 작업으로 시전하고, 이 블록은 1틱 뒤 끝난다. 반환 값을 받을 수 없으므로 FunctionDataConverter가 expression으로 쓰지 못하게 한다.
+/// - 비동기 스킬(IsAsync)은 새 작업으로 시전하고, 이 블록은 1틱 뒤 끝난다. 반환 값을 받을 수 없으므로 FunctionDataConverter가 expression으로 쓰지 못하게 한다.<br/>
+///   같은 스킬이 실행 중이거나 쿨타임 중이면 이 블록이 쓸 수 있을 때까지 기다렸다가 시전한다.
 /// </para>
 /// </summary>
 // statement로 부른 호출과 expression으로 부른 호출을 한 클래스로 두는 이유: C에서 두 호출은 같은 함수 호출이고, 반환 값을 쓰는지만 다르기 때문
@@ -24,6 +26,8 @@ public class PredefinedCallBlock : ValueBlock
 	ValueSlots slots;
 	// 실행 중인 스킬 복사본. value slot을 다 실행하기 전과 비동기 스킬은 null이다
 	PredefinedFunction running;
+	// 시전을 기다리는 비동기 스킬 복사본. argument를 넘긴 채로 쓸 수 있을 때까지 들고 있는다
+	PredefinedFunction waitingAsync;
 
 	public PredefinedCallBlock(PredefinedFunction function, params ValueBlock[] arguments)
 	{
@@ -38,7 +42,7 @@ public class PredefinedCallBlock : ValueBlock
 
 	protected override BlockResult Step(FunctionContext context)
 	{
-		if (running == null)
+		if (running == null && waitingAsync == null)
 		{
 			BlockResult slotResult = slots.Step(context);
 			if (slotResult != BlockResult.Done) return slotResult;
@@ -52,13 +56,20 @@ public class PredefinedCallBlock : ValueBlock
 			PredefinedFunction copy = (PredefinedFunction)function.Clone();
 			copy.SetArguments(arguments);
 
-			// 비동기 스킬은 끝나기를 기다리지 않는다. 새 작업으로 시전하고 이번 틱으로 끝난다
-			if (function.IsAsync)
-			{
-				context.RequestAsyncCast(copy);
-				return BlockResult.Done;
-			}
-			running = copy;
+			if (function.IsAsync) waitingAsync = copy;
+			else running = copy;
+		}
+
+		// 비동기 스킬은 끝나기를 기다리지 않는다. 새 작업으로 시전하고 이번 틱으로 끝난다
+		if (waitingAsync != null)
+		{
+			// 같은 스킬이 실행 중이거나 쿨타임 중이면 쓸 수 있을 때까지 기다렸다가 요청한다
+			// 바로 요청하면 반복문이 틱마다 기다리는 작업을 하나씩 쌓아, 쿨타임이 끝날 때마다 차례로 실행되기 때문
+			if (!context.Cooldowns.CanUseSkill(function.Id)) return BlockResult.Running;
+
+			context.RequestAsyncCast(waitingAsync);
+			waitingAsync = null;
+			return BlockResult.Done;
 		}
 
 		// 스킬 복사본을 틱마다 진행한다. 스택 프레임은 스킬이 실행을 시작할 때 스스로 쓴다

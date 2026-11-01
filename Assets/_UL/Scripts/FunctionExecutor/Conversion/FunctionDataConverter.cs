@@ -7,7 +7,7 @@ using UnityEngine;
 /// <para>
 /// 사용법<br/>
 /// - TryConvert(함수 데이터, out 함수)로 바꾸고, 성공하면 그 함수를 FunctionExecutor.Cast에 넘긴다.<br/>
-/// - 바꾼 함수는 원본이다. 슬롯은 같은 객체를 계속 Cast에 넘겨야 쿨타임이 이어진다.
+/// - 바꾼 함수는 원본이다. 슬롯은 같은 객체를 계속 Cast에 넘겨야, 실행 중에 같은 함수를 다시 시전하지 못하게 막는 검사가 이어진다.
 /// </para>
 /// <para>
 /// 거부(false)하는 함수: 지금 실행기가 아직 실행할 수 없는 기능을 쓴 함수다. 콘솔 오류를 남긴다.<br/>
@@ -28,7 +28,7 @@ public static class FunctionDataConverter
 
 		// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수
 		int frameSize = 1 + data.Parameters.Count + data.LocalVariables().Count;
-		function = new UserFunction(data.Name, frameSize, SumCooldownTicks(data), blocks);
+		function = new UserFunction(data.Name, frameSize, blocks);
 		return true;
 	}
 
@@ -90,20 +90,6 @@ public static class FunctionDataConverter
 	// 블록 영역이 null이어도 빈 { }로 본다. JSON에서 되돌린 데이터에 블록 영역이 빠져 있을 수 있기 때문
 	static IReadOnlyList<BlockData> InnerBlocksOf(BlockData block) =>
 		block.InnerBlocks ?? (IReadOnlyList<BlockData>)Array.Empty<BlockData>();
-
-	// function body와 expression 안의 모든 사전 정의 함수 블록의 쿨타임 합. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다
-	// 반복문 안의 함수는 한 번만 센다. 몇 번 반복될지 미리 알 수 없기 때문
-	static int SumCooldownTicks(FunctionData data)
-	{
-		int sum = 0;
-		foreach (BlockData block in data.AllBlocks())
-		{
-			if (block.Kind != BlockKind.Function || block.IsUserFunction) continue;
-			if (!string.IsNullOrEmpty(block.FunctionId) && PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function))
-				sum += function.CooldownTicks;
-		}
-		return sum;
-	}
 
 	// function body에 놓인 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
 	static Block ConvertStatement(FunctionData data, BlockData block)

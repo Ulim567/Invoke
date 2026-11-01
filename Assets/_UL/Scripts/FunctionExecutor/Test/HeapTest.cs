@@ -78,16 +78,22 @@ public class HeapTest : MonoBehaviour
 			case 7 when tick >= 25:
 				// 기대: HeapUsed 2, 전역 0, TestSword 1 (누수 객체만 남음)
 				LogHeap("전역 포인터를 모두 free한 후");
-				// 네 작업은 틱 26에 시전한 순서대로 진행하며, 각각 스택 1칸을 쓴 뒤 힙 2칸을 malloc한다. 남은 칸은 8 → 5 → 2 → 1 → 0
-				// 기대: 틱 26에 malloc → 4, 5, 그다음 둘은 NullPointer (스택과 힙의 합이 메모리 크기를 넘을 수 없음)
-				for (int i = 0; i < 4; i++)
-					executor.Cast(new TestMallocFunction());
+				// 스택 1칸을 쓴 뒤 힙 2칸을 malloc한다. 남은 칸은 8 → 7 → 5, 끝나면 스택을 돌려줘 6
+				// 기대: 틱 26에 malloc → 4
+				executor.Cast(new TestMallocFunction());
 				break;
 
-			case 8 when tick >= 32:
-				// 기대: HeapUsed 6, 전역 2, TestSword 3
-				LogHeap("힙이 모자랄 때까지 malloc한 후");
-				// 기대: 「HeapTest: 영역 비우기로 지움 (TestSword)」 3번
+			case 8 when tick >= 31:
+				// 프레임 4칸인 함수 안에서 malloc한다. 함수 프레임 4칸, 스킬 프레임 1칸을 쓰면 남은 칸은 6 → 2 → 1
+				// 기대: 틱 32에 malloc → NullPointer (스택과 힙의 합이 메모리 크기를 넘을 수 없음)
+				// 같은 malloc 함수를 여러 작업에서 함께 시전하지 않는다. 같은 스킬은 동시에 실행되지 않고 기다려서 스택을 함께 쓰지 않기 때문
+				executor.Cast(new UserFunction("MallocInFrame4", 4, new TestMallocFunction()));
+				break;
+
+			case 9 when tick >= 37:
+				// 기대: HeapUsed 4, 전역 1, TestSword 2
+				LogHeap("힙이 모자랄 때 malloc한 후");
+				// 기대: 「HeapTest: 영역 비우기로 지움 (TestSword)」 2번
 				memory.Heap.Clear();
 				// 기대: HeapUsed 0, 전역 0, TestSword 0 (누수 객체까지 모두 지워짐)
 				LogHeap("영역 비우기 후");

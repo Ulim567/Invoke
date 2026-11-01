@@ -78,7 +78,7 @@
 | `ReturnType` | `VariableType` | `Void` | `Void`가 아니면 함수 블록을 expression으로 쓸 수 있음 |
 | `LocalVariableCount` | `int` | 0 | 실행 중에 쓰는 지역 변수 수. stack 프레임 크기 계산에 씀. 스킬마다 stack 부담을 조정하는 값 |
 | `IsAsync` | `bool` | `false` (동기) | 다른 function 안에서 불렸을 때 기다리지 않으면 `true` |
-| `CooldownTicks` | `int` | 0 | 쿨타임(tick 수). 동작 시간(`TickCount`)과 따로 정함. 슬롯에 바로 넣으면 이 값, 사용자 정의 함수 안에 넣으면 그 함수의 쿨타임에 더해짐 |
+| `CooldownTicks` | `int` | 0 | 쿨타임(tick 수). 동작 시간(`TickCount`)과 따로 정함. 이 스킬이 끝난 tick부터 흐름(실패·실행 중단 포함). 쿨타임 동안 같은 고정 ID의 스킬은 슬롯 직접 시전이 거부되고, 사용자 정의 함수 안에서는 끝날 때까지 기다림. 규칙: [function-executor.md](function-executor.md)의 「쿨타임」 (#122) |
 
 #### 효과 실행 (몇 번째 tick에 무엇을 하는지)
 
@@ -238,6 +238,7 @@ protected override void OnEnd(FunctionContext context)
   - 쿨타임 `CooldownTicks`를 스킬마다 정함 (#38)
   - heap 쓰기 함수(`Malloc`, `Free`, `TryGetHeapObject`)와 `OnCancel`에서 heap 오브젝트를 없애지 않는 규칙 (#66)
   - 파라미터 값을 이름으로 읽는 `TryGetArgument`, 반환 값을 정하는 `Return` (#90)
+  - 쿨타임 기준: 사용자 정의 함수 → 스킬(고정 ID). 스킬이 끝날 때 시작하고, 실패·실행 중단도 쿨타임 전체 (#122)
 - 박진우·임혜원과 확인할 것
   - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)
   - 누수된 소환검 연출: `ObjectLeaked`를 받아 그 자리에 멈추고 흐리게 (#66)

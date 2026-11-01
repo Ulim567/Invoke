@@ -56,9 +56,10 @@ public class FunctionTask
 	/// </summary>
 	public string Name { get; }
 
-	// 슬롯에서 시전할 때 넘긴 함수(원본). 이 작업이 끝나면 실행기가 이 함수의 쿨타임을 시작한다
-	// 함수 안의 비동기 시전으로 만든 작업은 null이다. 그 스킬의 쿨타임은 바깥 함수의 쿨타임에 이미 더해져 있기 때문
-	internal FunctionBlock CooldownSource { get; set; }
+	// 슬롯에서 시전할 때 넘긴 함수(원본). 이 작업이 끝날 때까지 같은 원본을 다시 시전하지 못하게 CooldownTracker가 쓴다
+	// 함수 안의 비동기 시전으로 만든 작업은 슬롯에서 시전한 것이 아니므로 null이다
+	// 쿨타임에는 쓰지 않는다. 쿨타임은 스킬이 끝날 때 스킬마다 걸리기 때문
+	internal FunctionBlock CastSource { get; set; }
 
 	public FunctionTaskState State { get; private set; } = FunctionTaskState.Running;
 	public FunctionTaskEndReason EndReason { get; private set; } = FunctionTaskEndReason.None;
@@ -85,12 +86,12 @@ public class FunctionTask
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	// 실행기를 받지 않는다. 작업은 결과만 남기고, 실행기가 읽어서 처리하기 때문
-	internal FunctionTask(GameObject caster, ProcessMemory memory, LanguageRule language, FunctionBlock function)
+	internal FunctionTask(GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function)
 	{
 		Caster = caster;
 		Name = function.Name;
 		this.function = function;
-		context = new FunctionContext(this, caster, memory, language);
+		context = new FunctionContext(this, caster, memory, cooldowns, language);
 	}
 
 	/// <summary>

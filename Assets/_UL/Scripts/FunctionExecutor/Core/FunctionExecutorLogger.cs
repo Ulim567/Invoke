@@ -43,8 +43,8 @@ public class FunctionExecutorLogger : MonoBehaviour
 		if (task.IsFailed) reason += $": {task.Failure}";
 		if (task.Error != null) reason += $" - {task.Error.SourceName}: {task.Error.Message}";
 		// 끝난 작업을 모두 진행한 뒤에 불리므로, 이 틱이 끝난 시점의 스택 사용량이 찍힌다
-		// 슬롯에서 시전한 작업이면, 방금 시작된 쿨타임도 찍는다
-		string cooldown = task.CooldownSource != null ? $" / 쿨타임 {executor.GetRemainingCooldownTicks(task.CooldownSource)}틱" : "";
+		// 슬롯에서 시전한 작업이면, 그 함수의 남은 쿨타임도 찍는다. 스킬이면 방금 시작된 쿨타임이고, 사용자 정의 함수는 0이다
+		string cooldown = task.CastSource != null ? $" / 쿨타임 {executor.GetRemainingCooldownTicks(task.CastSource)}틱" : "";
 		Debug.Log($"[틱 {executor.CurrentTick}] {task.Caster.name}: {task.Name} 끝 ({reason}) / 스택 {memory.StackUsed}/{memory.Capacity}{cooldown}");
 	}
 

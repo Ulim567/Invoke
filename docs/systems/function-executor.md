@@ -163,12 +163,14 @@
 
 ### 시전 전 검사
 - `Cast`가 `FunctionTask`를 만들기 전에 공통 조건을 차례로 검사한다. 하나라도 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`로 거부 이유(`CastRejection`)를 알린다.
-  1. 쿨타임: 같은 function이 실행 중이거나 쿨타임 중이면 `OnCooldown`
+  1. 쿨타임: `OnCooldown`
+     - 스킬: 같은 스킬(고정 ID)이 어느 function 안에서든 실행 중이거나 쿨타임 중
+     - 사용자 정의 함수: 같은 function(원본)이 실행 중
   2. 메모리: `Free`가 그 function의 `FrameSize`보다 작으면 `NotEnoughMemory`
 - 시전 거부는 책임 없음(게임 상황): 언어 규칙 표를 거치지 않음
 - 메모리 검사 범위: 맨 바깥 function의 프레임만. 안쪽 function의 stack은 실행 중에 `Overflow`로 처리
 - 같은 tick에 연달아 시전: 둘 다 같은 `Free`를 보고 통과할 수 있음. 나중에 시작한 쪽은 실행 중에 `Overflow`
-- `UserFunction` 안의 비동기 시전: 검사하지 않음
+- `UserFunction` 안의 비동기 시전: 시전 전 검사 없음. 쿨타임은 아래 「쿨타임」의 기다림 규칙
 - 공통 조건 추가: `CastCondition`을 상속한 클래스 하나를 만들고, `FunctionExecutor.Awake`의 조건 목록에 추가
 - `Cast(null)`: `ArgumentNullException`
 - 스킬마다 다른 조건(맨손, 소환검 등)은 공통 조건이 아니다. 스킬 코드가 `Fail`로 직접 처리한다([predefined-function.md](predefined-function.md)).
@@ -210,17 +212,27 @@
 - 언어 규칙 파일 미연결: Play를 시작할 때 콘솔 오류. 실패가 나면 콘솔 오류 후 `InternalError`
 - `FunctionFailure`, `FailureHandling`, `FailureCategory`, `NumericConversion`의 새 값: 맨 끝에만 추가. 언어 규칙 파일이 값을 숫자로 저장하므로, 중간에 끼우면 이미 만든 파일의 값이 바뀜
 
-### 쿨타임
-- 붙는 곳: 슬롯에서 시전한 function(원본 객체)마다 하나. 같은 객체를 다시 `Cast`에 넘겨야 쿨타임이 이어짐
-- 길이: 그 function의 `CooldownTicks`(tick 수)
-  - `PredefinedFunction`: 스킬 구현자가 정함. 기본 0
-  - `UserFunction`: 안에 든 `FunctionBlock`들의 `CooldownTicks` 합
-    - 함수 데이터에서 바꾼 함수: expression 안까지 모든 사전 정의 함수 블록의 합. 반복문 안의 함수는 한 번만 셈 (#90)
-    - 코드로 직접 만든 함수: `Blocks`에 바로 들어 있는 `FunctionBlock`만 셈
-- 시작: `FunctionTask`가 끝나는 tick부터. `Completed`, `Failed`, `Interrupted`, `InternalError` 모두 같음
-- 쿨타임 감소: 시작할 때 `PlayerStats.ApplyCooldownReduction`을 한 번 적용하고 tick 수로 반올림
-- 실행 중인 function: 쿨타임이 아직 시작되지 않았지만 다시 시전할 수 없음(`OnCooldown`)
-- `UserFunction` 안의 비동기 시전으로 만든 `FunctionTask`: 쿨타임을 시작하지 않음. 그 스킬의 쿨타임은 바깥 function의 쿨타임에 이미 더해져 있음
+### 쿨타임 (#122)
+- 붙는 곳: 스킬(`PredefinedFunction`의 고정 ID)마다 하나. 슬롯 직접 시전, function 안의 호출, 비동기 시전이 같은 쿨타임을 씀
+- 길이: 그 스킬의 `CooldownTicks`(tick 수). 스킬 구현자가 정함. 기본 0
+- 시작: 그 스킬이 끝나는 tick부터. 정상 종료, 실패, 실행 중단 모두 쿨타임 전체
+  - 이유: 스킬을 일부러 끊어 쿨타임을 줄이지 못하게 함
+  - 시작하지 못한 스킬(stack 부족 `Overflow`, 시작 전 실행 중단): 쿨타임 없음
+  - 예: `{ A(); B(); }`에서 A가 끝난 뒤 B를 실행하기 전에 function이 끝나면 A만 쿨타임
+- 쿨타임 감소: 스킬이 끝날 때 `PlayerStats.ApplyCooldownReduction`을 한 번 적용하고 tick 수로 반올림. 스킬의 `CooldownTicks` 값은 그대로
+- 같은 스킬이 실행 중이거나 쿨타임 중일 때
+  - 슬롯에서 직접 시전: 시전 거부(`OnCooldown`)
+  - function 안의 스킬: 실패 없이 쓸 수 있을 때까지 기다림. 기다린 tick도 function의 진행 tick에 들어감
+    - 기다리는 동안의 stack: 그 스킬의 프레임은 없음. 바깥 function들의 프레임은 그대로
+    - 기다리는 동안 실행 중단: 시작하지 않았으므로 쿨타임 없음
+    - argument: 먼저 계산한 뒤 기다림
+  - function 안의 비동기 스킬: 부른 function이 기다렸다가 새 `FunctionTask`를 시전. 그동안 다음 블록으로 넘어가지 않음
+    - 이유: 바로 시전하면 반복문이 tick마다 기다리는 `FunctionTask`를 쌓아, 쿨타임이 끝날 때마다 차례로 실행됨(시전 예약)
+    - 한계: 새 `FunctionTask`는 다음 tick에 시작하므로, 그 사이에 같은 비동기 스킬을 한 번 더 요청할 수 있음. 그 `FunctionTask`도 시작할 때 기다리므로 쿨타임은 피하지 못함
+  - 같은 tick에 두 `FunctionTask`가 같은 스킬을 시작: 먼저 진행하는 쪽이 시작, 나머지는 기다림
+- 사용자 정의 함수: 자기 쿨타임 없음. 실행 중이면 다시 시전할 수 없음(`OnCooldown`)
+  - 실행 중 판단: 슬롯에서 시전한 원본 객체마다. 같은 객체를 다시 `Cast`에 넘겨야 이어짐
+- 알려진 단점: 같은 function이라도 직전에 스킬을 쓴 시점에 따라 걸리는 시간이 다름
 
 ## 다른 시스템이 쓰는 것
 
@@ -237,8 +249,8 @@
 | `TaskEnded` (event) | `FunctionTask` | - | `FunctionTask`가 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 `task.EndReason`, 플레이어 책임으로 실패(`Failed`)했으면 `task.Failure`, `task.Error`로 확인한다. |
 | `CurrentTick` | - | `int` | 지금까지 지난 tick 수. 첫 tick이 1이다. |
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
-| `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 쿨타임 UI에서 쓴다. |
-| `IsRunning(FunctionBlock function)` | 슬롯에서 cast한 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true` |
+| `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. |
+| `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
 
 ### `FunctionTask`
@@ -360,9 +372,9 @@ executor.Cast(dashThrust);
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TryConvert(FunctionData data, out UserFunction function)` | 함수 데이터 | `bool` | 바꾼 `UserFunction`(원본)을 `function`에 담는다. 프레임 크기와 쿨타임도 계산해 넣는다. 지금 실행할 수 없는 함수이면 콘솔 오류를 내고 `false` |
+| `TryConvert(FunctionData data, out UserFunction function)` | 함수 데이터 | `bool` | 바꾼 `UserFunction`(원본)을 `function`에 담는다. 프레임 크기도 계산해 넣는다. 지금 실행할 수 없는 함수이면 콘솔 오류를 내고 `false` |
 
-- 바꾼 함수: 원본. 슬롯은 같은 객체를 계속 `Cast`에 넘겨야 쿨타임이 이어짐
+- 바꾼 함수: 원본. 슬롯은 같은 객체를 계속 `Cast`에 넘겨야 실행 중 검사가 이어짐
 
 ```csharp
 // 예시. 슬롯에 넣은 함수 데이터를 바꿔서 시전
@@ -407,4 +419,12 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
 - 정할 것 (#120)
   - 반복문으로 쿨타임 피하기: 쿨타임이 슬롯의 function에 붙고 function이 끝나야 시작하므로, 반복문 안의 스킬은 몇 번 실행해도 쿨타임을 한 번만 셈. `while (true) { Thrust(); }`는 function이 끝나지 않아 쿨타임이 시작되지 않음
     - 고칠 방법(정함): 스킬별 쿨타임. 실행된 스킬에만 그 스킬의 쿨타임을 붙이고, 함수 안에서 쿨타임 중인 스킬에 닿으면 끝날 때까지 기다림. 사용자 정의 함수의 쿨타임은 없앰
-    - 「스킬별 쿨타임」 이슈에서 함
+    - #122에서 함 (위 「쿨타임」)
+- 박진우와 확인할 것 (#122)
+  - `CooldownTicks` 위치: `FunctionBlock` → `PredefinedFunction`. 덮어쓰는 방법은 그대로
+  - 슬롯 직접 시전 거부: 같은 스킬이 다른 function 안에서 실행 중이거나 쿨타임 중이어도 `OnCooldown`
+- 김도훈과 확인할 것 (#122)
+  - 쿨타임 감소 적용 시점: function이 끝날 때 → 스킬이 끝날 때
+- 임혜원과 확인할 것 (#122)
+  - 사용자 정의 함수 슬롯의 쿨타임 UI에 보여 줄 내용. 지금 `GetRemainingCooldownTicks`는 0
+  - function이 스킬의 쿨타임을 기다리는 동안의 표시. 필요한 함수는 정한 뒤 이 문서에 추가

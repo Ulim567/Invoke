@@ -12,7 +12,7 @@ using UnityEngine;
 /// <para>
 /// 가지는 것<br/>
 /// - 작업마다 다른 것(지역 변수 목록, 실패 기록, malloc한 포인터의 주인)은 실행 문맥이 직접 가진다.<br/>
-/// - 캐릭터에 하나인 것(메모리, heap, 언어 규칙)은 원래 주인이 가지고, 실행 문맥은 그 주인에게 닿는 길만 준다. heap 규칙은 HeapStorage에 있다.
+/// - 캐릭터에 하나인 것(메모리, heap, 쿨타임 기록, 언어 규칙)은 원래 주인이 가지고, 실행 문맥은 그 주인에게 닿는 길만 준다. heap 규칙은 HeapStorage에 있다.
 /// </para>
 /// </summary>
 // 작업 상태(FunctionTask)와 나눈 이유: 멀티플레이에서 서버만 블록을 실행하고 화면에는 작업 상태만 보낼 때 나누기 쉽고, 블록만 따로 테스트하기 쉽기 때문
@@ -36,6 +36,9 @@ public class FunctionContext
 	// 시전한 캐릭터의 메모리. 함수 블록이 프레임 칸을 쓰고 돌려주고, heap 함수가 HeapStorage를 찾을 때 쓴다
 	internal ProcessMemory Memory { get; }
 
+	// 시전한 캐릭터의 쿨타임 기록. 사전 정의 함수가 실행을 시작하고 끝낼 때 알린다
+	internal CooldownTracker Cooldowns { get; }
+
 	// 블록이 따를 언어 규칙(기본값, 숫자 타입 변환). 언어 규칙 파일이 없으면 C 규칙만 가진 임시 규칙이다
 	internal LanguageRuleData Rule => language.Rule;
 
@@ -50,11 +53,12 @@ public class FunctionContext
 	// 개발자 책임인 잘못을 블록이 기록했는지. true이면 작업이 언어 규칙 표를 거치지 않고 InternalError로 끝난다
 	internal bool InternalErrorRecorded { get; private set; }
 
-	internal FunctionContext(FunctionTask task, GameObject caster, ProcessMemory memory, LanguageRule language)
+	internal FunctionContext(FunctionTask task, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language)
 	{
 		this.task = task;
 		this.language = language;
 		Memory = memory;
+		Cooldowns = cooldowns;
 		Caster = caster;
 	}
 

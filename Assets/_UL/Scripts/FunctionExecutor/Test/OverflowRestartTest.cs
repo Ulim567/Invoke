@@ -20,9 +20,12 @@ public class OverflowRestartTest : MonoBehaviour
 	FunctionTask holdNested, loop, overflowCaller;
 	// Clear로 지운 객체 수. ObjectCleared가 불릴 때마다 센다
 	int clearedCount;
-	// Overflow를 낸 틱 뒤에 진행을 시작한 작업 수. 프로세스를 새로 시작한 뒤에는 작업이 생기지 않아야 한다
+	// Overflow를 낸 작업이 끝난 뒤에 진행을 시작한 작업 수. 프로세스를 새로 시작한 뒤에는 작업이 생기지 않아야 한다
 	int startedAfterRestart;
-	bool restarted;
+	// Overflow를 낸 작업이 끝났는지. 재시작이 일어났는지는 이 값이 아니라 마지막 단계의 확인 항목(힙 0, count 3)으로 본다
+	bool overflowEnded;
+	// 전역 변수 파일을 시작할 때의 파일로 되돌렸는지. 테스트가 끝나지 못하고 멈춰도 한 번은 되돌리기 위함
+	bool fileRestored;
 	int failedCount;
 	// 지금 진행할 단계. 그 단계의 틱이 되면 FixedUpdate가 실행하고 다음 단계로 넘어간다
 	int step;
@@ -33,8 +36,8 @@ public class OverflowRestartTest : MonoBehaviour
 		memory = GetComponent<ProcessMemory>();
 		originalFile = GlobalVariablesStorage.Load();
 		memory.Heap.ObjectCleared += _ => clearedCount++;
-		executor.TaskStarted += _ => { if (restarted) startedAfterRestart++; };
-		executor.TaskEnded += task => { if (task == overflowCaller) restarted = true; };
+		executor.TaskStarted += _ => { if (overflowEnded) startedAfterRestart++; };
+		executor.TaskEnded += task => { if (task == overflowCaller) overflowEnded = true; };
 
 		bool restartRule = GetComponent<LanguageRule>().TryFindHandling(name, FunctionFailure.Overflow, out FailureHandling handling) && handling == FailureHandling.RestartProcess;
 		Check("언어 규칙 파일의 Overflow 줄이 RestartProcess", restartRule, $"실제 {handling}");
@@ -73,7 +76,7 @@ public class OverflowRestartTest : MonoBehaviour
 				break;
 
 			// Overflow가 난 틱의 끝에 끝난 작업이 목록에서 빠진다. 그다음 틱에도 새 작업이 시작하지 않는지 보기 위해 한 틱 더 기다린다
-			case 2 when restarted && tick >= 28:
+			case 2 when overflowEnded && tick >= 28:
 				Check("OverflowCaller: Failed(Overflow)로 끝남", overflowCaller.EndReason == FunctionTaskEndReason.Failed && overflowCaller.Failure == FunctionFailure.Overflow, $"실제 {overflowCaller.EndReason}, {overflowCaller.Failure}");
 				CheckInterrupted(holdNested);
 				CheckInterrupted(loop);
@@ -85,8 +88,7 @@ public class OverflowRestartTest : MonoBehaviour
 				if (failedCount == 0) Debug.Log("[OverflowRestartTest] 전체 통과");
 				else Debug.LogError($"[OverflowRestartTest] 실패 {failedCount}개");
 
-				// 저장 함수를 거치지 않고 되돌린다. 원래 파일이 지금 메모리 크기에서 저장 검사에 걸려도 그대로 되돌리기 위함
-				GlobalVariablesStorage.Save(originalFile);
+				RestoreFile();
 				executor.RestartProcess();
 				Debug.Log($"[OverflowRestartTest] 끝. 시작할 때의 전역 변수 파일로 되돌림 (DataUsed {memory.DataUsed})");
 				break;
@@ -95,6 +97,21 @@ public class OverflowRestartTest : MonoBehaviour
 				return;
 		}
 		step++;
+	}
+
+	// 마지막 단계 전에 Play를 멈추거나 오브젝트를 지워도 파일을 되돌린다. 남겨 두면 다음 Play부터 모든 캐릭터의 DataUsed가 1이 되기 때문
+	void OnDestroy()
+	{
+		if (originalFile != null) RestoreFile();
+	}
+
+	// 저장 함수를 거치지 않고 되돌린다. 원래 파일이 지금 메모리 크기에서 저장 검사에 걸려도 그대로 되돌리기 위함
+	void RestoreFile()
+	{
+		if (fileRestored) return;
+
+		GlobalVariablesStorage.Save(originalFile);
+		fileRestored = true;
 	}
 
 	void CheckCount(string name, string expected)

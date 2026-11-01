@@ -358,19 +358,16 @@ public class FunctionExecutor : MonoBehaviour
 
 		switch (handling)
 		{
-			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
-			case FailureHandling.Reject:
-			case FailureHandling.EndTask:
-				task.End(FunctionTaskEndReason.Failed);
-				return false;
-
 			// 실패한 작업을 먼저 Failed로 끝낸다. RestartProcess가 끊는 작업은 Interrupted가 되는데, 실패한 작업까지 Interrupted로 덮으면 화면이 원인을 찾을 수 없기 때문
 			case FailureHandling.RestartProcess:
 				task.End(FunctionTaskEndReason.Failed);
 				RestartProcess();
 				return true;
 
-			// 처리 값을 새로 추가하고 여기를 빠뜨려도, 실패한 작업이 끝나지 않은 채 남지 않게 한다
+			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
+			// default도 함께 둔다. 처리 값을 새로 추가하고 여기를 빠뜨려도, 실패한 작업이 끝나지 않은 채 남지 않게 하기 위함
+			case FailureHandling.Reject:
+			case FailureHandling.EndTask:
 			default:
 				task.End(FunctionTaskEndReason.Failed);
 				return false;

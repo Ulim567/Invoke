@@ -109,7 +109,7 @@ public class PlayerInputReader : NetworkBehaviour
 	/// Debug 액션 맵에 있어 Player·Attack 액션 맵을 비활성화한 동안(대상 선택 중 등)에도 받는다.<br/>
 	/// 몬스터의 실행 중단 공격이 생기면 지운다.
 	/// </summary>
-	public bool InterruptTestPressed => interruptTest.WasPressedThisFrame();
+	public bool InterruptTestPressed => interruptTest != null && interruptTest.WasPressedThisFrame();
 
 	/// <summary>
 	/// Player 액션 맵(Move, Jump, Run, Down, PickUp, Interact)을 활성화하거나 비활성화한다.<br/>
@@ -158,8 +158,6 @@ public class PlayerInputReader : NetworkBehaviour
 		targetNext = attackMap.FindAction("TargetNext", true);
 		mark = attackMap.FindAction("Mark", true);
 
-		interruptTest = InputSystem.actions.FindActionMap("Debug", true).FindAction("InterruptTest", true);
-
 		for (int i = 0; i < SlotCount; i++)
 		{
 			int index = i;
@@ -174,6 +172,10 @@ public class PlayerInputReader : NetworkBehaviour
 			slots[i].started += onSlotStarted[i];
 			slots[i].canceled += onSlotCanceled[i];
 		}
+
+		// 임시 시험 키는 없어도 예외를 던지지 않고, 다른 입력을 모두 연결한 뒤에 찾는다
+		// Debug 액션 맵을 먼저 지웠을 때 이 줄의 예외로 슬롯 입력 연결까지 멈추지 않게 하기 위함
+		interruptTest = InputSystem.actions.FindActionMap("Debug")?.FindAction("InterruptTest");
 	}
 
 	public override void OnStopLocalPlayer()

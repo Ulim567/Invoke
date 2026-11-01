@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -102,6 +103,17 @@ public class ProcessMemory : MonoBehaviour
 	internal void ReleaseHeap(int size)
 	{
 		HeapUsed -= size;
+	}
+
+	// 전역 변수 저장소를 비우고 variables를 선언한다. 초기화(FunctionExecutor.RestartProcess)만 부른다
+	// 검사(칸 수, 타입, 이름)는 GlobalVariablesConverter가 이미 했다
+	// 저장소를 새로 만드는 이유: VariableStore에 비우는 함수를 따로 두지 않아도 예전 전역 변수가 하나도 남지 않게 하기 위함
+	internal void ResetGlobals(IEnumerable<(string Name, VariableType Type, RuntimeValue Value)> variables)
+	{
+		VariableStore globals = new VariableStore();
+		foreach ((string name, VariableType type, RuntimeValue value) in variables)
+			globals.TryDeclare(name, type, value);
+		Globals = globals;
 	}
 
 	void Awake()

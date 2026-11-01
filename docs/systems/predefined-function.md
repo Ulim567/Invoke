@@ -81,6 +81,8 @@
 | `IsAsync` | `bool` | `false` (동기) | 다른 function 안에서 불렸을 때 기다리지 않으면 `true` |
 | `CooldownTicks` | `int` | 0 | 쿨타임(tick 수). 동작 시간(`TickCount`)과 따로 정함. 이 스킬이 끝난 tick부터 흐름(실패·실행 중단 포함). 쿨타임 동안 같은 고정 ID의 스킬은 슬롯 직접 시전이 거부되고, 사용자 정의 함수 안에서는 끝날 때까지 기다림. 규칙: [function-executor.md](function-executor.md)의 「쿨타임」 (#122) |
 
+- `Parameters`, `ReturnType`, `IsAsync`의 위치: `FunctionBlock`. 사용자 정의 함수와 함께 가지는 값. 덮어쓰는 방법은 그대로(`public override`) (#132)
+
 #### 효과 실행 (몇 번째 tick에 무엇을 하는지)
 
 | 이름 | 덮어쓰지 않으면 | 설명 |
@@ -179,7 +181,8 @@ protected override void OnTick(FunctionContext context, int tick)
   - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
 - 이름: `Parameters`에 적은 `ParameterData`의 이름
 - 반환 값이 쓰이는 곳: expression으로 쓴 함수 블록(예: `int n = CountSwords();`). statement로 놓으면 버림
-  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 작업을 `InternalError`(개발자 책임)로 끝냄. statement로 놓아도 같음
+  - 반환 타입이 `Void`가 아닌데 `Return` 없이 끝남, `ReturnType`으로 맞출 수 없는 값을 넘김: 콘솔 오류 + 작업을 `InternalError`(개발자 책임)로 끝냄. statement로 놓아도, 슬롯에서 바로 시전해도 같음(#132)
+    - 확인 시점: 스킬이 끝날 때(`OnEnd` 다음)
   - 반환 타입이 `Void`인데 `Return`을 부름, `OnCancel`에서 부름: 콘솔 오류, 무시
 - 값 만들기, 꺼내기: `RuntimeValue.FromInt(3)`, `value.AsInt()` 등
 
@@ -271,6 +274,8 @@ protected override void OnTick(FunctionContext context, int tick)
   - 쿨타임 기준: 사용자 정의 함수 → 스킬(고정 ID). 스킬이 끝날 때 시작하고, 실패·실행 중단도 쿨타임 전체 (#122)
   - 대상 파라미터 값: 이제 함수 블록의 argument로 넘어옴. 몬스터는 `TryGetArgument("target", ...)` 뒤 `AsBug()`. 쓸 수 없는 대상이면 실행기가 `InvalidTarget`으로 끝내고 스킬은 시작하지 않음 (#131)
   - 스킬의 동기·비동기: 모든 스킬 동기(`IsAsync` 기본값) (#131)
+  - `Parameters`, `ReturnType`, `IsAsync` 위치: `PredefinedFunction` → `FunctionBlock`. 스킬의 `override`는 그대로 (#132)
+  - 슬롯 직접 시전에서도 `Return` 누락·반환 타입 불일치가 콘솔 오류 + `InternalError` (#132)
 - 박진우·임혜원과 확인할 것
   - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)
   - 누수된 소환검 연출: `ObjectLeaked`를 받아 그 자리에 멈추고 흐리게 (#66)

@@ -27,6 +27,7 @@
     - 기본: `int`, `float`, `bool`, `string`, `char`
     - 게임 전용: 위치, 방향, 대상, 함수
     - 자료구조: 배열, list
+      - list: C 캐릭터에는 없음. list가 문법에 있는 언어(Java, Python)의 캐릭터가 생길 때 (#132)
     - 사용자 정의 타입: struct (게임이 미리 정한 것, 플레이어가 만드는 것(Type 정의))
     - 참조: 포인터
   - 대입 블록 (예: `x = 5`)
@@ -41,6 +42,8 @@
   - 반복 제어: `break`, `continue`
 - 배열 만들기 블록 (예: `int arr[5]`)
   - 일반 변수 만들기 블록과 다른 블록
+  - 길이: 직접 입력한 1 이상의 정수만(C89). 변수, 값 블록은 넣을 수 없음 (#132)
+  - 원소 읽기 블록(`arr[i]`, 값 칸에 끼움), 원소 쓰기 블록(`arr[i] = 값`) (#132)
 - 동적 할당 (C)
   - `malloc`, `free` 추가: 코드 블록 (C 스킬 「검 소환」·「해제」는 모티브)
   - `malloc`: 게임이 미리 정한 타입의 실제 오브젝트 생성 (나중에 사용자 정의 타입도 생성 가능하게)
@@ -59,7 +62,7 @@
 - 값 칸: 키보드로 직접 입력 또는 블록 드래그
   - 직접 입력한 값 (`bool`은 `true` / `false` 토글, C 화면에서도 `true` / `false`)
   - 변수
-  - 값 블록: 연산, 비교, 논리, `malloc`
+  - 값 블록: 연산, 비교, 논리, `malloc`, 원소 읽기(#132)
   - 값을 돌려주는 함수 블록
 - 변수 칸: 변수 블록만 드래그 (예: 대입 블록의 왼쪽 `x`)
 - 드롭다운 칸: 목록에서 하나 선택
@@ -79,7 +82,9 @@
 | `for` (단순형: `for (int i = 0; i < 10; i++)`) | 이름 1(`i`), 값 2(시작, 끝) | 1 |
 | `while` | 값 1(조건) | 1 |
 | `break`, `continue` | 없음 | 0 |
-| 배열 만들기 | 드롭다운 1(타입), 이름 1, 값 1(길이) | 0 |
+| 배열 만들기 | 드롭다운 1(타입), 이름 1, 값 1(길이, 직접 입력한 1 이상의 정수만 #132) | 0 |
+| 원소 읽기 (#132) | 변수 1(array), 값 1(index) | 0 |
+| 원소 쓰기 (#132) | 변수 1(array), 값 2(index, 쓸 값) | 0 |
 | `malloc` | 드롭다운 1(struct 타입) | 0 |
 | `free` | 값 1(포인터) | 0 |
 | 함수 블록 | 값: 그 함수의 파라미터 수만큼 | 0 |
@@ -93,6 +98,7 @@
   - 반환 타입 (돌려주는 값이 없으면 `void`)
   - 파라미터 목록: 파라미터마다 이름, 타입
   - 블록 목록: 위에서부터 순서대로
+  - 비동기 여부(`IsAsync`): 다른 함수 안에서 불렸을 때 기다리지 않으면 `true`. 이 칸이 없는 예전 데이터는 `false`(동기) (#132)
 - 저장하지 않고 계산하는 것 (프로퍼티 또는 함수)
   - 지역 변수 목록: 블록 목록의 선언 블록, 배열 만들기 블록에서 모음
   - 블록 수: 블록 목록의 블록을 셈
@@ -111,9 +117,9 @@
 - 블록 1개: 1
 - 반복 횟수: 곱하지 않음
 - 같은 함수 여러 번 호출, 여러 함수가 같은 함수 호출: 한 번만 셈
-- 재귀 호출: 아직 불가
+- 재귀 호출: 허용 (#132). 같은 함수는 한 번만 셈
 - 크기 계산과 구조 검사: 분리
-  - 구조 검사(재귀, 없는 함수 호출 포함): 「만든 함수를 서버로 보내 검사·저장하기」 이슈에서 전부
+  - 구조 검사(없는 함수 호출 포함): 「만든 함수를 서버로 보내 검사·저장하기」 이슈에서 전부. 재귀는 막지 않음 (#132)
 - C 스킬 호출 블록 크기: 그 스킬의 `CodeSize` (`predefined-function.md`). 지금은 모두 1
   - 없는 고정 ID: 1
 - 슬롯에 바로 넣은 C 스킬: C 스킬 블록 하나만 든 함수와 같게 셈 (그 스킬의 `CodeSize`)
@@ -143,10 +149,10 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Create(string name)` | 함수 이름 | `FunctionData` | 새 함수. GUID가 이때 한 번 붙음. 반환 타입 `Void`, 파라미터·블록은 빔 |
-| `Guid`, `Name`, `ReturnType`, `Parameters`, `Blocks` | - | - | 저장하는 값. 편집 화면이 직접 고침 |
+| `Guid`, `Name`, `ReturnType`, `Parameters`, `Blocks`, `IsAsync` | - | - | 저장하는 값. 편집 화면이 직접 고침. `IsAsync`는 #132, 편집 화면 UI는 아직 없음 |
 | `AllBlocks()` | - | `IEnumerable<BlockData>` | 함수 몸통의 모든 블록 (칸, 블록 영역 안까지) |
 | `CountBlocks()` | - | `int` | 이 함수 하나의 블록 개수. 부르는 함수는 세지 않음 |
-| `LocalVariables()` | - | `List<(string Name, VariableType Type)>` | 선언, 배열 만들기, `for`의 변수. 프레임 크기 계산에 씀 |
+| `LocalVariables()` | - | `List<(string Name, VariableType Type)>` | 선언, 배열 만들기, `for`의 변수. 프레임 크기 계산에 씀. array는 변수 하나로 들어 있고, 프레임의 array 칸 수(길이)는 `FunctionDataConverter`가 길이 칸에서 계산 |
 
 ### `BlockData` (블록 하나)
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
@@ -159,7 +165,8 @@
 | `CountBlocks()` | - | `int` | 이 블록과 안쪽 블록의 개수 |
 | `CanBeValue(BlockKind)` | 블록 종류 | `bool` | 값 칸에 끼울 수 있는 종류인지. 함수 블록은 부를 함수의 반환 타입이 `Void`가 아닐 때만 끼울 수 있음 (부르는 쪽이 확인) |
 | `CanBeStatement(BlockKind)` | 블록 종류 | `bool` | 함수 몸통, 블록 영역에 놓을 수 있는 종류인지 |
-| 만들기 함수 | 블록마다 다름 | `BlockData` | `Declare`, `Assign`, `Arithmetic`, `Compare`, `Logic`, `Not`, `Conditional`, `For`, `While`, `Break`, `Continue`, `ArrayDeclare`, `Malloc`, `Free`, `CallUserFunction`, `CallPredefinedFunction`, `Return`, `Wait`. 칸을 순서대로 채워 줌 |
+| `AlwaysReturnsValue(blocks)` | 블록 목록(function body 등) | `bool` | 어느 갈래로 가든 반드시 값을 넣은 `return`을 만나면 `true`. 반환 타입이 있는 함수의 return 누락(compile error)을 저장할 때 찾는 검사가 씀. 반복문 안의 `return`은 세지 않음 (#132) |
+| 만들기 함수 | 블록마다 다름 | `BlockData` | `Declare`, `Assign`, `Arithmetic`, `Compare`, `Logic`, `Not`, `Conditional`, `For`, `While`, `Break`, `Continue`, `ArrayDeclare`, `Malloc`, `Free`, `CallUserFunction`, `CallPredefinedFunction`, `Return`, `Wait`, `ArrayGet`, `ArraySet`(#132). 칸을 순서대로 채워 줌 |
 
 ### `SlotData` (칸 하나)
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
@@ -267,3 +274,8 @@ string json = FunctionDataJson.ToJson(function);
   - `malloc` 블록의 struct 드롭다운: `PredefinedStructs.All`
 - 임혜원과 확인할 것 (#120)
   - `NULL` 직접 입력: 플레이어가 값 칸에 `NULL`을 입력하면 `SlotData.FromNull()`로 저장. C 화면에서는 `NULL`로 보여 줌
+- 임혜원과 확인할 것 (#132)
+  - 새 블록: 원소 읽기(`BlockData.ArrayGet(이름, index)`, 값 칸에 끼움), 원소 쓰기(`BlockData.ArraySet(이름, index, 값)`). array 칸은 변수 칸(`VariableName`)
+  - 배열 만들기 블록의 길이 칸: 1 이상의 숫자를 직접 입력하는 것만. 다른 값이 든 함수는 실행기가 변환 거부
+  - `FunctionData.IsAsync`: 칸만 추가. 편집 화면에서 고르는 UI는 아직 없음
+  - 저장할 때 return 누락 검사: `BlockData.AlwaysReturnsValue`

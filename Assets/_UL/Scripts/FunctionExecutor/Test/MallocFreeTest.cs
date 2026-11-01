@@ -5,7 +5,7 @@ using UnityEngine;
 /// malloc 블록, free 블록 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 두 단계를 차례로 진행한다. 1단계가 끝나면 2단계를 시작한다.<br/>
 /// - 1단계(이슈 완료 조건 4): malloc에서 HeapUsed가 오르고 free에서 내려가는지<br/>
-/// - 2단계(이슈 완료 조건 5): heap이 모자라면 변수에 NullPointer가 담기고, 그 변수로 free하면 InvalidPointer로 실패하는지<br/>
+/// - 2단계(이슈 완료 조건 5): heap이 모자라면 변수에 NullPointer가 담기고, 그 변수로 free하면 C의 free(NULL)처럼 실패하지 않고 끝나는지(#120)<br/>
 /// 메모리 크기가 4칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다.
 /// </summary>
 [RequireComponent(typeof(FunctionExecutor))]
@@ -69,7 +69,7 @@ public class MallocFreeTest : MonoBehaviour
 	}
 
 	// 2단계. heap을 이 함수의 프레임(2칸)만 남기고 채운 뒤 시전한다
-	// 틱 1 malloc(실패), 틱 2 선언, 틱 3 s 읽기, 틱 4 free → InvalidPointer
+	// 틱 1 malloc(실패), 틱 2 선언, 틱 3 s 읽기, 틱 4 free(NULL) → 아무 일도 하지 않고 정상 종료
 	void CastHeapFull()
 	{
 		if (!FunctionDataConverter.TryConvert(MakeMallocFree("HeapFull"), out UserFunction converted))
@@ -104,10 +104,7 @@ public class MallocFreeTest : MonoBehaviour
 				break;
 
 			case "HeapFull":
-				FailureCategory? category = task.Failure.HasValue ? GetComponent<LanguageRule>().GetFailureCategory(task.Failure.Value) : null;
-				Check("HeapFull: 틱 4에 InvalidPointer(RuntimeError)로 실패",
-					task.Failure == FunctionFailure.InvalidPointer && category == FailureCategory.RuntimeError && tick == 4,
-					$"실제 틱 {tick}, {task.Failure}, {category}");
+				Check("HeapFull: 틱 4에 정상 종료 (free(NULL))", task.EndReason == FunctionTaskEndReason.Completed && tick == 4, $"실제 틱 {tick}, {task.EndReason}, {task.Failure}");
 				memory.Heap.Free(fillerPointer);
 				Check("테스트가 끝난 뒤 HeapUsed가 시작할 때와 같음", memory.HeapUsed == heapAtStart, $"시작 {heapAtStart}, 지금 {memory.HeapUsed}");
 				break;

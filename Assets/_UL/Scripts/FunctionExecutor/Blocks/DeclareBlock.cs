@@ -4,7 +4,9 @@
 /// - initializer가 있으면 그 값을, 비어 있으면 캐릭터 언어의 기본값(LanguageRuleData)을 넣는다.<br/>
 /// - initializer에 쓴 블록(연산 등)이 있으면 그 블록이 자기 틱을 쓴 뒤, 다음 틱에 변수를 만든다.<br/>
 /// - 초기값은 캐릭터 언어의 숫자 타입 변환 규칙으로 변수 타입에 맞춘다(C: float f = 3 → 3.0, int x = 0.5 → 0).<br/>
-/// - 같은 이름이 이미 있으면 DuplicateVariable, 초기값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.
+/// - 변수는 가장 안쪽 범위({ })에 만든다. 그 범위가 닫히면 사라진다.<br/>
+/// - 같은 범위에 같은 이름이 이미 있으면 DuplicateVariable로 실패한다. 바깥 범위와 같은 이름은 캐릭터 언어가 허용할 때만 만든다(LanguageRuleData.AllowShadowing).<br/>
+/// - 초기값을 변수 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.
 /// </para>
 /// </summary>
 public class DeclareBlock : Block
@@ -37,7 +39,7 @@ public class DeclareBlock : Block
 		RuntimeValue value;
 		if (initialValueOriginal != null)
 		{
-			if (!NumericRules.TryConvertForStore(slots[0], type, rule, out value))
+			if (!NumericRules.TryConvertForStore(initialValueOriginal, slots[0], type, rule, out value))
 			{
 				context.RecordFailure(FunctionFailure.TypeMismatch);
 				return BlockResult.Failed;
@@ -52,7 +54,7 @@ public class DeclareBlock : Block
 
 		// 선언 블록은 사용자 정의 함수 안에만 있으므로 지역 변수가 언제나 있다
 		VariableStore variables = context.CurrentVariables;
-		if (variables.Contains(name))
+		if (!variables.CanDeclare(name, rule.AllowShadowing))
 		{
 			context.RecordFailure(FunctionFailure.DuplicateVariable);
 			return BlockResult.Failed;

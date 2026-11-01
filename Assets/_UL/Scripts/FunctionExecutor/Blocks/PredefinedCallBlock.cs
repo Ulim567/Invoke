@@ -83,7 +83,7 @@ public class PredefinedCallBlock : ValueBlock
 		for (int i = 0; i < argumentOriginals.Length && i < parameters.Count; i++)
 		{
 			if (argumentOriginals[i] == null) continue;
-			if (!NumericRules.TryConvertForStore(slots[i], parameters[i].Type, context.Rule, out RuntimeValue value)) return false;
+			if (!NumericRules.TryConvertForStore(argumentOriginals[i], slots[i], parameters[i].Type, context.Rule, out RuntimeValue value)) return false;
 			arguments[i] = value;
 		}
 		return true;

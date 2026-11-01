@@ -24,4 +24,7 @@ public abstract class ValueBlock : Block
 
 	// 플레이어가 놓은 블록이면 true. Done을 돌려준 틱을 이 블록이 쓴 것으로 보고, 바깥 블록은 다음 틱에 진행한다
 	internal virtual bool UsesTick => true;
+
+	// value slot에 직접 입력한 int 0이면 true. 언어 규칙이 ZeroIsNull이면 포인터 자리에서 NULL로 본다(NumericRules.NullIfZeroLiteral)
+	internal virtual bool IsZeroLiteral => false;
 }

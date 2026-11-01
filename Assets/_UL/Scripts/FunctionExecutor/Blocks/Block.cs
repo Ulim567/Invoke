@@ -12,6 +12,10 @@ public enum BlockResult
 	// 실패해서 실행하지 못했다. 바깥 함수들도 끝까지 실행하지 못하고 끝난다
 	// 실패 종류마다 값을 따로 두지 않는다. 종류는 실패한 블록이 FunctionContext.RecordFailure로 기록하므로, 종류가 늘어도 블록 결과를 받는 쪽은 고치지 않는다
 	Failed,
+	// break를 만나 끝났다. 가장 안쪽 반복문이 받아 반복을 끝낸다. 반복문 밖이면 사용자 정의 함수가 NotInLoop로 실패시킨다
+	Break,
+	// continue를 만나 끝났다. 가장 안쪽 반복문이 받아 다음 검사로 간다. 반복문 밖이면 Break와 같다
+	Continue,
 }
 
 /// <summary>
@@ -135,4 +139,20 @@ public abstract class Block
 public class ReturnBlock : Block
 {
 	protected override BlockResult Step(FunctionContext context) => BlockResult.Returned;
+}
+
+/// <summary>
+/// break 블록. 가장 안쪽 반복문을 끝낸다. 1틱을 쓴다. 반복문 밖에 놓이면 NotInLoop로 실패한다.
+/// </summary>
+public class BreakBlock : Block
+{
+	protected override BlockResult Step(FunctionContext context) => BlockResult.Break;
+}
+
+/// <summary>
+/// continue 블록. 가장 안쪽 반복문의 이번 바퀴를 끝내고 다음 검사로 간다. 1틱을 쓴다. 반복문 밖에 놓이면 NotInLoop로 실패한다.
+/// </summary>
+public class ContinueBlock : Block
+{
+	protected override BlockResult Step(FunctionContext context) => BlockResult.Continue;
 }

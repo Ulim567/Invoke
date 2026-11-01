@@ -25,8 +25,11 @@ public enum FunctionFailure
 	TypeMismatch,
 	// 0으로 나누거나 0으로 나머지를 구했다 (int, float 모두)
 	DivideByZero,
-	// free 블록에 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터)를 넣었다
+	// free 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣었다. NULL은 C처럼 아무 일도 하지 않으므로 실패가 아니다
 	InvalidPointer,
+	// 반복문 밖에서 break, continue를 만났다. C에서는 compile error다
+	// 편집 화면이나 저장 검사가 막기 전까지 실행 중에 이 실패로 끝낸다. 저장 검사는 BlockData.HasJumpOutsideLoop로 찾는다
+	NotInLoop,
 }
 
 /// <summary>
@@ -73,6 +76,19 @@ public enum NumericConversion
 }
 
 /// <summary>
+/// string을 ==, !=로 비교하는 방법. 언어마다 다르므로 언어 규칙 파일이 고른다. 크기 비교(&lt; 등)는 어느 값이든 TypeMismatch다.
+/// </summary>
+// FunctionFailure와 같은 이유로, 새 방법은 맨 끝에만 추가한다
+public enum StringEquality
+{
+	// 비교할 수 없다(TypeMismatch). C는 ==가 글자 내용이 아니라 주소를 비교하므로, 플레이어가 내용 비교로 착각하지 않게 막는다
+	// Java도 이 값을 쓴다. ==가 주소 비교라 내용 비교는 equals 함수로 해야 하기 때문
+	Disallowed,
+	// 글자 내용으로 비교한다 (C#)
+	ByContent,
+}
+
+/// <summary>
 /// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지와 그 실패의 분류(실패 처리 표), 초기값을 비운 변수의 기본값, 숫자 타입 변환 규칙을 정한다.
 /// <para>
 /// 사용법<br/>
@@ -115,6 +131,18 @@ public class LanguageRuleData : ScriptableObject
 	[SerializeField, Tooltip("float에 %를 쓸 수 있는지. C는 쓸 수 없다(TypeMismatch)")]
 	bool allowFloatModulo = false;
 
+	// 처음 값은 C의 규칙이다. 이미 만든 C 파일도 Unity가 새 칸을 읽을 때 이 값을 넣는다
+	[Header("NULL과 비교")]
+	[SerializeField, Tooltip("직접 입력한 0을 포인터 자리에서 NULL로 보는지. C는 본다")]
+	bool zeroIsNull = true;
+	[SerializeField, Tooltip("string을 ==, !=로 비교하는 방법. C는 비교할 수 없다(Disallowed)")]
+	StringEquality stringEquality = StringEquality.Disallowed;
+
+	// 처음 값은 C의 규칙이다. 이미 만든 C 파일도 Unity가 새 칸을 읽을 때 이 값을 넣는다
+	[Header("변수 범위")]
+	[SerializeField, Tooltip("{ } 안에서 바깥과 같은 이름의 변수를 선언할 수 있는지. C는 할 수 있다. 할 수 없으면 DuplicateVariable")]
+	bool allowShadowing = true;
+
 	/// <summary>
 	/// 숫자 타입이 섞일 때 값을 바꾸는 규칙. 연산 블록, 선언 블록, 대입 블록이 따른다.
 	/// </summary>
@@ -124,6 +152,21 @@ public class LanguageRuleData : ScriptableObject
 	/// float에 %를 쓸 수 있으면 true. false이면 TypeMismatch로 실패한다.
 	/// </summary>
 	public bool AllowFloatModulo => allowFloatModulo;
+
+	/// <summary>
+	/// true이면 포인터와 비교하거나 포인터 변수에 넣을 때, value slot에 직접 입력한 0을 NULL로 본다(C의 p == 0, Sword* p = 0).
+	/// </summary>
+	public bool ZeroIsNull => zeroIsNull;
+
+	/// <summary>
+	/// string을 ==, !=로 비교하는 방법. 비교 블록이 따른다.
+	/// </summary>
+	public StringEquality StringEquality => stringEquality;
+
+	/// <summary>
+	/// true이면 { } 안에서 바깥과 같은 이름의 변수를 선언할 수 있다(C). false이면 선언 블록이 DuplicateVariable로 실패한다(Java, C#).
+	/// </summary>
+	public bool AllowShadowing => allowShadowing;
 
 	/// <summary>
 	/// failure의 처리를 찾는다. 표에 없으면 false를 돌려준다.
@@ -193,12 +236,16 @@ public class LanguageRuleData : ScriptableObject
 		return false;
 	}
 
-	// 테스트 코드가 C가 아닌 숫자 타입 변환 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
-	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo)
+	// 테스트 코드가 C가 아닌 언어 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
+	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo,
+		bool zeroIsNull = true, StringEquality stringEquality = StringEquality.Disallowed, bool allowShadowing = true)
 	{
 		LanguageRuleData rule = CreateInstance<LanguageRuleData>();
 		rule.numericConversion = conversion;
 		rule.allowFloatModulo = allowFloatModulo;
+		rule.zeroIsNull = zeroIsNull;
+		rule.stringEquality = stringEquality;
+		rule.allowShadowing = allowShadowing;
 		return rule;
 	}
 }

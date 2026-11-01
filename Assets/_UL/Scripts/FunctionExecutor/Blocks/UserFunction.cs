@@ -13,9 +13,8 @@ using System.Collections.Generic;
 /// </summary>
 public class UserFunction : FunctionBlock
 {
-	int blockIndex;
-	// 지금 실행 중인 블록의 복사본. 이 블록이 끝나야 다음 블록으로 넘어간다
-	Block runningBlock;
+	// 이 실행에서 블록 목록을 실행하는 도우미. 블록 복사본마다 따로 가져야 하므로 OnStart에서 만든다
+	Statements statements;
 	// 만들 때 정한 쿨타임. 정하지 않았으면 null이고, 그때는 Blocks에서 계산한다
 	readonly int? cooldownTicks;
 
@@ -81,40 +80,20 @@ public class UserFunction : FunctionBlock
 
 	protected override BlockResult Step(FunctionContext context)
 	{
-		// 블록이 하나도 없는 함수도 최소 1틱은 쓰게 한다
-		if (Blocks.Count == 0) return BlockResult.Done;
+		// 블록이 하나도 없는 함수도 Statements가 바로 Done을 돌려주므로 최소 1틱은 쓴다
+		BlockResult result = statements.Step(context);
 
-		if (runningBlock == null)
+		// 반복문이 받지 않은 break, continue가 function body까지 올라왔다. 반복문 밖에 놓인 것이다
+		// 바깥 함수의 반복문에 걸리게 하지 않는다. C에서도 break, continue는 함수를 넘지 못하기 때문
+		if (result == BlockResult.Break || result == BlockResult.Continue)
 		{
-			Block next = Blocks[blockIndex];
-
-			// 비동기 함수는 끝나기를 기다리지 않는다. 새 작업으로 시전하고, 이 블록은 1틱을 쓴 것으로 보고 다음 블록으로 넘어간다
-			// 원본을 그대로 넘겨도 Cast가 복사본을 만들어 실행한다
-			// 조건문, for, while 블록이 생기면 그 블록들도 안쪽 블록을 실행하므로 같은 처리가 필요하다. 그때 이 처리를 한 함수로 빼서 함께 쓴다
-			if (next is PredefinedFunction function && function.IsAsync)
-			{
-				context.RequestAsyncCast(function);
-				blockIndex++;
-				return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
-			}
-
-			// 원본은 여러 작업이 함께 쓰므로, 실행을 시작할 때 복사본을 만들어 진행 상황을 따로 갖게 한다
-			runningBlock = next.Clone();
+			context.RecordFailure(FunctionFailure.NotInLoop);
+			return BlockResult.Failed;
 		}
 
-		BlockResult result = runningBlock.Execute(context);
-		if (result == BlockResult.Running) return BlockResult.Running;
-
-		runningBlock = null;
-
-		// 안쪽에서 실패했으면 이 함수도 끝까지 실행하지 못하므로 바깥에 그대로 알린다
-		if (result == BlockResult.Failed) return BlockResult.Failed;
-
 		// 안쪽에서 return을 만났으면 남은 블록을 실행하지 않는다. return은 이 함수에서 멈추므로 바깥에는 Done으로 알린다
-		if (result == BlockResult.Returned) return BlockResult.Done;
-
-		blockIndex++;
-		return blockIndex >= Blocks.Count ? BlockResult.Done : BlockResult.Running;
+		// 실패는 이 함수도 끝까지 실행하지 못한 것이므로 바깥에 그대로 알린다
+		return result == BlockResult.Returned ? BlockResult.Done : result;
 	}
 
 	// 안쪽 블록은 실행 문맥만 받으므로, 이 함수의 지역 변수를 실행 문맥에 올려 두어 안쪽 블록이 찾게 한다
@@ -123,6 +102,8 @@ public class UserFunction : FunctionBlock
 	{
 		Variables = new VariableStore();
 		context.PushVariables(Variables);
+		// function body는 범위를 따로 열지 않는다. C에서 function body의 맨 바깥 범위는 파라미터와 같은 범위이기 때문
+		statements = new Statements(Blocks, false);
 	}
 
 	protected override void OnEnd(FunctionContext context)
@@ -134,7 +115,7 @@ public class UserFunction : FunctionBlock
 	{
 		// 실행 중인 안쪽 블록도 함께 끊어서, 안쪽 블록들도 정리할 기회를 갖게 한다
 		// 안쪽을 먼저 끊는다. 안쪽 사용자 정의 함수가 자기 지역 변수를 먼저 내려야 이 함수의 것이 맨 위가 되기 때문
-		runningBlock?.Cancel(context);
+		statements?.Cancel(context);
 		context.PopVariables();
 	}
 }

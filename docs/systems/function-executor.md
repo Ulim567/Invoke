@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors` | 스킬 작성자가 쓰는 것 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
@@ -33,10 +33,17 @@
 - 모든 `Block`은 최소 1 tick을 쓴다. 플레이어가 놓은 블록 하나 = 1 tick (#90)
   - `PredefinedFunction`: `TickCount` tick
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
-  - `ReturnBlock`, 선언, 대입, 연산, `malloc`, `free`: 1 tick
-  - expression으로 쓴 블록(연산, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
+  - `ReturnBlock`, 선언, 대입, 연산, 비교, 논리(`&& || !`), `malloc`, `free`: 1 tick
+  - expression으로 쓴 블록(연산, 비교, 논리, `malloc`, 값을 돌려주는 스킬): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
   - value slot에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
   - value slot이 여럿: 왼쪽부터 차례로 실행
+  - 논리 블록의 short-circuit으로 실행하지 않은 오른쪽 value slot: tick을 쓰지 않음 (#120)
+  - 조건문 (#120): 실행이 닿은 갈래(`if`, `else if`, `else`)마다 1 tick. 조건의 expression은 그 앞에 자기 tick. 고른 갈래의 `{ }`는 다음 tick부터. 예: `x`가 1일 때 `if (x > 3) {...} else { x = 2; }` → 비교, `if`, `else`, 대입 4 tick
+    - 고른 갈래가 없음, 고른 갈래의 `{ }`가 비어 있음: 그 갈래의 tick에 끝남
+  - 반복문 (#120): 검사 한 번마다 1 tick. 검사의 expression은 그 앞에 자기 tick. `{ }`는 검사 다음 tick부터. 마지막 거짓 검사도 1 tick
+    - `for`: `i` 만들기와 `i++`는 검사와 같은 tick. 같은 뜻의 `while`보다 바퀴당 약 3 tick 적음(`while`은 비교·더하기·대입 블록을 따로 놓음)
+    - 빈 `{ }`: 바로 다음 tick에 다음 검사. 한 바퀴는 최소 1 tick이므로 `while (true) { }`도 게임을 멈추지 않음
+    - `break`, `continue`: 1 tick. `break`는 그 tick에 반복문이 끝남(마지막 검사 없음), `continue`는 다음 tick에 다음 검사
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
   - 반복문도 문법 `Block`이므로 stack을 쓰지 않는다. 반복문 안의 `FunctionBlock`은 한 번 끝날 때마다 stack을 돌려주므로, 반복 횟수와 상관없이 그 `FunctionBlock`의 `FrameSize`만큼만 쓴다.
   - `PredefinedFunction`의 `FrameSize`: 1 + 파라미터 수 + `LocalVariableCount`
@@ -52,22 +59,57 @@
 
 ### 함수 데이터 실행 (#90)
 - 실행 순서: 함수 데이터(`FunctionData`)를 `FunctionDataConverter`가 `UserFunction`으로 바꾼 뒤 `Cast`. 블록 목록을 위에서부터 차례로 실행
-- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 사전 정의 함수 블록, `malloc`, `free`
-  - 조건문, `for`, `while`, 비교·논리: 블록 실행 2 이슈
+- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), `for`, `while`, `break`, `continue`(#120), 사전 정의 함수 블록, `malloc`, `free`
   - 사용자 정의 함수 호출, list: 블록 실행 3 이슈
 - 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`)
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
 - 지역 변수
   - 저장: 실행 중인 `UserFunction` 복사본마다 변수 저장소(`VariableStore`) 하나. 같은 function을 두 번 시전하면 저장소 두 개
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
-  - 블록 범위(조건문 안에서만 보이는 변수): 블록 실행 2 이슈
+  - 블록 범위 (#120): C처럼 `{ }` 하나가 범위 하나
+    - `{ }` 안에서 선언한 변수: `}`에서 사라짐. 반복문은 바퀴마다 새 변수
+    - 찾기: 안쪽 범위부터. 바깥과 같은 이름이면 안쪽 변수
+    - function body의 맨 바깥 범위: 파라미터와 같은 범위(따로 열지 않음)
+    - 같은 범위에 같은 이름 선언: `DuplicateVariable`
+    - 바깥 범위와 같은 이름 선언: 언어 규칙 파일의 `allowShadowing`. C는 허용, 허용하지 않으면 `DuplicateVariable`
+    - 프레임 크기: 범위와 상관없이 function body의 모든 선언을 셈(지금과 같음)
+    - 블록 목록 실행: `Statements`가 위에서부터 차례로 실행하고, `{ }` 하나마다 범위를 열고 닫음. `UserFunction`의 function body와 조건문·반복문의 `{ }`가 함께 씀
 - 선언의 initializer를 비움: 언어 규칙 파일의 기본값
-- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`), 변수, 값 블록(연산, `malloc`, 값을 돌려주는 사전 정의 함수)
+- value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`, `NULL`), 변수, 값 블록(연산, 비교, 논리, `malloc`, 값을 돌려주는 사전 정의 함수)
 - 숫자 계산과 타입 변환: 언어 규칙 파일의 「숫자 타입 변환」. C는 `ImplicitAll`
   - `int / int`: 정수 나눗셈(`7 / 2` = 3). `%`의 부호는 왼쪽 값을 따름(`-7 % 2` = -1)
   - `int` 범위를 넘음: 반대쪽 끝으로 돌아감
   - 0으로 나누기, `% 0`: `int`, `float` 모두 `DivideByZero`
   - 계산할 수 없는 타입(`string`, 포인터): `TypeMismatch`
+- 비교 (#120): 결과는 `bool`
+  - 타입이 섞임: 아래 표의 「연산에서 타입이 섞임」 규칙으로 맞춘 뒤 비교(`3 == 3.0` → `true`). `int`끼리는 `float`으로 바꾸지 않음
+  - 같은 타입끼리: 언어와 상관없이 비교 가능. 단 `bool`의 크기 비교(`true > false`)는 `ImplicitAll`만
+  - 포인터: `==`, `!=`만. 같은 타입의 포인터끼리, 또는 한쪽이 `NULL`이면 주소 비교. 크기 비교, 다른 타입과의 비교는 `TypeMismatch`
+  - `string`: 언어 규칙 파일의 `stringEquality`. C는 `Disallowed`(`TypeMismatch`), `ByContent`이면 `==`, `!=`로 글자 내용 비교. 크기 비교는 언제나 `TypeMismatch`
+  - 그 밖의 타입이 섞임(예: `string`과 `int`): `TypeMismatch`
+- `NULL` (#120)
+  - 직접 입력: 함수 데이터에 `Type = PointerTo(null)`, `Literal = "Null"`(`SlotData.FromNull()`). 실행기는 `NullPointer`로 읽음
+  - 어떤 포인터와도 비교하고, 어떤 포인터 변수에도 넣음(`Sword* p = NULL`)
+  - 직접 입력한 `0`: 언어 규칙 파일의 `zeroIsNull`이 켜져 있으면(C) 포인터 자리(포인터와 비교, 포인터 변수에 넣기, `free`)에서 `NULL`. 계산하거나 변수에서 읽은 0은 `NULL`이 아님
+- 논리 (#120): 결과는 `bool`
+  - short-circuit: `&&`의 왼쪽이 거짓, `||`의 왼쪽이 참이면 오른쪽 value slot을 실행하지 않음(C와 같음)
+  - 조건 값 변환(`NumericRules.TryConvertToCondition`): 논리 블록, 조건문, `while`이 함께 씀
+    - `bool`: 모든 언어에서 그대로
+    - `ImplicitAll`(C): 숫자는 0이 아니면 참, 포인터는 `NULL`이 아니면 참(`!5` → `false`)
+    - `Strict`, `WideningOnly`: `bool`만
+    - 조건으로 쓸 수 없는 값(`string` 등): `TypeMismatch`
+- 조건문 (#120)
+  - 함수 데이터: `if`, `else if`, `else`가 따로 놓인 블록. `FunctionDataConverter`가 연달아 놓인 `If` + `ElseIf`들 + `Else`를 `ConditionalBlock` 하나로 묶음
+  - 변환 거부: 앞에 `If`가 없는 `ElseIf`, `Else`(`else` 바로 뒤의 갈래 포함), 비어 있는 조건 칸
+  - `{ }`: 범위 하나. `{ }` 안의 실패, `return`, `break`, `continue`는 바깥에 그대로 전달(`if` 안의 `break`도 바깥 반복문에 걸림)
+- 반복문 (#120)
+  - `for (int i = start; i < end; i++)`: `start`를 `int`로 바꿔 `i` 선언. `end`는 검사마다 다시 읽음. `{ }`가 `i`를 바꾸면 바뀐 값으로 계속. `i`가 `int` 범위를 넘으면 반대쪽 끝으로
+    - `i`: `for`만의 범위. `for`가 끝나면 사라짐. 바깥과 같은 이름은 `allowShadowing`을 따름
+    - `start`를 `int`로 바꿀 수 없음, `i < end`를 비교할 수 없음: `TypeMismatch`
+  - `while (조건)`: 조건 값 변환은 논리 블록과 같음
+  - `{ }`: 바퀴마다 새 범위. `{ }` 안의 선언은 바퀴마다 새 변수
+  - `break`, `continue`: 가장 안쪽 반복문에만 적용. 반복문 밖에서 만나면 `NotInLoop`(함수를 넘어 바깥 함수의 반복문에 걸리지 않음)
+  - 반복문 밖의 `break`, `continue` 찾기: `BlockData.HasJumpOutsideLoop(blocks)`. 저장할 때 검사하는 이슈가 씀. 실행기는 쓰지 않음
 
 | 규칙 | 연산에서 타입이 섞임 | 대입·선언에서 다른 타입 | 쓰는 언어 |
 | --- | --- | --- | --- |
@@ -93,7 +135,8 @@
 - free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
 - `malloc` 블록 (#90): 미리 정한 struct(`PredefinedStructs`)의 객체(`StructInstance`)를 heap에 올리고 포인터를 내놓음. 칸 수는 그 struct의 `HeapSize`. 모자라면 `NullPointer`, 에러 없음
   - 화면의 오브젝트(예: 소환검): 만들지 않음. 연결 방법은 박진우와 정할 것
-- `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터이면 `InvalidPointer`(플레이어 코드 에러)
+- `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)이면 `InvalidPointer`(플레이어 코드 에러)
+  - `NULL`(`NullPointer`, 직접 입력한 `NULL`, C에서 직접 입력한 `0`): C처럼 아무 일도 하지 않고 1 tick 뒤 끝남 (#120). 스킬이 쓰는 `PredefinedFunction.Free`는 그대로 `NullPointer`를 에러로 봄
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
   - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
 - 루트 집합: 포인터를 보관하는 목록들
@@ -150,7 +193,8 @@
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
 | `TypeMismatch` | 값을 변수·파라미터 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
-| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(`NullPointer`, 해제한 포인터, 누수된 포인터)를 넣음 |
+| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣음. `NULL`은 실패가 아님 (#120) |
+| `NotInLoop` | 반복문 밖에서 `break`, `continue`를 만남 (#120) |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
@@ -244,7 +288,9 @@
 - 기본값: 초기값을 비운 변수의 값. `int`, `float`, `bool`, `char`(글자 번호), `string` 칸. 포인터는 언제나 `NullPointer` (#90)
 - 숫자 타입 변환: `ImplicitAll`, `Strict`, `WideningOnly` 중 하나(「함수 데이터 실행」의 표) (#90)
 - `float %` 허용 여부 (#90)
-- 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값과 숫자 타입 변환은 처음 값(C 규칙)
+- `NULL`과 비교 (#120): `zeroIsNull`(직접 입력한 0을 `NULL`로 볼지, C는 켬), `stringEquality`(string 비교 방법 `Disallowed`·`ByContent`, C는 `Disallowed`)
+- 변수 범위 (#120): `allowShadowing`(`{ }` 안에서 바깥과 같은 이름을 선언할 수 있는지, C는 켬)
+- 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값, 숫자 타입 변환, `NULL`과 비교는 처음 값(C 규칙)
 - C 파일(`Assets/_UL/Data/LanguageRule_C`)
 
 | 실패 종류 | 처리 | 분류 |
@@ -257,6 +303,7 @@
 | `TypeMismatch` | `EndTask` | `CompileError` |
 | `DivideByZero` | `EndTask` | `RuntimeError` |
 | `InvalidPointer` | `EndTask` | `RuntimeError` |
+| `NotInLoop` | `EndTask` | `CompileError` |
 
 - C 파일의 그 밖의 값: 기본값 0, 0, `false`, 글자 번호 0, 빈 글자열. 숫자 타입 변환 `ImplicitAll`, `float %` 허용하지 않음
 
@@ -352,5 +399,12 @@ if (FunctionDataConverter.TryConvert(functionData, out UserFunction function)) e
   - `Player_HW` 프리팹: `LanguageRule` 컴포넌트(없으면 붙이기)의 `Rule Data` 칸에 `LanguageRule_C` 연결. 연결하지 않으면 플레이어 함수의 실패가 `InternalError`로 끝남
 - 정할 것 (#90)
   - tick 비용 규칙 재검토: 지금은 블록 하나 = 1 tick. 반복문을 만드는 블록 실행 2 이슈에서 「문법 블록은 tick 없음, 반복 한 바퀴에 1 tick」 등과 비교
+    - #120에서 정함: 블록 하나 = 1 tick 유지. 조건문은 닿은 갈래마다 1 tick, 반복문은 검사 한 번마다 1 tick
   - 플레이어가 만든 함수의 `return` 누락 규칙: 블록 실행 3 이슈. C는 컴파일러에 따라 경고(GCC) 또는 오류(MSVC C4716), 실행되면 값은 정의되지 않음
   - 슬롯에서 함수 데이터를 바꿔 시전하는 연결: `FunctionDataConverter`를 부르는 곳([slot-caster.md](slot-caster.md))
+- 임혜원과 확인할 것 (#120)
+  - 반복문 밖의 `break`, `continue`: 편집 화면에서 놓지 못하게 막을지, 저장할 때 `BlockData.HasJumpOutsideLoop`로 compile error를 보여 줄지. 지금은 실행 중에 `NotInLoop`(`CompileError`)로 끝남
+- 정할 것 (#120)
+  - 반복문으로 쿨타임 피하기: 쿨타임이 슬롯의 function에 붙고 function이 끝나야 시작하므로, 반복문 안의 스킬은 몇 번 실행해도 쿨타임을 한 번만 셈. `while (true) { Thrust(); }`는 function이 끝나지 않아 쿨타임이 시작되지 않음
+    - 고칠 방법(정함): 스킬별 쿨타임. 실행된 스킬에만 그 스킬의 쿨타임을 붙이고, 함수 안에서 쿨타임 중인 스킬에 닿으면 끝날 때까지 기다림. 사용자 정의 함수의 쿨타임은 없앰
+    - 「스킬별 쿨타임」 이슈에서 함

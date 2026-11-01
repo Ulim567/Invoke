@@ -37,6 +37,9 @@ MonoBehaviour:
   - failure: 7
     handling: 0
     category: 1
+  - failure: 8
+    handling: 0
+    category: 0
   defaultInt: 0
   defaultFloat: 0
   defaultBool: 0
@@ -44,3 +47,6 @@ MonoBehaviour:
   defaultString: 
   numericConversion: 0
   allowFloatModulo: 0
+  zeroIsNull: 1
+  stringEquality: 0
+  allowShadowing: 1

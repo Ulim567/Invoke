@@ -239,7 +239,7 @@ string json = FunctionDataJson.ToJson(function);
     - 함수 몸통, 블록 영역: `BlockData.CanBeStatement(블록 종류)`
 - 블록 UI와 블록 데이터: 블록 UI 하나가 자기 `BlockData` 하나를 들고 있음
 - 칸 고치기: 플레이어가 칸을 바꾸면 블록 UI가 `BlockData.Slots[칸 번호]`를 바로 고침 (칸 번호: 「블록마다 가진 칸」 순서)
-  - 직접 입력한 값: `Type`, `Literal` (`bool`은 `"true"` / `"false"`, 소수는 점으로 `"0.5"`, `char`는 글자 하나 `"a"`)
+  - 직접 입력한 값: `Type`, `Literal` (`bool`은 `"true"` / `"false"`, 소수는 점으로 `"0.5"`, `char`는 글자 하나 `"a"`, `NULL`은 `SlotData.FromNull()`로 `Type = PointerTo(null)`, `Literal = "Null"`)
   - 변수: `VariableName`
   - 드롭다운에서 고른 연산자, 조건문 갈래: `Option`에 `BlockOptions`의 enum 이름 (예: `ArithmeticOperator.Add.ToString()` → `"Add"`)
   - 드롭다운에서 고른 타입: `Type`
@@ -263,3 +263,5 @@ string json = FunctionDataJson.ToJson(function);
 - 임혜원과 확인할 것 (#90)
   - `char` 직접 입력 형식: 글자 하나(`"a"`). 실행기가 이 형식으로 읽음
   - `malloc` 블록의 struct 드롭다운: `PredefinedStructs.All`
+- 임혜원과 확인할 것 (#120)
+  - `NULL` 직접 입력: 플레이어가 값 칸에 `NULL`을 입력하면 `SlotData.FromNull()`로 저장. C 화면에서는 `NULL`로 보여 줌

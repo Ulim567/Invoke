@@ -63,4 +63,5 @@ public static class PredefinedFunctionIds
 	public const string TestReturnFunction = "test.return_function";
 	public const string TestMissingReturnFunction = "test.missing_return_function";
 	public const string TestTargetFunction = "test.target_function";
+	public const string TestHoldMallocFunction = "test.hold_malloc_function";
 }

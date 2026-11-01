@@ -845,6 +845,35 @@
                     "isPartOfComposite": false
                 }
             ]
+        },
+        {
+            "name": "Debug",
+            "id": "4fc95089-3645-403d-b4a5-ddaff09fcc1b",
+            "actions": [
+                {
+                    "name": "InterruptTest",
+                    "type": "Button",
+                    "id": "da98d04b-fa04-4436-9c00-8b54924f8fbf",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "aa32ddbf-f030-4c6c-9c57-04fa3ec1f3dc",
+                    "path": "<Keyboard>/f9",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "InterruptTest",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
         }
     ],
     "controlSchemes": [

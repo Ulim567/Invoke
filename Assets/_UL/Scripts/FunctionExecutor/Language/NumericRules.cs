@@ -1,5 +1,5 @@
 /// <summary>
-/// 연산 블록의 계산, 비교 블록의 비교, 선언·대입 때 값을 변수 타입으로 바꾸는 규칙.<br/>
+/// 연산 블록의 계산, 비교 블록의 비교, 선언·대입 때 값을 변수 타입으로 바꾸는 규칙, 값을 조건(참·거짓)으로 바꾸는 규칙.<br/>
 /// 언어마다 다른 부분(타입을 섞을 때, float의 %)은 LanguageRuleData의 칸을 따른다.
 /// <para>
 /// 모든 언어에 같은 규칙<br/>
@@ -171,6 +171,40 @@ internal static class NumericRules
 	/// </summary>
 	public static RuntimeValue NullIfZeroLiteral(ValueBlock source, RuntimeValue value, LanguageRuleData rule) =>
 		rule.ZeroIsNull && source != null && source.IsZeroLiteral ? RuntimeValue.Null : value;
+
+	/// <summary>
+	/// value를 조건(참·거짓)으로 바꾼다. 논리 블록, 조건문, while이 쓴다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).<br/>
+	/// - bool: 모든 언어에서 그대로<br/>
+	/// - ImplicitAll(C): 숫자는 0이 아니면 참, 포인터는 NULL이 아니면 참<br/>
+	/// - 다른 규칙: bool만
+	/// </summary>
+	// bool이 아닌 값을 조건으로 쓰는 것은 bool을 숫자로 다루는 언어(ImplicitAll)만 허용한다. Java, C#은 if (5), if (p)를 허용하지 않기 때문
+	public static bool TryConvertToCondition(RuntimeValue value, LanguageRuleData rule, out bool condition)
+	{
+		condition = false;
+		VariableTypeKind kind = value.Type?.Kind ?? VariableTypeKind.Void;
+		if (kind == VariableTypeKind.Bool)
+		{
+			condition = value.AsBool();
+			return true;
+		}
+		if (rule.NumericConversion != NumericConversion.ImplicitAll) return false;
+
+		switch (kind)
+		{
+			case VariableTypeKind.Int:
+			case VariableTypeKind.Char:
+				condition = ToInt(value) != 0;
+				return true;
+			case VariableTypeKind.Float:
+				condition = value.AsFloat() != 0f;
+				return true;
+			case VariableTypeKind.Pointer:
+				condition = value.AsPointer() != HeapStorage.NullPointer;
+				return true;
+		}
+		return false;
+	}
 
 	static bool IsNumeric(VariableTypeKind kind) =>
 		kind == VariableTypeKind.Int || kind == VariableTypeKind.Float || kind == VariableTypeKind.Char || kind == VariableTypeKind.Bool;

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 캐릭터(프로세스) 하나의 메모리. 스택과 힙의 칸 수를 센다.<br/>
+/// 캐릭터(프로세스) 하나의 메모리. 데이터 영역(전역 변수), 스택, 힙의 칸 수를 센다.<br/>
 /// 메모리 값은 이 컴포넌트만 바꾼다. 다른 스크립트는 스택은 TryAllocateStack, ReleaseStack을 부르고, 힙은 Heap(HeapStorage)의 함수를 부른다.
 /// <para>
 /// 메모리 전체 크기는 같은 오브젝트에 붙은 PlayerStats의 MemorySize다.<br/>
@@ -10,6 +10,9 @@ using UnityEngine;
 /// <para>
 /// 스택과 힙은 메모리 한 영역을 함께 쓴다. 메모리 게이지는 스택을 위에서부터, 힙을 아래에서부터 그린다.<br/>
 /// 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, 스택과 힙은 각각 칸 수만 센다. 그래서 위아래 방향은 계산에 쓰지 않는다.
+/// </para>
+/// <para>
+/// 데이터 영역은 전역 변수 하나에 1칸이다. 초기화부터 다음 초기화까지 칸을 계속 쓰고, 함수가 끝나도 돌려주지 않는다.
 /// </para>
 /// <para>
 /// 힙은 여기서 칸 수만 센다. 어떤 객체가 그 칸을 쓰는지는 Heap(힙 객체 저장소)이 안다.<br/>
@@ -28,6 +31,18 @@ public class ProcessMemory : MonoBehaviour
 	public int Capacity => stats.MemorySize;
 
 	/// <summary>
+	/// 이 캐릭터의 전역 변수 저장소. 블록은 실행 문맥(FunctionContext)을 거쳐 값을 읽고 쓴다.
+	/// </summary>
+	// 전역 변수 선언은 이 컴포넌트의 초기화 함수만 한다. 선언 수가 곧 DataUsed라서, 다른 곳에서 선언하면 칸 검사 없이 데이터 영역이 늘어나기 때문
+	internal VariableStore Globals { get; private set; }
+
+	/// <summary>
+	/// 지금 데이터 영역이 쓰고 있는 칸 수. 선언한 전역 변수 수와 같다.
+	/// </summary>
+	// 따로 세지 않고 전역 변수 저장소에서 읽는다. 두 값을 따로 두면 선언·초기화 때 어긋날 수 있기 때문
+	public int DataUsed => Globals.Count;
+
+	/// <summary>
 	/// 지금 스택이 쓰고 있는 칸 수. 실행 중인 모든 함수의 프레임 크기 합이다.
 	/// </summary>
 	public int StackUsed { get; private set; }
@@ -43,11 +58,11 @@ public class ProcessMemory : MonoBehaviour
 	public HeapStorage Heap { get; private set; }
 
 	/// <summary>
-	/// 남은 칸 수(Capacity - StackUsed - HeapUsed). 0보다 작아지지 않는다.
+	/// 남은 칸 수(Capacity - DataUsed - StackUsed - HeapUsed). 0보다 작아지지 않는다.
 	/// </summary>
-	// 힙을 함께 빼 두어, 힙을 쓰기 시작하면 스택이 쓸 수 있는 칸이 따로 고치지 않아도 줄어들게 한다
+	// 데이터 영역과 힙을 함께 빼 두어, 전역 변수를 선언하거나 힙을 쓰면 스택이 쓸 수 있는 칸이 따로 고치지 않아도 줄어들게 한다
 	// 메모리 크기가 줄어 사용량보다 작아지면 계산 값이 음수가 되므로 0으로 막는다. 0이면 TryAllocateStack이 새 프레임을 거절한다
-	public int Free => Mathf.Max(0, Capacity - StackUsed - HeapUsed);
+	public int Free => Mathf.Max(0, Capacity - DataUsed - StackUsed - HeapUsed);
 
 	/// <summary>
 	/// 스택을 size칸 쓴다. 남은 칸이 모자라면 쓰지 않고 false를 돌려준다(오버플로).
@@ -93,5 +108,6 @@ public class ProcessMemory : MonoBehaviour
 	{
 		stats = GetComponent<PlayerStats>();
 		Heap = new HeapStorage(this);
+		Globals = new VariableStore();
 	}
 }

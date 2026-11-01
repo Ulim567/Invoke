@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors` | 스킬 작성자가 쓰는 것 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
@@ -38,6 +38,8 @@
   - value slot에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
   - value slot이 여럿: 왼쪽부터 차례로 실행
   - 논리 블록의 short-circuit으로 실행하지 않은 오른쪽 value slot: tick을 쓰지 않음 (#120)
+  - 조건문 (#120): 실행이 닿은 갈래(`if`, `else if`, `else`)마다 1 tick. 조건의 expression은 그 앞에 자기 tick. 고른 갈래의 `{ }`는 다음 tick부터. 예: `x`가 1일 때 `if (x > 3) {...} else { x = 2; }` → 비교, `if`, `else`, 대입 4 tick
+    - 고른 갈래가 없음, 고른 갈래의 `{ }`가 비어 있음: 그 갈래의 tick에 끝남
 - `FunctionBlock`은 실행을 시작할 때 `FrameSize`칸의 stack을 쓰고, 끝나거나 cancel되는 즉시 돌려준다. `ReturnBlock` 같은 문법 `Block`은 stack을 쓰지 않는다.
   - 반복문도 문법 `Block`이므로 stack을 쓰지 않는다. 반복문 안의 `FunctionBlock`은 한 번 끝날 때마다 stack을 돌려주므로, 반복 횟수와 상관없이 그 `FunctionBlock`의 `FrameSize`만큼만 쓴다.
   - `PredefinedFunction`의 `FrameSize`: 1 + 파라미터 수 + `LocalVariableCount`
@@ -53,8 +55,8 @@
 
 ### 함수 데이터 실행 (#90)
 - 실행 순서: 함수 데이터(`FunctionData`)를 `FunctionDataConverter`가 `UserFunction`으로 바꾼 뒤 `Cast`. 블록 목록을 위에서부터 차례로 실행
-- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 사전 정의 함수 블록, `malloc`, `free`
-  - 조건문, `for`, `while`: 블록 실행 2 이슈
+- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), 사전 정의 함수 블록, `malloc`, `free`
+  - `for`, `while`: 블록 실행 2 이슈
   - 사용자 정의 함수 호출, list: 블록 실행 3 이슈
 - 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`)
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
@@ -93,6 +95,10 @@
     - `ImplicitAll`(C): 숫자는 0이 아니면 참, 포인터는 `NULL`이 아니면 참(`!5` → `false`)
     - `Strict`, `WideningOnly`: `bool`만
     - 조건으로 쓸 수 없는 값(`string` 등): `TypeMismatch`
+- 조건문 (#120)
+  - 함수 데이터: `if`, `else if`, `else`가 따로 놓인 블록. `FunctionDataConverter`가 연달아 놓인 `If` + `ElseIf`들 + `Else`를 `ConditionalBlock` 하나로 묶음
+  - 변환 거부: 앞에 `If`가 없는 `ElseIf`, `Else`(`else` 바로 뒤의 갈래 포함), 비어 있는 조건 칸
+  - `{ }`: 범위 하나. `{ }` 안의 실패와 `return`은 바깥에 그대로 전달
 
 | 규칙 | 연산에서 타입이 섞임 | 대입·선언에서 다른 타입 | 쓰는 언어 |
 | --- | --- | --- | --- |

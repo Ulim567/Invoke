@@ -11,11 +11,12 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 거부(false)하는 함수: 지금 실행기가 아직 실행할 수 없는 기능을 쓴 함수다. 콘솔 오류를 남긴다.<br/>
-/// - 예: 조건문·for 블록, 위치 타입 변수, 비어 있는 value slot(함수 블록의 파라미터 칸은 비워도 됨), 없는 고정 ID<br/>
+/// - 예: for·while 블록, 위치 타입 변수, 앞에 if가 없는 else, 비어 있는 value slot(함수 블록의 파라미터 칸은 비워도 됨), 없는 고정 ID<br/>
 /// - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등)은 거부하지 않는다. 실행 중에 그 블록이 실패 종류를 기록하고 실패한다.
 /// </para>
 /// </summary>
-// 바꿀 수 있는 블록은 이슈가 진행되며 늘어난다. 새 블록은 ConvertStatement, ConvertValue의 switch에 더한다
+// 바꿀 수 있는 블록은 이슈가 진행되며 늘어난다. 새 블록은 ConvertStatement, ConvertValueBlock의 switch에 더한다
+// 조건문은 블록 여러 개를 하나로 묶으므로 ConvertStatement가 아니라 TryConvertStatements가 따로 바꾼다
 public static class FunctionDataConverter
 {
 	public static bool TryConvert(FunctionData data, out UserFunction function)
@@ -23,18 +24,68 @@ public static class FunctionDataConverter
 		if (data == null) throw new ArgumentNullException(nameof(data));
 
 		function = null;
-		List<Block> blocks = new List<Block>();
-		foreach (BlockData blockData in data.Blocks)
-		{
-			Block block = ConvertStatement(data, blockData);
-			if (block == null) return false;
-			blocks.Add(block);
-		}
+		if (!TryConvertStatements(data, data.Blocks, out Block[] blocks)) return false;
 
 		// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수
 		int frameSize = 1 + data.Parameters.Count + data.LocalVariables().Count;
-		function = new UserFunction(data.Name, frameSize, SumCooldownTicks(data), blocks.ToArray());
+		function = new UserFunction(data.Name, frameSize, SumCooldownTicks(data), blocks);
 		return true;
+	}
+
+	// 블록 목록 하나(function body, 또는 조건문의 { } 안)를 바꾼다. 연달아 놓인 if, else if, else는 조건문 블록 하나로 묶는다
+	static bool TryConvertStatements(FunctionData data, IReadOnlyList<BlockData> blockDatas, out Block[] blocks)
+	{
+		blocks = null;
+		List<Block> converted = new List<Block>();
+		for (int i = 0; i < blockDatas.Count; i++)
+		{
+			Block block = blockDatas[i].Kind == BlockKind.Conditional
+				? ConvertConditional(data, blockDatas, ref i)
+				: ConvertStatement(data, blockDatas[i]);
+			if (block == null) return false;
+			converted.Add(block);
+		}
+
+		blocks = converted.ToArray();
+		return true;
+	}
+
+	// i번째부터 연달아 놓인 If, ElseIf들, Else를 조건문 블록 하나로 바꾼다. i는 묶은 마지막 블록으로 옮긴다
+	// 칸: 갈래(드롭다운), 조건(Else는 없음). 블록 영역: { } 안
+	static Block ConvertConditional(FunctionData data, IReadOnlyList<BlockData> blockDatas, ref int i)
+	{
+		List<ConditionalBlock.Branch> branches = new List<ConditionalBlock.Branch>();
+		for (int j = i; j < blockDatas.Count && blockDatas[j].Kind == BlockKind.Conditional; j++)
+		{
+			BlockData block = blockDatas[j];
+			// 연산 블록과 같은 이유로 정의된 값인지 한 번 더 본다
+			string option = block.Slots.Count >= 1 ? block.Slots[0].Option : null;
+			if (!System.Enum.TryParse(option, out ConditionalBranch branch) || !System.Enum.IsDefined(typeof(ConditionalBranch), branch))
+				return Reject(data, $"조건문 갈래 {option}을(를) 알 수 없습니다.");
+
+			// If는 새 조건문을 시작한다. 앞의 조건문은 바로 앞 블록에서 끝난다
+			if (j > i && branch == ConditionalBranch.If) break;
+			// 편집 화면도 바로 위가 if, else if가 아니면 else if, else를 고르지 못하게 하지만, 저장된 데이터를 한 번 더 확인한다
+			if (j == i && branch != ConditionalBranch.If) return Reject(data, $"{branch} 앞에 if가 없습니다.");
+
+			ValueBlock condition = null;
+			if (branch != ConditionalBranch.Else)
+			{
+				if (block.Slots.Count < 2) return Reject(data, $"{branch} 블록에 조건 칸이 없습니다.");
+				condition = ConvertValue(data, block.Slots[1]);
+				if (condition == null) return null;
+			}
+
+			IReadOnlyList<BlockData> inner = block.InnerBlocks ?? (IReadOnlyList<BlockData>)Array.Empty<BlockData>();
+			if (!TryConvertStatements(data, inner, out Block[] body)) return null;
+
+			branches.Add(new ConditionalBlock.Branch(condition, body));
+			i = j;
+			// Else 뒤에는 갈래가 이어지지 않는다. 바로 뒤의 ElseIf, Else는 다음 블록으로 바꿀 때 앞에 if가 없는 것으로 거부된다
+			if (branch == ConditionalBranch.Else) break;
+		}
+
+		return new ConditionalBlock(branches.ToArray());
 	}
 
 	// function body와 expression 안의 모든 사전 정의 함수 블록의 쿨타임 합. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다

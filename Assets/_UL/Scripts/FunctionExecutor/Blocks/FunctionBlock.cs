@@ -22,14 +22,7 @@ public abstract class FunctionBlock : Block
 	/// </summary>
 	public virtual int FrameSize => 1;
 
-	/// <summary>
-	/// 쿨타임(tick 수). 슬롯에서 시전한 함수가 끝난 뒤 이만큼 지나야 다시 시전할 수 있다.<br/>
-	/// 사전 정의 함수는 스킬 구현자가 덮어써서 정하고(기본 0), 사용자 정의 함수는 안에 든 함수들의 쿨타임을 더한 값이다.
-	/// </summary>
-	// 동작 시간(TickCount)과 따로 둔다. 짧게 실행되고 오래 기다리는 스킬, 오래 실행되고 바로 다시 쓰는 스킬을 모두 만들기 위함
-	public virtual int CooldownTicks => 0;
-
-	// 순서: 프레임 쓰기 → OnStart → … → OnEnd/OnCancel → 프레임 돌려주기
+	// 순서: 프레임 쓰기 → AfterFrameAllocated → OnStart → … → OnEnd/OnCancel → BeforeFrameReleased → 프레임 돌려주기
 	// 이 순서여야 UserFunction이 OnStart/OnEnd에서 쌓고 내리는 변수 저장소와 프레임이 어긋나지 않는다
 	// sealed: C 스킬이나 사용자 정의 함수가 덮어써서 이 순서를 깨지 못하게 한다. OnStart에 두지 않는 이유도 같다(C 스킬이 base를 부르지 않아도 됨)
 	internal sealed override BlockResult Execute(FunctionContext context)
@@ -42,6 +35,7 @@ public abstract class FunctionBlock : Block
 				context.RecordFailure(FunctionFailure.Overflow);
 				return BlockResult.Failed;
 			}
+			AfterFrameAllocated(context);
 		}
 
 		BlockResult result = base.Execute(context);
@@ -56,6 +50,13 @@ public abstract class FunctionBlock : Block
 		ReleaseFrame(context);
 	}
 
+	// 프레임을 받은 직후에 한 번 불린다. 프레임을 받지 못해(Overflow) 시작하지 않은 함수에는 불리지 않는다
+	// 블록의 실행 단계(OnStart)가 아니라 프레임 시점에 두는 이유: 스킬 작성자가 덮어쓰는 OnStart와 섞이지 않고, BeforeFrameReleased와 짝이 항상 맞게 하기 위함
+	internal virtual void AfterFrameAllocated(FunctionContext context) { }
+
+	// 프레임을 돌려주기 직전에 한 번 불린다. 정상 종료, 실패, 실행 중단 모두 이곳을 지난다
+	internal virtual void BeforeFrameReleased(FunctionContext context) { }
+
 	bool TryAllocateFrame(FunctionContext context)
 	{
 		if (!context.Memory.TryAllocateStack(FrameSize)) return false;
@@ -69,6 +70,7 @@ public abstract class FunctionBlock : Block
 	{
 		if (allocatedStack == 0) return;
 
+		BeforeFrameReleased(context);
 		context.Memory.ReleaseStack(allocatedStack);
 		allocatedStack = 0;
 	}

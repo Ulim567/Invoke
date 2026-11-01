@@ -85,19 +85,21 @@ public class FunctionExecutor : MonoBehaviour
 		}
 
 		FunctionTask task = CastUnchecked(function);
-		task.CooldownSource = function;
+		task.CastSource = function;
 		cooldowns.Register(task);
 		return task;
 	}
 
 	/// <summary>
-	/// 슬롯에서 시전한 function의 남은 쿨타임(틱 수). 쿨타임 중이 아니면 0이다. 쿨타임 UI에서 쓴다.
+	/// 슬롯의 function의 남은 쿨타임(틱 수). 쿨타임 중이 아니면 0이다. 쿨타임 UI에서 쓴다.<br/>
+	/// 스킬이면 그 스킬(고정 ID)의 쿨타임이다. 사용자 정의 함수는 자기 쿨타임이 없으므로 0이다.
 	/// </summary>
 	// 쿨타임은 CooldownTracker가 가진다. 다른 시스템이 쓰는 접점을 바꾸지 않기 위해 실행기에도 남긴다
 	public int GetRemainingCooldownTicks(FunctionBlock function) => cooldowns.GetRemainingTicks(function);
 
 	/// <summary>
-	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.
+	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.<br/>
+	/// 스킬이면 같은 스킬이 다른 함수 안에서 실행 중일 때도 true다.
 	/// </summary>
 	public bool IsRunning(FunctionBlock function) => cooldowns.IsRunning(function);
 
@@ -105,7 +107,7 @@ public class FunctionExecutor : MonoBehaviour
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
 	FunctionTask CastUnchecked(FunctionBlock function)
 	{
-		FunctionTask task = new FunctionTask(gameObject, memory, language, (FunctionBlock)function.Clone());
+		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, (FunctionBlock)function.Clone());
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -179,7 +181,8 @@ public class FunctionExecutor : MonoBehaviour
 		{
 			if (!task.IsEnded) continue;
 
-			cooldowns.StartCooldown(task);
+			// 쿨타임은 여기서 걸지 않는다. 작업 안의 스킬이 끝날 때 스킬마다 이미 걸렸다
+			cooldowns.Unregister(task);
 			// TaskEnded보다 먼저 한다. 이벤트를 받은 쪽이 누수 여부까지 정해진 상태를 보게 하기 위함
 			memory.Heap.HandleTaskEnded(task);
 			TaskEnded?.Invoke(task);

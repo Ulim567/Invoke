@@ -39,12 +39,6 @@ public class SkillCallTest : MonoBehaviour
 		FunctionData unknown = FunctionData.Create("Unknown");
 		unknown.Blocks.Add(BlockData.CallPredefinedFunction("test.no_such_function"));
 		Check("없는 고정 ID 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(unknown, out _));
-
-		// 스킬 블록을 담은 함수의 쿨타임은 그 스킬의 쿨타임(7틱)이다
-		FunctionData cooldown = FunctionData.Create("Cooldown");
-		cooldown.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestArgumentFunction, SlotData.EmptyValue()));
-		bool ok = FunctionDataConverter.TryConvert(cooldown, out UserFunction function);
-		Check("스킬 블록을 담은 함수의 쿨타임 7", ok && function.CooldownTicks == 7, ok ? $"실제 {function.CooldownTicks}" : "변환 실패");
 	}
 
 	// 테스트 2: 실행. 모두 틱 1부터 함께 진행한다

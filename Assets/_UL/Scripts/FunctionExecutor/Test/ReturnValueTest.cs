@@ -49,13 +49,12 @@ public class ReturnValueTest : MonoBehaviour
 		CastConverted(missingStatement);
 
 		// 이슈 완료 조건 3. int n = TestReturnFunction(4);
-		// 틱 1~3 스킬, 틱 4 선언, 틱 5 읽기(테스트용) → n 8. expression 안의 스킬 쿨타임(4틱)도 함수의 쿨타임에 들어간다
+		// 틱 1~3 스킬, 틱 4 선언, 틱 5 읽기(테스트용) → n 8
 		FunctionData returned = FunctionData.Create("Returned");
 		returned.Blocks.Add(BlockData.Declare(Int, "n", SlotData.FromBlock(
 			BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestReturnFunction, SlotData.FromLiteral(Int, "4")))));
 		if (FunctionDataConverter.TryConvert(returned, out UserFunction converted))
 		{
-			Check("Returned: expression 안의 스킬 쿨타임 4", converted.CooldownTicks == 4, $"실제 {converted.CooldownTicks}");
 			Block read = new TestReadBlock(new VariableValue("n"), v => Check("Returned: 끝났을 때 n 8", v.ToString() == "8", $"실제 {v}"));
 			executor.Cast(new UserFunction(converted.Name, converted.FrameSize, converted.Blocks.Append(read).ToArray()));
 		}

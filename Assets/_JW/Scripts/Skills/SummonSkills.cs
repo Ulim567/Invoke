@@ -16,7 +16,7 @@ public class CSummonSword : DataDrivenSkill
 {
 	public override string Id => PredefinedFunctionIds.SummonSword;
 
-	protected override void OnSkillStart(FunctionTask task)
+	protected override void OnSkillStart(FunctionContext task)
 	{
 		SummonedSwords swords = task.Caster.GetComponent<SummonedSwords>();
 		if (swords == null)
@@ -53,9 +53,9 @@ public class CFreeSword : DataDrivenSkill
 	public override string Id => PredefinedFunctionIds.FreeSword;
 
 	// 해제는 사용 가능한 검뿐 아니라 던진 검도 대상이라, 해제할 수 있는 소환검 수(전역 포인터 목록)를 센다
-	protected override int CountUsableSummonedSwords(FunctionTask task) => GetGlobalPointers<SummonedSword>(task).Count;
+	protected override int CountUsableSummonedSwords(FunctionContext task) => GetGlobalPointers<SummonedSword>(task).Count;
 
-	protected override void OnSkillStart(FunctionTask task)
+	protected override void OnSkillStart(FunctionContext task)
 	{
 		SummonedSwords swords = task.Caster.GetComponent<SummonedSwords>();
 		List<int> pointers = GetGlobalPointers<SummonedSword>(task);

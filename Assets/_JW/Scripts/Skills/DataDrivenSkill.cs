@@ -44,7 +44,7 @@ public abstract class DataDrivenSkill : PredefinedFunction
 	}
 
 	// 필요 조건 검사를 빼먹지 않도록 OnStart는 여기서 닫고, 스킬은 OnSkillStart를 덮어쓴다
-	protected sealed override void OnStart(FunctionTask task)
+	protected sealed override void OnStart(FunctionContext task)
 	{
 		if (!CheckRequirements(task)) return;
 		Debug.Log($"[Skill] {task.Caster.name}: {Name} 시전 ({TickCount}틱)");
@@ -54,14 +54,14 @@ public abstract class DataDrivenSkill : PredefinedFunction
 	/// <summary>
 	/// 필요 조건을 통과한 뒤 첫 틱에 한 번 불린다. 효과를 만들 때 OnStart 대신 덮어쓴다.
 	/// </summary>
-	protected virtual void OnSkillStart(FunctionTask task) { }
+	protected virtual void OnSkillStart(FunctionContext task) { }
 
 	/// <summary>
 	/// 소환검이 필요한 스킬(needsSummonedSword)이 쓸 수 있는 소환검 수. 0이면 NoSummonedSwordError로 끝난다.<br/>
 	/// 기본: 시전자의 SummonedSwords.ReadyCount(플레이어 곁에 있는 소환검). 없으면 TempSwordState(이우림, 테스트용), 그것도 없으면 있는 것으로 본다.<br/>
 	/// 해제처럼 던진 소환검도 쓰는 스킬은 덮어쓴다.
 	/// </summary>
-	protected virtual int CountUsableSummonedSwords(FunctionTask task)
+	protected virtual int CountUsableSummonedSwords(FunctionContext task)
 	{
 		SummonedSwords summoned = task.Caster.GetComponent<SummonedSwords>();
 		if (summoned != null) return summoned.ReadyCount;
@@ -69,7 +69,7 @@ public abstract class DataDrivenSkill : PredefinedFunction
 		return temp != null ? temp.SummonedSwordCount : int.MaxValue;
 	}
 
-	bool CheckRequirements(FunctionTask task)
+	bool CheckRequirements(FunctionContext task)
 	{
 		SkillData data = Data;
 		if (data == null) return true;

@@ -70,9 +70,13 @@ public static class FunctionDataConverter
 
 			// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수. array 지역 변수는 1칸이 아니라 길이만큼 센다
 			// array 파라미터는 1칸이다. C처럼 원소가 아니라 array를 가리키는 값 하나만 넘어오기 때문
-			int frameSize = 1 + data.Parameters.Count + data.LocalVariables().Count + ExtraArrayCells(data);
+			// long으로 더한다. 조작한 데이터의 아주 큰 길이로 int가 넘쳐 음수가 되면, 프레임이 1칸으로 잡혀 메모리 검사를 지나고 거대한 array를 만들기 때문
+			// int 안에 들어오기만 하면 따로 상한을 두지 않는다. 메모리보다 큰 프레임은 시전 전 검사(NotEnoughMemory)나 Overflow가 막아, array를 만들기 전에 끝나기 때문
+			long frameSize = 1L + data.Parameters.Count + data.LocalVariables().Count + ExtraArrayCells(data);
+			if (frameSize > int.MaxValue) return Reject<UserFunction>(data, "array가 너무 커서 프레임 크기를 셀 수 없습니다.");
 			// 블록보다 먼저 만들어 기록한다. 블록 안의 재귀 호출이 이 객체를 가리키게 하기 위함
-			UserFunction function = new UserFunction(data.Name, frameSize, data.Parameters, returnType, data.IsAsync);
+			// 파라미터와 반환 타입은 복사해서 넘긴다. 편집 화면이 같은 함수 데이터를 고치면, 이미 바꾼 함수의 파라미터만 바뀌고 프레임 크기는 그대로라 서로 어긋나기 때문
+			UserFunction function = new UserFunction(data.Name, (int)frameSize, CopyParameters(data.Parameters), CopyType(returnType), data.IsAsync);
 			if (data.Guid != null) convertedByGuid[data.Guid] = function;
 
 			if (!TryConvertStatements(data, data.Blocks, out Block[] blocks)) return null;
@@ -82,9 +86,9 @@ public static class FunctionDataConverter
 
 		// 배열 만들기 블록마다 길이 - 1칸. LocalVariables가 array 하나를 이미 1칸으로 세기 때문
 		// 길이가 잘못된 블록은 블록을 바꿀 때 거부되므로 여기서는 세지 않는다
-		static int ExtraArrayCells(FunctionData data)
+		static long ExtraArrayCells(FunctionData data)
 		{
-			int cells = 0;
+			long cells = 0;
 			foreach (BlockData block in data.AllBlocks())
 			{
 				if (block.Kind == BlockKind.ArrayDeclare && block.Slots.Count >= 3 && TryGetArrayLength(block.Slots[2], out int length))
@@ -92,6 +96,22 @@ public static class FunctionDataConverter
 			}
 			return cells;
 		}
+
+		static ParameterData[] CopyParameters(IReadOnlyList<ParameterData> parameters)
+		{
+			ParameterData[] copied = new ParameterData[parameters.Count];
+			for (int i = 0; i < copied.Length; i++)
+				copied[i] = new ParameterData(parameters[i].Name, CopyType(parameters[i].Type));
+			return copied;
+		}
+
+		// VariableType은 칸을 바꿀 수 있는 클래스라서, 원소 타입까지 새로 만든다
+		static VariableType CopyType(VariableType type) => type == null ? null : new VariableType(type.Kind)
+		{
+			ElementType = CopyType(type.ElementType),
+			StructName = type.StructName,
+			TargetKind = type.TargetKind,
+		};
 
 		// 배열 길이 칸의 값. 직접 입력한 1 이상의 int만 받는다
 		// 변수나 블록을 받지 않는 이유: 함수가 시작할 때 프레임을 한 번에 받으므로, 길이를 실행 전에 알아야 하기 때문(C89와 같음)

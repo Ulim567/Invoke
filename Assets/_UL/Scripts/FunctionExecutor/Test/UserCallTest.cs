@@ -130,6 +130,18 @@ public class UserCallTest : MonoBehaviour
 
 		// 자기 자신을 부르는 함수도 변환된다
 		Check("재귀 함수 변환", FunctionDataConverter.TryConvert(fact, owned, out _));
+
+		// 바꾼 뒤에 편집 화면이 함수 데이터의 파라미터를 고쳐도, 이미 바꾼 함수는 바꾼 순간의 파라미터를 그대로 가진다
+		// 함께 바뀌면 파라미터 수와 프레임 크기가 어긋나기 때문
+		FunctionData edited = FunctionData.Create("Edited");
+		// 타입은 새로 만든다. 아래에서 고치므로, 다른 테스트가 함께 쓰는 Int를 넘기면 그 값까지 바뀌기 때문
+		edited.Parameters.Add(new ParameterData("v", new VariableType(VariableTypeKind.Int)));
+		FunctionDataConverter.TryConvert(edited, owned, out UserFunction before);
+		edited.Parameters.Add(new ParameterData("w", Int));
+		edited.Parameters[0].Type.Kind = VariableTypeKind.Float;
+		Check("바꾼 함수는 함수 데이터를 고쳐도 파라미터가 그대로",
+			before != null && before.Parameters.Count == 1 && before.Parameters[0].Type.Kind == VariableTypeKind.Int,
+			$"실제 {before?.Parameters.Count}개, {before?.Parameters[0].Type.Kind}");
 	}
 
 	// 테스트 2: 저장 검사가 쓸 return 누락 판정 (실행기는 쓰지 않음)

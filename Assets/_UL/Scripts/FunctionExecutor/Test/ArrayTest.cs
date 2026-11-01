@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// array 블록(배열 만들기, 원소 읽기·쓰기, 범위 밖 index, 함수에 넘기기) 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
-/// 콘솔 오류 6개가 나는 것이 정상이다: 변환 거부(변수로 정한 길이, 길이 0, 2차원 array, 선언 블록의 array, array 반환 타입, 비동기 함수에 array 넘기기) 6개.<br/>
+/// 콘솔 오류 7개가 나는 것이 정상이다: 변환 거부(변수로 정한 길이, 길이 0, 프레임 크기가 int를 넘는 array, 2차원 array, 선언 블록의 array, array 반환 타입, 비동기 함수에 array 넘기기) 7개.<br/>
 /// 캐릭터의 언어 규칙 파일(LanguageRule_C)에 IndexOutOfRange 줄이 있어야 한다. 없으면 범위 밖 단계가 InternalError로 끝나 실패한다.<br/>
 /// memory는 기본값 10칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다. 「[ArrayTest] 전체 통과」가 나오면 통과다.
 /// </summary>
@@ -88,6 +88,12 @@ public class ArrayTest : MonoBehaviour
 		FunctionData lengthZero = FunctionData.Create("LengthZero");
 		lengthZero.Blocks.Add(IntArray("arr", "0"));
 		Check("길이 0 거부", !FunctionDataConverter.TryConvert(lengthZero, owned, out _));
+
+		// 길이 15억 두 개: 프레임 크기를 int로 더하면 넘쳐 음수가 된다. 넘친 프레임이 1칸으로 잡히지 않고 거부되어야 한다
+		FunctionData tooLarge = FunctionData.Create("TooLarge");
+		tooLarge.Blocks.Add(IntArray("a", "1500000000"));
+		tooLarge.Blocks.Add(IntArray("b", "1500000000"));
+		Check("프레임 크기가 int를 넘는 array 거부", !FunctionDataConverter.TryConvert(tooLarge, owned, out _));
 
 		FunctionData twoDimensional = FunctionData.Create("TwoDimensional");
 		twoDimensional.Blocks.Add(BlockData.ArrayDeclare(VariableType.ArrayOf(Int), "grid", Literal("2")));

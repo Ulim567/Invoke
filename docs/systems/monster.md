@@ -8,6 +8,7 @@
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
+- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)까지 있다.
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
 - 하지 않는 일
@@ -69,6 +70,18 @@
 - 발사 (`ProjectileAttack`)
   - `Fire`를 부르면 연출 `FireEffectPlayed`가 바로 나가고, `Fire Delay`초(모으는 시간) 뒤에 투사체가 나간다. 모으는 중에는 `IsCharging`이 `true`이고, 다시 `Fire`를 불러도 무시한다.
   - 방향은 `Fire`를 부른 순간에 정해진다. 모으는 중에 죽거나 기절하면 투사체는 나가지 않는다.
+
+- 보스 Gateway (`GatewayAI`, #128)
+  - `Monster`(Is Boss 체크) + `ContactDamage` + `ProjectileAttack` + `GatewayAI` + `StatusEffects`. 제자리에 서 있고 움직이지 않는다. 체력 3000, 접촉 피해 10, 사망 대기 1.5초 (전부 임시)
+  - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(2초) 뒤, 그다음엔 `Attack Interval`(3초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
+  - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
+  - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.5초) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area` 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
+  - 기절 중에는 공격을 고르지 않는다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+- 낙하 (`FallingPacket`)
+  - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
+  - 착지 순간 그림자 위 `Hit Size`(2×3, 아래 변이 땅) 상자 안의 플레이어에게 한 번씩 `Packet_Drop`(체력 피해 20, 패링 불가)을 적용한다. 그림자 밖으로 피하면 맞지 않는다.
+  - `NetworkSpawner`로 만들고 없앤다(착지 `Despawn Delay` 0.3초 뒤). 판정·삭제는 서버(또는 네트워크 없는 테스트)에서만 한다.
+- 관통 투사체: `MonsterProjectile`의 `Pierce`를 켜면 맞은 대상(Rigidbody 기준)마다 한 번씩 효과를 주고 계속 날아간다. 끄면 예전처럼 처음 맞은 대상에서 사라진다.
 
 - 상태 이상 반응 (#103)
   - 상태 이상은 같은 오브젝트의 `StatusEffects`(박진우)에서 읽기만 한다. 몬스터 프리팹 최상위에 `StatusEffects`를 붙인다. 없으면 상태 이상에 반응하지 않는다.
@@ -185,6 +198,28 @@
 | `Attack` | - | `MonsterAttackData` | 이 투사체의 공격 데이터. 패링은 `Attack.Parryable`로 잡을 수 있는지 확인한다. |
 | `Misses` | - | `bool` | 쏜 몬스터가 실명 중이었으면 `true`. 플레이어를 통과한다. |
 
+Inspector `Pierce`를 켜면 관통한다(맞은 대상마다 한 번, 사라지지 않음).
+
+### `GatewayAI`
+
+Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 붙인다. Inspector에서 `Target Layers`는 Player, `Ground Layers`는 Ground·Platform, `Falling Packet Prefab`에 FallingPacket 프리팹을 넣는다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Target` | - | `PlayerHealth` | 지금 바라보는 가장 가까운 플레이어. 범위 안에 없으면 `null` |
+| `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
+| `SlamEffectPlayed` (event) | - | - | [연출] 패킷 낙하를 시작할 때. Slam 모션에 쓴다. 그림자는 `Slam Delay`초 뒤 |
+| 던지기 연출 | - | - | 같은 오브젝트의 `ProjectileAttack.FireEffectPlayed`를 받는다 (Throw 모션) |
+
+### `FallingPacket`
+
+`GatewayAI`가 만든다. 자식 `Shadow`(그림자), `Packet`(떨어지는 그림)을 Inspector에 넣는다. Collider는 필요 없다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `WarnEffectPlayed` (event) | - | - | [연출] 그림자가 나타날 때 |
+| `LandEffectPlayed` (event) | - | - | [연출] 패킷이 땅에 닿을 때 (착지 이펙트·소리) |
+
 ## 맞춘 결과
 - 이우림과 정해야 할 것
   - 사냥터 씬(`HuntingGround`)에 `LeakSpawner` 프리팹을 놓고 구역을 맵에 맞추는 일 (#86에서는 프리팹까지만 만듦)
@@ -211,3 +246,8 @@
   - Loop 발사 연출은 `ProjectileAttack.FireEffectPlayed`를 받는다. Shoot 모션 4번째 프레임(약 0.25초)에 맞춰 `Fire Delay` 0.25초 뒤 투사체가 나간다
   - Loop는 맞으면 쏘던 플레이어 반대쪽으로 살짝 밀린다(`FlyingShooterAI`). 그림의 휘청 모션과 함께 보인다
   - 투사체 그림 `Loop_Bullet`은 `MonsterBullet` 프리팹에 임혜원이 붙인다
+  - 보스 Gateway·웜 그림과 애니메이션은 `_HW/Boss`(#126). 보스 프리팹도 김도훈이 판정을 먼저 만들고, 임혜원이 그림·Animator를 붙인다
+- 임혜원과 정해야 할 것
+  - 패킷 공격 그림: 던지는 패킷 덩어리, 떨어지는 패킷, 바닥 그림자 (지금은 임시 그림)
+  - Gateway Throw 모션에서 패킷이 손을 떠나는 프레임(→ `Fire Delay`), Slam 모션에서 내려치는 프레임(→ `Slam Delay`). 지금은 임시 0.5초
+  - Gateway Slam 모션은 `GatewayAI.SlamEffectPlayed`, Throw는 `ProjectileAttack.FireEffectPlayed`를 받는다

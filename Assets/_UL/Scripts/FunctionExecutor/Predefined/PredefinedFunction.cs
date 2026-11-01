@@ -28,6 +28,9 @@ public abstract class PredefinedFunction : FunctionBlock
 	// OnStart, OnTick 도중에 바로 끝내면 그 뒤의 스킬 코드가 끝난 함수 위에서 계속 실행되기 때문
 	SkillError requestedError;
 	bool stopRequested;
+	// 이 함수가 Malloc으로 올린 포인터. 정상으로 끝나면 숨은 시스템 전역으로 옮긴다
+	// 처음 Malloc할 때 만든다. 원본에서 만들어 두면 복사본들이 같은 목록을 함께 쓰게 되기 때문(복사는 필드의 참조만 복사함)
+	List<int> mallocedPointers;
 
 	/// <summary>
 	/// 고정 ID. 함수 데이터의 함수 블록이 이 값으로 이 함수를 가리킨다. 화면 이름(Name)과 따로 둔다.
@@ -85,10 +88,20 @@ public abstract class PredefinedFunction : FunctionBlock
 		return true;
 	}
 
-	// Return으로 정한 값을 반환 타입으로 맞춘다. 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다
-	// 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
+	// 끝까지 실행한 직후 한 번 불린다. 반환 값을 확인하고, 통과하면(정상 종료) 이 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮긴다
+	// 이 함수가 끝나는 순간 옮긴다. 플레이어 함수 안에서 불렸어도 그 함수가 나중에 실패하든 상관없이 남기기 위함(C 라이브러리가 static 전역 변수에 저장하는 것과 같음)
 	// 함수 안의 호출, 슬롯 직접 시전, 비동기 시전이 모두 여기를 지난다. 같은 스킬이 놓인 자리에 따라 성공하거나 실패하지 않게 하기 위함
 	internal sealed override bool TryValidateEnd(FunctionContext context)
+	{
+		if (!TryValidateReturnValue(context)) return false;
+
+		if (mallocedPointers != null) context.MoveToSystemGlobals(mallocedPointers);
+		return true;
+	}
+
+	// Return으로 정한 값을 반환 타입으로 맞춘다. 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다
+	// 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
+	bool TryValidateReturnValue(FunctionContext context)
 	{
 		if (ReturnType.Kind == VariableTypeKind.Void) return true;
 
@@ -238,12 +251,15 @@ public abstract class PredefinedFunction : FunctionBlock
 	/// <summary>
 	/// obj를 시전한 캐릭터의 힙 size칸에 올리고 포인터를 돌려준다. OnStart, OnTick, OnEnd에서 부른다.<br/>
 	/// 힙이 모자라면 NullPointer를 돌려준다. 에러로 끝내지 않으므로, 실패했는지는 돌려받은 값이 HeapStorage.NullPointer인지로 확인한다.<br/>
-	/// 이 작업이 정상으로 끝나면 포인터가 전역 포인터 목록으로 옮겨진다. 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수가 된다.
+	/// 이 함수가 정상으로 끝나면 포인터가 숨은 시스템 전역으로 옮겨진다(사용자 정의 함수 안에서 불렸어도 이 함수가 끝나는 순간). 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수가 된다.
 	/// </summary>
 	protected int Malloc(FunctionContext context, object obj, int size)
 	{
 		if (IsInCancel(nameof(Malloc))) return HeapStorage.NullPointer;
-		return context.Malloc(obj, size);
+
+		int pointer = context.Malloc(obj, size);
+		if (pointer != HeapStorage.NullPointer) (mallocedPointers ??= new List<int>()).Add(pointer);
+		return pointer;
 	}
 
 	/// <summary>
@@ -274,7 +290,7 @@ public abstract class PredefinedFunction : FunctionBlock
 	}
 
 	/// <summary>
-	/// 전역 포인터 목록에 있는 T 타입 객체의 포인터를 malloc한 순서대로 돌려준다.<br/>
+	/// 숨은 시스템 전역에 있는 T 타입 객체의 포인터를 malloc한 순서대로 돌려준다.<br/>
 	/// 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 쓴다.
 	/// </summary>
 	protected List<int> GetGlobalPointers<T>(FunctionContext context) => context.Memory.Heap.GetGlobalPointers<T>();

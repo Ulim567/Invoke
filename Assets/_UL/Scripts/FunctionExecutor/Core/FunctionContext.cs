@@ -171,4 +171,7 @@ public class FunctionContext
 
 	// obj를 heap에 올린다. 포인터의 주인은 이 작업이다. 주인을 채우는 것만 여기서 하고, 루트 집합과 누수 규칙은 HeapStorage가 맡는다
 	internal int Malloc(object obj, int size) => Memory.Heap.Malloc(task, obj, size);
+
+	// 사전 정의 함수가 정상으로 끝날 때, 그 함수가 malloc한 포인터를 이 작업의 포인터 목록에서 숨은 시스템 전역으로 옮긴다. PredefinedFunction만 부른다
+	internal void MoveToSystemGlobals(IEnumerable<int> pointers) => Memory.Heap.MoveToSystemGlobals(task, pointers);
 }

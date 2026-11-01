@@ -8,13 +8,14 @@ using System.Collections.Generic;
 /// - ProcessMemory가 만들어 가지고 있다. 다른 스크립트는 ProcessMemory.Heap으로 가져온다.<br/>
 /// - Malloc으로 객체를 힙에 올리고 포인터를 받는다. 힙이 모자라면 NullPointer(0)를 받는다.<br/>
 /// - TryGet으로 포인터의 객체를 꺼내고, Free로 해제한다.<br/>
-/// - 다른 작업이 올려 둔 객체는 GetGlobalPointers로 포인터를 찾는다.
+/// - 다른 작업이 올려 둔 객체(예: 소환검)는 GetGlobalPointers로 숨은 시스템 전역에서 포인터를 찾는다.
 /// </para>
 /// <para>
 /// 루트 집합과 누수<br/>
-/// - 루트 집합: 포인터를 보관하는 목록들. 지금은 작업마다의 포인터 목록(taskPointers)과 캐릭터의 전역 포인터 목록(globalPointers) 두 가지다.<br/>
-/// - 작업이 malloc하면 그 작업의 포인터 목록에 포인터가 들어간다. 작업이 정상으로 끝나면 그 포인터들이 전역 포인터 목록으로 옮겨진다.<br/>
-/// - 루트 집합의 어느 목록에도 포인터가 없는 객체는 누수가 된다. 누수 객체는 힙을 계속 차지하고, 포인터로 찾을 수 없다.
+/// - 루트 집합: 포인터를 보관하는 곳들. 작업마다의 포인터 목록(taskPointers), 숨은 시스템 전역(globalPointers), 플레이어의 전역 변수(ProcessMemory.Globals)에 담긴 포인터 세 가지다.<br/>
+/// - 작업이 malloc하면 그 작업의 포인터 목록에 포인터가 들어간다(C의 지역 포인터). 작업이 끝나면 그 목록은 사라진다.<br/>
+/// - 사전 정의 함수가 정상으로 끝나면, 그 함수가 malloc한 포인터는 숨은 시스템 전역으로 옮겨진다(C 라이브러리의 static 전역 변수처럼 플레이어에게 보이지 않음).<br/>
+/// - 작업이 끝날 때 루트 집합의 어디에도 포인터가 없는 객체는 누수가 된다. 누수 객체는 힙을 계속 차지하고, 포인터로 찾을 수 없다.
 /// </para>
 /// <para>
 /// 이 컴포넌트는 객체를 만들거나 없애지 않는다. 오브젝트 생성·삭제는 스킬 코드의 생성·삭제 함수가 하고, 여기는 메모리 기록만 맡는다.<br/>
@@ -49,7 +50,8 @@ public class HeapStorage
 	// 루트 집합 1: 진행 중인 작업마다 그 작업이 malloc한 포인터 목록. C의 지역 포인터에 해당한다
 	readonly Dictionary<FunctionTask, List<int>> taskPointers = new Dictionary<FunctionTask, List<int>>();
 
-	// 루트 집합 2: 캐릭터의 전역 포인터 목록. C의 전역 포인터에 해당하며, 어느 작업에서든 이 목록의 포인터를 쓸 수 있다
+	// 루트 집합 2: 숨은 시스템 전역. C 라이브러리의 static 전역 변수에 해당하며, 플레이어는 볼 수 없고 사전 정의 함수만 GetGlobalPointers로 쓴다
+	// 루트 집합 3(플레이어의 전역 변수)은 ProcessMemory.Globals가 가지므로 여기 따로 두지 않는다. 누수 판단 때마다 읽는다
 	readonly HashSet<int> globalPointers = new HashSet<int>();
 
 	// 마지막으로 붙인 포인터 값. 1부터 하나씩 늘려 붙이고, 해제한 값은 최댓값에 닿기 전까지 다시 쓰지 않는다(NextPointer)
@@ -79,7 +81,7 @@ public class HeapStorage
 
 	/// <summary>
 	/// obj를 힙 size칸에 올리고 포인터를 돌려준다. 그 포인터는 owner(malloc하는 작업)의 포인터 목록에 들어간다.<br/>
-	/// owner가 null이면 전역 포인터 목록에 들어간다(작업 밖의 코드가 올리는 경우).<br/>
+	/// owner가 null이면 숨은 시스템 전역에 들어간다(작업 밖의 코드가 올리는 경우).<br/>
 	/// 힙이 모자라면 올리지 않고 NullPointer를 돌려준다(C의 malloc처럼 실패해도 에러로 끝내지 않는다).
 	/// </summary>
 	public int Malloc(FunctionTask owner, object obj, int size)
@@ -160,8 +162,8 @@ public class HeapStorage
 	}
 
 	/// <summary>
-	/// 전역 포인터 목록에 있는 T 타입 객체의 포인터를 값 순서(malloc한 순서)대로 돌려준다.<br/>
-	/// 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 쓴다. 아직 진행 중인 작업이 malloc한 객체는 나오지 않는다.
+	/// 숨은 시스템 전역에 있는 T 타입 객체의 포인터를 값 순서(malloc한 순서)대로 돌려준다.<br/>
+	/// 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 쓴다. 아직 진행 중인 사전 정의 함수가 malloc한 객체는 나오지 않는다.
 	/// </summary>
 	public List<int> GetGlobalPointers<T>()
 	{
@@ -205,7 +207,7 @@ public class HeapStorage
 		}
 
 		entries.Clear();
-		// 진행 중인 작업의 포인터도 지운다. 남겨 두면 그 작업이 끝날 때 전역 포인터 목록으로 옮겨져, 없는 기록을 가리키게 되기 때문
+		// 진행 중인 작업의 포인터도 지운다. 남겨 두면 그 작업의 사전 정의 함수가 끝날 때 숨은 시스템 전역으로 옮겨져, 없는 기록을 가리키게 되기 때문
 		taskPointers.Clear();
 		globalPointers.Clear();
 		memory.ReleaseHeap(releasedSize);
@@ -215,34 +217,39 @@ public class HeapStorage
 			ObjectCleared?.Invoke(obj);
 	}
 
+	// 사전 정의 함수가 정상으로 끝났을 때 부른다. 그 함수가 malloc한 포인터를 owner 작업의 포인터 목록에서 숨은 시스템 전역으로 옮긴다
+	// 작업이 아니라 함수가 끝날 때 옮기는 이유: 플레이어 함수 안에서 부른 검 소환도, 그 플레이어 함수가 나중에 실패하든 상관없이 검 소환이 끝난 순간 소환검을 남기기 위함
+	// 그 사이에 해제했거나 Clear로 지운 포인터는 옮기지 않는다
+	internal void MoveToSystemGlobals(FunctionTask owner, IEnumerable<int> pointers)
+	{
+		taskPointers.TryGetValue(owner, out List<int> ownerPointers);
+		foreach (int pointer in pointers)
+		{
+			if (!entries.ContainsKey(pointer)) continue;
+
+			ownerPointers?.Remove(pointer);
+			globalPointers.Add(pointer);
+		}
+	}
+
 	/// <summary>
-	/// 작업이 끝났을 때 실행기가 부른다. 루트 집합을 갱신한 뒤, 루트 집합의 어느 목록에도 포인터가 없게 된 객체를 누수로 표시한다.
+	/// 작업이 끝났을 때 실행기가 부른다. 그 작업의 포인터 목록(지역 포인터)을 지운 뒤, 루트 집합의 어디에도 포인터가 없게 된 객체를 누수로 표시한다.
 	/// </summary>
+	// 끝난 이유(정상 종료, 실패, 실행 중단)와 상관없이 지역 포인터는 사라진다. 남길 포인터는 그 전에 전역 변수나 숨은 시스템 전역에 들어가 있다
+	// malloc하지 않은 작업도 누수를 판단한다. 그 작업이 전역 변수의 포인터를 바꿔(예: g = NULL) 예전 객체를 놓쳤을 수 있기 때문
 	internal void HandleTaskEnded(FunctionTask task)
 	{
-		// malloc하지 않은 작업이 끝나면 루트 집합에서 빠지는 포인터가 없으므로, 새로 누수될 객체도 없다
-		if (!taskPointers.TryGetValue(task, out List<int> pointers)) return;
-
 		taskPointers.Remove(task);
-		HandOverPointers(task, pointers);
 		MarkUnreachableAsLeaked();
 	}
 
-	// 끝난 작업의 포인터 목록을 어디로 옮길지 정한다(루트 집합을 채우는 규칙)
-	// 정리 블록이 끝까지 실행된 것은 정상 종료뿐이므로, 정상 종료일 때만 전역 포인터 목록으로 옮긴다. 실행 중단과 실패는 포인터를 잃는다
-	// 블록 실행 이슈에서 변수가 생기면 이 함수만 바꾼다. 누수 판단(MarkUnreachableAsLeaked)은 그대로 둔다
-	void HandOverPointers(FunctionTask task, List<int> pointers)
-	{
-		if (task.EndReason == FunctionTaskEndReason.Completed)
-			globalPointers.UnionWith(pointers);
-	}
-
-	// 누수 판단. 루트 집합의 어느 목록에도 포인터가 없는 객체를 누수로 표시한다(실제 C의 누수 검사, Java GC와 같은 도달 가능성 검사)
+	// 누수 판단. 루트 집합의 어디에도 포인터가 없는 객체를 누수로 표시한다(실제 C의 누수 검사, Java GC와 같은 도달 가능성 검사)
 	void MarkUnreachableAsLeaked()
 	{
 		HashSet<int> reachable = new HashSet<int>(globalPointers);
 		foreach (List<int> pointers in taskPointers.Values)
 			reachable.UnionWith(pointers);
+		reachable.UnionWith(GetPlayerGlobalPointers());
 
 		List<object> leakedObjects = null;
 		foreach (KeyValuePair<int, HeapEntry> pair in entries)
@@ -259,6 +266,45 @@ public class HeapStorage
 		if (leakedObjects == null) return;
 		foreach (object obj in leakedObjects)
 			ObjectLeaked?.Invoke(obj);
+	}
+
+	/// <summary>
+	/// 힙 칸 수를 주인별로 나눈 값. 메모리 화면이나 테스트 로그에서 읽는다.<br/>
+	/// 한 객체를 여러 곳이 가리켜도 한 번만 센다. 우선순위: 플레이어 전역 변수 → 숨은 시스템 전역 → 작업의 지역 포인터. 네 값의 합은 ProcessMemory.HeapUsed와 같다.
+	/// </summary>
+	public HeapUsage GetUsageByOwner()
+	{
+		HashSet<int> playerGlobals = new HashSet<int>(GetPlayerGlobalPointers());
+		HashSet<int> taskLocals = new HashSet<int>();
+		foreach (List<int> pointers in taskPointers.Values)
+			taskLocals.UnionWith(pointers);
+
+		int playerGlobalSize = 0, systemGlobalSize = 0, taskLocalSize = 0, leakedSize = 0;
+		foreach (KeyValuePair<int, HeapEntry> pair in entries)
+		{
+			int size = pair.Value.Size;
+			if (pair.Value.IsLeaked) leakedSize += size;
+			else if (playerGlobals.Contains(pair.Key)) playerGlobalSize += size;
+			else if (globalPointers.Contains(pair.Key)) systemGlobalSize += size;
+			else if (taskLocals.Contains(pair.Key)) taskLocalSize += size;
+			// 루트 집합에 없지만 아직 누수로 표시되지 않은 객체(작업이 끝나기 전에 전역 변수의 포인터를 바꾼 경우)는 다음 누수 판단 전까지 지역으로 센다
+			else taskLocalSize += size;
+		}
+		return new HeapUsage(playerGlobalSize, systemGlobalSize, taskLocalSize, leakedSize);
+	}
+
+	// 플레이어의 전역 변수에 담긴 포인터 값들(루트 집합 3). NULL은 뺀다
+	IEnumerable<int> GetPlayerGlobalPointers()
+	{
+		if (memory.Globals == null) yield break;
+
+		foreach (RuntimeValue value in memory.Globals.AllValues())
+		{
+			if (value.Type?.Kind != VariableTypeKind.Pointer) continue;
+
+			int pointer = value.AsPointer();
+			if (pointer != NullPointer) yield return pointer;
+		}
 	}
 
 	// 포인터로 찾을 수 있는 기록. 누수된 기록은 포인터 값을 알아도 찾을 수 없다

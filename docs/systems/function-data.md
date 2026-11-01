@@ -140,8 +140,9 @@
 
 ## 다른 시스템이 쓰는 것
 - 코드 위치: `Assets/_UL/Scripts/FunctionData/`
-  - `Data/`: `FunctionData`, `BlockData`, `SlotData`, `VariableType`, `ParameterData`, `BlockOptions`
+  - `Data/`: `FunctionData`, `BlockData`, `SlotData`, `VariableType`, `ParameterData`, `BlockOptions`, `GlobalVariablesData`
   - `Json/`: `FunctionDataJson`
+  - `Storage/`: `GlobalVariablesStorage` (#139)
   - `CodeSize/`: `CodeSizeCalculator`
   - `Test/`: `FunctionDataTest` (씬의 아무 오브젝트에 붙이고 Play, 콘솔 로그로 결과 확인)
 
@@ -217,6 +218,29 @@
 | --- | --- | --- | --- |
 | `ToJson(FunctionData)` | 함수 데이터 | `string` | 서버 전송, DB 저장에 씀 |
 | `TryFromJson(string, out FunctionData)` | JSON 글자열 | `bool` | 실패하면 오류를 던지지 않고 `false`, 함수 데이터는 null |
+| `ToJson(GlobalVariablesData)` | 전역 변수 파일 | `string` | (#139) |
+| `TryGlobalVariablesFromJson(string, out GlobalVariablesData)` | JSON 글자열 | `bool` | 실패하면 `false`, 전역 변수 파일은 null. `TryFromJson(json, out _)`와 구분되도록 이름을 나눔 (#139) |
+
+### `GlobalVariablesData` (전역 변수 파일, #139)
+- 캐릭터마다 하나. 실행 규칙(찾는 순서, memory, 초기화)은 [function-executor.md](function-executor.md)의 「전역 변수」
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Declarations` | - | `List<BlockData>` | 전역 변수 선언. 함수 몸통과 같은 선언 블록(`BlockData.Declare`). 위에서부터 순서대로 |
+
+- 선언 블록을 쓰는 이유: 편집 화면이 함수 몸통의 선언 블록 UI를 그대로 쓸 수 있음
+- 초기값 칸: 직접 입력한 값, `NULL`(`SlotData.FromNull`), 비움(기본값)만. 그 밖은 저장 검사에서 거부
+- 저장: 편집 화면은 `FunctionExecutor.TrySaveGlobalVariables`를 부름. 검사 → 저장 → 초기화
+
+### `GlobalVariablesStorage` (전역 변수 파일 저장소, #139)
+- 이 컴퓨터의 `Application.persistentDataPath/GlobalVariables.json` 하나. 서버 저장 전까지의 임시 저장소
+- 내용 검사 없음
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Save(GlobalVariablesData)` | 전역 변수 파일 | - | 덮어씀 |
+| `Load()` | - | `GlobalVariablesData` | 파일이 없거나 읽을 수 없으면 선언이 없는 빈 파일 |
+| `PathOfFile` | - | `string` | 저장 경로. 확인용 |
 
 ### `CodeSizeCalculator` (코드 영역 크기)
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |

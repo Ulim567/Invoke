@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `PredefinedCallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors` | 스킬 작성자가 쓰는 것 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
@@ -61,7 +61,14 @@
 - 지역 변수
   - 저장: 실행 중인 `UserFunction` 복사본마다 변수 저장소(`VariableStore`) 하나. 같은 function을 두 번 시전하면 저장소 두 개
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
-  - 블록 범위(조건문 안에서만 보이는 변수): 블록 실행 2 이슈
+  - 블록 범위 (#120): C처럼 `{ }` 하나가 범위 하나
+    - `{ }` 안에서 선언한 변수: `}`에서 사라짐. 반복문은 바퀴마다 새 변수
+    - 찾기: 안쪽 범위부터. 바깥과 같은 이름이면 안쪽 변수
+    - function body의 맨 바깥 범위: 파라미터와 같은 범위(따로 열지 않음)
+    - 같은 범위에 같은 이름 선언: `DuplicateVariable`
+    - 바깥 범위와 같은 이름 선언: 언어 규칙 파일의 `allowShadowing`. C는 허용, 허용하지 않으면 `DuplicateVariable`
+    - 프레임 크기: 범위와 상관없이 function body의 모든 선언을 셈(지금과 같음)
+    - 블록 목록 실행: `Statements`가 위에서부터 차례로 실행하고, `{ }` 하나마다 범위를 열고 닫음. `UserFunction`의 function body와 조건문·반복문의 `{ }`가 함께 씀
 - 선언의 initializer를 비움: 언어 규칙 파일의 기본값
 - value slot: 직접 입력한 값(`"3"`, `"0.5"`, `"true"`, `"a"`, `NULL`), 변수, 값 블록(연산, 비교, 논리, `malloc`, 값을 돌려주는 사전 정의 함수)
 - 숫자 계산과 타입 변환: 언어 규칙 파일의 「숫자 타입 변환」. C는 `ImplicitAll`
@@ -264,6 +271,7 @@
 - 숫자 타입 변환: `ImplicitAll`, `Strict`, `WideningOnly` 중 하나(「함수 데이터 실행」의 표) (#90)
 - `float %` 허용 여부 (#90)
 - `NULL`과 비교 (#120): `zeroIsNull`(직접 입력한 0을 `NULL`로 볼지, C는 켬), `stringEquality`(string 비교 방법 `Disallowed`·`ByContent`, C는 `Disallowed`)
+- 변수 범위 (#120): `allowShadowing`(`{ }` 안에서 바깥과 같은 이름을 선언할 수 있는지, C는 켬)
 - 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값, 숫자 타입 변환, `NULL`과 비교는 처음 값(C 규칙)
 - C 파일(`Assets/_UL/Data/LanguageRule_C`)
 

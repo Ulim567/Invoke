@@ -135,6 +135,11 @@ public class LanguageRuleData : ScriptableObject
 	[SerializeField, Tooltip("string을 ==, !=로 비교하는 방법. C는 비교할 수 없다(Disallowed)")]
 	StringEquality stringEquality = StringEquality.Disallowed;
 
+	// 처음 값은 C의 규칙이다. 이미 만든 C 파일도 Unity가 새 칸을 읽을 때 이 값을 넣는다
+	[Header("변수 범위")]
+	[SerializeField, Tooltip("{ } 안에서 바깥과 같은 이름의 변수를 선언할 수 있는지. C는 할 수 있다. 할 수 없으면 DuplicateVariable")]
+	bool allowShadowing = true;
+
 	/// <summary>
 	/// 숫자 타입이 섞일 때 값을 바꾸는 규칙. 연산 블록, 선언 블록, 대입 블록이 따른다.
 	/// </summary>
@@ -154,6 +159,11 @@ public class LanguageRuleData : ScriptableObject
 	/// string을 ==, !=로 비교하는 방법. 비교 블록이 따른다.
 	/// </summary>
 	public StringEquality StringEquality => stringEquality;
+
+	/// <summary>
+	/// true이면 { } 안에서 바깥과 같은 이름의 변수를 선언할 수 있다(C). false이면 선언 블록이 DuplicateVariable로 실패한다(Java, C#).
+	/// </summary>
+	public bool AllowShadowing => allowShadowing;
 
 	/// <summary>
 	/// failure의 처리를 찾는다. 표에 없으면 false를 돌려준다.
@@ -225,13 +235,14 @@ public class LanguageRuleData : ScriptableObject
 
 	// 테스트 코드가 C가 아닌 언어 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
 	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo,
-		bool zeroIsNull = true, StringEquality stringEquality = StringEquality.Disallowed)
+		bool zeroIsNull = true, StringEquality stringEquality = StringEquality.Disallowed, bool allowShadowing = true)
 	{
 		LanguageRuleData rule = CreateInstance<LanguageRuleData>();
 		rule.numericConversion = conversion;
 		rule.allowFloatModulo = allowFloatModulo;
 		rule.zeroIsNull = zeroIsNull;
 		rule.stringEquality = stringEquality;
+		rule.allowShadowing = allowShadowing;
 		return rule;
 	}
 }

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 /// 사용법<br/>
 /// - 블록의 OnStart에서 new Statements(블록 목록 원본, 범위를 열지)로 만든다. 블록 복사본마다 따로 가져야 하기 때문이다.<br/>
 /// - 블록의 Step에서 Step(context)를 부른다. Done이면 모든 statement가 끝났고, Running이면 다음 틱에 다시 부른다.<br/>
-///   그 밖의 결과(Failed, Returned)는 안쪽 블록이 돌려준 그대로다. 부른 블록이 어떻게 할지 정한다.<br/>
+///   그 밖의 결과(Failed, Returned, Break, Continue)는 안쪽 블록이 돌려준 그대로다. 부른 블록이 어떻게 할지 정한다.<br/>
 /// - 블록의 OnCancel에서 Cancel(context)를 부른다.
 /// </para>
 /// <para>
@@ -86,7 +86,7 @@ internal class Statements
 
 		running = null;
 
-		// 실패, return은 남은 statement를 실행하지 않고 바깥에 그대로 알린다
+		// 실패, return, break, continue는 남은 statement를 실행하지 않고 바깥에 그대로 알린다
 		if (result != BlockResult.Done) return result;
 
 		index++;

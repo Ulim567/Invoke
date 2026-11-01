@@ -27,6 +27,9 @@ public enum FunctionFailure
 	DivideByZero,
 	// free 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣었다. NULL은 C처럼 아무 일도 하지 않으므로 실패가 아니다
 	InvalidPointer,
+	// 반복문 밖에서 break, continue를 만났다. C에서는 compile error다
+	// 편집 화면이나 저장 검사가 막기 전까지 실행 중에 이 실패로 끝낸다. 저장 검사는 BlockData.HasJumpOutsideLoop로 찾는다
+	NotInLoop,
 }
 
 /// <summary>

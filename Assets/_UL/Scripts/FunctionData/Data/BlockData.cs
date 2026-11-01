@@ -111,6 +111,22 @@ public class BlockData
 	/// </summary>
 	public static bool CanBeStatement(BlockKind kind) => kind == BlockKind.Function || !CanBeValue(kind);
 
+	/// <summary>
+	/// blocks(function body 등) 안에 반복문 밖에 놓인 break, continue가 있으면 true. 조건문의 블록 영역 안까지 찾는다.<br/>
+	/// 저장할 때 compile error를 찾는 검사가 쓴다. 실행기는 이 함수를 쓰지 않고, 실행 중에 만나면 NotInLoop로 실패시킨다.
+	/// </summary>
+	public static bool HasJumpOutsideLoop(IEnumerable<BlockData> blocks)
+	{
+		foreach (BlockData block in blocks)
+		{
+			if (block.Kind == BlockKind.Break || block.Kind == BlockKind.Continue) return true;
+			// 반복문 안의 break, continue는 그 반복문에 걸리므로 더 찾지 않는다
+			if (block.Kind == BlockKind.For || block.Kind == BlockKind.While) continue;
+			if (block.InnerBlocks != null && HasJumpOutsideLoop(block.InnerBlocks)) return true;
+		}
+		return false;
+	}
+
 	// 만들기 함수 ----------------------------------------------------------
 
 	/// <summary>

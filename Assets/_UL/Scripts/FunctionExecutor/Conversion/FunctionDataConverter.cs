@@ -11,7 +11,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 거부(false)하는 함수: 지금 실행기가 아직 실행할 수 없는 기능을 쓴 함수다. 콘솔 오류를 남긴다.<br/>
-/// - 예: for·while 블록, 위치 타입 변수, 앞에 if가 없는 else, 비어 있는 value slot(함수 블록의 파라미터 칸은 비워도 됨), 없는 고정 ID<br/>
+/// - 예: 위치 타입 변수, 앞에 if가 없는 else, 비어 있는 value slot(함수 블록의 파라미터 칸은 비워도 됨), 없는 고정 ID<br/>
 /// - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등)은 거부하지 않는다. 실행 중에 그 블록이 실패 종류를 기록하고 실패한다.
 /// </para>
 /// </summary>
@@ -32,7 +32,7 @@ public static class FunctionDataConverter
 		return true;
 	}
 
-	// 블록 목록 하나(function body, 또는 조건문의 { } 안)를 바꾼다. 연달아 놓인 if, else if, else는 조건문 블록 하나로 묶는다
+	// 블록 목록 하나(function body, 또는 조건문·반복문의 { } 안)를 바꾼다. 연달아 놓인 if, else if, else는 조건문 블록 하나로 묶는다
 	static bool TryConvertStatements(FunctionData data, IReadOnlyList<BlockData> blockDatas, out Block[] blocks)
 	{
 		blocks = null;
@@ -76,8 +76,7 @@ public static class FunctionDataConverter
 				if (condition == null) return null;
 			}
 
-			IReadOnlyList<BlockData> inner = block.InnerBlocks ?? (IReadOnlyList<BlockData>)Array.Empty<BlockData>();
-			if (!TryConvertStatements(data, inner, out Block[] body)) return null;
+			if (!TryConvertStatements(data, InnerBlocksOf(block), out Block[] body)) return null;
 
 			branches.Add(new ConditionalBlock.Branch(condition, body));
 			i = j;
@@ -87,6 +86,10 @@ public static class FunctionDataConverter
 
 		return new ConditionalBlock(branches.ToArray());
 	}
+
+	// 블록 영역이 null이어도 빈 { }로 본다. JSON에서 되돌린 데이터에 블록 영역이 빠져 있을 수 있기 때문
+	static IReadOnlyList<BlockData> InnerBlocksOf(BlockData block) =>
+		block.InnerBlocks ?? (IReadOnlyList<BlockData>)Array.Empty<BlockData>();
 
 	// function body와 expression 안의 모든 사전 정의 함수 블록의 쿨타임 합. 같은 스킬을 여러 번 넣으면 그만큼 늘어난다
 	// 반복문 안의 함수는 한 번만 센다. 몇 번 반복될지 미리 알 수 없기 때문
@@ -139,6 +142,33 @@ public static class FunctionDataConverter
 				ValueBlock pointer = ConvertValue(data, block.Slots[0]);
 				return pointer == null ? null : new FreeBlock(pointer);
 			}
+
+			// 칸: i 이름, start 값, end 값. 블록 영역: { } 안
+			case BlockKind.For when block.Slots.Count >= 3:
+			{
+				string indexName = block.Slots[0].Name;
+				if (string.IsNullOrEmpty(indexName)) return Reject(data, "for 블록의 변수 이름 칸이 비어 있습니다.");
+
+				ValueBlock start = ConvertValue(data, block.Slots[1]);
+				if (start == null) return null;
+				ValueBlock end = ConvertValue(data, block.Slots[2]);
+				if (end == null) return null;
+				return TryConvertStatements(data, InnerBlocksOf(block), out Block[] body) ? new ForBlock(indexName, start, end, body) : null;
+			}
+
+			// 칸: 조건. 블록 영역: { } 안
+			case BlockKind.While when block.Slots.Count >= 1:
+			{
+				ValueBlock condition = ConvertValue(data, block.Slots[0]);
+				if (condition == null) return null;
+				return TryConvertStatements(data, InnerBlocksOf(block), out Block[] body) ? new WhileBlock(condition, body) : null;
+			}
+
+			// 반복문 밖에 놓여도 거부하지 않는다. 플레이어 코드의 잘못이므로 실행 중에 NotInLoop로 실패한다
+			case BlockKind.Break:
+				return new BreakBlock();
+			case BlockKind.Continue:
+				return new ContinueBlock();
 
 			// 칸: 파라미터 수만큼의 값. 반환 값은 버리지만, Return 누락과 반환 타입 불일치는 expression에서처럼 실패한다
 			case BlockKind.Function:

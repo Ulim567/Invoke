@@ -8,7 +8,7 @@ using System.Collections.Generic;
 /// - 조건이 참인 갈래(또는 else)를 고르면, 그 갈래의 { }를 다음 틱부터 실행한다. { }가 비어 있거나 고른 갈래가 없으면 검사한 틱에 끝난다.<br/>
 /// - { }는 범위를 연다. 안에서 선언한 변수는 }에서 사라진다.<br/>
 /// - 조건으로 바꾸는 규칙은 논리 블록과 같다(C: 0이 아니면 참, NULL이 아니면 참). 조건으로 쓸 수 없는 값이면 TypeMismatch로 실패한다.<br/>
-/// - { } 안의 실패와 return은 바깥에 그대로 알린다.
+/// - { } 안의 실패, return, break, continue는 바깥에 그대로 알린다. 그래서 if 안의 break도 바깥 반복문에 걸린다.
 /// </para>
 /// <para>
 /// 함수 데이터에서는 if, else if, else가 따로 놓인 블록이다. FunctionDataConverter가 연달아 놓인 갈래를 이 블록 하나로 묶는다.

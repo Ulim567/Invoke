@@ -66,6 +66,9 @@ public enum FailureHandling
 	// 시전 전 검사가 표를 거치던 때의 처리. 실행 중에는 EndTask와 같다
 	// 시전 거부(CastRejection)가 표를 거치지 않게 된 뒤로 쓰는 줄이 없다. 지우면 이미 만든 파일의 값이 바뀔 수 있어 남겨 둔다
 	Reject,
+	// 실패한 작업을 끝내고 프로세스를 새로 시작한다(FunctionExecutor.RestartProcess). 다른 작업은 모두 끊기고 heap과 전역 변수도 처음으로 돌아간다
+	// C의 stack overflow처럼 프로세스 전체가 죽는 실패에 쓴다. 실제 프로그램도 죽은 프로세스의 메모리를 운영체제가 모두 회수하기 때문
+	RestartProcess,
 }
 
 /// <summary>

@@ -285,7 +285,9 @@ public class FunctionExecutor : MonoBehaviour
 		foreach (FunctionTask task in GetTickOrder())
 		{
 			FunctionFailure? failure = task.Step();
-			if (failure.HasValue) HandleFailure(task, failure.Value);
+			// 프로세스를 새로 시작했으면 이 작업이 남긴 입력·비동기 시전 요청은 버린다. 새로 시작한 프로세스에 죽은 프로세스의 작업이 생기지 않게 하기 위함
+			// 이 틱에 남은 작업은 이미 끊겨서 Step이 진행하지 않는다
+			if (failure.HasValue && HandleFailure(task, failure.Value)) continue;
 
 			// 상태를 WaitingInput으로 바꾼 뒤에 알린다. 받은 쪽이 이 안에서 바로 ProvideInput을 불러도 다음 틱부터 진행되게 하기 위함
 			if (task.TryTakeNewInputRequest(out PredefinedFunction requester))
@@ -313,13 +315,14 @@ public class FunctionExecutor : MonoBehaviour
 
 	// 작업이 플레이어 책임으로 실패했을 때, 작업의 Step이 돌려준 실패 종류로 실행기가 처리를 찾아 실행한다
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
-	void HandleFailure(FunctionTask task, FunctionFailure failure)
+	// 프로세스를 새로 시작했으면 true를 돌려준다
+	bool HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
 		// 표에 줄이 없거나 언어 규칙 파일이 없으면 개발자 책임이다. 플레이어의 에러로 보이지 않게 InternalError로 끝낸다
 		if (!language.TryFindHandling(task.Name, failure, out FailureHandling handling))
 		{
 			task.End(FunctionTaskEndReason.InternalError);
-			return;
+			return false;
 		}
 
 		switch (handling)
@@ -328,7 +331,18 @@ public class FunctionExecutor : MonoBehaviour
 			case FailureHandling.Reject:
 			case FailureHandling.EndTask:
 				task.End(FunctionTaskEndReason.Failed);
-				break;
+				return false;
+
+			// 실패한 작업을 먼저 Failed로 끝낸다. RestartProcess가 끊는 작업은 Interrupted가 되는데, 실패한 작업까지 Interrupted로 덮으면 화면이 원인을 찾을 수 없기 때문
+			case FailureHandling.RestartProcess:
+				task.End(FunctionTaskEndReason.Failed);
+				RestartProcess();
+				return true;
+
+			// 처리 값을 새로 추가하고 여기를 빠뜨려도, 실패한 작업이 끝나지 않은 채 남지 않게 한다
+			default:
+				task.End(FunctionTaskEndReason.Failed);
+				return false;
 		}
 	}
 

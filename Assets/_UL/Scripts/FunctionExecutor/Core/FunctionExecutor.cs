@@ -183,6 +183,37 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 슬롯에서 넘긴 함수(원본)로 시전한 작업만 끊는다. 플레이어가 그 슬롯의 작업을 취소할 때 부른다.<br/>
+	/// 진행 중인 작업과 다음 틱을 기다리는 작업이 모두 대상이다. 끊은 작업이 있으면 true, 없으면 false를 돌려준다.<br/>
+	/// 끊긴 작업은 EndReason이 Cancelled가 된다. 그 밖의 처리(OnCancel, 스택 반환, 누수, 쿨타임)는 InterruptAll과 같다.<br/>
+	/// 같은 스킬이 다른 함수 안에서 실행 중이어도 그 작업은 끊지 않는다. 그 작업이 비동기 호출로 만든 작업도 따로 시전된 작업이라 끊지 않는다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool Cancel(FunctionBlock function)
+	{
+		if (function == null) throw new ArgumentNullException(nameof(function));
+
+		bool cancelled = false;
+		// InterruptAll과 같은 이유로 번호로 돌고 Count를 매번 다시 읽는다(OnCancel에서 Cast를 부를 수 있음)
+		for (int i = 0; i < tasks.Count; i++)
+			cancelled |= TryCancel(tasks[i], function);
+		for (int i = 0; i < pendingTasks.Count; i++)
+			cancelled |= TryCancel(pendingTasks[i], function);
+		return cancelled;
+	}
+
+	// 슬롯에서 그 원본으로 시전한 작업이면 끊는다. 이미 끝난 작업은 끊은 것으로 세지 않는다
+	// 원본(CastSource)으로 찾는 이유: 플레이어가 누른 그 슬롯의 작업만 끊기 위함(사용자 결정)
+	// 스킬은 다른 함수 안에서 실행 중이기만 해도 IsRunning이 true지만, 그때 Cancel은 아무것도 끊지 않고 false다
+	static bool TryCancel(FunctionTask task, FunctionBlock function)
+	{
+		if (task.IsEnded || task.CastSource != function) return false;
+
+		task.Interrupt(FunctionTaskEndReason.Cancelled);
+		return true;
+	}
+
+	/// <summary>
 	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다.<br/>
 	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
 	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
@@ -285,7 +316,9 @@ public class FunctionExecutor : MonoBehaviour
 		foreach (FunctionTask task in GetTickOrder())
 		{
 			FunctionFailure? failure = task.Step();
-			if (failure.HasValue) HandleFailure(task, failure.Value);
+			// 프로세스를 새로 시작했으면 이 작업이 남긴 입력·비동기 시전 요청은 버린다. 새로 시작한 프로세스에 죽은 프로세스의 작업이 생기지 않게 하기 위함
+			// 이 틱에 남은 작업은 이미 끊겨서 Step이 진행하지 않는다
+			if (failure.HasValue && HandleFailure(task, failure.Value)) continue;
 
 			// 상태를 WaitingInput으로 바꾼 뒤에 알린다. 받은 쪽이 이 안에서 바로 ProvideInput을 불러도 다음 틱부터 진행되게 하기 위함
 			if (task.TryTakeNewInputRequest(out PredefinedFunction requester))
@@ -313,22 +346,31 @@ public class FunctionExecutor : MonoBehaviour
 
 	// 작업이 플레이어 책임으로 실패했을 때, 작업의 Step이 돌려준 실패 종류로 실행기가 처리를 찾아 실행한다
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
-	void HandleFailure(FunctionTask task, FunctionFailure failure)
+	// 프로세스를 새로 시작했으면 true를 돌려준다
+	bool HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
 		// 표에 줄이 없거나 언어 규칙 파일이 없으면 개발자 책임이다. 플레이어의 에러로 보이지 않게 InternalError로 끝낸다
 		if (!language.TryFindHandling(task.Name, failure, out FailureHandling handling))
 		{
 			task.End(FunctionTaskEndReason.InternalError);
-			return;
+			return false;
 		}
 
 		switch (handling)
 		{
+			// 실패한 작업을 먼저 Failed로 끝낸다. RestartProcess가 끊는 작업은 Interrupted가 되는데, 실패한 작업까지 Interrupted로 덮으면 화면이 원인을 찾을 수 없기 때문
+			case FailureHandling.RestartProcess:
+				task.End(FunctionTaskEndReason.Failed);
+				RestartProcess();
+				return true;
+
 			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
+			// default도 함께 둔다. 처리 값을 새로 추가하고 여기를 빠뜨려도, 실패한 작업이 끝나지 않은 채 남지 않게 하기 위함
 			case FailureHandling.Reject:
 			case FailureHandling.EndTask:
+			default:
 				task.End(FunctionTaskEndReason.Failed);
-				break;
+				return false;
 		}
 	}
 

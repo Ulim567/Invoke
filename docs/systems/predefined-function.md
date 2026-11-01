@@ -53,11 +53,17 @@
 - 비동기(`IsAsync = true`): 새 `FunctionTask` 하나 생성. 부른 쪽은 기다리지 않고 다음 `Block`으로 넘어감. 새 `FunctionTask`는 다음 tick부터 진행
 - 슬롯에서 바로 cast: 동기·비동기와 상관없이 새 `FunctionTask`
 
-### 실행 중단 공격
-- 맞았을 때: 그 캐릭터의 모든 `FunctionTask`가 끊김 (`FunctionExecutor.InterruptAll`)
-- 실행 중이던 function마다 `OnEnd` 대신 `OnCancel`이 한 번 불림. heap에 올리지 않은 오브젝트(예: 이펙트) 정리는 `OnCancel`에서
-- heap에 올린 오브젝트(예: 소환검): `OnCancel`에서 없애지 않음. 해제하지 않은 객체는 누수가 됨 (`function-executor.md` 「heap」)
+### 실행 중단 공격, 슬롯 취소, Overflow 재시작 (#143)
+- 끊기는 경우 (자세한 규칙: `function-executor.md` 「끊기는 경우」)
+  - 실행 중단 공격: 그 캐릭터의 모든 `FunctionTask`가 끊김 (`FunctionExecutor.InterruptAll`)
+  - 슬롯 취소: 그 슬롯에서 시전한 `FunctionTask`만 끊김 (`FunctionExecutor.Cancel`)
+  - Overflow 재시작(C): 모든 `FunctionTask`가 끊긴 뒤 heap과 전역 변수가 처음으로 돌아감 (`FunctionExecutor.RestartProcess`)
+- 실행 중이던 function마다 `OnEnd` 대신 `OnCancel`이 한 번 불림. 세 경우 모두 같음. heap에 올리지 않은 오브젝트(예: 이펙트) 정리는 `OnCancel`에서
+- heap에 올린 오브젝트(예: 소환검): `OnCancel`에서 없애지 않음
+  - 실행 중단 공격, 슬롯 취소: 해제하지 않은 객체는 누수가 됨 (`function-executor.md` 「heap」)
+  - Overflow 재시작: heap이 비워지므로 객체마다 `ObjectCleared`가 불림. 소환검 오브젝트 삭제는 그 이벤트를 받은 쪽
 - stack: 실행기가 돌려줌
+- 쿨타임: 끊긴 스킬도 쿨타임 전체
 
 ## 다른 시스템이 쓰는 것
 

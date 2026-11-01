@@ -8,7 +8,7 @@
 - 하지 않는 일
   - 키 입력을 읽지 않는다. slot을 뗐을 때 `Cast`를 부르는 것은 cast 담당 스크립트가 한다.
   - 이펙트, 소리, 애니메이션을 하지 않는다. 연출은 `TaskStarted`, `TaskEnded` event를 받은 쪽이 한다.
-  - code area, Overflow 시 재부팅, Java의 try, 버그 공격의 메모리 효과(`MemoryOccupy`, `ReclaimBlock`)는 아직 다루지 않는다. 이후 이슈에서 추가한다.
+  - code area, Overflow 시 재부팅 시간(디버프), Java의 try, 버그 공격의 메모리 효과(`MemoryOccupy`, `ReclaimBlock`)는 아직 다루지 않는다. 이후 이슈에서 추가한다. Overflow 때 프로세스를 새로 시작하는 것은 한다(#143).
   - 빈 슬롯을 거르지 않는다. 빈 슬롯이면 cast 담당 스크립트가 `Cast`를 부르지 않는다.
 
 ## 파일 위치
@@ -281,7 +281,7 @@
 | 책임 | 예 | 실행기가 하는 일 | 화면 |
 | --- | --- | --- | --- |
 | 없음 | 쿨타임 중, 시전 전 메모리 부족 | `FunctionTask`를 만들지 않고 `CastRejected` | 아직 쓸 수 없음 |
-| 플레이어 | 선언하지 않은 변수, 0으로 나누기, 잘못된 포인터 `free`, 맨손으로 찌르기 호출 | 언어 규칙 표의 처리. C는 그 `FunctionTask`만 `Failed`로 끝냄 | compile error 또는 runtime error |
+| 플레이어 | 선언하지 않은 변수, 0으로 나누기, 잘못된 포인터 `free`, 맨손으로 찌르기 호출 | 언어 규칙 표의 처리. C는 그 `FunctionTask`만 `Failed`로 끝냄. Overflow는 프로세스를 새로 시작(#143) | compile error 또는 runtime error |
 | 개발자 | 스킬의 `Return` 누락·반환 타입 불일치, 언어 규칙 표에 그 실패 종류의 줄이 없음, 언어 규칙 파일 미연결 | 콘솔 오류, 그 `FunctionTask`를 `InternalError`로 끝냄 | 플레이어의 에러로 보여 주지 않음 |
 
 - 플레이어 책임인 실패 종류(`FunctionFailure`)
@@ -311,9 +311,39 @@
 - 처리 종류(`FailureHandling`)
   - `EndTask`: 그 `FunctionTask`만 `Failed`로 끝남
   - `Reject`: 실행 중에는 `EndTask`와 같음. 시전 거부가 표를 거치지 않게 된 뒤로 쓰는 줄 없음
+  - `RestartProcess` (#143): 실패한 `FunctionTask`를 `Failed`로 끝낸 뒤 프로세스를 새로 시작(`FunctionExecutor.RestartProcess`). 다른 작업은 `Interrupted`, heap과 전역 변수는 처음으로. 아래 「끊기는 경우」
 - 표에 없는 실패 종류: Play를 시작할 때 콘솔 오류. 실제로 나면 콘솔 오류 후 `InternalError`
 - 언어 규칙 파일 미연결: Play를 시작할 때 콘솔 오류. 실패가 나면 콘솔 오류 후 `InternalError`
 - `FunctionFailure`, `FailureHandling`, `FailureCategory`, `NumericConversion`의 새 값: 맨 끝에만 추가. 언어 규칙 파일이 값을 숫자로 저장하므로, 중간에 끼우면 이미 만든 파일의 값이 바뀜
+
+### 끊기는 경우 (#143)
+- 실행 중인 작업이 끝까지 실행되지 못하고 끊기는 세 경우
+
+| 끊는 방법 | 부르는 곳 | 끊는 대상 | 끝난 이유 | heap | 전역 변수 |
+| --- | --- | --- | --- | --- | --- |
+| 실행 중단 공격 `InterruptAll` | 몬스터 공격의 실행 중단 효과 | 그 캐릭터의 모든 작업 | `Interrupted` | 그대로. 끊긴 작업이 쥐던 객체는 누수 | 그대로 |
+| 슬롯 취소 `Cancel` | 슬롯 입력(`SlotCaster`) | 그 슬롯의 원본으로 시전한 작업만 | `Cancelled` | 그대로. 끊긴 작업이 쥐던 객체는 누수 | 그대로 |
+| Overflow (C, `RestartProcess` 처리) | 실행기(언어 규칙 표) | 그 캐릭터의 모든 작업 | Overflow를 낸 작업 `Failed`, 나머지 `Interrupted` | 비움(소환검 포함) | 파일의 초기값 |
+
+- 세 경우 공통
+  - 대상: 진행 중인 작업과 다음 tick을 기다리는 작업. 진행을 시작하기 전에 끊긴 작업은 `TaskStarted` 없이 `TaskEnded`만
+  - 실행 중이던 function마다 `OnEnd` 대신 `OnCancel`. 프레임은 끊는 즉시 반환
+  - 끊긴 사전 정의 함수: 정상 종료가 아니므로 malloc한 포인터가 숨은 시스템 전역으로 옮겨지지 않음. 끊기기 전에 이미 끝난 사전 정의 함수의 객체는 숨은 시스템 전역에 남음
+  - 쿨타임: 끊긴 스킬도 쿨타임 전체(「쿨타임」). 시작하기 전에 끊긴 스킬은 쿨타임 없음
+  - 목록에서 빠지는 때: 끊은 뒤 처음 끝나는 tick. `TaskEnded`와 누수 표시도 그때
+    - tick 밖에서 끊음(몬스터 공격, 슬롯 입력 등에서 `InterruptAll`·`Cancel`): 다음 tick이 끝날 때. 그사이 `State`는 이미 `Ended`
+    - tick 안에서 끊음(Overflow 재시작): 그 tick이 끝날 때
+- 실제 언어와의 관계
+  - Overflow: C의 stack overflow는 프로세스를 죽이고, 운영체제가 그 프로세스의 메모리를 모두 회수함. 그래서 heap과 전역 변수까지 처음으로
+  - 재부팅 시간(디버프): 아직 없음. 재부팅 이슈에서 `RestartProcess`에 더함
+- 슬롯 취소 `Cancel`
+  - 찾는 기준: 슬롯에서 넘긴 원본(`Cast`에 넘긴 객체). 같은 스킬이 다른 function 안에서 실행 중이어도 끊지 않음
+  - `IsRunning`과의 차이: 스킬 슬롯은 같은 스킬이 다른 function 안에서 실행 중이기만 해도 `IsRunning`이 `true`. 그때 `Cancel`은 `false`. 부르는 쪽은 `Cancel`이 돌려준 값을 보고 처리
+  - 끊은 작업이 비동기 호출로 만든 작업: 따로 시전된 작업이므로 끊지 않음
+  - 언제 부를지(실행 중인 슬롯을 다시 누름, 연타 대책 등): `SlotCaster`가 정함. 아래 「맞춘 결과」
+- 끝나지 않는 작업(`while (true) { }` 등): 제한 없음. 실제 C와 같음
+  - 이유: 공격 속도는 스킬별 쿨타임이 막음(#122). 끝나지 않는 작업은 stack을 계속 차지하고, 실행 중단 공격·재시작에 끊김
+  - 플레이어가 끝내는 방법: 슬롯 취소
 
 ### 쿨타임 (#122)
 - 붙는 곳: 스킬(`PredefinedFunction`의 고정 ID)마다 하나. 슬롯 직접 시전, function 안의 호출, 비동기 시전이 같은 쿨타임을 씀
@@ -358,6 +388,7 @@
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. |
 | `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
+| `Cancel(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 원본으로 시전한 `FunctionTask`만 `Cancelled`로 끊는다(진행 중, 다음 tick을 기다리는 것 모두). 끊은 작업이 있으면 `true`, 없으면 `false`. 플레이어가 그 슬롯의 작업을 취소할 때 부른다. 스킬 슬롯은 같은 스킬이 다른 function 안에서 실행 중이어도 끊지 않으므로, `IsRunning`이 `true`여도 `false`일 수 있다. 처리는 「끊기는 경우」 (#143) |
 | `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화에서 부른다. (#139) |
 | `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장한 뒤 `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
 
@@ -370,7 +401,7 @@
 | `Caster` | - | `GameObject` | 이 `FunctionTask`를 cast한 캐릭터 |
 | `Name` | - | `string` | cast한 function의 이름 |
 | `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 함수가 입력을 기다리는 중, #131), `Ended`(끝남) |
-| `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(플레이어 책임인 실패. 실패 종류는 `Failure`), `InternalError`(개발자 책임. 플레이어의 에러로 보여 주지 않음) |
+| `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(플레이어 책임인 실패. 실패 종류는 `Failure`), `InternalError`(개발자 책임. 플레이어의 에러로 보여 주지 않음), `Cancelled`(플레이어가 슬롯 취소, #143). Overflow로 프로세스를 새로 시작하면 Overflow를 낸 작업은 `Failed`, 함께 끊긴 작업은 `Interrupted` |
 | `IsEnded` | - | `bool` | 끝났으면 `true` |
 | `IsFailed` | - | `bool` | `Failed`(플레이어 책임)로 끝났으면 `true`. `InternalError`는 `false`. 실패 여부는 `Failure`가 아니라 이 값으로 판단한다. |
 | `Failure` | - | `FunctionFailure?` | `Failed`로 끝났을 때 실패 종류. 그 밖에는 `null` |
@@ -415,7 +446,7 @@
 
 | 실패 종류 | 처리 | 분류 |
 | --- | --- | --- |
-| `Overflow` | `EndTask` | `RuntimeError` |
+| `Overflow` | `RestartProcess` (#143) | `RuntimeError` |
 | `SkillFailed` | `EndTask` | `RuntimeError` |
 | `UndeclaredVariable` | `EndTask` | `CompileError` |
 | `InvalidLiteral` | `EndTask` | `CompileError` |
@@ -584,3 +615,14 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
 - 정할 것 (#132)
   - 실행 중 실패한 블록을 편집 화면에 표시: 별도 이슈. 실행기가 실패한 `BlockData`와 함수 GUID를 작업에 담고, 편집 화면은 같은 `BlockData`를 든 블록 UI를 칠함
   - 범위 밖 index에서 C처럼 이웃 변수를 덮어쓰는 연출: 하려면 별도 이슈(프레임 안의 변수 위치 규칙이 새로 필요)
+- 김도훈과 정할 것 (#143)
+  - 실행 중단 효과(`AttackEffectType.Interrupt`)를 받는 곳: `MonsterAttackResolver`가 맞은 대상에서 `GetComponentInParent<FunctionExecutor>()`를 찾아 `InterruptAll()` 호출 (제안). 없으면(플레이어가 아님) 아무것도 하지 않음- 박진우와 정할 것 (#143)
+  - `SlotCaster`에서 `Cancel`을 부르는 때: 실행 중인 슬롯을 다시 누름(제안). 스킬 슬롯에도 넣을지, 연타로 자기 작업을 끊지 않게 하는 방법(사용자 정의 함수 슬롯만, 길게 누르기, 시전 직후 잠깐 무시 등)
+  - `Cancel`이 `false`일 때(그 슬롯에서 시전한 작업이 없음): 지금처럼 `Cast`
+  - 그 전까지: 플레이어가 자기 작업을 끊을 방법이 없음. 끝나지 않는 작업은 실행 중단 공격·재시작으로만 끝남
+  - 지금 `SlotCaster`가 `Cast`의 반환 값(`null`이면 시전 거부)을 보지 않고 「바로 시전」 로그와 `CastRequested`를 냄
+- 박진우와 확인할 것 (#143)
+  - `OnCancel`이 불리는 경우에 슬롯 취소와 Overflow 재시작이 더해짐. Overflow 재시작 때는 heap이 비워져 소환검도 `ObjectCleared`로 지워짐 ([predefined-function.md](predefined-function.md))
+- 임혜원과 확인할 것 (#143)
+  - 끝난 이유 `Cancelled`(플레이어 취소)와 `Interrupted`(실행 중단 공격, 재시작에 함께 끊김)를 나누어 보여 줄지
+  - Overflow 재시작: `Failed`(실패 종류 `Overflow`)로 끝난 작업 하나가 원인. 함께 끊긴 작업은 `Interrupted`

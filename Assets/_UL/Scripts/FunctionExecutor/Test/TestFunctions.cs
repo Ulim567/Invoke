@@ -146,6 +146,25 @@ public class TestLongMallocFunction : PredefinedFunction
 }
 
 /// <summary>
+/// 끊기 시험용 malloc 함수(#143). 1틱째에 TestSword를 힙 2칸에 올리고, 3000틱(약 1분) 동안 진행한다.<br/>
+/// 시험이 끊을 때까지 끝나지 않도록 길게 둔다. CancelTest, OverflowRestartTest가 쓴다.
+/// </summary>
+public class TestHoldMallocFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestHoldMallocFunction;
+	public override string Name => "TestHoldMallocFunction";
+	public override int TickCount => 3000;
+
+	protected override void OnTick(FunctionContext context, int tick)
+	{
+		if (tick != 1) return;
+
+		int pointer = Malloc(context, new TestSword(), 2);
+		Debug.Log($"{Name}: malloc → {pointer}");
+	}
+}
+
+/// <summary>
 /// 힙 테스트용 free 함수. 시작할 때 전역 포인터 목록의 첫 TestSword를 free한다. 1틱짜리다.<br/>
 /// 전역 포인터 목록에 TestSword가 없으면 NullPointer를 free해서 InvalidPointerError를 낸다.
 /// </summary>

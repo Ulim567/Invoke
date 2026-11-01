@@ -28,11 +28,6 @@ public abstract class PredefinedFunction : FunctionBlock
 	// OnStart, OnTick 도중에 바로 끝내면 그 뒤의 스킬 코드가 끝난 함수 위에서 계속 실행되기 때문
 	SkillError requestedError;
 	bool stopRequested;
-	// 함수 블록의 value slot에서 받은 파라미터 값. Parameters와 같은 순서이고, 비운 칸은 null이다
-	// 슬롯에서 바로 시전했거나 value slot이 없으면 배열 자체가 null이다
-	RuntimeValue?[] arguments;
-	// Return으로 정한 반환 값. 정하지 않았으면 null
-	RuntimeValue? returnValue;
 
 	/// <summary>
 	/// 고정 ID. 함수 데이터의 함수 블록이 이 값으로 이 함수를 가리킨다. 화면 이름(Name)과 따로 둔다.
@@ -50,27 +45,11 @@ public abstract class PredefinedFunction : FunctionBlock
 	public virtual int CodeSize => 1;
 
 	/// <summary>
-	/// 파라미터 이름과 타입. 편집 화면은 이 수와 순서대로 함수 블록의 value slot을 만든다.
-	/// </summary>
-	public virtual IReadOnlyList<ParameterData> Parameters => Array.Empty<ParameterData>();
-
-	/// <summary>
-	/// 돌려주는 값의 타입. Void가 아니면 함수 블록을 expression으로 쓸 수 있다.
-	/// </summary>
-	// 부를 때마다 새로 만든다. VariableType은 값을 바꿀 수 있어서, 하나를 함께 쓰면 한 곳에서 바꾼 값이 모든 함수에 퍼지기 때문
-	public virtual VariableType ReturnType => new VariableType(VariableTypeKind.Void);
-
-	/// <summary>
 	/// 실행 중에 쓰는 지역 변수 수. 스택 프레임 크기 계산에 쓴다.<br/>
 	/// 스킬마다 스택 부담을 조정하는 값이다. 무거운 스킬일수록 크게 정한다.
 	/// </summary>
 	// C 스킬의 내부는 블록이 아니라 C# 코드라서 실제 지역 변수를 셀 수 없다. 그래서 스킬 작성자가 직접 정한다
 	public virtual int LocalVariableCount => 0;
-
-	/// <summary>
-	/// 다른 함수 안에서 불렸을 때 기다리지 않으면 true. 이때는 새 작업으로 실행되고, 부른 쪽은 바로 다음 블록으로 넘어간다.
-	/// </summary>
-	public virtual bool IsAsync => false;
 
 	/// <summary>
 	/// 쿨타임(tick 수). 이 스킬이 끝난 순간부터 이만큼 지나야 같은 고정 ID의 스킬을 다시 쓸 수 있다.<br/>
@@ -91,18 +70,42 @@ public abstract class PredefinedFunction : FunctionBlock
 	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
 	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
 	// 넘겨받은 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 시작하지 않고 InvalidTarget으로 실패한다
-	// 함수 안의 호출(PredefinedCallBlock)과 슬롯 직접 시전(FunctionExecutor.Cast의 argument)이 모두 여기를 지난다. 스킬마다 검사 코드를 넣지 않기 위함
+	// 함수 안의 호출(CallBlock)과 슬롯 직접 시전(FunctionExecutor.Cast의 argument)이 모두 여기를 지난다. 스킬마다 검사 코드를 넣지 않기 위함
 	internal sealed override bool TryValidateStart(FunctionContext context)
 	{
-		if (arguments == null) return true;
+		if (Arguments == null) return true;
 
-		foreach (RuntimeValue? argument in arguments)
+		foreach (RuntimeValue? argument in Arguments)
 		{
 			if (!argument.HasValue || argument.Value.Type?.Kind != VariableTypeKind.Target || argument.Value.IsUsableTarget) continue;
 
 			context.RecordFailure(FunctionFailure.InvalidTarget);
 			return false;
 		}
+		return true;
+	}
+
+	// Return으로 정한 값을 반환 타입으로 맞춘다. 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다
+	// 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
+	// 함수 안의 호출, 슬롯 직접 시전, 비동기 시전이 모두 여기를 지난다. 같은 스킬이 놓인 자리에 따라 성공하거나 실패하지 않게 하기 위함
+	internal sealed override bool TryValidateEnd(FunctionContext context)
+	{
+		if (ReturnType.Kind == VariableTypeKind.Void) return true;
+
+		if (!ReturnValue.HasValue)
+		{
+			Debug.LogError($"{Name}: 반환 타입이 {ReturnType.Kind}인데 Return을 부르지 않고 끝났습니다.");
+			context.RecordInternalError();
+			return false;
+		}
+		if (!NumericRules.TryConvertForStore(ReturnValue.Value, ReturnType, context.Rule, out RuntimeValue converted))
+		{
+			Debug.LogError($"{Name}: Return으로 넘긴 {ReturnValue.Value.Type?.Kind} 값을 반환 타입 {ReturnType.Kind}(으)로 바꿀 수 없습니다.");
+			context.RecordInternalError();
+			return false;
+		}
+
+		ReturnValue = converted;
 		return true;
 	}
 
@@ -200,8 +203,8 @@ public abstract class PredefinedFunction : FunctionBlock
 		{
 			if (parameters[i].Name != name) continue;
 
-			if (arguments == null || i >= arguments.Length || arguments[i] == null) return false;
-			value = arguments[i].Value;
+			if (Arguments == null || i >= Arguments.Length || Arguments[i] == null) return false;
+			value = Arguments[i].Value;
 			return true;
 		}
 
@@ -229,20 +232,7 @@ public abstract class PredefinedFunction : FunctionBlock
 			return;
 		}
 
-		returnValue = value;
-	}
-
-	// 함수 호출 블록(PredefinedCallBlock)이 이 함수가 끝난 뒤 반환 값을 받아 간다
-	internal bool TryGetReturnValue(out RuntimeValue value)
-	{
-		value = returnValue ?? default;
-		return returnValue.HasValue;
-	}
-
-	// 함수 호출 블록(PredefinedCallBlock)이 value slot을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
-	internal void SetArguments(RuntimeValue?[] values)
-	{
-		arguments = values;
+		ReturnValue = value;
 	}
 
 	/// <summary>

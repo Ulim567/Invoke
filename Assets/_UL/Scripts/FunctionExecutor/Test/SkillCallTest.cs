@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 스킬 호출 블록(PredefinedCallBlock) 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
+/// 스킬 호출 블록(CallBlock) 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 메모리를 10칸 쓰므로 메모리 크기가 10칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다.<br/>
 /// 없는 고정 ID를 거부하는 테스트가 콘솔 오류 1개(「실행할 수 없습니다」)를 내는 것이 정상이다.
 /// </summary>
@@ -41,7 +41,7 @@ public class SkillCallTest : MonoBehaviour
 	{
 		FunctionData unknown = FunctionData.Create("Unknown");
 		unknown.Blocks.Add(BlockData.CallPredefinedFunction("test.no_such_function"));
-		Check("없는 고정 ID 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(unknown, out _));
+		Check("없는 고정 ID 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(unknown, System.Array.Empty<FunctionData>(), out _));
 	}
 
 	// 테스트 2: 실행. 끝나는 틱은 각 함수를 시전한 틱부터 센다
@@ -99,7 +99,7 @@ public class SkillCallTest : MonoBehaviour
 
 	FunctionTask CastConverted(FunctionData data)
 	{
-		if (FunctionDataConverter.TryConvert(data, out UserFunction converted)) return Cast(converted);
+		if (FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out UserFunction converted)) return Cast(converted);
 
 		Check($"{data.Name}: 변환 성공", false);
 		return null;

@@ -109,7 +109,7 @@ public class LogicTest : MonoBehaviour
 
 	static bool Convert(FunctionData data, out UserFunction converted)
 	{
-		bool ok = FunctionDataConverter.TryConvert(data, out converted);
+		bool ok = FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out converted);
 		if (!ok) Check($"{data.Name}: 변환 성공", false);
 		return ok;
 	}

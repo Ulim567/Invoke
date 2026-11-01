@@ -150,7 +150,7 @@ public class InputWaitTest : MonoBehaviour
 		data.Blocks.Add(BlockData.Declare(BugType, "b", SlotData.FromBlock(BlockData.CallPredefinedFunction(PredefinedFunctionIds.GetBug))));
 		data.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestTargetFunction, SlotData.FromVariable("b")));
 
-		if (FunctionDataConverter.TryConvert(data, out UserFunction function)) return executor.Cast(function);
+		if (FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out UserFunction function)) return executor.Cast(function);
 		return null;
 	}
 

@@ -72,11 +72,11 @@ internal class Statements
 			Block next = blocks[index];
 
 			// 원본을 그대로 넘겨도 Cast가 복사본을 만들어 실행한다
-			if (next is PredefinedFunction function && function.IsAsync)
+			if (next is FunctionBlock function && function.IsAsync)
 			{
 				// 같은 스킬이 실행 중이거나 쿨타임 중이면 쓸 수 있을 때까지 기다렸다가 요청한다
 				// 바로 요청하면 반복문이 틱마다 기다리는 작업을 하나씩 쌓아, 쿨타임이 끝날 때마다 차례로 실행되기 때문
-				if (!context.Cooldowns.CanUseSkill(function.Id)) return BlockResult.Running;
+				if (!function.CanStartNow(context)) return BlockResult.Running;
 
 				context.RequestAsyncCast(function);
 				index++;

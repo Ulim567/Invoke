@@ -36,14 +36,14 @@ public class ConditionalTest : MonoBehaviour
 	{
 		FunctionData elseFirst = FunctionData.Create("ElseFirst");
 		elseFirst.Blocks.Add(BlockData.Conditional(ConditionalBranch.Else));
-		Check("ElseFirst: if 없이 놓인 else는 변환 거부", !FunctionDataConverter.TryConvert(elseFirst, out _));
+		Check("ElseFirst: if 없이 놓인 else는 변환 거부", !FunctionDataConverter.TryConvert(elseFirst, System.Array.Empty<FunctionData>(), out _));
 
 		// if (true) { } else { } else if (true) { } → else 뒤의 else if는 앞에 if가 없는 것으로 본다
 		FunctionData afterElse = FunctionData.Create("ElseIfAfterElse");
 		afterElse.Blocks.Add(BlockData.Conditional(ConditionalBranch.If, SlotData.FromLiteral(Bool, "true")));
 		afterElse.Blocks.Add(BlockData.Conditional(ConditionalBranch.Else));
 		afterElse.Blocks.Add(BlockData.Conditional(ConditionalBranch.ElseIf, SlotData.FromLiteral(Bool, "true")));
-		Check("ElseIfAfterElse: else 뒤의 else if는 변환 거부", !FunctionDataConverter.TryConvert(afterElse, out _));
+		Check("ElseIfAfterElse: else 뒤의 else if는 변환 거부", !FunctionDataConverter.TryConvert(afterElse, System.Array.Empty<FunctionData>(), out _));
 	}
 
 	// 테스트 2: 처음 묶음. 블록 하나 = 1틱, 실행이 닿은 갈래마다 1틱
@@ -124,7 +124,7 @@ public class ConditionalTest : MonoBehaviour
 
 	static bool Convert(FunctionData data, out UserFunction converted)
 	{
-		bool ok = FunctionDataConverter.TryConvert(data, out converted);
+		bool ok = FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out converted);
 		if (!ok) Check($"{data.Name}: 변환 성공", false);
 		return ok;
 	}

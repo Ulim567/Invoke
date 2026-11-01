@@ -3,7 +3,7 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// 값을 돌려주는 함수 호출 블록(PredefinedCallBlock)과 스킬의 Return 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
+/// 값을 돌려주는 함수 호출 블록(CallBlock)과 스킬의 Return 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 콘솔 오류 3개가 나는 것이 정상이다: 반환 값이 없는 함수를 expression으로 쓴 함수의 변환 거부 1개, TestMissingReturnFunction의 「Return을 부르지 않고 끝났습니다」 2개(value slot, statement).<br/>
 /// 다른 테스트 컴포넌트와 함께 붙이지 않는다.
 /// </summary>
@@ -35,7 +35,7 @@ public class ReturnValueTest : MonoBehaviour
 		// int a = TestFunctionA(); → TestFunctionA는 값을 돌려주지 않으므로 거부
 		FunctionData voidValue = FunctionData.Create("VoidValue");
 		voidValue.Blocks.Add(BlockData.Declare(Int, "a", SlotData.FromBlock(BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestFunctionA))));
-		Check("반환 값이 없는 함수를 expression으로 쓰면 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(voidValue, out _));
+		Check("반환 값이 없는 함수를 expression으로 쓰면 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(voidValue, System.Array.Empty<FunctionData>(), out _));
 	}
 
 	// 테스트 2: 실행. 끝나는 틱은 각 함수를 시전한 틱부터 센다
@@ -60,7 +60,7 @@ public class ReturnValueTest : MonoBehaviour
 		returned.Blocks.Add(BlockData.Declare(Int, "n", SlotData.FromBlock(
 			BlockData.CallPredefinedFunction(PredefinedFunctionIds.TestReturnFunction, SlotData.FromLiteral(Int, "4")))));
 		FunctionTask returnedTask = null;
-		if (FunctionDataConverter.TryConvert(returned, out UserFunction converted))
+		if (FunctionDataConverter.TryConvert(returned, System.Array.Empty<FunctionData>(), out UserFunction converted))
 		{
 			Block read = new TestReadBlock(new VariableValue("n"), v => Check("Returned: 끝났을 때 n 8", v.ToString() == "8", $"실제 {v}"));
 			returnedTask = Cast(new UserFunction(converted.Name, converted.FrameSize, converted.Blocks.Append(read).ToArray()));
@@ -97,7 +97,7 @@ public class ReturnValueTest : MonoBehaviour
 
 	FunctionTask CastConverted(FunctionData data)
 	{
-		if (FunctionDataConverter.TryConvert(data, out UserFunction converted)) return Cast(converted);
+		if (FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out UserFunction converted)) return Cast(converted);
 
 		Check($"{data.Name}: 변환 성공", false);
 		return null;

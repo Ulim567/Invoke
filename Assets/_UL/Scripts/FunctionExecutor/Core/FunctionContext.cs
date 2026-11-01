@@ -62,6 +62,22 @@ public class FunctionContext
 		Caster = caster;
 	}
 
+	// return 블록이 계산한 값(value slot의 복사본). 값을 비운 return;이거나 return을 만나지 않았으면 null이다
+	// 작업마다 칸 하나로 충분하다. return 블록이 돌려준 Returned는 같은 틱 안에서 가장 안쪽 사용자 정의 함수까지 바로 올라가고, 그 사이에 다른 블록이 실행되지 않기 때문
+	ValueBlock returnValue;
+
+	// return 블록이 Returned를 돌려주기 직전에 값을 기록한다. 값을 비운 return;이면 null을 넘긴다
+	// 값만이 아니라 value slot을 넘기는 이유: 직접 입력한 0을 포인터 반환 타입에서 NULL로 볼지(ZeroIsNull) 받는 쪽이 판단하기 때문
+	internal void RecordReturnValue(ValueBlock value) => returnValue = value;
+
+	// return 블록이 기록한 값을 꺼내고 지운다. Returned를 받은 사용자 정의 함수가 부른다
+	internal ValueBlock TakeReturnValue()
+	{
+		ValueBlock taken = returnValue;
+		returnValue = null;
+		return taken;
+	}
+
 	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
 	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
 	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);

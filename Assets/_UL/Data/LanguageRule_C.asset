@@ -43,6 +43,9 @@ MonoBehaviour:
   - failure: 9
     handling: 0
     category: 1
+  - failure: 10
+    handling: 0
+    category: 0
   defaultInt: 0
   defaultFloat: 0
   defaultBool: 0

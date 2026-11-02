@@ -7,9 +7,9 @@
 - 출혈의 지속 데미지를 준다.
 - 표식은 `DamageCalculator`가 읽어 데미지 +100%를 붙인다 (damage-calculation.md).
 - 다른 시스템이 대상이 어떤 상태인지 읽을 수 있게 한다.
+- 상태 이상 아이콘을 대상 머리 위에 띄운다 (`StatusIconView`, 아래).
 - 하지 않는 일
   - 기절·이속 감소·실명에 대한 몬스터 반응(AI 정지, 이동 속도, 공격 빗나감): 김도훈 「몬스터가 상태 이상에 반응하고 죽으면 드롭하기」. 이 컴포넌트의 값을 읽기만 하면 된다.
-  - 상태 이상 표시: 「상태 이상 걸린 대상 위에 표시하기」 이슈. `StatusApplied`, `StatusRemoved`를 받는다.
   - 어떤 스킬이 어떤 상태를 거는지: 각 스킬 이슈 (아래 표)
   - 네트워크 동기화: 「데미지·상태 이상을 서버에서 판정하기」 이슈
 
@@ -56,15 +56,33 @@
 | `StatusRemoved` (event) | `StatusType` | - | [표시] 풀렸을 때 |
 | `BleedTicked` (event) | `int` 데미지 | - | [로직] 출혈 데미지를 줬을 때 |
 
+### `StatusIconView` (상태 이상 아이콘 표시)
+
+몬스터 프리팹 최상위 오브젝트(`StatusEffects`와 같은 곳)에 붙인다. `StatusEffects`가 없으면 자동으로 붙는다 (RequireComponent).
+
+- `StatusApplied` / `StatusRemoved`를 받아 걸린 상태마다 아이콘 하나를 띄운다. 값은 바꾸지 않는다 (표시 전용).
+- 아이콘은 몬스터의 자식으로 만들어져 몬스터를 따라다니고, 몬스터가 사라지면 같이 사라진다.
+- 위치: 콜라이더 윗변에서 `heightAboveTop`(0.6) 위. 여러 개면 걸린 순서대로 `spacing`(1.1) 간격으로 가로로 놓고, 몸 가운데에 맞춰 정렬한다.
+- 같은 상태를 다시 걸어도 아이콘은 늘지 않는다. 풀리면 그 아이콘만 사라지고 남은 것이 다시 가운데 정렬된다.
+- 아이콘 프리팹: `Assets/_JW/Resources/StatusIcon.prefab` (SpriteRenderer, Sorting Layer `WorldUI`). 인스펙터 `iconPrefab`이 비어 있으면 이걸 불러온다.
+- 그림: 임혜원 #114 `StatusIcons_0..4`를 `StatusType` 순서(출혈, 표식, 기절, 실명, 이속 감소)로 쓴다. 그림을 바꾸려면 StatusIcon 프리팹의 `sprites`만 바꾸면 된다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `ShownStatuses` | - | `IReadOnlyList<StatusType>` | 지금 띄운 아이콘들 (왼쪽부터) |
+| `TryGetIconPosition(StatusType type, out Vector3 position)` | 상태 | `bool` | 그 아이콘의 월드 위치. 없으면 `false` (테스트용) |
+
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
+| `StatusIconSimTest` | Test_JW의 StatusIconTest. 켜고 Play (Host 필요 없음, 약 4초). 몬스터에 `StatusEffects`/`StatusIconView`가 없으면 테스트 동안 붙인다. 머리 위 1개, 알맞은 그림, 3개 순서·가운데 정렬, 다시 걸어도 3개, 기절이 풀리면 2개로 다시 정렬, 몬스터가 죽으면 모두 사라짐을 확인. 「[StatusIconTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `StatusIconPlayTest` | (임시) Test_JW의 StatusPlayTest. 상태 이상 거는 스킬이 아직 없어서 만든 직접 해 보는 테스트. 켜고 Play → Host, Q(찌르기)로 몬스터를 맞힐 때마다 출혈 → 표식 → 기절 → 실명 → 이속 감소를 하나씩 8초 동안 건다. 상태 이상 스킬이 생기면 없앤다. 평소에는 꺼 둔다. |
 | `StatusEffectsTest` | Test_JW의 StatusTest. 켜고 Play (Host 필요 없음, 약 6초). 몬스터에 `StatusEffects`가 없으면 테스트 동안 붙인다. 출혈 총 데미지, 표식 2배, 기절·이속 감소·실명의 지속과 풀림, 다시 걸면 시간 새로 시작을 확인. 「[StatusTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 김도훈과 정할 것
   - 기절·이속 감소·실명 반응은 형 이슈에서 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 처리
-  - 몬스터 프리팹(Leak 등)에 `StatusEffects` 붙이기 (형 폴더)
+  - 몬스터 프리팹(Leak, Loop 등)에 `StatusEffects`, `StatusIconView` 붙이기 (형 폴더)
 - 정한 것
   - 같은 상태를 다시 걸면 지속 시간만 새로 시작 (겹치지 않음)
 - 정해야 할 것 (기획)

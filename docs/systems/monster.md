@@ -248,6 +248,6 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
   - 투사체 그림 `Loop_Bullet`은 `MonsterBullet` 프리팹에 임혜원이 붙인다
   - 보스 Gateway·웜 그림과 애니메이션은 `_HW/Boss`(#126). 보스 프리팹도 김도훈이 판정을 먼저 만들고, 임혜원이 그림·Animator를 붙인다
   - Gateway 공격 타이밍: Throw 8번째 장면(0.58초)에 패킷이 손을 떠나고(`Fire Delay` 0.58), Slam 6번째 장면(0.42초)에 내려친다(`Slam Delay` 0.42). 두 모션 모두 9장면 0.75초
+  - 패킷 공격 그림은 `_HW/Boss/Attack`(#146). `Packet_Throw` 2×2칸, `Packet_Fall` 1.5칸, `Packet_Shadow` 가로 2칸, 4장면 12fps 반복. 김도훈이 PacketThrow·FallingPacket 프리팹에 첫 장면과 컨트롤러를 붙였다(Scale 1). PacketThrow는 `ProjectileFacing`(임혜원)으로 왼쪽으로 날 때 flipX
 - 임혜원과 정해야 할 것
-  - 패킷 공격 그림(`Packet_Throw` 2×2칸, `Packet_Fall` 1.5칸, `Packet_Shadow` 가로 2칸, 4장면 12fps)을 임혜원이 PacketThrow·FallingPacket 프리팹에 붙인다. 임시 그림 크기용 Scale은 1로 돌린다. PacketThrow는 `ProjectileFacing`으로 왼쪽일 때 flipX
-  - Gateway Slam 모션은 `GatewayAI.SlamEffectPlayed`, Throw는 `ProjectileAttack.FireEffectPlayed`를 받는다
+  - Gateway 프리팹의 그림·Animator. Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`를 받는다

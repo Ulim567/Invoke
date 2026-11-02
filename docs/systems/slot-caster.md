@@ -60,6 +60,16 @@
 - 고르는 중에 경직·사망으로 취소되면 대상 없음을 넣는다. 기다리던 작업이 끝나면(취소, 실행 중단 공격) 고르기도 끝낸다.
 - 대상 없음이 들어가면 그 값을 받은 스킬이 `InvalidTarget`으로 실패한다 (function-executor.md).
 
+### 급소공략 미니게임 (#161)
+- 입력 순서: 급소공략 슬롯을 누른 채 ← →로 대상 고르기 → Space(`MarkPressed`)로 미니게임 시작 → Space로 바늘 멈춤(판정) → 슬롯을 떼면 시전.
+- 미니게임을 시작하면 대상이 고정된다 (← → 무시).
+- 결과는 `VitalStrikeMinigame`에 남고, 급소공략이 시작할 때 가져간다 (c-skills.md 「급소공략」).
+  - Space를 안 누르고 떼면 미니게임 없이(기본 데미지) 시전
+  - 바늘이 도는 중에 떼면 `Miss`로 시전
+  - 대상이 없어 시전하지 않거나, 고르기가 취소되면(경직·사망) 결과를 지운다. 새로 대상 고르기를 시작해도 지운다.
+- GetBug 입력으로 고를 때도 같다. 블록 함수 `VitalStrike(GetBug())`는 GetBug로 고르는 동안 미니게임을 하고, 그 결과로 찌른다.
+- 여러 명 선택 스킬의 Space(찍기)와는 겹치지 않는다 (급소공략은 단일).
+
 ### 취소 키 (#159)
 - `PlayerInputReader.CancelPressed`(C)가 들어오면, 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 원본으로 `FunctionExecutor.Cancel`을 부른다.
 - 실행기의 `Cancel`은 원본 단위지만, 같은 원본은 실행 중이면 다시 시전되지 않으므로(쿨타임으로 거부) 한 슬롯의 작업은 늘 하나다. 그래서 C 한 번에 작업 하나만 끊긴다.
@@ -68,7 +78,7 @@
 ## 다른 시스템이 쓰는 것
 
 플레이어 프리팹에 `SlotCaster`가 붙어 있다. `GetComponent<SlotCaster>()`로 가져온다.
-- 같은 오브젝트에 `PlayerInputReader`, `FunctionExecutor`(+ `ProcessMemory`), `SlotLoadout`이 있어야 한다.
+- 같은 오브젝트에 `PlayerInputReader`, `FunctionExecutor`(+ `ProcessMemory`), `SlotLoadout`이 있어야 한다. `VitalStrikeMinigame`이 있으면 급소공략 미니게임을 한다.
 
 ### `SlotCaster`
 

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // 찌르기 계열 스킬. 수치는 SkillTable 표, 필요 조건 검사는 DataDrivenSkill이 맡는다.
-// 검 찌르기·집중찌르기·꼬챙이는 #152에서 채웠다 (ThrustSkill). 나머지 효과는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
+// 검 찌르기·집중찌르기·꼬챙이는 #152, 급소공략은 #161에서 채웠다 (ThrustSkill). 나머지 효과는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
 
 /// <summary>
 /// 손에 든 검으로 대상을 찌르는 스킬의 기반 (#152). 검 찌르기, 검 집중찌르기, 꼬챙이가 상속한다.
@@ -80,6 +80,11 @@ public abstract class ThrustSkill : DataDrivenSkill
 	/// </summary>
 	protected virtual float BonusRate(Monster monster) => 0f;
 
+	/// <summary>
+	/// 대상마다 데미지를 준 뒤 불린다. 상태 이상을 거는 스킬(급소공략)이 쓴다. 기본은 아무것도 안 함.
+	/// </summary>
+	protected virtual void OnHitMonster(FunctionContext task, Monster monster, DamageResult result) { }
+
 	void Strike(FunctionContext task)
 	{
 		GameObject caster = task.Caster;
@@ -98,6 +103,7 @@ public abstract class ThrustSkill : DataDrivenSkill
 			DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 			Vector2 point = ClosestPoint(monster, caster.transform.position);
 			monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+			OnHitMonster(task, monster, result);
 			effects?.RaiseHit(Id, monster.gameObject, point, result);
 		}
 	}
@@ -179,10 +185,36 @@ public class CFocusedThrust : ThrustSkill
 	}
 }
 
-/// <summary>급소공략. 미니게임 성공 시 3.0배, 눈은 실명·발목은 이속 감소 (단일)</summary>
-public class CVitalStrike : DataDrivenSkill
+/// <summary>
+/// 급소공략 (#161). 대상을 찌르기와 같게 찌르고, 미니게임 결과에 따라 데미지와 상태 이상이 붙는다 (단일).
+/// <para>
+/// - 시작할 때 시전자의 VitalStrikeMinigame.TakeResult()로 결과를 가져간다. 미니게임은 슬롯 입력(SlotCaster)이 대상을 고르는 동안 한다.<br/>
+/// - 눈 / 발목: +200% (DamageBonus.VitalStrikeMinigame, 총 3.0배). 눈은 실명, 발목은 이속 감소를 건다 (StatusEffects 기본 지속 시간).<br/>
+/// - 실패, 미니게임 안 함: 기본 데미지 (스킬 표 배율). 페널티 없음.
+/// </para>
+/// </summary>
+public class CVitalStrike : ThrustSkill
 {
 	public override string Id => PredefinedFunctionIds.VitalStrike;
+
+	VitalStrikeResult minigameResult;
+
+	protected override void OnSkillStart(FunctionContext task)
+	{
+		VitalStrikeMinigame minigame = task.Caster.GetComponent<VitalStrikeMinigame>();
+		minigameResult = minigame != null ? minigame.TakeResult() : VitalStrikeResult.None;
+		base.OnSkillStart(task);
+	}
+
+	bool Succeeded => minigameResult == VitalStrikeResult.Eye || minigameResult == VitalStrikeResult.Ankle;
+
+	protected override float BonusRate(Monster monster) => Succeeded ? DamageBonus.VitalStrikeMinigame : 0f;
+
+	protected override void OnHitMonster(FunctionContext task, Monster monster, DamageResult result)
+	{
+		if (minigameResult == VitalStrikeResult.Eye) StatusEffects.TryApply(monster.gameObject, StatusType.Blind);
+		else if (minigameResult == VitalStrikeResult.Ankle) StatusEffects.TryApply(monster.gameObject, StatusType.Slow);
+	}
 }
 
 /// <summary>

@@ -206,6 +206,27 @@ public class InvokeNetworkManager : NetworkManager
 		conn.Send(new SceneMessage { sceneName = scene.name, sceneOperation = SceneOperation.LoadAdditive });
 	}
 
+	// 장소 사이를 이동한 플레이어가 도착할 위치를 찾는다.
+	// 떠나온 장소(fromPlace)가 같은 ArrivalPoint가 있으면 그 위치, 없으면 씬의 NetworkStartPosition 위치
+	static Vector3 FindArrivalPosition(Scene scene, string fromPlace)
+	{
+		bool hasArrivalPoint = false;
+		foreach (GameObject root in scene.GetRootGameObjects())
+		{
+			foreach (ArrivalPoint point in root.GetComponentsInChildren<ArrivalPoint>())
+			{
+				if (point.FromPlace == fromPlace) return point.transform.position;
+				hasArrivalPoint = true;
+			}
+		}
+
+		// 사냥터처럼 ArrivalPoint를 두지 않은 씬은 시작 위치가 정상이다.
+		// ArrivalPoint가 있는데 맞는 것이 없으면 fromPlace 오타일 수 있으므로 알린다
+		if (hasArrivalPoint)
+			Debug.LogWarning($"[InvokeNetworkManager] {scene.name} 씬에 {fromPlace}에서 온 플레이어의 ArrivalPoint가 없어서 시작 위치에 도착시킵니다.");
+		return FindStartPosition(scene);
+	}
+
 	// 씬 안의 NetworkStartPosition 위치를 찾는다.
 	// Mirror의 GetStartPosition()은 불러온 모든 씬의 시작 위치를 섞어서 고르므로 쓰지 않는다
 	static Vector3 FindStartPosition(Scene scene)

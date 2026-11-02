@@ -29,6 +29,11 @@ using UnityEngine;
 /// - 내 작업이 입력 함수(GetBug)를 만나면 내 화면에 InputRequested(작업 번호, 입력 함수 ID, 슬롯)가 불린다.<br/>
 /// - 고른 몬스터는 ProvideTarget(작업 번호, 몬스터)로 서버에 보낸다. 고를 몬스터가 없으면 null(대상 없음). 고르는 방식은 받는 쪽(SlotCaster)이 정한다.
 /// </para>
+/// <para>
+/// 메모리·쿨타임 (서버 → 내 화면)<br/>
+/// - 서버의 메모리 값이 내 화면의 ProcessMemory로 온다. 메모리 게이지는 지금처럼 ProcessMemory를 읽는다. 내 메모리는 나만 받는다(Sync Mode: Owner).<br/>
+/// - 스킬의 쿨타임이 시작되면 끝나는 시각이 내 화면의 실행기로 온다. 쿨타임 UI는 지금처럼 FunctionExecutor.GetRemainingCooldownTicks를 읽는다.
+/// </para>
 /// </summary>
 // FunctionExecutor와 따로 두는 이유: 실행기는 Mirror 없이 일반 코드로 두고, 네트워크는 이 컴포넌트에만 모으기 위함(CLAUDE.md 코드 작성 규칙)
 [RequireComponent(typeof(FunctionExecutor), typeof(SlotLoadout))]
@@ -36,6 +41,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 {
 	FunctionExecutor executor;
 	SlotLoadout loadout;
+	ProcessMemory memory;
 
 	// [서버] 슬롯마다 시전할 원본. ApplyPlayerData만 바꾼다. 빈 슬롯이나 실행할 수 없는 함수는 null
 	// 같은 슬롯은 같은 원본을 계속 써야 쿨타임, 실행 중 검사, 취소가 이어진다(function-executor.md)
@@ -62,6 +68,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// 서버가 이 플레이어의 데이터를 처음 다 받아 슬롯 원본을 만들었는지. 서버만 바꾼다
 	[SyncVar(hook = nameof(OnDataReadyChanged))]
 	bool dataReady;
+
+	// 서버의 메모리 값. 서버가 매 프레임 ProcessMemory에서 옮기고, 바뀐 값만 Mirror가 보낸다
+	// 내 메모리는 나만 보므로, 이 컴포넌트의 Sync Mode는 Owner로 둔다(프리팹 Inspector). Free는 받는 화면이 이 4개로 계산한다
+	[SyncVar(hook = nameof(OnMemoryChanged))] int memoryCapacity;
+	[SyncVar(hook = nameof(OnMemoryChanged))] int memoryDataUsed;
+	[SyncVar(hook = nameof(OnMemoryChanged))] int memoryStackUsed;
+	[SyncVar(hook = nameof(OnMemoryChanged))] int memoryHeapUsed;
 
 	/// <summary>
 	/// 서버가 이 플레이어의 함수 데이터(슬롯, 함수, 전역 변수)를 처음 다 받아 시전할 준비가 되었으면 true. 로딩 화면이 기다린다.
@@ -109,6 +122,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		executor = GetComponent<FunctionExecutor>();
 		loadout = GetComponent<SlotLoadout>();
+		memory = GetComponent<ProcessMemory>();
 	}
 
 	// 실행기의 event는 실행기가 돌고 있는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불린다. 받아서 화면들에 전한다
@@ -118,6 +132,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded += OnExecutorTaskEnded;
 		executor.CastRejected += OnExecutorCastRejected;
 		executor.InputRequested += OnExecutorInputRequested;
+		executor.CooldownStarted += OnExecutorCooldownStarted;
 	}
 
 	void OnDisable()
@@ -126,6 +141,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded -= OnExecutorTaskEnded;
 		executor.CastRejected -= OnExecutorCastRejected;
 		executor.InputRequested -= OnExecutorInputRequested;
+		executor.CooldownStarted -= OnExecutorCooldownStarted;
 	}
 
 	public override void OnStartClient()
@@ -134,7 +150,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 		// 클라이언트로만 접속했으면 이 컴퓨터의 실행기는 함수를 실행하지 않는다. 값은 서버 한 곳에서만 바꾸기 위함
 		// 호스트는 이 오브젝트가 곧 서버의 것이므로 그대로 실행한다
-		if (!isServer) executor.TickEnabled = false;
+		if (isServer) return;
+		executor.TickEnabled = false;
+		// 처음 받은 메모리 값도 보여 준다. 그 뒤로는 값이 바뀔 때마다 OnMemoryChanged가 보여 준다
+		ApplyDisplayedMemory();
 	}
 
 	public override void OnStartLocalPlayer()
@@ -161,6 +180,27 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 		resendRequested = false;
 		SendPlayerData(false);
+	}
+
+	// [서버] 메모리 값을 SyncVar로 옮긴다. 같은 값을 넣으면 Mirror가 보내지 않으므로 매 프레임 옮겨도 된다
+	void LateUpdate()
+	{
+		if (!isServer) return;
+
+		memoryCapacity = memory.Capacity;
+		memoryDataUsed = memory.DataUsed;
+		memoryStackUsed = memory.StackUsed;
+		memoryHeapUsed = memory.HeapUsed;
+	}
+
+	// [클라이언트] 서버의 메모리 값이 바뀌었다. 네 값 중 무엇이 바뀌었든 네 값을 모두 다시 넣는다
+	void OnMemoryChanged(int oldValue, int newValue) => ApplyDisplayedMemory();
+
+	// 호스트는 서버와 같은 ProcessMemory를 쓰므로 넣지 않는다. 넣으면 자기 값 대신 한 프레임 늦은 값으로 답하게 되기 때문
+	void ApplyDisplayedMemory()
+	{
+		if (isServer) return;
+		memory.SetDisplayedValues(memoryCapacity, memoryDataUsed, memoryStackUsed, memoryHeapUsed);
 	}
 
 	// [내 화면] 이 컴퓨터에 저장한 데이터를 서버로 보낸다. 서버는 마지막에 오는 슬롯을 받을 때 앞서 받은 것과 함께 적용한다
@@ -451,4 +491,21 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	[TargetRpc]
 	void TargetInputRequested(int taskId, string inputFunctionId, int slot) => InputRequested?.Invoke(taskId, inputFunctionId, slot);
+
+	// [서버] 스킬의 쿨타임이 시작되면, 끝나는 시각을 시전한 사람에게 알린다
+	// 틱 수가 아니라 네트워크 시계(NetworkTime) 기준 시각으로 보낸다. 메시지가 늦게 도착해도 남은 시간이 서버와 맞게 하기 위함
+	void OnExecutorCooldownStarted(string skillId, int ticks)
+	{
+		if (IsOffline || !isServer) return;
+		TargetCooldownStarted(skillId, NetworkTime.time + ticks * executor.SecondsPerTick);
+	}
+
+	// [클라이언트] 네트워크 시계 기준 끝나는 시각을 이 컴퓨터의 Time.time 기준으로 바꿔 실행기에 넣는다
+	// 호스트는 실행기가 직접 쿨타임을 세므로 넣지 않는다
+	[TargetRpc]
+	void TargetCooldownStarted(string skillId, double endNetworkTime)
+	{
+		if (isServer) return;
+		executor.SetDisplayedCooldown(skillId, Time.time + (float)(endNetworkTime - NetworkTime.time));
+	}
 }

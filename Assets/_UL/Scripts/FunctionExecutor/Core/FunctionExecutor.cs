@@ -40,6 +40,9 @@ public class FunctionExecutor : MonoBehaviour
 	int lastTaskId;
 	// 초기화 때 읽을 전역 변수 파일. null이면 이 컴퓨터의 파일(GlobalVariablesStorage)을 읽는다
 	GlobalVariablesData globalVariablesFile;
+	// 틱을 멈춘 실행기(클라이언트 화면)가 쿨타임을 보여 줄 때 쓰는 값. 스킬 고정 ID → 쿨타임이 끝나는 시각(Time.time)
+	// 그 화면의 실행기는 스킬을 실행하지 않아 쿨타임 기록이 비어 있으므로, 서버가 알려 준 시각을 받아 둔다(SetDisplayedCooldown)
+	readonly Dictionary<string, float> displayedCooldownEndTimes = new Dictionary<string, float>();
 	ProcessMemory memory;
 	CooldownTracker cooldowns;
 	LanguageRule language;
@@ -83,6 +86,12 @@ public class FunctionExecutor : MonoBehaviour
 	/// 이 event 안에서 바로 ProvideInput을 불러도 된다(예: 슬롯 키가 눌려 있지 않아 기본값으로 진행).
 	/// </summary>
 	public event Action<FunctionTask, PredefinedFunction> InputRequested;
+
+	/// <summary>
+	/// 스킬의 쿨타임이 시작되거나 늘어났을 때 불린다 (스킬 고정 ID, 지금부터 남은 쿨타임 틱 수). 쿨타임은 스킬이 끝나는 틱에 시작한다.<br/>
+	/// 멀티플레이에서 서버가 쿨타임을 시전한 사람의 화면에 알릴 때 쓴다.
+	/// </summary>
+	public event Action<string, int> CooldownStarted;
 
 	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
@@ -145,7 +154,22 @@ public class FunctionExecutor : MonoBehaviour
 	/// 스킬이면 그 스킬(고정 ID)의 쿨타임이다. 사용자 정의 함수는 자기 쿨타임이 없으므로 0이다.
 	/// </summary>
 	// 쿨타임은 CooldownTracker가 가진다. 다른 시스템이 쓰는 접점을 바꾸지 않기 위해 실행기에도 남긴다
-	public int GetRemainingCooldownTicks(FunctionBlock function) => cooldowns.GetRemainingTicks(function);
+	// 틱을 멈춘 실행기(클라이언트 화면)는 서버가 알려 준 끝나는 시각으로 답한다. 쿨타임 UI가 서버·클라이언트를 나누지 않고 이 함수 하나만 읽게 하기 위함
+	public int GetRemainingCooldownTicks(FunctionBlock function)
+	{
+		if (TickEnabled) return cooldowns.GetRemainingTicks(function);
+		if (!(function is PredefinedFunction skill) || !displayedCooldownEndTimes.TryGetValue(skill.Id, out float endTime)) return 0;
+		return Mathf.Max(0, Mathf.CeilToInt((endTime - Time.time) / SecondsPerTick));
+	}
+
+	/// <summary>
+	/// 틱을 멈춘 실행기(클라이언트 화면)에 스킬의 쿨타임이 끝나는 시각(Time.time 기준)을 받아 둔다. 이 뒤로 GetRemainingCooldownTicks가 이 시각으로 답한다.<br/>
+	/// 멀티플레이에서 FunctionExecutorNetwork만 부른다.
+	/// </summary>
+	public void SetDisplayedCooldown(string skillId, float endTime)
+	{
+		displayedCooldownEndTimes[skillId] = endTime;
+	}
 
 	/// <summary>
 	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.<br/>
@@ -298,6 +322,7 @@ public class FunctionExecutor : MonoBehaviour
 			language = gameObject.AddComponent<LanguageRule>();
 		}
 		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick);
+		cooldowns.CooldownStarted += (skillId, endTick) => CooldownStarted?.Invoke(skillId, endTick - CurrentTick);
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));
 		castConditions.Add(new MemoryCondition(memory));

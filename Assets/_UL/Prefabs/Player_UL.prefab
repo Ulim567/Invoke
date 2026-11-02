@@ -168,5 +168,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorNetwork
   syncDirection: 0
-  syncMode: 0
+  syncMode: 1
   syncInterval: 0

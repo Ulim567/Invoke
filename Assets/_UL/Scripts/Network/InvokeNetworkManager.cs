@@ -302,6 +302,9 @@ public class InvokeNetworkManager : NetworkManager
 
 		// Player는 클라이언트가 위치를 정하므로(Client To Server) 서버에서 위치만 바꾸면 클라이언트가 덮어쓴다
 		// ServerTeleport는 서버 쪽 위치를 바꾸고 클라이언트에도 순간이동(RpcTeleport)을 보낸다
+		// 씬 메시지 뒤에 보내는 이유: 클라이언트는 새 씬을 다 로드한 뒤에 teleport를 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아온다
+		// 한계: 로드하는 동안 클라이언트의 플레이어는 밟을 땅이 없어 떨어지고, 그 위치가 서버로 전송된다.
+		// 플레이어 움직임을 잠그는 함수를 박진우에게 요청함 (place-scenes.md 「맞춘 결과」). 함수가 생기면 이동하는 동안 잠근다
 		Vector3 position = FindArrivalPosition(target, previous.name);
 		player.GetComponent<NetworkTransformBase>().ServerTeleport(position, player.transform.rotation);
 

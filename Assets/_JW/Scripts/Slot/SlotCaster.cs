@@ -311,7 +311,12 @@ public class SlotCaster : NetworkBehaviour
 	List<GameObject> FindMonsters(float radius)
 	{
 		List<GameObject> found = new List<GameObject>();
-		Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, radius, targetLayers);
+		// 내가 속한 장소 씬의 물리 세계에 묻는다. 서버는 씬마다 물리 세계가 따로 있어서 Physics2D로는 못 찾는다 (place-scenes.md). 씬이 바뀔 수 있어 저장하지 않고 매번 가져온다
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(targetLayers);
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		List<Collider2D> hits = new List<Collider2D>();
+		gameObject.scene.GetPhysicsScene2D().OverlapCircle(transform.position, radius, filter, hits);
 		foreach (Collider2D hit in hits)
 		{
 			Monster monster = hit.GetComponentInParent<Monster>();

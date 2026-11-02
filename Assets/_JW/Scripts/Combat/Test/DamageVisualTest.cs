@@ -102,7 +102,12 @@ public class DamageVisualTest : MonoBehaviour
 	Monster FindNearestMonster()
 	{
 		Vector2 origin = NetworkClient.localPlayer.transform.position;
-		Collider2D[] hits = Physics2D.OverlapCircleAll(origin, range, monsterLayers);
+		// 플레이어가 속한 장소 씬의 물리 세계에 묻는다 (place-scenes.md)
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(monsterLayers);
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		List<Collider2D> hits = new List<Collider2D>();
+		NetworkClient.localPlayer.gameObject.scene.GetPhysicsScene2D().OverlapCircle(origin, range, filter, hits);
 
 		Monster nearest = null;
 		float best = float.MaxValue;

@@ -16,6 +16,7 @@
   - 쿨타임, 시전 가능 검사(메모리 등)는 하지 않는다. 「시전 가능한지 검사하기와 쿨타임」 이슈(이우림).
 
 ## 동작 규칙
+- 대상 찾기(가까운 몬스터, 범위 안 몬스터)는 플레이어가 속한 장소 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D().OverlapCircle`)에 묻는다. `Physics2D`로 바로 찾으면 서버에서 장소 씬의 몬스터를 못 찾는다 (place-scenes.md, #125).
 - 입력 방식 (`CastMode`)
   - 스킬 표(c-skills.md)의 대상 지정 방식이 `Area`이면 범위.
   - 그 밖에는 함수의 `Parameters`로 정한다: `Target` 1개면 단일(관통·다단 히트 포함), `Target` list면 여러 명, 없으면 대상 없음 (predefined-function.md 「대상 지정 방식」).
@@ -68,7 +69,7 @@
 | 이름 | 설명 |
 | --- | --- |
 | `SlotTargetMarker` | 고른 대상 위에 노란 V, 찍은 대상 위에 하늘색 V를 OnGUI로 그리는 임시 표시. 실제 대상 표시 연출(임혜원)이 생기면 바꾼다. |
-| `SlotMultiAreaSimTest` | Test_JW의 MultiTest. Play → Host, Game 창을 한 번 클릭. 슬롯 3(E)=전장 휩쓸기, 슬롯 4(R)=검 크게베기로 두 명 찍기, 안 찍고 떼기, 다시 찍어 빼기, 소환검 1개 제한, 범위를 확인. 「[MultiTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SlotMultiAreaSimTest` | Test_JW의 MultiTest. Play → Host, Game 창을 한 번 클릭. 슬롯 3(E)=전장 휩쓸기, 슬롯 4(R)=검 크게베기로 두 명 찍기, 안 찍고 떼기, 다시 찍어 빼기, 소환검 1개 제한, 범위를 확인. 시작할 때 검 소환을 2번 시전해 소환검 2개를 만들고(찍을 수 있는 인원 = 사용 가능한 소환검 수), 해제로 1개·0개로 줄인다. 「[MultiTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SlotTargetInputSimTest` | Play → Host 2초 뒤 가짜 키 입력(Q, Q+→, Q+→, Q+←, 뗌)을 넣어 대상 넘기기를 확인한다. `TargetChanged` 5번이면 통과. 자동으로 돌기 때문에 평소에는 꺼 둔다. |
 
 ## 맞춘 결과

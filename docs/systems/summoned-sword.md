@@ -38,6 +38,10 @@
 - 슬롯에서 바로 쓰는 스킬은 가장 먼저 소환한(포인터가 작은) 사용 가능한 검부터 쓴다 (`TryGetFirstReady`, C 배열처럼 앞에서부터).
 - 소환검 필요 스킬(`needsSummonedSword`)은 사용 가능한 소환검이 0개면 `NoSummonedSwordError` (c-skills.md). 여러 명 선택 최대 인원 = 사용 가능한 소환검 수 (slot-caster.md).
 - 소환검 오브젝트는 `SpawnSword` / `DespawnSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
+  - 안에서 `NetworkSpawner.Spawn(프리팹, 위치, 회전, gameObject.scene)` / `NetworkSpawner.Despawn`을 부른다 (place-scenes.md, #125). 플레이어가 있는 장소 씬에 생기고, 서버면 모든 클라이언트에 보인다. 서버에서만 부른다.
+  - 소환검 프리팹: `NetworkIdentity`, `Base` 씬과 Test_JW의 NetworkManager Registered Spawnable Prefabs에 등록
+  - 만들지 못하면(프리팹 설정 오류, 클라이언트에서 부름) `SpawnSword`가 `null`을 돌려주고 검 소환은 아무것도 만들지 않는다
+- 떨어질 땅 찾기는 소환검이 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다 (place-scenes.md, #125).
 
 ### 지금 값 (Player_JW)
 
@@ -61,7 +65,7 @@
 | `Count` | - | `int` | heap에 있는 소환검 수 (누수 포함) |
 | `CanSummon` | - | `bool` | 5개 미만이면 `true` |
 | `ReadyCount` | - | `int` | 사용 가능한 소환검 수 |
-| `SpawnSword()` | - | `SummonedSword` | 소환검 오브젝트를 만든다 (목록·포인터 없음). 검 소환 스킬이 Malloc 전에 부른다 |
+| `SpawnSword()` | - | `SummonedSword` | 소환검 오브젝트를 만든다 (목록·포인터 없음, `NetworkSpawner`). 검 소환 스킬이 Malloc 전에 부른다. 만들지 못하면 `null` |
 | `Register(SummonedSword, int pointer)` | 소환검, 포인터 | - | malloc에 성공한 소환검을 목록에 올린다 |
 | `DespawnSword(SummonedSword)` | 소환검 | - | 오브젝트를 없애고 목록에서 뺀다. heap은 건드리지 않음 (해제 스킬이 Free 다음에, 검 소환 스킬이 malloc 실패 때 부른다) |
 | `TryGetSword(int pointer, out SummonedSword)` | 포인터 | `bool` | 포인터로 찾기. 해제·누수면 `false` |

@@ -29,6 +29,8 @@ public class CSummonSword : DataDrivenSkill
 
 		int heapSize = Data != null ? Data.HeapSize : 1;
 		SummonedSword sword = swords.SpawnSword();
+		// 만들지 못했으면(프리팹 설정 오류 등) 소환하지 않는다. 원인은 NetworkSpawner가 로그로 남긴다
+		if (sword == null) return;
 		int pointer = Malloc(task, sword, heapSize);
 		// heap 부족: 만든 오브젝트를 없애고 끝낸다 (에러 아님)
 		if (pointer == HeapStorage.NullPointer)

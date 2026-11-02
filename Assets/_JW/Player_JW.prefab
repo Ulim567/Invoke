@@ -138,6 +138,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7786418427325587672}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5543782934877071222}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2842981481539365227}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -162,6 +168,8 @@ MonoBehaviour:
   jumpHeight: 4
   fallGravityMultiplier: 1.5
   runSpeedMultiplier: 1.5
+  lungeSpeed: 30
+  lungeMaxTime: 0.35
   body: {fileID: 7079417861596757320}
   bodyCollider: {fileID: 2850566709390127241}
   input: {fileID: 1965934584990814665}
@@ -390,6 +398,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LanguageRule
   ruleData: {fileID: 11400000, guid: a79aabd9154a0af46a3e72e9a33751cf, type: 2}
+--- !u!114 &5543782934877071222
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63a73a21aa6414c48a749778acb50eb3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillEffectEvents
+--- !u!114 &2842981481539365227
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bea19b4366f6419ea1ebee99a6f7bd9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThrustEffectView
+  thrustFlashPrefab: {fileID: 2279675309158623242, guid: af7511bd27e694c31ab0ca57e94c26ba, type: 3}
+  skewerFlashPrefab: {fileID: 8271863875450660268, guid: 06d74674d1e5c422f897809c135d892c, type: 3}
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

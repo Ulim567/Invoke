@@ -43,18 +43,45 @@ public abstract class DataDrivenSkill : PredefinedFunction
 		}
 	}
 
-	// 필요 조건 검사를 빼먹지 않도록 OnStart는 여기서 닫고, 스킬은 OnSkillStart를 덮어쓴다
+	// 필요 조건을 통과해 시작했는지. 시작하지 못한 스킬은 Ended를 내지 않는다
+	bool started;
+
+	// 필요 조건 검사와 연출 event(SkillEffectEvents)를 빼먹지 않도록 OnStart·OnEnd·OnCancel은 여기서 닫고,
+	// 스킬은 OnSkillStart·OnSkillEnd·OnSkillCancel을 덮어쓴다
 	protected sealed override void OnStart(FunctionContext task)
 	{
 		if (!CheckRequirements(task)) return;
+		started = true;
 		Debug.Log($"[Skill] {task.Caster.name}: {Name} 시전 ({TickCount}틱)");
+		Effects(task)?.RaiseStarted(Id);
 		OnSkillStart(task);
+	}
+
+	protected sealed override void OnEnd(FunctionContext task)
+	{
+		OnSkillEnd(task);
+		if (started) Effects(task)?.RaiseEnded(Id, true);
+	}
+
+	protected sealed override void OnCancel(FunctionContext task)
+	{
+		OnSkillCancel(task);
+		if (started) Effects(task)?.RaiseEnded(Id, false);
 	}
 
 	/// <summary>
 	/// 필요 조건을 통과한 뒤 첫 틱에 한 번 불린다. 효과를 만들 때 OnStart 대신 덮어쓴다.
 	/// </summary>
 	protected virtual void OnSkillStart(FunctionContext task) { }
+
+	/// <summary>끝까지 실행했을 때 한 번 불린다. OnEnd 대신 덮어쓴다.</summary>
+	protected virtual void OnSkillEnd(FunctionContext task) { }
+
+	/// <summary>도중에 끊겼거나 실패했을 때 한 번 불린다 (실행 중단 공격, 슬롯 취소, Overflow 재시작, Fail). OnCancel 대신 덮어쓴다. heap은 건드리지 않는다.</summary>
+	protected virtual void OnSkillCancel(FunctionContext task) { }
+
+	/// <summary>시전자의 연출 event. 없으면 null (연출 없이 동작).</summary>
+	protected static SkillEffectEvents Effects(FunctionContext task) => task.Caster != null ? task.Caster.GetComponent<SkillEffectEvents>() : null;
 
 	/// <summary>
 	/// 소환검이 필요한 스킬(needsSummonedSword)이 쓸 수 있는 소환검 수. 0이면 NoSummonedSwordError로 끝난다.<br/>

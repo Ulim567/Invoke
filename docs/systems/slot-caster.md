@@ -4,18 +4,19 @@
 
 ## 하는 일
 - 슬롯 키(Q W E R A S D F)로 함수를 시전하는 입력 흐름을 맡는다.
-  - 단일: 슬롯을 누르면 주변 몬스터가 후보가 되고, 누른 채 ← →로 고르고, 떼면 시전을 요청한다.
+  - 단일: 슬롯을 누르면 주변 몬스터가 후보가 되고, 누른 채 ← →로 고르고, 떼면 고른 몬스터를 `target`으로 넘겨 시전한다 (#152, `FunctionExecutor.Cast(function, RuntimeValue.FromBug(몬스터))`).
   - 여러 명: 단일처럼 고르면서 Space로 찍고, 떼면 찍은 대상 모두로 시전을 요청한다 (#95).
   - 범위: 누르는 순간 `FunctionExecutor.Cast`로 시전하고, 주변 범위 안의 몬스터를 대상으로 알린다 (#95).
   - 대상 없음: 누르는 순간 `FunctionExecutor.Cast`로 시전한다.
 - 지금 고른 대상과 찍은 대상을 알려 준다 (대상 표시 연출용).
 - 하지 않는 일
-  - 고른 대상을 함수의 Target 파라미터에 넣지 않는다. 넣는 방법이 정해지기 전까지 `CastRequested` 이벤트와 로그까지만 한다.
+  - 여러 명 선택의 대상 목록을 Target list 파라미터에 넣지 않는다. 실행기에 list 값이 아직 없어서 `CastRequested` 이벤트와 로그까지만 한다 (블록 실행 3 이슈).
   - 슬롯에 함수를 장착하지 않는다. 「슬롯 8개에 함수 장착·해제하기」 이슈. 그 전까지는 Inspector의 `Slot Function Ids`에 고정 ID를 적는다(임시).
   - 관통(꼬챙이), 다단 히트(검 다중베기)의 맞는 방식: 입력은 단일과 같고, 맞는 방식은 각 스킬 이슈.
   - 쿨타임, 시전 가능 검사(메모리 등)는 하지 않는다. 「시전 가능한지 검사하기와 쿨타임」 이슈(이우림).
 
 ## 동작 규칙
+- 시전이 거부되면(쿨타임, 메모리 부족 등, `Cast`가 `null`) 시전 로그와 `CastRequested`를 내지 않는다. 거부 이유는 실행기가 `CastRejected`로 알린다 (#152).
 - 대상 찾기(가까운 몬스터, 범위 안 몬스터)는 플레이어가 속한 장소 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D().OverlapCircle`)에 묻는다. `Physics2D`로 바로 찾으면 서버에서 장소 씬의 몬스터를 못 찾는다 (place-scenes.md, #125).
 - 입력 방식 (`CastMode`)
   - 스킬 표(c-skills.md)의 대상 지정 방식이 `Area`이면 범위.
@@ -49,7 +50,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `CastRequested` (event) | `int` 슬롯 번호(0~7), `PredefinedFunction` 함수, `IReadOnlyList<GameObject>` 대상 목록 | - | [로직] 시전을 요청했을 때 불린다. 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안 몬스터 모두, 대상 없음은 빈 목록. 범위·대상 없음은 이미 `Cast`된 상태다. 단일·여러 명은 아직 `Cast`되지 않았다. 대상을 Target 파라미터에 넣는 방법이 정해지면 이 이벤트를 받는 쪽(또는 `SlotCaster`)에서 `Cast`한다. 네트워크 동기화는 이 이벤트에서 시작하면 된다. |
+| `CastRequested` (event) | `int` 슬롯 번호(0~7), `PredefinedFunction` 함수, `IReadOnlyList<GameObject>` 대상 목록 | - | [로직] 시전을 요청했을 때 불린다. 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안 몬스터 모두, 대상 없음은 빈 목록. 범위·대상 없음은 이미 `Cast`된 상태다. 단일은 고른 대상을 `target`으로 넘겨 이미 `Cast`된 상태다 (#152). 여러 명은 아직 `Cast`되지 않았다 (list 값이 생기면 같은 방식으로). 시전이 거부되면 불리지 않는다. 네트워크 동기화는 이 이벤트에서 시작하면 된다. |
 | `TargetChanged` (event) | `GameObject` 대상 | - | [표시] 선택된 대상이 바뀌었을 때 불린다 (고르기 시작, ← →, 끝). 끝나면 `null`. 대상 표시 연출에 쓴다. |
 | `MarkedChanged` (event) | `IReadOnlyList<GameObject>` 찍은 대상 | - | [표시] 여러 명 선택에서 찍은 대상이 바뀌었을 때 (찍기, 빼기, 끝). 끝나면 빈 목록. |
 | `CurrentTarget` | - | `GameObject` | 지금 선택된 대상. 고르는 중이 아니면 `null` |
@@ -73,6 +74,10 @@
 | `SlotTargetInputSimTest` | Play → Host 2초 뒤 가짜 키 입력(Q, Q+→, Q+→, Q+←, 뗌)을 넣어 대상 넘기기를 확인한다. `TargetChanged` 5번이면 통과. 자동으로 돌기 때문에 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
+- 이우림과 정함 (#133, #152)
+  - 단일 대상 슬롯 시전은 `Cast(function, RuntimeValue.FromBug(몬스터))`로 넘긴다. 죽었거나 없어진 대상은 실행기가 `InvalidTarget`으로 막는다
+  - 함수 안의 `GetBug` 입력 대기(슬롯 키 누른 채 고르기 → `ProvideInput`)는 「슬롯 8개에 함수 장착·해제하기」 이슈에서 한다
+  - 스킬 캔슬: C 키를 누르면 가장 최근에 슬롯으로 시전한 작업 하나를 `FunctionExecutor.Cancel`로 끊는다. 슬롯 키는 시전만 한다(연타해도 안 끊김). C 키 입력(`PlayerInputReader`)은 이우림이 추가, 캔슬은 슬롯 장착 이슈에서 한다
 - 이우림과 정해야 할 것
   - ← → 대상 넘기기가 동작하지 않는 문제
     - 원인: Input System의 Shortcut Keys Consume Input(Complexity Consumption) 때문에 `Move`(1D Axis 조합, 복잡도 3)가 ← →를 먼저 가져가고, `TargetPrev`/`TargetNext`(단일 키, 복잡도 1) 신호가 지워진다. `TargetPrev`/`TargetNext`를 조합으로 바꿔 복잡도를 맞춰도, 먼저 처리된 쪽이 나머지를 지우므로 해결되지 않는다.

@@ -36,6 +36,10 @@ public class FunctionExecutor : MonoBehaviour
 	readonly List<CastCondition> castConditions = new List<CastCondition>();
 
 	int fixedUpdateCount;
+	// 마지막으로 붙인 작업 번호. 작업을 만들 때마다 1씩 늘려 붙인다
+	int lastTaskId;
+	// 초기화 때 읽을 전역 변수 파일. null이면 이 컴퓨터의 파일(GlobalVariablesStorage)을 읽는다
+	GlobalVariablesData globalVariablesFile;
 	ProcessMemory memory;
 	CooldownTracker cooldowns;
 	LanguageRule language;
@@ -49,6 +53,13 @@ public class FunctionExecutor : MonoBehaviour
 	/// 1틱의 길이(초). 스킬 애니메이션 길이를 TickCount에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다.
 	/// </summary>
 	public float SecondsPerTick => Time.fixedDeltaTime * fixedUpdatesPerTick;
+
+	/// <summary>
+	/// 틱을 진행하는지. false이면 틱을 세지 않고 작업도 진행하지 않는다. 처음 값은 true다.<br/>
+	/// 멀티플레이에서 클라이언트에 있는 플레이어 복사본의 실행기를 멈출 때 쓴다. 함수는 서버의 실행기만 실행한다.
+	/// </summary>
+	// 컴포넌트를 비활성화(enabled = false)하지 않고 따로 두는 이유: 비활성화하면 다른 스크립트가 꺼진 컴포넌트로 보고, 다시 켜는 쪽과 겹칠 수 있기 때문
+	public bool TickEnabled { get; set; } = true;
 
 	/// <summary>
 	/// 작업이 첫 단계를 진행하기 직전에 불린다.
@@ -154,6 +165,17 @@ public class FunctionExecutor : MonoBehaviour
 		return task.ProvideInput(value);
 	}
 
+	/// <summary>
+	/// 작업 번호(FunctionTask.Id)로 작업을 찾는다. 진행 중인 작업과 다음 틱을 기다리는 작업에서 찾는다.<br/>
+	/// 이미 목록에서 빠진 작업이거나 없는 번호이면 false를 돌려준다. 이번 틱에 끝나 아직 목록에 남은 작업은 찾는다(IsEnded가 true).<br/>
+	/// 멀티플레이에서 클라이언트가 보낸 작업 번호를 서버의 작업으로 바꿀 때 쓴다.
+	/// </summary>
+	public bool TryGetTask(int id, out FunctionTask task)
+	{
+		task = tasks.Find(t => t.Id == id) ?? pendingTasks.Find(t => t.Id == id);
+		return task != null;
+	}
+
 	// 시전 전 검사 없이 작업을 만든다. Cast와, 블록이 요청한 비동기 시전이 쓴다
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
 	// arguments가 있으면 복사본에 넘긴다. 원본에 넘기면 같은 원본을 쓰는 다른 시전과 값이 섞이기 때문
@@ -162,7 +184,7 @@ public class FunctionExecutor : MonoBehaviour
 		FunctionBlock copy = (FunctionBlock)function.Clone();
 		if (arguments != null) copy.SetArguments(arguments);
 
-		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, copy);
+		FunctionTask task = new FunctionTask(++lastTaskId, gameObject, memory, cooldowns, language, copy);
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -214,7 +236,7 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다.<br/>
+	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 전역 변수 파일(SetGlobalVariablesFile, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다.<br/>
 	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
 	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
 	/// </summary>
@@ -227,12 +249,24 @@ public class FunctionExecutor : MonoBehaviour
 		LoadGlobalVariables();
 	}
 
-	// 저장한 전역 변수 파일을 읽어 전역 변수를 초기값으로 다시 만든다
+	/// <summary>
+	/// 초기화(RestartProcess) 때 전역 변수를 만들 파일을 정한다. null을 넘기면 이 컴퓨터에 저장한 파일을 읽는다(처음 값).<br/>
+	/// 정하기만 하고 초기화하지는 않는다. 바로 반영하려면 이어서 RestartProcess를 부른다.<br/>
+	/// 멀티플레이에서 서버가 클라이언트에게서 받은 전역 변수 파일로 그 플레이어의 전역 변수를 만들 때 쓴다.
+	/// </summary>
+	// 서버에서 이 컴퓨터의 파일을 읽으면 모든 플레이어가 서버 컴퓨터의 파일 하나를 함께 쓰게 되기 때문
+	// TrySaveGlobalVariables는 지금처럼 이 컴퓨터의 파일에 저장한다. 편집 화면은 플레이어의 컴퓨터에서 부르기 때문
+	public void SetGlobalVariablesFile(GlobalVariablesData file)
+	{
+		globalVariablesFile = file;
+	}
+
+	// 전역 변수 파일을 읽어 전역 변수를 초기값으로 다시 만든다
 	// 실행 중에 메모리 크기가 줄었어도 전역 변수는 모두 만든다. 칸 검사는 저장할 때만 하고, 줄어든 만큼은 Free가 0이 되는 것으로 드러난다(스택 규칙과 같음)
 	// 파일이 깨졌으면 GlobalVariablesConverter가 콘솔 오류를 남기고, 전역 변수 없이 시작한다
 	void LoadGlobalVariables()
 	{
-		GlobalVariablesData file = GlobalVariablesStorage.Load();
+		GlobalVariablesData file = globalVariablesFile ?? GlobalVariablesStorage.Load();
 		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, int.MaxValue, out var variables))
 			variables = new List<(string, VariableType, RuntimeValue)>();
 		memory.ResetGlobals(variables);
@@ -293,6 +327,8 @@ public class FunctionExecutor : MonoBehaviour
 
 	void FixedUpdate()
 	{
+		if (!TickEnabled) return;
+
 		fixedUpdateCount++;
 		if (fixedUpdateCount < fixedUpdatesPerTick) return;
 

@@ -55,6 +55,13 @@ public class FunctionTask
 	bool inputRequestAnnounced;
 
 	/// <summary>
+	/// 작업 번호. 실행기가 작업을 만들 때 1부터 하나씩 붙인다. 캐릭터(실행기)마다 따로 센다.<br/>
+	/// 멀티플레이에서 서버와 클라이언트가 같은 작업을 가리킬 때 쓴다(예: 입력을 기다리는 작업에 고른 몬스터를 넣을 때).
+	/// </summary>
+	// 작업 객체는 네트워크로 보낼 수 없으므로, 서버와 클라이언트가 함께 알 수 있는 번호를 둔다
+	public int Id { get; }
+
+	/// <summary>
 	/// 이 작업을 시전한 캐릭터.
 	/// </summary>
 	public GameObject Caster { get; }
@@ -94,8 +101,9 @@ public class FunctionTask
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	// 실행기를 받지 않는다. 작업은 결과만 남기고, 실행기가 읽어서 처리하기 때문
-	internal FunctionTask(GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function)
+	internal FunctionTask(int id, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function)
 	{
+		Id = id;
 		Caster = caster;
 		Name = function.Name;
 		this.function = function;

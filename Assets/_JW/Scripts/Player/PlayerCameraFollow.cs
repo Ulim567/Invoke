@@ -14,7 +14,7 @@ using UnityEngine.Rendering.Universal;
 public class PlayerCameraFollow : NetworkBehaviour
 {
 	[SerializeField, Tooltip("캐릭터 위치(발바닥)에서 카메라 중심까지의 거리. 캐릭터가 화면 가운데쯤 오게 위로 올린다")]
-	private Vector2 offset = new Vector2(0f, 2f);
+	private Vector2 offset = new Vector2(0f, 6f);
 
 	[SerializeField, Tooltip("카메라 Z 위치")]
 	private float cameraZ = -10f;

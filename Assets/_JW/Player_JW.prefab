@@ -316,7 +316,7 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  offset: {x: 0, y: 2}
+  offset: {x: 0, y: 6}
   cameraZ: -10
 --- !u!114 &163385676324885216
 MonoBehaviour:
@@ -338,6 +338,7 @@ MonoBehaviour:
   throwSpeed: 20
   maxFlightTime: 1
   pickUpRange: 1.5
+  returnSpeed: 30
 --- !u!114 &8224731288559705605
 MonoBehaviour:
   m_ObjectHideFlags: 0

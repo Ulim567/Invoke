@@ -44,7 +44,8 @@
 - 경직·사망 중(`PlayerHealth.CanAct`가 false)에는 좌우로 움직이지 않고 점프하지 않는다. 떨어지는 것은 그대로다. `PlayerHealth`가 없는 플레이어는 검사하지 않는다.
 - 카메라 추적(`PlayerCameraFollow`)
   - 내 캐릭터(`isLocalPlayer`)에서만 메인 카메라(MainCamera 태그)를 움직인다. 다른 플레이어가 접속해도 카메라를 빼앗지 않는다.
-  - 카메라 중심 = 캐릭터 발바닥 + `Offset`(기본 (0, 2)). Z는 `Camera Z`(기본 -10).
+  - 카메라 중심 = 캐릭터 발바닥 + `Offset`(기본 (0, 6)). Z는 `Camera Z`(기본 -10).
+    - Y 6: 땅은 화면 아래 4~5칸만 보이고 하늘·건물, 위쪽 발판이 더 보이게 (임혜원 요청, 맵 꾸미기)
   - 위치를 `PixelPerfectCamera.RoundToPixel`로 픽셀 격자에 맞춰 픽셀이 떨리지 않게 한다.
   - 공용 카메라 프리팹은 고치지 않는다.
 - 벽 마찰: 플레이어 콜라이더에 마찰 0 재질(`PlayerNoFriction`, Friction Combine = Minimum)을 쓴다. 공중에서 벽 쪽으로 키를 눌러도 벽에 붙지 않는다.

@@ -58,61 +58,58 @@ public static class MapDecorator
 	static Stamp Thorns(int x, int y) => new Stamp(11, 4, 1, 1, x, y);
 	static Stamp Lamp(int x, int y) => new Stamp(12, 3, 1, 3, x, y);
 
-	// 사냥터 (흐린 낮). 땅 윗면: X -43~-21 → -4, -20~-9 언덕 → -2, -8~5 → -4, 6~12 둔덕 → -3, 13~26 → -4, 29~42 높은 단 → -1
+	// 사냥터 (흐린 낮). 가로 80칸, 바닥 윗면 Y -4. 발판 1층(윗면 -1): X -34~-23, -8~3, 18~29 / 2층(2): -26~-15, 8~19 / 3층(5): -18~-7
+	// 키 큰 소품은 발판 아래가 아닌 곳(X -38~-35, 4~7, 30~37)에만 둔다
 	const string Day = "9EA399";
 	static Decoration HuntingGround() => new Decoration
 	{
 		props = new[]
 		{
-			new Prop("UrbanDecay_23", -38, -1.19f, Day),
-			new Prop("Grass", -30, -4, Day),
-			new Prop("StopSign_Flowers_Moss", -24, -4, Day),
-			new Prop("Map_Moss", -14, -2, Day),
-			new Prop("Grass", -11, -2, Day),
-			new Prop("UrbanDecay_21", -3, -1.19f, Day),
-			new Prop("Bollard_Moss", 2, -4, Day),
-			new Prop("Bollard_Moss", 2.7f, -4, Day),
-			new Prop("UrbanDecay_20", 9, -1.34f, Day),
-			new Prop("Grass_WTrash", 15, -4, Day),
-			new Prop("UrbanDecay_13", 21, -3, Day),
-			new Prop("Grass", 25, -4, Day),
-			new Prop("TrafficLight_Moss", 31, -1, Day),
-			new Prop("Flowers_Assorted", 36, -1, Day),
-			new Prop("Foxtail_Blue", 40, -1, Day),
-			new Prop("FloatingFlower_Blue", -18, 1, null, "Props", 5),
-			new Prop("FloatingFlower_Blue", 4, 2, null, "Props", 5),
-			new Prop("FloatingFlower_Blue", 30, 3, null, "Props", 5),
+			new Prop("UrbanDecay_21", -36, -1.19f, Day),
+			new Prop("Grass", -31, -4, Day),
+			new Prop("StopSign_Flowers_Moss", -21, -4, Day),
+			new Prop("Map_Moss", -18, -4, Day),
+			new Prop("UrbanDecay_20", -12, -2.34f, Day),
+			new Prop("Grass", -9, -4, Day),
+			new Prop("Bollard_Moss", -2, -4, Day),
+			new Prop("Bollard_Moss", -1.3f, -4, Day),
+			new Prop("UrbanDecay_21", 6, -1.19f, Day),
+			new Prop("Grass_WTrash", 12, -4, Day),
+			new Prop("UrbanDecay_13", 23, -3, Day),
+			new Prop("Flowers_Assorted", 31, -4, Day),
+			new Prop("TrafficLight_Moss", 34, -4, Day),
+			new Prop("Foxtail_Blue", 37, -4, Day),
+			new Prop("FloatingFlower_Blue", -20, 4, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 5, 6, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 33, 4, null, "Props", 5),
 		},
 		stamps = new[]
 		{
-			RockBig(-42, -4), Bush(-37, -4), Lamp(-34, -4), TreeDead(-27, -4), Grave(-22, -4),
-			TreeRound(-18, -2), TreeSmall(-16, -2), Thorns(-10, -2),
-			RockTall(-7, -4), Bush(-1, -4),
-			Mound(7, -3), Bush(10, -3),
-			Fence(13, -4),
-			Thorns(30, -1), TreeDead(34, -1), Bush(38, -1),
+			RockBig(-38, -4), Bush(-33, -4), TreeDead(-27, -4), Grave(-24, -4),
+			Lamp(-16, -4), TreeRound(-6, -4), RockTall(1, -4),
+			Mound(9, -4), Bush(14, -4), Fence(19, -4), Thorns(27, -4), TreeDead(29, -4),
 		},
 	};
 
-	// 레이드 던전 (폭풍 밤). 바닥 윗면 Y -4, 양쪽 벽 X -25·-24, 23·24
+	// 레이드 던전 (폭풍 밤). 가로 40칸 평지, 바닥 윗면 Y -4, 양쪽 벽 X -20·-19, 18·19. 가운데(X -4~4)는 Gateway 자리라 비운다
 	const string Night = "5A5C80";
 	static Decoration RaidDungeon() => new Decoration
 	{
 		props = new[]
 		{
-			new Prop("UrbanDecay_23", -19, -1.19f, Night),
-			new Prop("UrbanDecay_21", 19, -1.19f, Night),
-			new Prop("UrbanDecay_13", 13, -3, Night),
+			new Prop("UrbanDecay_21", -14, -1.19f, Night),
+			new Prop("UrbanDecay_21", 13, -1.19f, Night),
+			new Prop("UrbanDecay_13", 9, -3, Night),
 			new Prop("Grass_WTrash", -9, -4, Night),
+			new Prop("Foxtail_Pink", -6, -4, Night),
 			new Prop("Grass", 6, -4, Night),
-			new Prop("Foxtail_Pink", -3, -4, Night),
-			new Prop("FloatingFlower_Blue", -12, 3, null, "Props", 5),
-			new Prop("FloatingFlower_Blue", 9, 4, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", -11, 6, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 10, 7, null, "Props", 5),
 		},
 		stamps = new[]
 		{
-			Lamp(-22, -4), Lamp(21, -4),
-			RockBig(-15, -4), TreeDead(-6, -4), Thorns(2, -4), Grave(9, -4), RockTall(16, -4),
+			Lamp(-17, -4), Lamp(16, -4),
+			RockTall(-12, -4), Grave(-10, -4), Thorns(5, -4), RockBig(11, -4),
 		},
 	};
 

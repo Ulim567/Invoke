@@ -7,7 +7,7 @@ using UnityEngine;
 /// 슬롯 키로 함수를 시전하는 컴포넌트. 함수의 대상 지정 방식에 따라 입력이 달라진다.
 /// <para>
 /// 대상 지정 방식 (노션 「C 캐릭터 - 1차」 7. 입력 방식, c-skills.md 「대상 지정 방식」)<br/>
-/// - 단일(Target 파라미터 1개): 누르면 주변 몬스터가 후보가 되고 가장 가까운 몬스터가 선택된다 → 누른 채 ← →로 넘긴다 → 떼면 CastRequested (대상 1명).<br/>
+/// - 단일(Target 파라미터 1개): 누르면 주변 몬스터가 후보가 되고 가장 가까운 몬스터가 선택된다 → 누른 채 ← →로 넘긴다 → 떼면 고른 몬스터를 target으로 넘겨 시전하고 CastRequested (대상 1명).<br/>
 /// - 여러 명(Target list 파라미터): 단일처럼 고르면서 Space(MarkPressed)로 지금 고른 대상을 찍거나 뺀다 → 떼면 찍은 대상 모두로 CastRequested.
 ///   아무도 찍지 않고 떼면 지금 고른 대상 한 명. 찍을 수 있는 최대 인원은 쓸 수 있는 소환검 개수다.<br/>
 /// - 범위(스킬 표의 Area): 누르는 순간 시전하고, 캐릭터 주변 Area Radius 안의 살아 있는 몬스터로 CastRequested.<br/>
@@ -18,7 +18,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 아직 하지 않는 일<br/>
-/// - 고른 대상을 함수의 Target 파라미터에 넣는 일: 넘기는 방법을 이우림과 정하는 중이라 CastRequested 이벤트와 로그까지만 한다.<br/>
+/// - 여러 명 선택의 대상 목록을 Target list 파라미터에 넣는 일: 실행기에 list 값이 아직 없어 CastRequested 이벤트와 로그까지만 한다 (블록 실행 3 이슈, #133).<br/>
 /// - 슬롯에 함수 장착: 「슬롯 8개에 함수 장착·해제하기」 이슈. 그 전까지는 Inspector의 Slot Function Ids에 고정 ID를 적어 둔다.
 /// </para>
 /// </summary>
@@ -148,14 +148,14 @@ public class SlotCaster : NetworkBehaviour
 		switch (mode)
 		{
 			case CastMode.None:
-				executor.Cast(function);
+				if (!TryCast(slot, function)) break;
 				Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 바로 시전 (대상 없음)");
 				CastRequested?.Invoke(slot, function, Array.Empty<GameObject>());
 				break;
 
 			case CastMode.Area:
 				List<GameObject> inArea = FindMonsters(areaRadius);
-				executor.Cast(function);
+				if (!TryCast(slot, function)) break;
 				Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 범위 시전 (반경 {areaRadius}, {inArea.Count}명)");
 				CastRequested?.Invoke(slot, function, inArea);
 				break;
@@ -235,9 +235,24 @@ public class SlotCaster : NetworkBehaviour
 			return;
 		}
 
-		// TODO(이우림과 정하는 중): 고른 대상을 function의 Target 파라미터에 넣어 Cast한다
+		// 단일: 고른 몬스터를 target으로 넘겨 시전한다 (#133). 죽었거나 없어진 대상은 실행기가 InvalidTarget으로 막는다
+		// 여러 명: list 값이 아직 없어서 시전하지 않고 CastRequested까지만 한다 (블록 실행 3 이슈)
+		if (mode == CastMode.Single)
+		{
+			Monster monster = targets[0].GetComponent<Monster>();
+			if (!TryCast(slot, function, RuntimeValue.FromBug(monster))) return;
+		}
 		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} → {string.Join(", ", targets.ConvertAll(t => t.name))} 시전 요청");
 		CastRequested?.Invoke(slot, function, targets);
+	}
+
+	// 실행기에 시전을 맡긴다. 거부되면(쿨타임, 메모리 부족 등) 시전 로그와 CastRequested를 내지 않는다
+	// 거부 이유는 실행기가 CastRejected로 알린다
+	bool TryCast(int slot, PredefinedFunction function, params RuntimeValue[] arguments)
+	{
+		if (executor.Cast(function, arguments) != null) return true;
+		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 시전 거부됨");
+		return false;
 	}
 
 	void CancelSelection()

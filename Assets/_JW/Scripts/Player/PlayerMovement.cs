@@ -30,6 +30,12 @@ public class PlayerMovement : NetworkBehaviour
 	[Tooltip("Shift를 누르는 동안 이동 속도 배율 (임시: 기획에서 정해지면 바꾼다)")]
 	[SerializeField, Min(1f)] private float runSpeedMultiplier = 1.5f;
 
+	[Header("돌진 (찌르기 스킬)")]
+	[Tooltip("스킬이 대상 앞까지 돌진할 때 속도 (유닛/초, 임시)")]
+	[SerializeField, Min(0.1f)] private float lungeSpeed = 30f;
+	[Tooltip("돌진 최대 시간(초). 벽 등에 막혀 못 닿아도 이 시간이 지나면 멈춘다")]
+	[SerializeField, Min(0.05f)] private float lungeMaxTime = 0.35f;
+
 	[Header("연결")]
 	[SerializeField] private Rigidbody2D body;
 	[SerializeField] private Collider2D bodyCollider;
@@ -56,6 +62,11 @@ public class PlayerMovement : NetworkBehaviour
 	readonly List<Collider2D> droppedPlatforms = new List<Collider2D>();
 	float dropEndTime;
 
+	// 돌진 중이면 true. 이 동안은 좌우 입력 대신 lungeTargetX를 향해 움직인다
+	bool lunging;
+	float lungeTargetX;
+	float lungeEndTime;
+
 	// 달리는 속도로 움직이는지. 땅에 있을 때만 Shift 상태로 바꾸고, 공중에서는 땅을 떠난 순간의 값을 유지한다
 	bool runMode;
 
@@ -77,6 +88,37 @@ public class PlayerMovement : NetworkBehaviour
 	/// </summary>
 	// TODO: 네트워크를 붙이면 [SyncVar]로 다른 플레이어 화면에도 맞춘다 (코드 작성 규칙 2)
 	public int Facing { get; private set; } = 1;
+
+	/// <summary>돌진 중이면 true. 찌르기 스킬이 돌진이 끝났는지 읽는다.</summary>
+	public bool IsLunging => lunging;
+
+	/// <summary>
+	/// x 위치까지 좌우로 돌진한다 (찌르기 스킬이 멀리 있는 대상 앞까지 갈 때). 돌진하는 쪽을 바라본다.<br/>
+	/// 돌진하는 동안 좌우 입력은 무시한다. 닿거나 Lunge Max Time이 지나거나 경직·사망하면 멈춘다. 위아래(중력, 점프)는 그대로다.
+	/// </summary>
+	public void StartLunge(float targetX)
+	{
+		lunging = true;
+		lungeTargetX = targetX;
+		lungeEndTime = Time.time + lungeMaxTime;
+		FaceTowards(targetX);
+	}
+
+	/// <summary>돌진을 멈춘다. 스킬이 끝나거나 끊길 때 부른다.</summary>
+	public void StopLunge()
+	{
+		if (!lunging) return;
+		lunging = false;
+		body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+	}
+
+	/// <summary>x 위치 쪽을 바라본다. 스킬이 대상 쪽으로 돌아설 때 부른다.</summary>
+	public void FaceTowards(float x)
+	{
+		float dx = x - transform.position.x;
+		if (dx > 0.01f) Facing = 1;
+		else if (dx < -0.01f) Facing = -1;
+	}
 
 	/// <summary>
 	/// 지금 바닥에 서 있으면 true. 올라가는 중(발판을 아래에서 뚫고 오르는 중 등)에는 false다.
@@ -128,7 +170,14 @@ public class PlayerMovement : NetworkBehaviour
 		// 경직·사망 중에는 좌우 입력을 받지 않고 멈춘다 (떨어지는 것은 그대로)
 		if (health != null && !health.CanAct)
 		{
+			lunging = false;
 			body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+			return;
+		}
+
+		if (lunging)
+		{
+			UpdateLunge();
 			return;
 		}
 
@@ -150,6 +199,19 @@ public class PlayerMovement : NetworkBehaviour
 		{
 			Jump();
 		}
+	}
+
+	// 돌진: 남은 거리가 이번 프레임에 갈 거리보다 짧으면 딱 맞게 멈춘다
+	void UpdateLunge()
+	{
+		float dx = lungeTargetX - transform.position.x;
+		if (Mathf.Abs(dx) < 0.05f || Time.time >= lungeEndTime)
+		{
+			StopLunge();
+			return;
+		}
+		float speed = Mathf.Min(lungeSpeed, Mathf.Abs(dx) / Mathf.Max(Time.deltaTime, 0.0001f));
+		body.linearVelocity = new Vector2(Mathf.Sign(dx) * speed, body.linearVelocity.y);
 	}
 
 	// 움직이는 방향을 바라본다. 멈추면(0) 마지막 방향을 유지한다

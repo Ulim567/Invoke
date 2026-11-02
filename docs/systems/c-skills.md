@@ -96,6 +96,17 @@
   - 표식 남기기: 소환검 필요 (「검이 적 좌우로 찔러」)
   - 해제: 소환검이 있어야 쓸 수 있음
 
+### 찌르기 1: 검 찌르기·집중찌르기·꼬챙이 (#152)
+- 공통(`ThrustSkill`)
+  - 대상: 파라미터 `target`(슬롯에서 고른 몬스터, 블록에서 넘긴 대상)을 `TryGetArgument("target")`로 읽는다. 값이 없으면 바라보는 방향 사거리 안의 가장 가까운 몬스터, 그것도 없으면 허공을 찌른다(빗나감, `Fired`만).
+  - 사거리 `ThrustSkill.Reach` 2.5유닛 (임시). 몸 중심에서 대상 콜라이더의 가장 가까운 점까지 좌우 거리.
+  - 대상이 사거리보다 멀면 대상 앞까지 돌진한다 (`PlayerMovement.StartLunge`, player-movement.md). 사거리 안에 들어온 틱에 한 번 찌른다.
+  - 스킬이 끝날 때(20틱)까지 닿지 못하면 빗나간다. 돌진은 몬스터 몸에 막힌다 (뒤쪽 몬스터를 고르면 앞의 몬스터에 막혀 빗나감).
+  - 데미지: `new DamageRequest(PlayerStats.AttackPower, 표 배율) { BonusRate }` → `DamageCalculator.Calculate(request, DamageTarget.FromMonster)` → `IDamageable.TakeDamage`. 표식은 계산기가 자동으로 더한다.
+- 검 찌르기: 대상 1명.
+- 검 집중찌르기: 대상이 출혈이면 `BonusRate = DamageBonus.BleedFocusedThrust`(+50%).
+- 꼬챙이: 대상부터 찌르는 방향 뒤로 `CSkewer.PierceLength` 3유닛(임시), 높이 1.5유닛 안의 몬스터가 모두 맞는다. 배율은 표(0.5, 임시). 판정은 시전자 씬의 물리 세계.
+
 ### 검 소환·해제 (#102)
 - 검 소환 (`c.summon_sword`, malloc)
   - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, heapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
@@ -121,15 +132,33 @@
 
 `SkillData`의 값은 위 「수치 표」의 칸과 같고, 이름은 PascalCase다 (예: `DisplayName`, `TickCount`, `NeedsSummonedSword`). 읽기만 할 수 있다.
 
+### 연출 event (`SkillEffectEvents`, #152)
+
+플레이어 프리팹에 `SkillEffectEvents`가 붙어 있다. 이펙트·소리·애니메이션(임혜원)은 이 event만 받아서 튼다 (코드 작성 규칙 1). 모든 event는 스킬 고정 ID(`PredefinedFunctionIds`)를 같이 보낸다.
+
+| 이름 | 받는 값 | 설명 |
+| --- | --- | --- |
+| `Started` (event) | `string` 스킬 ID | [연출] 스킬이 시작했을 때 (필요 조건 통과 후). 시전 자세, 소리 |
+| `Fired` (event) | `string` 스킬 ID, `Vector2` 시작 위치(몸 가운데), `Vector2` 방향 | [연출] 판정이 나간 순간. 빗나가도 불린다. 찌르기 섬광 |
+| `Hit` (event) | `string` 스킬 ID, `GameObject` 맞은 대상, `Vector2` 맞은 위치, `DamageResult` 데미지 결과 | [연출] 대상이 맞은 순간. 관통이면 대상마다. 맞은 이펙트, 치명타·처형 연출 |
+| `Ended` (event) | `string` 스킬 ID, `bool` 끝까지 실행했으면 `true` | [연출] 스킬이 끝났을 때. 끊기거나 실패하면 `false` |
+
+- 순서: `Started` → (`Fired` → `Hit` 0번 이상) → `Ended`. 필요 조건(맨손 등)에 걸려 시작하지 못한 스킬은 아무 event도 내지 않는다.
+- `Started`, `Ended`는 `DataDrivenSkill`이 모든 C 스킬에 대해 낸다. `Fired`, `Hit`은 효과를 채운 스킬부터 낸다 (지금: 검 찌르기, 집중찌르기, 꼬챙이).
+- `Raise...` 함수는 C 스킬만 부른다. 네트워크를 붙이면 `[ClientRpc]`로 바꿔 모든 화면에서 불린다.
+- 찌르기 섬광: `ThrustEffectView`(플레이어)가 `Fired`를 받아 `ThrustFlash`(검 찌르기·집중찌르기) / `SkewerFlash`(꼬챙이) 프리팹을 찌르는 방향으로 만든다. 그림은 임혜원 #114 (`_HW/Effects/Thrust_Flash`, `Skewer_Flash`). 보여 주기만 하는 오브젝트라 `OneShotEffect`가 0.25초 뒤 스스로 없앤다.
+
 ### 새 스킬 효과 만들기 (`DataDrivenSkill`)
 - 스킬 클래스는 `DataDrivenSkill`을 상속하고 `Id`만 정한다. 이름, 틱 수, 쿨타임, 파라미터는 표에서 읽는다.
-- 효과는 `OnSkillStart`(필요 조건을 통과한 뒤 첫 틱), `OnTick`, `OnEnd`, `OnCancel`, `OnFail`을 덮어써서 만든다.
-- `OnStart`는 덮어쓸 수 없다. 필요 조건 검사를 빼먹지 않기 위함
+- 효과는 `OnSkillStart`(필요 조건을 통과한 뒤 첫 틱), `OnTick`, `OnSkillEnd`(끝까지 실행), `OnSkillCancel`(끊김·실패), `OnFail`을 덮어써서 만든다.
+- `OnStart`, `OnEnd`, `OnCancel`은 덮어쓸 수 없다. 필요 조건 검사와 연출 event(`Started`, `Ended`)를 빼먹지 않기 위함
+- 대상 등 파라미터 값은 `TryGetArgument("target", out RuntimeValue v)` → `v.AsBug()`로 읽는다 (predefined-function.md, #133)
 - 스킬 클래스 위치: `Assets/_JW/Scripts/Skills/` 계열별 파일 (`ThrustSkills.cs` 등)
 
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
+| `ThrustSkillSimTest` | Test_JW의 ThrustTest. 켜고 Play → Host, Game 창을 한 번 클릭 (Unity가 화면 맨 앞에 있어야 가짜 키가 들어감). 검 찌르기(사거리 밖 몬스터에게 돌진 후 맞음, 데미지 = 공격력 × 배율), 집중찌르기(출혈 1.5배), 꼬챙이(일직선 뒤 몬스터 모두), 맨손 실패, 슬롯 Q로 고른 대상에게 맞음, 연출 event 순서를 확인. 「[ThrustTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
@@ -139,7 +168,11 @@
   - heap 사용량은 표에 적어 두고, 메모리 작업(이우림)에서 실행기가 읽는다
 - 정한 것
   - 대시는 스킬(`common.dash`)로 둔다. 왼쪽 Shift는 달리기(이동 속도 증가)로 바꾼다 (입력 키는 이우림이 반영)
+- 임혜원과 정함 (#152)
+  - 이펙트는 `SkillEffectEvents`의 event를 받아서 튼다 (스킬 코드는 고치지 않음)
 - 정해야 할 것
   - 수치 전부 (데미지, 쿨타임, 메모리, 틱 수): 기획
+  - 찌르기 사거리 2.5, 꼬챙이 관통 길이 3, 돌진 속도 30: 기획
+  - 돌진이 몬스터 몸에 막히는 것 (지금은 막힘. 뚫고 지나갈지): 기획
   - 위 「가정한 것」 3개: 기획
   - 검기가 해제가 필요한지, 날아간 뒤 자동 반환인지: 기획

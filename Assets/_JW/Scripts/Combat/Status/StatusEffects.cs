@@ -54,6 +54,8 @@ public class StatusEffects : MonoBehaviour
 	// 걸려 있는 상태와 끝나는 시각
 	readonly Dictionary<StatusType, float> endTimes = new Dictionary<StatusType, float>();
 	float nextBleedTime;
+	// 상처 가르기(#172): 지금 출혈의 틱 데미지 추가분. 출혈이 풀리면 0으로
+	float bleedBonusRate;
 
 	IDamageable damageable;
 	Monster monster;
@@ -115,6 +117,19 @@ public class StatusEffects : MonoBehaviour
 		StatusApplied?.Invoke(type);
 	}
 
+	/// <summary>
+	/// 지금 걸린 출혈이 끝날 때까지 출혈 틱 데미지에 bonusRate를 더한다 (상처 가르기 +100% → 2.0배, #172).<br/>
+	/// 출혈 중이 아니면 아무 일도 없다. 여러 번 걸어도 겹치지 않고 큰 값 하나만 쓴다. 출혈이 풀리면 없어진다.
+	/// </summary>
+	public void AmplifyBleed(float bonusRate)
+	{
+		if (!Has(StatusType.Bleed)) return;
+		bleedBonusRate = Mathf.Max(bleedBonusRate, bonusRate);
+	}
+
+	/// <summary>지금 출혈 틱 데미지 추가분 (0 = 기본). 상처 가르기를 맞으면 1.0</summary>
+	public float BleedBonusRate => bleedBonusRate;
+
 	/// <summary>이 상태가 걸려 있으면 true.</summary>
 	public bool Has(StatusType type) => endTimes.TryGetValue(type, out float end) && Time.time < end;
 
@@ -124,6 +139,7 @@ public class StatusEffects : MonoBehaviour
 	/// <summary>이 상태를 바로 푼다.</summary>
 	public void Clear(StatusType type)
 	{
+		if (type == StatusType.Bleed) bleedBonusRate = 0f;
 		if (endTimes.Remove(type)) StatusRemoved?.Invoke(type);
 	}
 
@@ -171,7 +187,9 @@ public class StatusEffects : MonoBehaviour
 	void BleedTick()
 	{
 		if (damageable == null || (monster != null && monster.IsDead)) return;
-		int damage = DamageCalculator.Calculate(DamageRequest.Flat(StatusDefaults.BleedDamage)).Damage;
+		DamageRequest request = DamageRequest.Flat(StatusDefaults.BleedDamage);
+		request.BonusRate = bleedBonusRate;
+		int damage = DamageCalculator.Calculate(request).Damage;
 		damageable.TakeDamage(damage);
 		BleedTicked?.Invoke(damage);
 	}

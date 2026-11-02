@@ -135,10 +135,13 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 
 ### 씬에 놓는 컴포넌트
 
-| 이름 | 놓는 곳 | 설정 | 설명 |
-| --- | --- | --- | --- |
-| `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`) | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
-| `PlaceExit` | 사냥터·연습장·레이드 던전 (`Assets/_UL/Prefabs/PlaceExit`) | `prompt`: ↑ 안내 오브젝트, Is Trigger를 체크한 `Collider 2D` | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청 |
+출구와 로딩 화면은 이 컴포넌트를 붙여 프리팹으로 만든다. `Assets/_UL/Prefabs`의 `PlaceExit`, `PlaceTravel` 안 Canvas는 임시본.
+
+| 이름 | 붙이는 곳 | 꼭 필요한 설정 | 자유롭게 바꿔도 되는 것 | 설명 |
+| --- | --- | --- | --- | --- |
+| `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). 높이: 땅 + 1 | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
+| `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 장소 씬 세 곳에 하나씩, `PlayerStartPosition`과 겹치지 않게 | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청 |
+| `LoadingScreen` | 로딩 화면 Canvas | `panelRoot`: 화면을 덮는 UI의 부모. `canvasGroup`: `panelRoot`에 붙인 `Canvas Group`. 배경 Image의 Raycast Target 체크. Canvas Sort Order는 로비 UI(0)보다 크게. `Base`에 놓고 `PlaceTravel`의 `loadingScreen` 칸에 연결 | 배경, 글자, 글꼴, 애니메이션, `fadeSeconds`(페이드 시간, 기본 0.25초) | `PlaceTravelClient`만 `Show`·`ShowImmediate`·`Hide`를 부름. 이동하는 동안과 접속 직후에 화면을 덮음 |
 
 ## 맞춘 결과
 - 김도훈에게 알릴 것
@@ -153,5 +156,10 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
   - 「들어가기」 뒤 `LobbyEntrancePanel.Close()`가 액션 맵을 다시 활성화하므로, 이동하는 동안 `PlaceTravelClient`가 Player·Attack 액션 맵을 다시 비활성화
   - `Base`의 `EventSystem` 그대로 사용. 로딩 화면 Canvas도 같은 `EventSystem`
   - 출구 모양: `Entrance`의 문 스프라이트(`UrbanDecay_42`, 색 `6EE4F5`)와 `Prompt`를 `PlaceExit` 프리팹에서 참조·복사 (`_HW` 파일 변경 없음)
-- 정할 것
-  - 출구·로딩 화면 디자인을 임혜원이 다듬을 때의 프리팹 위치 (`Assets/_UL` → `Assets/Prefabs` 또는 `Assets/_HW`)
+- 임혜원에게 넘길 것
+  - 출구와 로딩 화면을 `Assets/_HW`에 프리팹으로 만들기 (사용법: 「씬에 놓는 컴포넌트」)
+    - 출구: 사냥터·연습장·레이드 던전에 하나씩
+    - 로딩 화면: `Base`에 놓고 `PlaceTravel`의 `loadingScreen` 칸에 연결
+  - 공용 씬의 임시본 삭제: 장소 씬 세 곳의 `PlaceExit`, `Base`의 `PlaceTravel` 안 Canvas (`PlaceTravel`은 이동 코드가 붙어 있어 남김)
+  - 지금 임시본의 모습: 출구는 `Entrance`의 문 스프라이트와 `Prompt` 복사, 로딩 화면은 검은 배경과 "Loading..." 글자
+- `Assets/_UL/Prefabs`의 임시 프리팹 파일: 임혜원의 프리팹으로 바꾼 뒤 이우림이 삭제

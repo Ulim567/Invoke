@@ -73,12 +73,17 @@
 | `Throw(SummonedSword, GameObject target)` | 검, 대상 (없으면 빗나감) | `bool` | 사용 가능한 검만 던진다 |
 | `Recall(SummonedSword)` / `RecallFirstThrown()` | 검 | `bool` | 던진 검을 되돌린다 |
 | `Stab(SummonedSword, GameObject target)` | 검, 대상 | `bool` | (#165) 사용 가능한 검을 대상에게 보내 찌르고 돌아오게 한다. 닿으면 `StabHit`, 돌아오면 다시 `Ready`. 대상이 사라지거나 1.2초 안에 못 닿으면 그냥 돌아온다. 소환검 찌르기가 쓴다 |
+| `Throw(SummonedSword, GameObject target, Vector2 direction)` | 검, 대상(빗나가면 `null`), 방향 | `bool` | (#167) 일직선으로 던진다. 대상에 닿으면 `Hit`을 알리고 몬스터 몸에 꽂혀 따라다닌다(몬스터가 죽으면 떨어짐). 대상이 `null`이면 안 맞고 날아가 벽·땅(Ground)에 꽂히거나 14칸에서 떨어진다. 한쪽 방향 발판(Platform)은 통과한다. 소환검 던지기가 쓴다 |
+| `StartReturn(SummonedSword)` | 검 | `bool` | (#167) 던진(날아가는 중, 떨어짐·꽂힘) 검을 곁으로 날아오게 한다. 지나가는 몬스터는 `ReturnHit`, 닿으면 `Ready`. 검 돌아오기가 쓴다 |
+| `ReturnHit` (event) | `SummonedSword`, `GameObject` | - | [로직] (#167) 돌아오는 검이 몬스터를 지나갔을 때. 몬스터마다 한 번 |
 | `StabHit` (event) | `SummonedSword`, `GameObject` | - | [로직] (#165) `Stab`으로 보낸 검이 대상에 닿았을 때. 데미지는 받은 스킬이 준다 |
 | `TryPickUpNearest()` | - | `bool` | 근처의 떨어진 소환검을 줍는다 |
 | `Changed` (event) | - | - | [표시] 목록·상태가 바뀔 때 |
 | `Hit` (event) | `SummonedSword`, `GameObject` | - | [로직] 던진 소환검이 대상에 닿았을 때 |
 
-`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked` / `Stabbing`), `StateChanged`(event, [표시]).
+`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked` / `Stabbing` / `Returning`), `StateChanged`(event, [표시]), `ThrowOrder`(던진 순서, #167), `StuckTo`(꽂힌 몬스터, #167).
+- `Throw(검, 대상)`(대상만 넘김)도 #167부터 대상 쪽 일직선으로 날아간다 (예전: 대상을 따라가는 유도). 대상이 `null`이면 바로 떨어지는 건 그대로.
+- `Returning`(#167): 검 돌아오기로 곁으로 날아오는 중. 사용 가능 개수에 안 들어간다. 꽂혀 있는 검은 `Dropped` 상태라 Z로 주울 수도 있다.
 - `Stabbing`(#165): 소환검 찌르기로 날아가 찌르고 돌아오는 중. 사용 가능 개수(`ReadyCount`)에 안 들어가서 다른 스킬에 쓰이지 않는다. 속도 `Stab Speed`(프리팹, 임시 35).
 
 ### 임시 표시

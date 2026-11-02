@@ -64,6 +64,9 @@ public class SummonedSwords : MonoBehaviour
 	/// <summary>[로직] 소환검 찌르기(Stab)로 보낸 검이 대상에 닿았을 때 (검, 대상). 데미지는 받은 스킬이 준다 (#165)</summary>
 	public event Action<SummonedSword, GameObject> StabHit;
 
+	/// <summary>[로직] 검 돌아오기로 날아오는 소환검이 몬스터를 지나갔을 때 (검, 몬스터). 몬스터마다 한 번. 데미지는 받은 스킬이 준다 (#167)</summary>
+	public event Action<SummonedSword, GameObject> ReturnHit;
+
 	void Reset()
 	{
 		groundLayers = LayerMask.GetMask("Ground", "Platform");
@@ -143,6 +146,31 @@ public class SummonedSwords : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 소환검을 방향으로 일직선으로 던진다 (소환검 던지기, #167). target이 있으면 그 대상에 닿았을 때만 Hit을 알리고 몸에 꽂힌다.<br/>
+	/// target이 null이면(빗나감) 맞지 않고 날아가다 벽·땅에 꽂히거나 최대 거리에서 떨어진다.
+	/// </summary>
+	public bool Throw(SummonedSword sword, GameObject target, Vector2 direction)
+	{
+		if (sword == null || !swords.Contains(sword) || sword.State != SummonedSwordState.Ready) return false;
+		sword.LaunchStraight(target, direction);
+		NotifyChanged();
+		return true;
+	}
+
+	/// <summary>
+	/// 검 돌아오기 (#167): 던진(날아가는 중, 떨어진·꽂힌) 소환검을 지금 자리에서 곁으로 날아오게 한다.<br/>
+	/// 지나가는 몬스터는 ReturnHit으로 알리고, 닿으면 다시 사용 가능. 누수된 검은 안 된다.
+	/// </summary>
+	public bool StartReturn(SummonedSword sword)
+	{
+		if (sword == null || !swords.Contains(sword)) return false;
+		if (sword.State != SummonedSwordState.Flying && sword.State != SummonedSwordState.Dropped) return false;
+		sword.LaunchReturn();
+		NotifyChanged();
+		return true;
+	}
+
+	/// <summary>
 	/// 소환검을 대상에게 보내 찌르게 한다 (소환검 찌르기, #165). 사용 가능한 검만 보낼 수 있다.<br/>
 	/// 닿으면 StabHit을 알리고 곁으로 돌아와 다시 사용 가능해진다. 대상이 사라지거나 시간 안에 못 닿으면 그냥 돌아온다.
 	/// </summary>
@@ -160,7 +188,7 @@ public class SummonedSwords : MonoBehaviour
 	public bool Recall(SummonedSword sword)
 	{
 		if (sword == null || !swords.Contains(sword)) return false;
-		if (sword.State != SummonedSwordState.Flying && sword.State != SummonedSwordState.Dropped) return false;
+		if (sword.State != SummonedSwordState.Flying && sword.State != SummonedSwordState.Dropped && sword.State != SummonedSwordState.Returning) return false;
 		sword.SetReady();
 		NotifyChanged();
 		return true;
@@ -200,6 +228,26 @@ public class SummonedSwords : MonoBehaviour
 	internal void NotifyHit(SummonedSword sword, GameObject target) => Hit?.Invoke(sword, target);
 
 	internal void NotifyStabHit(SummonedSword sword, GameObject target) => StabHit?.Invoke(sword, target);
+
+	internal void NotifyReturnHit(SummonedSword sword, GameObject monster) => ReturnHit?.Invoke(sword, monster);
+
+	// 검 돌아오기로 날아온 소환검이 곁에 닿았을 때
+	internal void NotifyReturned(SummonedSword sword)
+	{
+		if (!swords.Contains(sword) || sword.State != SummonedSwordState.Returning) return;
+		sword.SetReady();
+		NotifyChanged();
+	}
+
+	// 돌아오는 소환검이 향할 곳: 머리 뒤쪽 첫 자리
+	internal Vector2 ReturnPoint
+	{
+		get
+		{
+			int facing = movement != null ? movement.Facing : 1;
+			return (Vector2)transform.position + new Vector2(-facing * followOffset.x, followOffset.y);
+		}
+	}
 
 	// 찌르고 돌아온 소환검을 다시 사용 가능으로
 	internal void NotifyStabReturned(SummonedSword sword)

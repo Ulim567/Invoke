@@ -14,7 +14,7 @@
 ## 규칙
 - 처음에는 손에 있다.
 - 던지기(`Throw`)
-  - 대상이 있으면 대상의 콜라이더 가운데를 향해 날아간다(`Throw Speed`, 기본 20유닛/초). 닿으면 `Hit`을 알리고 그 자리에서 아래로 떨어진다.
+  - 대상이 있으면 대상의 콜라이더 가운데를 향해 포물선으로 날아간다 (#167. 날아가는 시간 = 거리 / `Throw Speed`(기본 20유닛/초), 높이 = 거리 × 0.25, 최대 2). 닿으면 `Hit`을 알리고 그 자리에서 아래로 떨어진다.
   - 대상이 없거나(빗나감), 날아가는 사이 대상이 사라지거나, `Max Flight Time`(기본 1초) 안에 닿지 못하면 그 자리에서 바로 떨어진다.
   - 검 던지기는 대상을 골라야 쓸 수 있다 (slot-caster.md). 빗나감은 검 던지기 스킬이 확률로 정하고, 빗나가면 `Throw(null)`을 부른다 (던지기 스킬 이슈).
   - 던지는 위치: 발밑 + `Hand Offset`(기본 (0.5, 2)). x는 바라보는 방향(`PlayerMovement.Facing`)으로 뒤집는다.
@@ -23,7 +23,8 @@
   - 맨손이면 공격 스킬은 `UnarmedError`로 끝난다. 검 돌아오기, 소환(검 소환·해제), 이동 계열은 쓸 수 있다 (c-skills.md 표의 `usableUnarmed`).
 - 회수
   - 줍기(`TryPickUp`): 땅에 떨어진 검과 `Pick Up Range`(기본 1.5유닛) 안에 있을 때만.
-  - 검 돌아오기(`Recall`): 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다.
+  - 검 돌아오기 스킬(`StartReturn`, #167): 지금 자리에서 손(`HandPosition`)으로 날아온다(`Return Speed`, 임시 30). 오는 길에 지나가는 몬스터를 `ReturnHit`으로 한 번씩 알리고, 손에 닿으면 손으로 돌아온다. 날아오는 동안은 `Returning` 상태(맨손).
+  - `Recall`: 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다. 테스트에서 쓴다.
 - 해제(free)할 수 없다.
 - 떨어진 검 오브젝트는 `SpawnDroppedSword` / `DespawnDroppedSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
   - 안에서 `NetworkSpawner.Spawn` / `Despawn`을 부른다 (place-scenes.md, #125). 떨어진 검 프리팹은 `NetworkIdentity`를 붙이고 `Base` 씬과 Test_JW의 NetworkManager에 등록했다. 만들지 못하면 `Throw`가 `false`.
@@ -53,7 +54,11 @@
 | `Dropped` | - | `DroppedSword` | 던진 검 오브젝트. 손에 있으면 `null`. 위치 표시, 검 돌아오기 경로에 쓴다 |
 | `Throw(GameObject target)` | 대상 (없으면 `null` = 빗나감) | `bool` | 검을 던진다. 손에 없으면 `false`. 검 던지기 스킬이 부른다 |
 | `TryPickUp()` | - | `bool` | 근처의 떨어진 검을 줍는다. 주울 수 없으면 `false`. 줍기 키를 눌렀을 때 부른다 |
-| `Recall()` | - | `bool` | 거리와 상관없이 손으로 되돌린다. 이미 손에 있으면 `false`. 검 돌아오기 스킬이 경로 판정 뒤에 부른다 |
+| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false` |
+| `StartReturn()` | - | `bool` | (#167) 던진 검을 손으로 날아오게 한다. 손에 있거나 이미 돌아오는 중이면 `false`. 검 돌아오기 스킬이 부른다 |
+| `ReturnHit` (event) | `GameObject` 몬스터 | - | [로직] (#167) 돌아오는 검이 몬스터를 지나갔을 때. 몬스터마다 한 번 |
+| `ThrowOrder` | - | `int` | (#167) 마지막으로 던진 순서 (`SwordThrowOrder`, 소환검과 같은 번호표) |
+| `HandPosition` | - | `Vector2` | 던지는 손 위치. 돌아오는 검이 여기로 온다 |
 | `StateChanged` (event) | `SwordState` | - | [표시] 상태가 바뀔 때. 손 그림, 맨손 표시 |
 | `Hit` (event) | `GameObject` 맞은 대상 | - | [로직] 던진 검이 대상에 닿았을 때. 데미지·처형은 이 이벤트를 받는 쪽(검 던지기 스킬)이 준다 |
 

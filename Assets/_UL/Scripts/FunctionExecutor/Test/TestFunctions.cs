@@ -146,6 +146,25 @@ public class TestLongMallocFunction : PredefinedFunction
 }
 
 /// <summary>
+/// 끊기 시험용 malloc 함수(#143). 1틱째에 TestSword를 힙 2칸에 올리고, 3000틱(약 1분) 동안 진행한다.<br/>
+/// 시험이 끊을 때까지 끝나지 않도록 길게 둔다. CancelTest, OverflowRestartTest가 쓴다.
+/// </summary>
+public class TestHoldMallocFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestHoldMallocFunction;
+	public override string Name => "TestHoldMallocFunction";
+	public override int TickCount => 3000;
+
+	protected override void OnTick(FunctionContext context, int tick)
+	{
+		if (tick != 1) return;
+
+		int pointer = Malloc(context, new TestSword(), 2);
+		Debug.Log($"{Name}: malloc → {pointer}");
+	}
+}
+
+/// <summary>
 /// 힙 테스트용 free 함수. 시작할 때 전역 포인터 목록의 첫 TestSword를 free한다. 1틱짜리다.<br/>
 /// 전역 포인터 목록에 TestSword가 없으면 NullPointer를 free해서 InvalidPointerError를 낸다.
 /// </summary>
@@ -183,6 +202,28 @@ public class TestArgumentFunction : PredefinedFunction
 	protected override void OnStart(FunctionContext context)
 	{
 		ArgumentRead?.Invoke(TryGetArgument("amount", out RuntimeValue amount) ? amount.ToString() : "값 없음");
+	}
+}
+
+/// <summary>
+/// 대상 파라미터 테스트용 함수. Target(종류 Bug) 파라미터 target 하나를 받고, 시작할 때 읽은 대상을 TargetRead로 알린다. 1틱 동안 진행한다.
+/// </summary>
+public class TestTargetFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestTargetFunction;
+	public override string Name => "TestTargetFunction";
+	public override int TickCount => 1;
+	public override System.Collections.Generic.IReadOnlyList<ParameterData> Parameters =>
+		new[] { new ParameterData("target", VariableType.TargetOf(TargetKind.Bug)) };
+
+	/// <summary>
+	/// 시작할 때 읽은 대상의 몬스터. 값이 없으면 null을 넘긴다. 테스트 컴포넌트가 결과를 확인할 때 쓴다.
+	/// </summary>
+	public static event System.Action<Monster> TargetRead;
+
+	protected override void OnStart(FunctionContext context)
+	{
+		TargetRead?.Invoke(TryGetArgument("target", out RuntimeValue target) ? target.AsBug() : null);
 	}
 }
 

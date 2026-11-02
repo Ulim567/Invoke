@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -7,7 +8,8 @@ using UnityEngine;
 /// - Layer는 MonsterProjectile로 둔다. Player, Ground, Platform과만 부딪힌다.<br/>
 /// - Rigidbody2D: Body Type Dynamic, Gravity Scale 0, Freeze Rotation Z<br/>
 /// - Collider2D: Is Trigger를 켠다 (몸으로 밀지 않고 겹침만 알린다)<br/>
-/// - Target Layers는 Player, Block Layers는 Ground와 Platform으로 둔다.
+/// - Target Layers는 Player, Block Layers는 Ground와 Platform으로 둔다.<br/>
+/// - Pierce를 켜면 맞은 플레이어마다 한 번씩 효과를 주고 사라지지 않고 계속 날아간다(보스의 큰 패킷 덩어리처럼 한 줄을 모두 맞히는 공격).
 /// </para>
 /// <para>
 /// 패링(박진우)은 Attack.Parryable로 잡을 수 있는지 확인한다. 잡은 투사체를 없애는 방법은 패링 이슈에서 정한다.
@@ -25,10 +27,15 @@ public class MonsterProjectile : MonoBehaviour
 	[SerializeField, Tooltip("닿으면 효과 없이 사라질 레이어. Ground, Platform으로 둔다")]
 	LayerMask blockLayers;
 
+	[SerializeField, Tooltip("켜면 맞은 대상마다 한 번씩 효과를 주고 계속 날아간다(관통). 끄면 처음 맞은 대상에서 사라진다")]
+	bool pierce;
+
 	Rigidbody2D body;
 	float despawnTime;
 	// 같은 물리 단계에 여러 Collider와 겹쳐도 한 번만 맞도록 막는다
 	bool spent;
+	// 관통할 때 이미 맞힌 대상. Collider가 여러 개인 대상도 한 번만 맞는다
+	readonly HashSet<GameObject> pierced = new HashSet<GameObject>();
 
 	/// <summary>
 	/// 이 투사체가 맞았을 때 적용할 공격 데이터. Launch에서 정해진다.
@@ -53,6 +60,7 @@ public class MonsterProjectile : MonoBehaviour
 	{
 		Attack = attack;
 		Misses = misses;
+		pierced.Clear();
 		body.linearVelocity = velocity;
 		despawnTime = Time.time + lifetime;
 		spent = false;
@@ -73,6 +81,13 @@ public class MonsterProjectile : MonoBehaviour
 		{
 			// 빗나가는 투사체는 플레이어를 그냥 지나간다
 			if (Misses) return;
+			if (pierce)
+			{
+				// 대상(Rigidbody가 있는 최상위)마다 한 번만 맞히고 계속 날아간다
+				GameObject owner = other.attachedRigidbody != null ? other.attachedRigidbody.gameObject : other.gameObject;
+				if (pierced.Add(owner)) MonsterAttackResolver.Apply(Attack, other);
+				return;
+			}
 			spent = true;
 			MonsterAttackResolver.Apply(Attack, other);
 			Despawn();

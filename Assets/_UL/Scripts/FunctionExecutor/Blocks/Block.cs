@@ -134,11 +134,51 @@ public abstract class Block
 }
 
 /// <summary>
-/// 남은 블록을 실행하지 않고 지금 함수를 끝내는 블록. 1틱을 쓴다.
+/// 남은 블록을 실행하지 않고 지금 함수를 끝내는 블록. 1틱을 쓴다. 예: return;, return x + 1;
+/// <para>
+/// - value slot에 쓴 블록(연산 등)이 있으면 그 블록이 자기 틱을 쓴 뒤, 다음 틱에 함수를 끝낸다.<br/>
+/// - 값을 반환 타입으로 맞추는 일과 return 누락 검사는 이 블록을 담은 사용자 정의 함수가 끝날 때 한다(UserFunction).
+/// </para>
 /// </summary>
 public class ReturnBlock : Block
 {
-	protected override BlockResult Step(FunctionContext context) => BlockResult.Returned;
+	// value slot(원본). 값을 비운 return;이면 null
+	readonly ValueBlock valueOriginal;
+	// 이 실행에서 쓰는 value slot. 블록 복사본마다 따로 가져야 하므로 OnStart에서 만든다
+	ValueSlots slots;
+
+	/// <summary>
+	/// 값을 돌려주지 않는 return;
+	/// </summary>
+	public ReturnBlock() : this(null) { }
+
+	/// <summary>
+	/// value를 돌려주는 return. value가 null이면 return;과 같다.
+	/// </summary>
+	public ReturnBlock(ValueBlock value)
+	{
+		valueOriginal = value;
+	}
+
+	protected override void OnStart(FunctionContext context)
+	{
+		slots = new ValueSlots(valueOriginal);
+	}
+
+	protected override BlockResult Step(FunctionContext context)
+	{
+		BlockResult result = slots.Step(context);
+		if (result != BlockResult.Done) return result;
+
+		// 값은 실행 문맥에 맡긴다. 이 블록은 자기를 담은 함수를 모르고, Returned를 받는 가장 안쪽 사용자 정의 함수가 꺼내 가기 때문
+		context.RecordReturnValue(valueOriginal == null ? null : slots.Get(0));
+		return BlockResult.Returned;
+	}
+
+	protected override void OnCancel(FunctionContext context)
+	{
+		slots?.Cancel(context);
+	}
 }
 
 /// <summary>

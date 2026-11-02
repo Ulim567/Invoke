@@ -40,7 +40,7 @@ public class MallocFreeTest : MonoBehaviour
 		FunctionData unknown = FunctionData.Create("UnknownStruct");
 		VariableType shieldPointer = VariableType.PointerTo(VariableType.StructOf("Shield"));
 		unknown.Blocks.Add(BlockData.Declare(shieldPointer, "p", SlotData.FromBlock(BlockData.Malloc(VariableType.StructOf("Shield")))));
-		Check("목록에 없는 struct 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(unknown, out _));
+		Check("목록에 없는 struct 거부 (콘솔 오류 1개가 정상)", !FunctionDataConverter.TryConvert(unknown, System.Array.Empty<FunctionData>(), out _));
 	}
 
 	// Sword* s = malloc(Sword); free(s);
@@ -55,7 +55,7 @@ public class MallocFreeTest : MonoBehaviour
 	// 1단계. 틱 1 malloc, 틱 2 선언, 틱 3 확인, 틱 4 free, 틱 5 확인
 	void CastMallocFree()
 	{
-		if (!FunctionDataConverter.TryConvert(MakeMallocFree("MallocFree"), out UserFunction converted))
+		if (!FunctionDataConverter.TryConvert(MakeMallocFree("MallocFree"), System.Array.Empty<FunctionData>(), out UserFunction converted))
 		{
 			Check("MallocFree: 변환 성공", false);
 			return;
@@ -72,7 +72,7 @@ public class MallocFreeTest : MonoBehaviour
 	// 틱 1 malloc(실패), 틱 2 선언, 틱 3 s 읽기, 틱 4 free(NULL) → 아무 일도 하지 않고 정상 종료
 	void CastHeapFull()
 	{
-		if (!FunctionDataConverter.TryConvert(MakeMallocFree("HeapFull"), out UserFunction converted))
+		if (!FunctionDataConverter.TryConvert(MakeMallocFree("HeapFull"), System.Array.Empty<FunctionData>(), out UserFunction converted))
 		{
 			Check("HeapFull: 변환 성공", false);
 			return;

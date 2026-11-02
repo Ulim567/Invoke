@@ -8,7 +8,8 @@ using UnityEngine;
 /// 사용법<br/>
 /// - 캐릭터에 하나만 붙인다.<br/>
 /// - 함수를 시전할 때 Cast(함수)를 부른다. 같은 함수든 다른 함수든 여러 번 부를 수 있다.<br/>
-/// - 작업이 진행을 시작하거나 끝날 때 TaskStarted, TaskEnded로 알린다. 로그·이펙트 같은 연출은 이 이벤트를 받아서 한다.
+/// - 작업이 진행을 시작하거나 끝날 때 TaskStarted, TaskEnded로 알린다. 로그·이펙트 같은 연출은 이 이벤트를 받아서 한다.<br/>
+/// - 작업이 입력 함수를 만나면 InputRequested로 알린다. 입력을 받는 쪽이 값을 정해 ProvideInput을 부르면 작업이 이어서 진행한다.
 /// </para>
 /// <para>
 /// 틱 규칙<br/>
@@ -66,6 +67,13 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<FunctionBlock, CastRejection> CastRejected;
 
 	/// <summary>
+	/// 작업이 입력 함수(예: GetBug)를 만나 플레이어의 입력을 기다리기 시작할 때 불린다. 작업과 요청한 입력 함수를 넘긴다.<br/>
+	/// 입력을 받는 쪽은 입력 함수의 Id로 자기가 맡은 입력인지 확인하고, 값을 정하면 ProvideInput을 부른다.<br/>
+	/// 이 event 안에서 바로 ProvideInput을 불러도 된다(예: 슬롯 키가 눌려 있지 않아 기본값으로 진행).
+	/// </summary>
+	public event Action<FunctionTask, PredefinedFunction> InputRequested;
+
+	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
 	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
 	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
@@ -74,7 +82,38 @@ public class FunctionExecutor : MonoBehaviour
 	{
 		// 빈 슬롯은 시전하는 쪽(키 입력 처리)이 걸러 Cast를 부르지 않는다. 그래서 null은 코드 실수로 보고 바로 드러나게 한다
 		if (function == null) throw new ArgumentNullException(nameof(function));
+		return CastChecked(function, null);
+	}
 
+	/// <summary>
+	/// 사전 정의 함수에 argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 플레이어가 고른 대상을 넘기는 데 쓴다.<br/>
+	/// 예: Cast(thrust, RuntimeValue.FromBug(몬스터)). 스킬은 함수 안에서 불렸을 때와 같이 TryGetArgument로 읽는다.<br/>
+	/// arguments는 Parameters 순서이고, 뒤쪽 파라미터는 비워도 된다(「값 없음」). argument가 없으면 Cast(function)과 같다.<br/>
+	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 InvalidTarget으로 끝난다.
+	/// </summary>
+	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments)
+	{
+		if (function == null) throw new ArgumentNullException(nameof(function));
+		if (arguments == null || arguments.Length == 0) return CastChecked(function, null);
+
+		// 값을 파라미터 타입으로 맞춘다. 맞출 수 없거나 파라미터보다 많으면 부르는 쪽의 코드 실수이므로 예외를 던진다
+		IReadOnlyList<ParameterData> parameters = function.Parameters;
+		if (arguments.Length > parameters.Count)
+			throw new ArgumentException($"{function.Name}의 파라미터는 {parameters.Count}개인데 argument {arguments.Length}개를 넘겼습니다.", nameof(arguments));
+
+		RuntimeValue?[] converted = new RuntimeValue?[parameters.Count];
+		for (int i = 0; i < arguments.Length; i++)
+		{
+			if (!NumericRules.TryConvertForStore(arguments[i], parameters[i].Type, language.Rule, out RuntimeValue value))
+				throw new ArgumentException($"{function.Name}의 파라미터 {parameters[i].Name}({parameters[i].Type.Kind})에 {arguments[i].Type?.Kind} 값을 넘겼습니다.", nameof(arguments));
+			converted[i] = value;
+		}
+		return CastChecked(function, converted);
+	}
+
+	// 시전 전 검사를 한 뒤 작업을 만든다. arguments는 사전 정의 함수의 복사본에 넘길 값이고, 없으면 null
+	FunctionTask CastChecked(FunctionBlock function, RuntimeValue?[] arguments)
+	{
 		foreach (CastCondition condition in castConditions)
 		{
 			if (condition.Check(function, out CastRejection rejection)) continue;
@@ -84,28 +123,46 @@ public class FunctionExecutor : MonoBehaviour
 			return null;
 		}
 
-		FunctionTask task = CastUnchecked(function);
-		task.CooldownSource = function;
+		FunctionTask task = CastUnchecked(function, arguments);
+		task.CastSource = function;
 		cooldowns.Register(task);
 		return task;
 	}
 
 	/// <summary>
-	/// 슬롯에서 시전한 function의 남은 쿨타임(틱 수). 쿨타임 중이 아니면 0이다. 쿨타임 UI에서 쓴다.
+	/// 슬롯의 function의 남은 쿨타임(틱 수). 쿨타임 중이 아니면 0이다. 쿨타임 UI에서 쓴다.<br/>
+	/// 스킬이면 그 스킬(고정 ID)의 쿨타임이다. 사용자 정의 함수는 자기 쿨타임이 없으므로 0이다.
 	/// </summary>
 	// 쿨타임은 CooldownTracker가 가진다. 다른 시스템이 쓰는 접점을 바꾸지 않기 위해 실행기에도 남긴다
 	public int GetRemainingCooldownTicks(FunctionBlock function) => cooldowns.GetRemainingTicks(function);
 
 	/// <summary>
-	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.
+	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.<br/>
+	/// 스킬이면 같은 스킬이 다른 함수 안에서 실행 중일 때도 true다.
 	/// </summary>
 	public bool IsRunning(FunctionBlock function) => cooldowns.IsRunning(function);
 
+	/// <summary>
+	/// 입력을 기다리는 작업에 플레이어가 고른 값을 넣는다. 작업은 다음 틱부터 이어서 진행한다.<br/>
+	/// 작업이 이미 끝났거나(예: 실행 중단 공격) 입력을 기다리지 않으면 아무것도 하지 않고 false를 돌려준다.<br/>
+	/// 값의 타입이 요청한 타입과 다르면 예외를 던진다. 대상 입력이면 RuntimeValue.FromBug(몬스터), 고를 대상이 없으면 RuntimeValue.FromBug(null)을 넘긴다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool ProvideInput(FunctionTask task, RuntimeValue value)
+	{
+		if (task == null) throw new ArgumentNullException(nameof(task));
+		return task.ProvideInput(value);
+	}
+
 	// 시전 전 검사 없이 작업을 만든다. Cast와, 블록이 요청한 비동기 시전이 쓴다
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
-	FunctionTask CastUnchecked(FunctionBlock function)
+	// arguments가 있으면 복사본에 넘긴다. 원본에 넘기면 같은 원본을 쓰는 다른 시전과 값이 섞이기 때문
+	FunctionTask CastUnchecked(FunctionBlock function, RuntimeValue?[] arguments = null)
 	{
-		FunctionTask task = new FunctionTask(gameObject, memory, language, (FunctionBlock)function.Clone());
+		FunctionBlock copy = (FunctionBlock)function.Clone();
+		if (arguments != null) copy.SetArguments(arguments);
+
+		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, copy);
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -125,6 +182,77 @@ public class FunctionExecutor : MonoBehaviour
 			pendingTasks[i].Interrupt();
 	}
 
+	/// <summary>
+	/// 슬롯에서 넘긴 함수(원본)로 시전한 작업만 끊는다. 플레이어가 그 슬롯의 작업을 취소할 때 부른다.<br/>
+	/// 진행 중인 작업과 다음 틱을 기다리는 작업이 모두 대상이다. 끊은 작업이 있으면 true, 없으면 false를 돌려준다.<br/>
+	/// 끊긴 작업은 EndReason이 Cancelled가 된다. 그 밖의 처리(OnCancel, 스택 반환, 누수, 쿨타임)는 InterruptAll과 같다.<br/>
+	/// 같은 스킬이 다른 함수 안에서 실행 중이어도 그 작업은 끊지 않는다. 그 작업이 비동기 호출로 만든 작업도 따로 시전된 작업이라 끊지 않는다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool Cancel(FunctionBlock function)
+	{
+		if (function == null) throw new ArgumentNullException(nameof(function));
+
+		bool cancelled = false;
+		// InterruptAll과 같은 이유로 번호로 돌고 Count를 매번 다시 읽는다(OnCancel에서 Cast를 부를 수 있음)
+		for (int i = 0; i < tasks.Count; i++)
+			cancelled |= TryCancel(tasks[i], function);
+		for (int i = 0; i < pendingTasks.Count; i++)
+			cancelled |= TryCancel(pendingTasks[i], function);
+		return cancelled;
+	}
+
+	// 슬롯에서 그 원본으로 시전한 작업이면 끊는다. 이미 끝난 작업은 끊은 것으로 세지 않는다
+	// 원본(CastSource)으로 찾는 이유: 플레이어가 누른 그 슬롯의 작업만 끊기 위함(사용자 결정)
+	// 스킬은 다른 함수 안에서 실행 중이기만 해도 IsRunning이 true지만, 그때 Cancel은 아무것도 끊지 않고 false다
+	static bool TryCancel(FunctionTask task, FunctionBlock function)
+	{
+		if (task.IsEnded || task.CastSource != function) return false;
+
+		task.Interrupt(FunctionTaskEndReason.Cancelled);
+		return true;
+	}
+
+	/// <summary>
+	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다.<br/>
+	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
+	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서만 실행되도록 [Server]를 붙인다
+	public void RestartProcess()
+	{
+		// 작업을 먼저 끊는다. 끊기 전에 heap을 비우면, 이번 틱에 남은 작업이 사라진 객체의 포인터를 쓰게 되기 때문
+		InterruptAll();
+		memory.Heap.Clear();
+		LoadGlobalVariables();
+	}
+
+	// 저장한 전역 변수 파일을 읽어 전역 변수를 초기값으로 다시 만든다
+	// 실행 중에 메모리 크기가 줄었어도 전역 변수는 모두 만든다. 칸 검사는 저장할 때만 하고, 줄어든 만큼은 Free가 0이 되는 것으로 드러난다(스택 규칙과 같음)
+	// 파일이 깨졌으면 GlobalVariablesConverter가 콘솔 오류를 남기고, 전역 변수 없이 시작한다
+	void LoadGlobalVariables()
+	{
+		GlobalVariablesData file = GlobalVariablesStorage.Load();
+		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, int.MaxValue, out var variables))
+			variables = new List<(string, VariableType, RuntimeValue)>();
+		memory.ResetGlobals(variables);
+	}
+
+	/// <summary>
+	/// 전역 변수 파일을 검사해서 저장하고, 프로세스를 새로 시작한다(RestartProcess).<br/>
+	/// 검사에 걸리면(칸 부족, 대상 타입, 직접 입력한 값이 아닌 초기값 등) 저장하지 않고 false를 돌려준다. 거부 이유는 콘솔 오류로 남는다.
+	/// </summary>
+	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
+	public bool TrySaveGlobalVariables(GlobalVariablesData file)
+	{
+		if (file == null) throw new ArgumentNullException(nameof(file));
+		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _)) return false;
+
+		GlobalVariablesStorage.Save(file);
+		RestartProcess();
+		return true;
+	}
+
 	void Awake()
 	{
 		memory = GetComponent<ProcessMemory>();
@@ -139,6 +267,28 @@ public class FunctionExecutor : MonoBehaviour
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));
 		castConditions.Add(new MemoryCondition(memory));
+	}
+
+	// 접속하면 저장한 전역 변수를 만든다. 접속 직후에는 끊을 작업도 비울 heap도 없으므로 RestartProcess의 나머지는 하지 않는다
+	// RestartProcess를 부르지 않는 이유: 같은 오브젝트의 다른 컴포넌트가 Start에서 먼저 시전하면, 그 작업까지 끊기 때문(Start 순서는 Unity가 정하지 않음)
+	// Awake가 아니라 Start에서 하는 이유: ProcessMemory가 Awake에서 전역 변수 저장소를 만든 뒤여야 하기 때문
+	// heap이 누수를 판단할 때 실행 중인 작업들의 지역 변수도 루트로 보게 연결한다. ProcessMemory가 Awake에서 heap을 만든 뒤여야 하므로 Start에서 한다
+	void Start()
+	{
+		memory.Heap.SetRunningLocalPointers(GetRunningLocalPointers);
+		LoadGlobalVariables();
+	}
+
+	// 실행 중인 작업들의 지역 변수에 담긴 포인터
+	// 끝난 작업은 뺀다. 이번 틱에 끝나 아직 목록에 남아 있어도, 끝난 순간 지역 변수는 사라졌기 때문
+	IEnumerable<int> GetRunningLocalPointers()
+	{
+		foreach (FunctionTask task in tasks)
+		{
+			if (task.IsEnded) continue;
+			foreach (int pointer in task.GetLocalPointers())
+				yield return pointer;
+		}
 	}
 
 	void FixedUpdate()
@@ -166,7 +316,13 @@ public class FunctionExecutor : MonoBehaviour
 		foreach (FunctionTask task in GetTickOrder())
 		{
 			FunctionFailure? failure = task.Step();
-			if (failure.HasValue) HandleFailure(task, failure.Value);
+			// 프로세스를 새로 시작했으면 이 작업이 남긴 입력·비동기 시전 요청은 버린다. 새로 시작한 프로세스에 죽은 프로세스의 작업이 생기지 않게 하기 위함
+			// 이 틱에 남은 작업은 이미 끊겨서 Step이 진행하지 않는다
+			if (failure.HasValue && HandleFailure(task, failure.Value)) continue;
+
+			// 상태를 WaitingInput으로 바꾼 뒤에 알린다. 받은 쪽이 이 안에서 바로 ProvideInput을 불러도 다음 틱부터 진행되게 하기 위함
+			if (task.TryTakeNewInputRequest(out PredefinedFunction requester))
+				InputRequested?.Invoke(task, requester);
 
 			// 작업이 이번 틱에 끝났어도 요청은 시전한다. 함수의 마지막 줄이 비동기 호출이면, 요청한 틱에 원래 작업이 끝나기 때문
 			// 새 작업은 pendingTasks에 들어가 다음 틱부터 진행한다. 지금 도는 tasks는 바뀌지 않는다
@@ -179,7 +335,8 @@ public class FunctionExecutor : MonoBehaviour
 		{
 			if (!task.IsEnded) continue;
 
-			cooldowns.StartCooldown(task);
+			// 쿨타임은 여기서 걸지 않는다. 작업 안의 스킬이 끝날 때 스킬마다 이미 걸렸다
+			cooldowns.Unregister(task);
 			// TaskEnded보다 먼저 한다. 이벤트를 받은 쪽이 누수 여부까지 정해진 상태를 보게 하기 위함
 			memory.Heap.HandleTaskEnded(task);
 			TaskEnded?.Invoke(task);
@@ -189,22 +346,31 @@ public class FunctionExecutor : MonoBehaviour
 
 	// 작업이 플레이어 책임으로 실패했을 때, 작업의 Step이 돌려준 실패 종류로 실행기가 처리를 찾아 실행한다
 	// 작업이 스스로 처리하지 않고 실행기가 맡는다. 재부팅처럼 다른 작업까지 끝내는 처리는 모든 작업을 가진 실행기만 할 수 있기 때문
-	void HandleFailure(FunctionTask task, FunctionFailure failure)
+	// 프로세스를 새로 시작했으면 true를 돌려준다
+	bool HandleFailure(FunctionTask task, FunctionFailure failure)
 	{
 		// 표에 줄이 없거나 언어 규칙 파일이 없으면 개발자 책임이다. 플레이어의 에러로 보이지 않게 InternalError로 끝낸다
 		if (!language.TryFindHandling(task.Name, failure, out FailureHandling handling))
 		{
 			task.End(FunctionTaskEndReason.InternalError);
-			return;
+			return false;
 		}
 
 		switch (handling)
 		{
+			// 실패한 작업을 먼저 Failed로 끝낸다. RestartProcess가 끊는 작업은 Interrupted가 되는데, 실패한 작업까지 Interrupted로 덮으면 화면이 원인을 찾을 수 없기 때문
+			case FailureHandling.RestartProcess:
+				task.End(FunctionTaskEndReason.Failed);
+				RestartProcess();
+				return true;
+
 			// 이미 실행 중인 작업은 시전을 되돌릴 수 없으므로, 거부도 그 작업만 끝내는 것으로 처리한다
+			// default도 함께 둔다. 처리 값을 새로 추가하고 여기를 빠뜨려도, 실패한 작업이 끝나지 않은 채 남지 않게 하기 위함
 			case FailureHandling.Reject:
 			case FailureHandling.EndTask:
+			default:
 				task.End(FunctionTaskEndReason.Failed);
-				break;
+				return false;
 		}
 	}
 

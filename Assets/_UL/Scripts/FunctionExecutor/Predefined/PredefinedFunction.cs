@@ -28,11 +28,9 @@ public abstract class PredefinedFunction : FunctionBlock
 	// OnStart, OnTick 도중에 바로 끝내면 그 뒤의 스킬 코드가 끝난 함수 위에서 계속 실행되기 때문
 	SkillError requestedError;
 	bool stopRequested;
-	// 함수 블록의 value slot에서 받은 파라미터 값. Parameters와 같은 순서이고, 비운 칸은 null이다
-	// 슬롯에서 바로 시전했거나 value slot이 없으면 배열 자체가 null이다
-	RuntimeValue?[] arguments;
-	// Return으로 정한 반환 값. 정하지 않았으면 null
-	RuntimeValue? returnValue;
+	// 이 함수가 Malloc으로 올린 포인터. 정상으로 끝나면 숨은 시스템 전역으로 옮긴다
+	// 처음 Malloc할 때 만든다. 원본에서 만들어 두면 복사본들이 같은 목록을 함께 쓰게 되기 때문(복사는 필드의 참조만 복사함)
+	List<int> mallocedPointers;
 
 	/// <summary>
 	/// 고정 ID. 함수 데이터의 함수 블록이 이 값으로 이 함수를 가리킨다. 화면 이름(Name)과 따로 둔다.
@@ -50,17 +48,6 @@ public abstract class PredefinedFunction : FunctionBlock
 	public virtual int CodeSize => 1;
 
 	/// <summary>
-	/// 파라미터 이름과 타입. 편집 화면은 이 수와 순서대로 함수 블록의 value slot을 만든다.
-	/// </summary>
-	public virtual IReadOnlyList<ParameterData> Parameters => Array.Empty<ParameterData>();
-
-	/// <summary>
-	/// 돌려주는 값의 타입. Void가 아니면 함수 블록을 expression으로 쓸 수 있다.
-	/// </summary>
-	// 부를 때마다 새로 만든다. VariableType은 값을 바꿀 수 있어서, 하나를 함께 쓰면 한 곳에서 바꾼 값이 모든 함수에 퍼지기 때문
-	public virtual VariableType ReturnType => new VariableType(VariableTypeKind.Void);
-
-	/// <summary>
 	/// 실행 중에 쓰는 지역 변수 수. 스택 프레임 크기 계산에 쓴다.<br/>
 	/// 스킬마다 스택 부담을 조정하는 값이다. 무거운 스킬일수록 크게 정한다.
 	/// </summary>
@@ -68,9 +55,11 @@ public abstract class PredefinedFunction : FunctionBlock
 	public virtual int LocalVariableCount => 0;
 
 	/// <summary>
-	/// 다른 함수 안에서 불렸을 때 기다리지 않으면 true. 이때는 새 작업으로 실행되고, 부른 쪽은 바로 다음 블록으로 넘어간다.
+	/// 쿨타임(tick 수). 이 스킬이 끝난 순간부터 이만큼 지나야 같은 고정 ID의 스킬을 다시 쓸 수 있다.<br/>
+	/// 정상 종료, 실패, 실행 중단 모두 쿨타임 전체가 걸린다. 슬롯에서 바로 시전했든 사용자 정의 함수 안에서 불렸든 같다.
 	/// </summary>
-	public virtual bool IsAsync => false;
+	// 동작 시간(TickCount)과 따로 둔다. 짧게 실행되고 오래 기다리는 스킬, 오래 실행되고 바로 다시 쓰는 스킬을 모두 만들기 위함
+	public virtual int CooldownTicks => 0;
 
 	/// <summary>
 	/// 기획의 프레임 = 1(호출) + 파라미터 수 + 지역 변수 수.
@@ -78,10 +67,73 @@ public abstract class PredefinedFunction : FunctionBlock
 	// 스킬마다 직접 정하지 않고 계산한다. 파라미터를 고치고 프레임 크기를 고치지 않아 둘이 어긋나는 일을 막기 위함
 	public sealed override int FrameSize => 1 + Parameters.Count + LocalVariableCount;
 
+	// 같은 스킬이 실행 중이거나 쿨타임 중이면 시작하지 않고 기다린다. 슬롯 직접 시전, 함수 안의 호출, 비동기 시전이 모두 여기를 지난다
+	// 스킬이 실제로 실행된 동안만 실행 중으로 세고, 끝날 때 쿨타임을 건다
+	// sealed: 스킬 작성자가 덮어써서 쿨타임 검사나 기록을 빠뜨리지 못하게 한다
+	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
+	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
+	// 넘겨받은 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 시작하지 않고 InvalidTarget으로 실패한다
+	// 함수 안의 호출(CallBlock)과 슬롯 직접 시전(FunctionExecutor.Cast의 argument)이 모두 여기를 지난다. 스킬마다 검사 코드를 넣지 않기 위함
+	internal sealed override bool TryValidateStart(FunctionContext context)
+	{
+		if (Arguments == null) return true;
+
+		foreach (RuntimeValue? argument in Arguments)
+		{
+			if (!argument.HasValue || argument.Value.Type?.Kind != VariableTypeKind.Target || argument.Value.IsUsableTarget) continue;
+
+			context.RecordFailure(FunctionFailure.InvalidTarget);
+			return false;
+		}
+		return true;
+	}
+
+	// 끝까지 실행한 직후 한 번 불린다. 반환 값을 확인하고, 통과하면(정상 종료) 이 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮긴다
+	// 이 함수가 끝나는 순간 옮긴다. 플레이어 함수 안에서 불렸어도 그 함수가 나중에 실패하든 상관없이 남기기 위함(C 라이브러리가 static 전역 변수에 저장하는 것과 같음)
+	// 함수 안의 호출, 슬롯 직접 시전, 비동기 시전이 모두 여기를 지난다. 같은 스킬이 놓인 자리에 따라 성공하거나 실패하지 않게 하기 위함
+	internal sealed override bool TryValidateEnd(FunctionContext context)
+	{
+		if (!TryValidateReturnValue(context)) return false;
+
+		if (mallocedPointers != null) context.MoveToSystemGlobals(mallocedPointers);
+		return true;
+	}
+
+	// Return으로 정한 값을 반환 타입으로 맞춘다. 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다
+	// 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
+	bool TryValidateReturnValue(FunctionContext context)
+	{
+		if (ReturnType.Kind == VariableTypeKind.Void) return true;
+
+		if (!ReturnValue.HasValue)
+		{
+			Debug.LogError($"{Name}: 반환 타입이 {ReturnType.Kind}인데 Return을 부르지 않고 끝났습니다.");
+			context.RecordInternalError();
+			return false;
+		}
+		if (!NumericRules.TryConvertForStore(ReturnValue.Value, ReturnType, context.Rule, out RuntimeValue converted))
+		{
+			Debug.LogError($"{Name}: Return으로 넘긴 {ReturnValue.Value.Type?.Kind} 값을 반환 타입 {ReturnType.Kind}(으)로 바꿀 수 없습니다.");
+			context.RecordInternalError();
+			return false;
+		}
+
+		ReturnValue = converted;
+		return true;
+	}
+
+	internal sealed override void BeforeFrameReleased(FunctionContext context)
+	{
+		// 값을 받기 전에 끝났으면(Stop, Fail, 실행 중단) 남은 입력 요청을 지운다. 남겨 두면 같은 작업의 다음 스킬이 입력을 기다리는 것으로 보기 때문
+		context.ClearInputRequest(this);
+		context.Cooldowns.SkillEnded(this);
+	}
+
 	protected sealed override BlockResult Step(FunctionContext context)
 	{
 		// OnStart에서 이미 Fail이나 Stop을 불렀으면 OnTick을 부르지 않는다
-		if (requestedError == null && !stopRequested)
+		// 입력을 요청한 틱(OnStart에서 요청)에도 부르지 않는다. 입력을 기다리는 동안은 동작 시간(TickCount)에 넣지 않기 때문
+		if (requestedError == null && !stopRequested && !context.IsWaitingInput)
 		{
 			elapsedTicks++;
 			OnTick(context, elapsedTicks);
@@ -95,6 +147,8 @@ public abstract class PredefinedFunction : FunctionBlock
 			return BlockResult.Failed;
 		}
 		if (stopRequested) return BlockResult.Done;
+		// 입력이 들어올 때까지 끝나지 않는다. TickCount가 지났어도 입력값으로 할 일이 남았기 때문
+		if (context.IsWaitingInput) return BlockResult.Running;
 
 		return elapsedTicks >= TickCount ? BlockResult.Done : BlockResult.Running;
 	}
@@ -162,8 +216,8 @@ public abstract class PredefinedFunction : FunctionBlock
 		{
 			if (parameters[i].Name != name) continue;
 
-			if (arguments == null || i >= arguments.Length || arguments[i] == null) return false;
-			value = arguments[i].Value;
+			if (Arguments == null || i >= Arguments.Length || Arguments[i] == null) return false;
+			value = Arguments[i].Value;
 			return true;
 		}
 
@@ -191,31 +245,21 @@ public abstract class PredefinedFunction : FunctionBlock
 			return;
 		}
 
-		returnValue = value;
-	}
-
-	// 함수 호출 블록(PredefinedCallBlock)이 이 함수가 끝난 뒤 반환 값을 받아 간다
-	internal bool TryGetReturnValue(out RuntimeValue value)
-	{
-		value = returnValue ?? default;
-		return returnValue.HasValue;
-	}
-
-	// 함수 호출 블록(PredefinedCallBlock)이 value slot을 계산한 뒤, 실행할 복사본에 넘긴다. 원본에는 넘기지 않는다
-	internal void SetArguments(RuntimeValue?[] values)
-	{
-		arguments = values;
+		ReturnValue = value;
 	}
 
 	/// <summary>
 	/// obj를 시전한 캐릭터의 힙 size칸에 올리고 포인터를 돌려준다. OnStart, OnTick, OnEnd에서 부른다.<br/>
 	/// 힙이 모자라면 NullPointer를 돌려준다. 에러로 끝내지 않으므로, 실패했는지는 돌려받은 값이 HeapStorage.NullPointer인지로 확인한다.<br/>
-	/// 이 작업이 정상으로 끝나면 포인터가 전역 포인터 목록으로 옮겨진다. 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수가 된다.
+	/// 이 함수가 정상으로 끝나면 포인터가 숨은 시스템 전역으로 옮겨진다(사용자 정의 함수 안에서 불렸어도 이 함수가 끝나는 순간). 실행 중단이나 실패로 끝나면 해제하지 않은 객체는 누수가 된다.
 	/// </summary>
 	protected int Malloc(FunctionContext context, object obj, int size)
 	{
 		if (IsInCancel(nameof(Malloc))) return HeapStorage.NullPointer;
-		return context.Malloc(obj, size);
+
+		int pointer = context.Malloc(obj, size);
+		if (pointer != HeapStorage.NullPointer) (mallocedPointers ??= new List<int>()).Add(pointer);
+		return pointer;
 	}
 
 	/// <summary>
@@ -246,7 +290,7 @@ public abstract class PredefinedFunction : FunctionBlock
 	}
 
 	/// <summary>
-	/// 전역 포인터 목록에 있는 T 타입 객체의 포인터를 malloc한 순서대로 돌려준다.<br/>
+	/// 숨은 시스템 전역에 있는 T 타입 객체의 포인터를 malloc한 순서대로 돌려준다.<br/>
 	/// 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 쓴다.
 	/// </summary>
 	protected List<int> GetGlobalPointers<T>(FunctionContext context) => context.Memory.Heap.GetGlobalPointers<T>();

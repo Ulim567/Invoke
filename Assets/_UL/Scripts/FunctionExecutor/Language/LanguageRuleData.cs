@@ -30,6 +30,14 @@ public enum FunctionFailure
 	// 반복문 밖에서 break, continue를 만났다. C에서는 compile error다
 	// 편집 화면이나 저장 검사가 막기 전까지 실행 중에 이 실패로 끝낸다. 저장 검사는 BlockData.HasJumpOutsideLoop로 찾는다
 	NotInLoop,
+	// 스킬에 넘긴 대상(Target)이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어졌다
+	// 변수에 담을 때가 아니라 스킬에 넘길 때 검사한다. C의 해제한 포인터도 쓰는 순간에 에러가 나는 것과 같다
+	InvalidTarget,
+	// 반환 타입이 있는 사용자 정의 함수가 return 없이 끝났거나, 값을 비운 return;을 만났다
+	// 실제로는 편집 화면에서 저장할 때 찾아낼 잘못이지만, 그 검사가 생기기 전까지는 실행 중에 찾아낸다
+	MissingReturn,
+	// array의 범위 밖 원소를 읽거나 썼다(음수 포함). 실제 C는 검사하지 않고 이웃 메모리를 건드리지만, 게임은 runtime error로 멈춘다
+	IndexOutOfRange,
 }
 
 /// <summary>
@@ -58,6 +66,9 @@ public enum FailureHandling
 	// 시전 전 검사가 표를 거치던 때의 처리. 실행 중에는 EndTask와 같다
 	// 시전 거부(CastRejection)가 표를 거치지 않게 된 뒤로 쓰는 줄이 없다. 지우면 이미 만든 파일의 값이 바뀔 수 있어 남겨 둔다
 	Reject,
+	// 실패한 작업을 끝내고 프로세스를 새로 시작한다(FunctionExecutor.RestartProcess). 다른 작업은 모두 끊기고 heap과 전역 변수도 처음으로 돌아간다
+	// C의 stack overflow처럼 프로세스 전체가 죽는 실패에 쓴다. 실제 프로그램도 죽은 프로세스의 메모리를 운영체제가 모두 회수하기 때문
+	RestartProcess,
 }
 
 /// <summary>
@@ -213,7 +224,7 @@ public class LanguageRuleData : ScriptableObject
 
 	/// <summary>
 	/// type 타입 변수의 기본값을 돌려준다. 선언 블록의 initializer가 비어 있을 때 쓴다.<br/>
-	/// 포인터는 언어와 상관없이 언제나 HeapStorage.NullPointer다. 아직 다루지 않는 타입이면 콘솔 오류를 내고 false를 돌려준다.
+	/// 포인터는 언어와 상관없이 언제나 HeapStorage.NullPointer, 대상(Target)은 「대상 없음」이다. 아직 다루지 않는 타입이면 콘솔 오류를 내고 false를 돌려준다.
 	/// </summary>
 	public bool TryGetDefaultValue(VariableType type, out RuntimeValue value)
 	{
@@ -230,6 +241,8 @@ public class LanguageRuleData : ScriptableObject
 			case VariableTypeKind.String: value = RuntimeValue.FromString(defaultString ?? ""); return true;
 			// 표에서 정하지 않는다. HeapStorage가 0을 null 포인터로 쓰므로 다른 값이면 malloc 실패를 알아볼 수 없기 때문
 			case VariableTypeKind.Pointer: value = RuntimeValue.FromPointer(type, HeapStorage.NullPointer); return true;
+			// 표에서 정하지 않는다. 포인터처럼 언어와 상관없이 「대상 없음」으로 시작한다
+			case VariableTypeKind.Target: value = RuntimeValue.NoTarget(type); return true;
 		}
 
 		Debug.LogError($"{name}: {type.Kind} 타입의 기본값은 아직 없습니다. 이 타입은 이후 이슈에서 추가합니다.", this);

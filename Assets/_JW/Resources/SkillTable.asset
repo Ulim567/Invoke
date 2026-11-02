@@ -128,7 +128,7 @@ MonoBehaviour:
     heapSize: 0
     areaRadius: 4
     needsSummonedSword: 1
-    usableUnarmed: 0
+    usableUnarmed: 1
     note: "\uC18C\uD658\uAC80\uC744 \uB358\uC9D0, \uB354 \uBA3C \uC801\uAE4C\uC9C0 \uBA85\uC911"
   - id: c.sword_return
     displayName: "\uAC80 \uB3CC\uC544\uC624\uAE30"

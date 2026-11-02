@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>소환검 하나의 상태</summary>
@@ -9,6 +10,7 @@ public enum SummonedSwordState
 	Dropped, // 땅에 떨어짐 (회수해야 다시 씀)
 	Leaked,  // 누수: 포인터를 잃어 그 자리에 멈춤. 힙과 개수는 계속 차지
 	Stabbing, // 소환검 찌르기: 대상에게 날아가 찌르고 돌아오는 중 (#165)
+	Returning, // 검 돌아오기: 곁으로 날아오는 중 (#167)
 }
 
 /// <summary>
@@ -17,7 +19,8 @@ public enum SummonedSwordState
 /// 만들기·없애기, 포인터, 상태 변경은 SummonedSwords(플레이어)가 맡는다. 이 컴포넌트는 SummonedSwords가 정한 상태대로 움직이고, 땅에 닿으면 SummonedSwords에 알린다.<br/>
 /// 그림(누수 반투명 등)은 SummonedSwordView가 StateChanged를 받아서 바꾼다.<br/>
 /// - 사용 가능: 플레이어 머리 뒤쪽의 자기 자리로 따라간다.<br/>
-/// - 날아가는 중: 대상을 향해 날아가 닿으면 그 자리에서 떨어진다. 대상이 없거나 시간 안에 못 닿으면 바로 떨어진다.<br/>
+/// - 날아가는 중 (#167): 던진 순간의 방향으로 일직선으로 날아간다. 한쪽 방향 발판(Platform)은 통과한다. 대상에 닿으면 알리고 몬스터 몸에 꽂혀 따라다닌다(몬스터가 죽으면 떨어짐). 벽·땅에 닿으면 거기 꽂힌다. 최대 거리를 넘으면 떨어진다. 대상 없이 던지면 바로 떨어진다.<br/>
+/// - 돌아오는 중 (#167): 곁으로 날아오며 지나가는 몬스터를 알리고, 닿으면 알린다.<br/>
 /// - 떨어짐·누수: 그 자리에 있다.<br/>
 /// - 찌르는 중: 대상에게 날아가 닿으면 SummonedSwords에 알리고, 자기 자리로 돌아와 닿으면 알린다 (#165).<br/>
 /// 물리(Rigidbody)를 쓰지 않고 직접 움직인다 (DroppedSword와 같은 방식).
@@ -37,6 +40,12 @@ public class SummonedSword : MonoBehaviour
 	[SerializeField, Min(0.01f)] float hitDistance = 0.4f;
 	[Tooltip("소환검 찌르기에서 날아가고 돌아오는 속도 (유닛/초, 임시)")]
 	[SerializeField, Min(0.1f)] float stabSpeed = 35f;
+	[Tooltip("던졌을 때 일직선으로 날아가는 최대 거리. 넘으면 떨어진다 (유닛, 임시)")]
+	[SerializeField, Min(0.1f)] float maxThrowDistance = 14f;
+	[Tooltip("검 돌아오기에서 곁으로 날아오는 속도 (유닛/초, 임시)")]
+	[SerializeField, Min(0.1f)] float returnSpeed = 30f;
+	[Tooltip("돌아오는 동안 몬스터를 베는 판정 반지름 (유닛, 임시)")]
+	[SerializeField, Min(0.05f)] float returnHitRadius = 0.6f;
 
 	SummonedSwords owner;
 	GameObject target;
@@ -46,12 +55,23 @@ public class SummonedSword : MonoBehaviour
 	float fallSpeed;
 	float landY;
 	bool returning;
+	Vector2 throwDirection;
+	float travelled;
+	Monster stuckTo;
+	Vector2 stuckOffset;
+	readonly HashSet<Monster> returnHits = new HashSet<Monster>();
 
 	/// <summary>힙 포인터 (번호표). 해제되면 더 이상 쓸 수 없다.</summary>
 	public int Pointer { get; private set; }
 
 	/// <summary>지금 상태.</summary>
 	public SummonedSwordState State { get; private set; } = SummonedSwordState.Ready;
+
+	/// <summary>마지막으로 던진 순서 (SwordThrowOrder). 검 돌아오기가 가장 먼저 던진 검을 고를 때 읽는다 (#167)</summary>
+	public int ThrowOrder { get; private set; }
+
+	/// <summary>몬스터 몸에 꽂혀 있으면 그 몬스터. 아니면 null (#167)</summary>
+	public Monster StuckTo => stuckTo;
 
 	/// <summary>[표시] 상태가 바뀔 때. SummonedSwordView가 그림을 바꾼다.</summary>
 	public event Action<SummonedSwordState> StateChanged;
@@ -71,20 +91,42 @@ public class SummonedSword : MonoBehaviour
 	internal void SetReady()
 	{
 		falling = false;
+		stuckTo = null;
 		transform.rotation = Quaternion.identity;
 		SetState(SummonedSwordState.Ready);
 	}
 
+	// 대상 쪽으로 일직선으로 던진다. 대상이 없으면 바로 떨어진다
 	internal void Launch(GameObject target)
 	{
+		if (target == null) { LaunchStraight(null, Vector2.zero); return; }
+		LaunchStraight(target, AimPoint(target) - (Vector2)transform.position);
+	}
+
+	// 방향으로 일직선으로 던진다. target이 있으면 그 대상에만 맞는다. 방향이 없으면 바로 떨어진다
+	internal void LaunchStraight(GameObject target, Vector2 direction)
+	{
 		this.target = target;
-		flightEndTime = Time.time + maxFlightTime;
+		throwDirection = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.zero;
+		travelled = 0f;
+		stuckTo = null;
+		falling = false;
+		ThrowOrder = SwordThrowOrder.Next();
 		SetState(SummonedSwordState.Flying);
-		if (target == null) StartFalling();
+		if (throwDirection == Vector2.zero) StartFalling();
+	}
+
+	internal void LaunchReturn()
+	{
+		stuckTo = null;
+		falling = false;
+		returnHits.Clear();
+		SetState(SummonedSwordState.Returning);
 	}
 
 	internal void LaunchStab(GameObject target)
 	{
+		stuckTo = null;
 		this.target = target;
 		flightEndTime = Time.time + maxFlightTime;
 		returning = false;
@@ -101,6 +143,7 @@ public class SummonedSword : MonoBehaviour
 	internal void SetLeaked()
 	{
 		falling = false;
+		stuckTo = null;
 		SetState(SummonedSwordState.Leaked);
 	}
 
@@ -120,32 +163,105 @@ public class SummonedSword : MonoBehaviour
 			case SummonedSwordState.Flying:
 				if (falling) Fall(); else Fly();
 				break;
+			case SummonedSwordState.Dropped:
+				FollowStuck();
+				if (falling) Fall();
+				break;
+			case SummonedSwordState.Returning:
+				Return();
+				break;
 			case SummonedSwordState.Stabbing:
 				Stab();
 				break;
 		}
 	}
 
+	// 던진 방향으로 일직선. 벽·땅에 닿으면 꽂히고, 대상에 닿으면 몸에 꽂힌다
 	void Fly()
 	{
-		if (target == null || !target.activeInHierarchy || Time.time >= flightEndTime)
+		Vector2 pos = transform.position;
+		float step = throwSpeed * Time.deltaTime;
+		transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(throwDirection.y, throwDirection.x) * Mathf.Rad2Deg);
+
+		// 내가 속한 장소 씬의 물리 세계에서 벽·땅을 찾는다 (place-scenes.md). 한쪽 방향 발판(Platform)은 통과한다
+		int wallLayers = groundLayers & ~LayerMask.GetMask("Platform");
+		RaycastHit2D wall = gameObject.scene.GetPhysicsScene2D().Raycast(pos, throwDirection, step, wallLayers);
+		if (wall.collider != null)
 		{
-			StartFalling();
+			transform.position = wall.point;
+			owner?.NotifyLanded(this);
 			return;
 		}
 
-		Collider2D col = target.GetComponentInChildren<Collider2D>();
-		Vector2 aim = col != null ? (Vector2)col.bounds.center : (Vector2)target.transform.position;
-		Vector2 next = Vector2.MoveTowards(transform.position, aim, throwSpeed * Time.deltaTime);
+		Vector2 next = pos + throwDirection * step;
+		transform.position = next;
+		travelled += step;
+
+		if (target != null && target.activeInHierarchy)
+		{
+			Collider2D col = target.GetComponentInChildren<Collider2D>();
+			Vector2 closest = col != null ? col.ClosestPoint(next) : (Vector2)target.transform.position;
+			if (Vector2.Distance(closest, next) <= hitDistance)
+			{
+				Monster monster = target.GetComponentInParent<Monster>();
+				owner?.NotifyHit(this, target);
+				if (monster != null && !monster.IsDead)
+				{
+					stuckTo = monster;
+					stuckOffset = next - (Vector2)monster.transform.position;
+				}
+				owner?.NotifyLanded(this);
+				if (stuckTo == null) StartFalling();
+				return;
+			}
+		}
+
+		if (travelled >= maxThrowDistance) StartFalling();
+	}
+
+	// 몬스터 몸에 꽂혀 있으면 따라다닌다. 몬스터가 죽거나 사라지면 떨어진다
+	void FollowStuck()
+	{
+		if (stuckTo == null && !ReferenceEquals(stuckTo, null)) { stuckTo = null; StartFalling(); return; }
+		if (stuckTo == null) return;
+		if (stuckTo.IsDead || !stuckTo.gameObject.activeInHierarchy)
+		{
+			stuckTo = null;
+			StartFalling();
+			return;
+		}
+		transform.position = (Vector2)stuckTo.transform.position + stuckOffset;
+	}
+
+	// 검 돌아오기: 곁으로 날아오며 지나가는 몬스터를 한 번씩 알린다
+	void Return()
+	{
+		if (owner == null) return;
+		Vector2 aim = owner.ReturnPoint;
+		Vector2 next = Vector2.MoveTowards(transform.position, aim, returnSpeed * Time.deltaTime);
 		Vector2 dir = next - (Vector2)transform.position;
 		if (dir.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
 		transform.position = next;
 
-		if (Vector2.Distance(next, aim) <= hitDistance)
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(LayerMask.GetMask("Monster"));
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		List<Collider2D> hits = new List<Collider2D>();
+		gameObject.scene.GetPhysicsScene2D().OverlapCircle(next, returnHitRadius, filter, hits);
+		foreach (Collider2D hit in hits)
 		{
-			owner?.NotifyHit(this, target);
-			StartFalling();
+			Monster monster = hit.GetComponentInParent<Monster>();
+			if (monster == null || monster.IsDead || !returnHits.Add(monster)) continue;
+			owner.NotifyReturnHit(this, monster.gameObject);
 		}
+
+		if (Vector2.Distance(next, aim) <= hitDistance) owner.NotifyReturned(this);
+	}
+
+	static Vector2 AimPoint(GameObject target)
+	{
+		Collider2D col = target.GetComponentInChildren<Collider2D>();
+		return col != null ? (Vector2)col.bounds.center : (Vector2)target.transform.position;
 	}
 
 	// 대상에게 날아가 찌르고(닿으면 알림) 자기 자리(FollowPoint)로 돌아온다

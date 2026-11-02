@@ -1,9 +1,11 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 던진 물리 검 오브젝트 (떨어진 검 프리팹에 붙는다). 날아가다가 대상에 맞거나 빗나가면 아래로 떨어져 바닥에 멈춘다.
+/// 던진 물리 검 오브젝트 (떨어진 검 프리팹에 붙는다). 포물선으로 날아가 대상에 맞거나 빗나가면 아래로 떨어져 바닥에 멈춘다.
+/// 검 돌아오기면 플레이어 손으로 날아오며 지나가는 몬스터를 알린다 (#167).
 /// <para>
-/// 만들고 없애는 일, 상태(손에 있음/날아가는 중/땅에 떨어짐)는 PhysicalSword가 맡는다. 이 컴포넌트는 움직임만 한다.<br/>
+/// 만들고 없애는 일, 상태(손에 있음/날아가는 중/땅에 떨어짐/돌아오는 중)는 PhysicalSword가 맡는다. 이 컴포넌트는 움직임만 한다.<br/>
 /// 물리(Rigidbody)를 쓰지 않고 직접 움직인다. 플레이어·몬스터와 부딪혀 밀리지 않게 하기 위함이다.
 /// </para>
 /// </summary>
@@ -11,10 +13,16 @@ public class DroppedSword : MonoBehaviour
 {
 	[Tooltip("떨어질 때 중력 가속도 (유닛/초²)")]
 	[SerializeField, Min(0f)] float fallGravity = 40f;
-	[Tooltip("이 거리 안으로 들어오면 대상에 맞은 것으로 본다 (유닛)")]
+	[Tooltip("이 거리 안으로 들어오면 대상(또는 손)에 닿은 것으로 본다 (유닛)")]
 	[SerializeField, Min(0.01f)] float hitDistance = 0.4f;
+	[Tooltip("포물선 높이 = 거리 × 이 값 (임시)")]
+	[SerializeField, Min(0f)] float arcHeightRatio = 0.25f;
+	[Tooltip("포물선 높이 최대 (유닛, 임시)")]
+	[SerializeField, Min(0f)] float maxArcHeight = 2f;
+	[Tooltip("돌아오는 동안 몬스터를 베는 판정 반지름 (유닛, 임시)")]
+	[SerializeField, Min(0.05f)] float returnHitRadius = 0.6f;
 
-	enum Phase { Idle, Flying, Falling, Landed }
+	enum Phase { Idle, Flying, Falling, Landed, Returning }
 
 	PhysicalSword owner;
 	GameObject target;
@@ -24,6 +32,13 @@ public class DroppedSword : MonoBehaviour
 	Phase phase = Phase.Idle;
 	float fallSpeed;
 	float landY;
+	// 포물선
+	Vector2 start;
+	float flightTime;
+	float elapsed;
+	float arcHeight;
+	// 돌아오기
+	readonly HashSet<Monster> returnHits = new HashSet<Monster>();
 
 	/// <summary>땅에 떨어져 멈췄으면 true.</summary>
 	public bool IsLanded => phase == Phase.Landed;
@@ -36,10 +51,24 @@ public class DroppedSword : MonoBehaviour
 		this.speed = speed;
 		this.groundLayers = groundLayers;
 		flightEndTime = Time.time + maxFlightTime;
-
 		// 대상이 없으면 빗나간 것: 바로 떨어진다
-		if (target == null) StartFalling();
-		else phase = Phase.Flying;
+		if (target == null) { StartFalling(); return; }
+
+		// 대상까지 거리로 날아가는 시간과 포물선 높이를 정한다
+		start = transform.position;
+		float distance = Vector2.Distance(start, AimPoint(target));
+		flightTime = Mathf.Max(distance / speed, 0.05f);
+		arcHeight = Mathf.Min(distance * arcHeightRatio, maxArcHeight);
+		elapsed = 0f;
+		phase = Phase.Flying;
+	}
+
+	// PhysicalSword.StartReturn만 부른다. 지금 자리에서 손으로 날아온다
+	internal void LaunchReturn(float returnSpeed)
+	{
+		speed = returnSpeed;
+		returnHits.Clear();
+		phase = Phase.Returning;
 	}
 
 	void Update()
@@ -48,6 +77,7 @@ public class DroppedSword : MonoBehaviour
 		{
 			case Phase.Flying: Fly(); break;
 			case Phase.Falling: Fall(); break;
+			case Phase.Returning: Return(); break;
 		}
 	}
 
@@ -60,15 +90,45 @@ public class DroppedSword : MonoBehaviour
 			return;
 		}
 
+		// 시작점에서 대상(움직이면 따라감)까지 직선 위에 포물선 높이를 더한다
+		elapsed += Time.deltaTime;
+		float s = Mathf.Clamp01(elapsed / flightTime);
 		Vector2 aim = AimPoint(target);
-		Vector2 next = Vector2.MoveTowards(transform.position, aim, speed * Time.deltaTime);
+		Vector2 next = Vector2.Lerp(start, aim, s) + Vector2.up * (arcHeight * 4f * s * (1f - s));
 		FaceTowards(next - (Vector2)transform.position);
 		transform.position = next;
 
-		if (Vector2.Distance(next, aim) <= hitDistance)
+		if (s >= 1f || Vector2.Distance(next, aim) <= hitDistance)
 		{
 			owner?.NotifyHit(target);
 			StartFalling();
+		}
+	}
+
+	void Return()
+	{
+		if (owner == null) return;
+		Vector2 hand = owner.HandPosition;
+		Vector2 next = Vector2.MoveTowards(transform.position, hand, speed * Time.deltaTime);
+		FaceTowards(next - (Vector2)transform.position);
+		transform.position = next;
+		CheckReturnHits();
+		if (Vector2.Distance(next, hand) <= hitDistance) owner.NotifyReturned(this);
+	}
+
+	// 돌아오는 길에 닿은 몬스터를 한 번씩 알린다. 내가 속한 장소 씬의 물리 세계에 묻는다
+	void CheckReturnHits()
+	{
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(LayerMask.GetMask("Monster"));
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		List<Collider2D> hits = new List<Collider2D>();
+		gameObject.scene.GetPhysicsScene2D().OverlapCircle(transform.position, returnHitRadius, filter, hits);
+		foreach (Collider2D hit in hits)
+		{
+			Monster monster = hit.GetComponentInParent<Monster>();
+			if (monster == null || monster.IsDead || !returnHits.Add(monster)) continue;
+			owner.NotifyReturnHit(monster.gameObject);
 		}
 	}
 

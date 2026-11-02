@@ -7,6 +7,18 @@ public enum SwordState
 	InHand,   // 손에 있음
 	Flying,   // 날아가는 중
 	OnGround, // 땅에 떨어짐
+	Returning, // 검 돌아오기로 손으로 날아오는 중 (#167)
+}
+
+/// <summary>
+/// 물리 검과 소환검을 합쳐 던진 순서를 매기는 번호표 (#167). 검 돌아오기가 가장 먼저 던진 검을 고를 때 쓴다.
+/// </summary>
+public static class SwordThrowOrder
+{
+	static int last;
+
+	/// <summary>다음 번호. 던질 때마다 1씩 커진다.</summary>
+	public static int Next() => ++last;
 }
 
 /// <summary>
@@ -14,6 +26,7 @@ public enum SwordState
 /// <para>
 /// - 상태는 이 컴포넌트만 바꾼다. 다른 스크립트는 Throw, TryPickUp, Recall을 부른다.<br/>
 /// - 던지면 맞든 빗나가든 땅에 떨어지고, 줍거나 검 돌아오기로 회수할 때까지 맨손(IsUnarmed)이다.<br/>
+/// - 대상이 있으면 포물선으로 날아간다. 검 돌아오기(StartReturn)면 손으로 날아오며 지나가는 몬스터를 ReturnHit으로 알린다 (#167).<br/>
 /// - 떨어진 검 오브젝트는 SpawnDroppedSword / DespawnDroppedSword로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3).<br/>
 /// - 물리 검은 해제(free)할 수 없다. 해제는 소환검만 대상으로 한다.
 /// </para>
@@ -41,6 +54,10 @@ public class PhysicalSword : MonoBehaviour
 	[Tooltip("떨어진 검과 이 거리 안에 있으면 주울 수 있다 (유닛)")]
 	[SerializeField, Min(0f)] float pickUpRange = 1.5f;
 
+	[Header("검 돌아오기")]
+	[Tooltip("손으로 날아오는 속도 (유닛/초, 임시)")]
+	[SerializeField, Min(0.1f)] float returnSpeed = 30f;
+
 	PlayerMovement movement;
 	DroppedSword dropped;
 
@@ -67,6 +84,22 @@ public class PhysicalSword : MonoBehaviour
 	/// </summary>
 	public event Action<GameObject> Hit;
 
+	/// <summary>[로직] 검 돌아오기로 날아오는 검이 몬스터를 지나갔을 때 (몬스터). 몬스터마다 한 번. 데미지는 검 돌아오기 스킬이 준다 (#167)</summary>
+	public event Action<GameObject> ReturnHit;
+
+	/// <summary>마지막으로 던진 순서 (SwordThrowOrder). 검 돌아오기가 가장 먼저 던진 검을 고를 때 읽는다 (#167)</summary>
+	public int ThrowOrder { get; private set; }
+
+	/// <summary>검을 던지는 손 위치 (발밑 + Hand Offset, 바라보는 방향으로 뒤집음). 돌아오는 검이 이 위치로 온다</summary>
+	public Vector2 HandPosition
+	{
+		get
+		{
+			int facing = movement != null ? movement.Facing : 1;
+			return (Vector2)transform.position + new Vector2(handOffset.x * facing, handOffset.y);
+		}
+	}
+
 	void Reset()
 	{
 		groundLayers = LayerMask.GetMask("Ground", "Platform");
@@ -90,12 +123,11 @@ public class PhysicalSword : MonoBehaviour
 			return false;
 		}
 
-		int facing = movement != null ? movement.Facing : 1;
-		Vector2 hand = (Vector2)transform.position + new Vector2(handOffset.x * facing, handOffset.y);
-		dropped = SpawnDroppedSword(hand);
+		dropped = SpawnDroppedSword(HandPosition);
 		// 만들지 못했으면(프리팹 설정 오류, 클라이언트에서 부름) 던지지 않는다. 원인은 NetworkSpawner가 로그로 남긴다
 		if (dropped == null) return false;
 		dropped.Launch(this, target, throwSpeed, maxFlightTime, groundLayers);
+		ThrowOrder = SwordThrowOrder.Next();
 		SetState(SwordState.Flying);
 		return true;
 	}
@@ -119,6 +151,27 @@ public class PhysicalSword : MonoBehaviour
 		if (State == SwordState.InHand) return false;
 		ReturnToHand();
 		return true;
+	}
+
+	/// <summary>
+	/// 검 돌아오기 (#167): 던진 검을 지금 자리에서 손으로 날아오게 한다. 손에 있거나 이미 돌아오는 중이면 false.<br/>
+	/// 날아오며 지나가는 몬스터는 ReturnHit으로 알리고, 손에 닿으면 손으로 돌아온다(InHand).
+	/// </summary>
+	public bool StartReturn()
+	{
+		if (State == SwordState.InHand || State == SwordState.Returning || dropped == null) return false;
+		dropped.LaunchReturn(returnSpeed);
+		SetState(SwordState.Returning);
+		return true;
+	}
+
+	internal void NotifyReturnHit(GameObject monster) => ReturnHit?.Invoke(monster);
+
+	// 돌아오던 검이 손에 닿았을 때 DroppedSword가 부른다
+	internal void NotifyReturned(DroppedSword sword)
+	{
+		if (sword != dropped || State != SwordState.Returning) return;
+		ReturnToHand();
 	}
 
 	// DroppedSword가 대상에 닿았을 때 부른다

@@ -10,7 +10,7 @@
   - 이펙트, 소리, 애니메이션을 하지 않는다. 연출은 `TaskStarted`, `TaskEnded` event를 받은 쪽이 한다.
   - code area, Overflow 시 재부팅 시간(디버프), Java의 try, 버그 공격의 메모리 효과(`MemoryOccupy`, `ReclaimBlock`)는 아직 다루지 않는다. 이후 이슈에서 추가한다. Overflow 때 프로세스를 새로 시작하는 것은 한다(#143).
   - 빈 슬롯을 거르지 않는다. 빈 슬롯이면 cast 담당 스크립트가 `Cast`를 부르지 않는다.
-- 멀티플레이 (#173): 함수는 서버의 실행기만 실행. 클라이언트 화면의 실행기는 멈추고(`TickEnabled` false) 서버가 알려 준 메모리·쿨타임 값으로 답함. 시전 요청·알림은 `FunctionExecutorNetwork`([network.md](network.md))
+- 멀티플레이 (#173): 함수는 서버의 실행기만 실행. 클라이언트의 실행기는 틱 진행 안 함(`TickEnabled` false), 서버가 알려 준 메모리·쿨타임 값으로 답함. 시전 요청·알림은 `FunctionExecutorNetwork`([network.md](network.md))
 
 ## 파일 위치
 - `Assets/_UL/Scripts/FunctionExecutor/` 아래 (#118)
@@ -382,17 +382,17 @@
 | `Cast(FunctionBlock function)` | cast할 function (`PredefinedFunction` 또는 `UserFunction`) | `FunctionTask` | function을 cast한다. 넘긴 객체는 원본으로 남고 복사본이 실행되므로, 같은 객체를 여러 번 넘겨도 된다. `FunctionTask`는 다음 tick부터 진행한다. 시전 전 검사에 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`를 알린 뒤 `null`을 돌려준다. |
 | `Cast(PredefinedFunction function, params RuntimeValue[] arguments)` | 사전 정의 함수, argument(`Parameters` 순서) | `FunctionTask` | argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 고른 대상을 넘긴다. 예: `Cast(thrust, RuntimeValue.FromBug(몬스터))`. 스킬은 `TryGetArgument`로 읽는다. 쓸 수 없는 대상이면 작업이 시작할 때 `InvalidTarget`. 파라미터 타입으로 맞출 수 없거나 파라미터보다 많으면 예외 (#131) |
 | `Cast(FunctionBlock function, out CastRejection? rejection)`, `Cast(PredefinedFunction function, RuntimeValue[] arguments, out CastRejection? rejection)` | 위와 같음 | `FunctionTask` | 위 두 `Cast`와 같고, 거부되면 거부 이유를 `rejection`으로 돌려준다(시전되면 `null`). `CastRejected`도 그대로 불린다. 시전한 쪽이 거부 이유를 바로 알아야 할 때 쓴다(`FunctionExecutorNetwork`) (#173) |
-| `CastRejected` (event) | `FunctionBlock`, `CastRejection` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 거부 이유(`OnCooldown`, `NotEnoughMemory`)를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. 멀티플레이 화면은 `FunctionExecutorNetwork.CastRejected`를 받는다(`NoFunction` 포함, #173) |
+| `CastRejected` (event) | `FunctionBlock`, `CastRejection` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 거부 이유(`OnCooldown`, `NotEnoughMemory`)를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. 멀티플레이에서 클라이언트는 `FunctionExecutorNetwork.CastRejected`를 받는다(`NoFunction` 포함, #173) |
 | `TaskStarted` (event) | `FunctionTask` | - | `FunctionTask`가 첫 tick을 진행하기 직전에 불린다. 연출을 시작할 때 쓴다. |
 | `TaskEnded` (event) | `FunctionTask` | - | `FunctionTask`가 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 `task.EndReason`, 플레이어 책임으로 실패(`Failed`)했으면 `task.Failure`, `task.Error`로 확인한다. |
 | `InputRequested` (event) | `FunctionTask`, `PredefinedFunction` | - | `FunctionTask`가 입력 함수를 만나 입력을 기다리기 시작할 때 한 번 불린다. 기다리는 작업과 요청한 입력 함수를 넘긴다. 받는 쪽은 입력 함수의 `Id`(예: `input.get_bug`)로 자기가 맡은 입력인지 확인한다. (#131) |
 | `ProvideInput(FunctionTask task, RuntimeValue value)` | 기다리는 작업, 넣을 값 | `bool` | 입력을 기다리는 작업에 값을 넣는다. 작업은 다음 tick부터 이어서 진행한다. 대상 입력이면 `RuntimeValue.FromBug(몬스터)`, 고를 대상이 없으면 `FromBug(null)`. 작업이 이미 끝났거나 입력을 기다리지 않으면 `false`. 값의 타입이 요청한 타입과 다르면 예외. (#131) |
 | `CurrentTick` | - | `int` | 지금까지 지난 tick 수. 첫 tick이 1이다. |
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
-| `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. `SetDisplayedCooldown`을 받은 실행기(클라이언트 화면)는 받은 끝 시각으로 답한다 (#173) |
-| `CooldownStarted` (event) | `string` 스킬 고정 ID, `int` 지금부터 남은 tick 수 | - | 스킬의 쿨타임이 시작되거나 늘어났을 때. 서버가 시전한 사람 화면에 쿨타임을 알릴 때 쓴다 (#173) |
-| `SetDisplayedCooldown(string skillId, float endTime)` | 스킬 고정 ID, 끝 시각(`Time.time` 기준) | - | 클라이언트 화면의 실행기에 서버가 알려 준 쿨타임 끝 시각을 넣는다. 처음 부른 뒤로 `GetRemainingCooldownTicks`가 받은 시각으로 답한다. `FunctionExecutorNetwork`만 부른다 (#173) |
-| `TickEnabled` | - | `bool` (읽기·쓰기) | tick을 진행하는지. false이면 tick을 세지 않고 작업도 진행하지 않는다. 처음 값 true. 클라이언트 화면의 실행기를 멈출 때 `FunctionExecutorNetwork`가 쓴다 (#173) |
+| `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. `SetDisplayedCooldown`을 받은 실행기(클라이언트)는 받은 끝 시각으로 답한다 (#173) |
+| `CooldownStarted` (event) | `string` 스킬 고정 ID, `int` 지금부터 남은 tick 수 | - | 스킬의 쿨타임이 시작되거나 늘어났을 때. 서버가 소유 클라이언트에 쿨타임을 알릴 때 쓴다 (#173) |
+| `SetDisplayedCooldown(string skillId, float endTime)` | 스킬 고정 ID, 끝 시각(`Time.time` 기준) | - | 클라이언트의 실행기에 서버가 알려 준 쿨타임 끝 시각을 넣는다. 처음 부른 뒤로 `GetRemainingCooldownTicks`가 받은 시각으로 답한다. `FunctionExecutorNetwork`만 부른다 (#173) |
+| `TickEnabled` | - | `bool` (읽기·쓰기) | tick을 진행하는지. false이면 tick을 세지 않고 작업도 진행하지 않는다. 처음 값 true. 클라이언트의 실행기를 멈출 때 `FunctionExecutorNetwork`가 쓴다 (#173) |
 | `TryGetTask(int id, out FunctionTask task)` | 작업 번호(`FunctionTask.Id`) | `bool` | 진행 중인 작업과 다음 tick을 기다리는 작업에서 번호로 찾는다. 목록에서 빠졌거나 없는 번호면 `false`. 클라이언트가 보낸 작업 번호를 서버의 작업으로 바꿀 때 쓴다 (#173) |
 | `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
@@ -474,7 +474,7 @@
 ### `ProcessMemory`
 
 값은 `ProcessMemory`만 바꾼다. 다른 시스템은 읽기만 한다(예: memory 게이지 UI). heap 객체는 `Heap`의 함수로 다룬다.
-- 클라이언트 화면 (#173): `Capacity`, `DataUsed`, `StackUsed`, `HeapUsed`, `Free`가 서버가 알려 준 값으로 답한다(`FunctionExecutorNetwork`). 읽는 쪽은 그대로 읽는다. `Heap`은 비어 있다
+- 클라이언트 (#173): `Capacity`, `DataUsed`, `StackUsed`, `HeapUsed`, `Free`가 서버가 알려 준 값으로 답한다(`FunctionExecutorNetwork`). 읽는 쪽은 그대로 읽는다. `Heap`은 비어 있다
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |

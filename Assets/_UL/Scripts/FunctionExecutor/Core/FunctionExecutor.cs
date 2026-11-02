@@ -36,6 +36,16 @@ public class FunctionExecutor : MonoBehaviour
 	readonly List<CastCondition> castConditions = new List<CastCondition>();
 
 	int fixedUpdateCount;
+	// 마지막으로 붙인 작업 번호. 작업을 만들 때마다 1씩 늘려 붙인다
+	int lastTaskId;
+	// 초기화 때 읽을 전역 변수 파일. null이면 이 컴퓨터의 파일(GlobalVariablesStorage)을 읽는다
+	GlobalVariablesData globalVariablesFile;
+	// 틱을 멈춘 실행기(클라이언트 화면)가 쿨타임을 보여 줄 때 쓰는 값. 스킬 고정 ID → 쿨타임이 끝나는 시각(Time.time)
+	// 그 화면의 실행기는 스킬을 실행하지 않아 쿨타임 기록이 비어 있으므로, 서버가 알려 준 시각을 받아 둔다(SetDisplayedCooldown)
+	readonly Dictionary<string, float> displayedCooldownEndTimes = new Dictionary<string, float>();
+	// 쿨타임을 서버에서 받은 값으로 답하는지. SetDisplayedCooldown을 처음 부를 때 켠다
+	// TickEnabled로 판단하지 않는 이유: 서버에서도 다른 이유(일시 정지 등)로 틱을 멈출 수 있는데, 그때도 자기 쿨타임으로 답해야 하기 때문
+	bool usesDisplayedCooldowns;
 	ProcessMemory memory;
 	CooldownTracker cooldowns;
 	LanguageRule language;
@@ -49,6 +59,13 @@ public class FunctionExecutor : MonoBehaviour
 	/// 1틱의 길이(초). 스킬 애니메이션 길이를 TickCount에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다.
 	/// </summary>
 	public float SecondsPerTick => Time.fixedDeltaTime * fixedUpdatesPerTick;
+
+	/// <summary>
+	/// 틱을 진행하는지. false이면 틱을 세지 않고 작업도 진행하지 않는다. 처음 값은 true다.<br/>
+	/// 멀티플레이에서 클라이언트에 있는 플레이어 복사본의 실행기를 멈출 때 쓴다. 함수는 서버의 실행기만 실행한다.
+	/// </summary>
+	// 컴포넌트를 비활성화(enabled = false)하지 않고 따로 두는 이유: 비활성화하면 다른 스크립트가 꺼진 컴포넌트로 보고, 다시 켜는 쪽과 겹칠 수 있기 때문
+	public bool TickEnabled { get; set; } = true;
 
 	/// <summary>
 	/// 작업이 첫 단계를 진행하기 직전에 불린다.
@@ -74,15 +91,28 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<FunctionTask, PredefinedFunction> InputRequested;
 
 	/// <summary>
+	/// 스킬의 쿨타임이 시작되거나 늘어났을 때 불린다 (스킬 고정 ID, 지금부터 남은 쿨타임 틱 수). 쿨타임은 스킬이 끝나는 틱에 시작한다.<br/>
+	/// 멀티플레이에서 서버가 쿨타임을 시전한 사람의 화면에 알릴 때 쓴다.
+	/// </summary>
+	public event Action<string, int> CooldownStarted;
+
+	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
 	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
 	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
 	/// </summary>
-	public FunctionTask Cast(FunctionBlock function)
+	public FunctionTask Cast(FunctionBlock function) => Cast(function, out _);
+
+	/// <summary>
+	/// Cast(function)과 같고, 거부되면 거부 이유를 rejection으로 돌려준다. 시전되면 rejection은 null이다.<br/>
+	/// 시전한 쪽이 거부 이유를 바로 알아야 할 때 쓴다(예: 서버가 시전한 사람에게 거부 이유를 보낼 때). CastRejected event도 그대로 불린다.
+	/// </summary>
+	// CastRejected event로 이유를 따로 받아 두지 않게 하기 위함. event로 받으면 다른 받는 쪽이 그 안에서 또 시전할 때 이유가 덮어써지기 때문
+	public FunctionTask Cast(FunctionBlock function, out CastRejection? rejection)
 	{
 		// 빈 슬롯은 시전하는 쪽(키 입력 처리)이 걸러 Cast를 부르지 않는다. 그래서 null은 코드 실수로 보고 바로 드러나게 한다
 		if (function == null) throw new ArgumentNullException(nameof(function));
-		return CastChecked(function, null);
+		return CastChecked(function, null, out rejection);
 	}
 
 	/// <summary>
@@ -91,10 +121,15 @@ public class FunctionExecutor : MonoBehaviour
 	/// arguments는 Parameters 순서이고, 뒤쪽 파라미터는 비워도 된다(「값 없음」). argument가 없으면 Cast(function)과 같다.<br/>
 	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 InvalidTarget으로 끝난다.
 	/// </summary>
-	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments)
+	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments) => Cast(function, arguments, out _);
+
+	/// <summary>
+	/// Cast(function, arguments)와 같고, 거부되면 거부 이유를 rejection으로 돌려준다. 시전되면 rejection은 null이다.
+	/// </summary>
+	public FunctionTask Cast(PredefinedFunction function, RuntimeValue[] arguments, out CastRejection? rejection)
 	{
 		if (function == null) throw new ArgumentNullException(nameof(function));
-		if (arguments == null || arguments.Length == 0) return CastChecked(function, null);
+		if (arguments == null || arguments.Length == 0) return CastChecked(function, null, out rejection);
 
 		// 값을 파라미터 타입으로 맞춘다. 맞출 수 없거나 파라미터보다 많으면 부르는 쪽의 코드 실수이므로 예외를 던진다
 		IReadOnlyList<ParameterData> parameters = function.Parameters;
@@ -108,21 +143,24 @@ public class FunctionExecutor : MonoBehaviour
 				throw new ArgumentException($"{function.Name}의 파라미터 {parameters[i].Name}({parameters[i].Type.Kind})에 {arguments[i].Type?.Kind} 값을 넘겼습니다.", nameof(arguments));
 			converted[i] = value;
 		}
-		return CastChecked(function, converted);
+		return CastChecked(function, converted, out rejection);
 	}
 
 	// 시전 전 검사를 한 뒤 작업을 만든다. arguments는 사전 정의 함수의 복사본에 넘길 값이고, 없으면 null
-	FunctionTask CastChecked(FunctionBlock function, RuntimeValue?[] arguments)
+	// 거부되면 그 이유를 rejection에 담아 null을 돌려준다
+	FunctionTask CastChecked(FunctionBlock function, RuntimeValue?[] arguments, out CastRejection? rejection)
 	{
 		foreach (CastCondition condition in castConditions)
 		{
-			if (condition.Check(function, out CastRejection rejection)) continue;
+			if (condition.Check(function, out CastRejection reason)) continue;
 
 			// 시전 거부는 플레이어 코드의 잘못이 아니므로 언어 규칙 표를 거치지 않고 바로 알린다
-			CastRejected?.Invoke(function, rejection);
+			rejection = reason;
+			CastRejected?.Invoke(function, reason);
 			return null;
 		}
 
+		rejection = null;
 		FunctionTask task = CastUnchecked(function, arguments);
 		task.CastSource = function;
 		cooldowns.Register(task);
@@ -134,7 +172,23 @@ public class FunctionExecutor : MonoBehaviour
 	/// 스킬이면 그 스킬(고정 ID)의 쿨타임이다. 사용자 정의 함수는 자기 쿨타임이 없으므로 0이다.
 	/// </summary>
 	// 쿨타임은 CooldownTracker가 가진다. 다른 시스템이 쓰는 접점을 바꾸지 않기 위해 실행기에도 남긴다
-	public int GetRemainingCooldownTicks(FunctionBlock function) => cooldowns.GetRemainingTicks(function);
+	// 클라이언트 화면의 실행기는 서버가 알려 준 끝나는 시각으로 답한다. 쿨타임 UI가 서버·클라이언트를 나누지 않고 이 함수 하나만 읽게 하기 위함
+	public int GetRemainingCooldownTicks(FunctionBlock function)
+	{
+		if (!usesDisplayedCooldowns) return cooldowns.GetRemainingTicks(function);
+		if (!(function is PredefinedFunction skill) || !displayedCooldownEndTimes.TryGetValue(skill.Id, out float endTime)) return 0;
+		return Mathf.Max(0, Mathf.CeilToInt((endTime - Time.time) / SecondsPerTick));
+	}
+
+	/// <summary>
+	/// 클라이언트 화면의 실행기에 스킬의 쿨타임이 끝나는 시각(Time.time 기준)을 받아 둔다. 처음 부른 뒤로 GetRemainingCooldownTicks가 받은 시각으로 답한다.<br/>
+	/// 멀티플레이에서 FunctionExecutorNetwork만 부른다.
+	/// </summary>
+	public void SetDisplayedCooldown(string skillId, float endTime)
+	{
+		usesDisplayedCooldowns = true;
+		displayedCooldownEndTimes[skillId] = endTime;
+	}
 
 	/// <summary>
 	/// 슬롯에서 시전한 function이 아직 실행 중이거나 다음 틱을 기다리고 있으면 true.<br/>
@@ -154,6 +208,17 @@ public class FunctionExecutor : MonoBehaviour
 		return task.ProvideInput(value);
 	}
 
+	/// <summary>
+	/// 작업 번호(FunctionTask.Id)로 작업을 찾는다. 진행 중인 작업과 다음 틱을 기다리는 작업에서 찾는다.<br/>
+	/// 이미 목록에서 빠진 작업이거나 없는 번호이면 false를 돌려준다. 이번 틱에 끝나 아직 목록에 남은 작업은 찾는다(IsEnded가 true).<br/>
+	/// 멀티플레이에서 클라이언트가 보낸 작업 번호를 서버의 작업으로 바꿀 때 쓴다.
+	/// </summary>
+	public bool TryGetTask(int id, out FunctionTask task)
+	{
+		task = tasks.Find(t => t.Id == id) ?? pendingTasks.Find(t => t.Id == id);
+		return task != null;
+	}
+
 	// 시전 전 검사 없이 작업을 만든다. Cast와, 블록이 요청한 비동기 시전이 쓴다
 	// 안쪽 비동기 시전은 슬롯에서 시전한 것이 아니라 이미 실행 중인 코드의 일부이므로, 시전 전 검사를 하지 않는다
 	// arguments가 있으면 복사본에 넘긴다. 원본에 넘기면 같은 원본을 쓰는 다른 시전과 값이 섞이기 때문
@@ -162,7 +227,7 @@ public class FunctionExecutor : MonoBehaviour
 		FunctionBlock copy = (FunctionBlock)function.Clone();
 		if (arguments != null) copy.SetArguments(arguments);
 
-		FunctionTask task = new FunctionTask(gameObject, memory, cooldowns, language, copy);
+		FunctionTask task = new FunctionTask(++lastTaskId, gameObject, memory, cooldowns, language, copy);
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -214,7 +279,7 @@ public class FunctionExecutor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다.<br/>
+	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 전역 변수 파일(SetGlobalVariablesFile, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다.<br/>
 	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
 	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
 	/// </summary>
@@ -227,12 +292,24 @@ public class FunctionExecutor : MonoBehaviour
 		LoadGlobalVariables();
 	}
 
-	// 저장한 전역 변수 파일을 읽어 전역 변수를 초기값으로 다시 만든다
+	/// <summary>
+	/// 초기화(RestartProcess) 때 전역 변수를 만들 파일을 정한다. null을 넘기면 이 컴퓨터에 저장한 파일을 읽는다(처음 값).<br/>
+	/// 정하기만 하고 초기화하지는 않는다. 바로 반영하려면 이어서 RestartProcess를 부른다.<br/>
+	/// 멀티플레이에서 서버가 클라이언트에게서 받은 전역 변수 파일로 그 플레이어의 전역 변수를 만들 때 쓴다.
+	/// </summary>
+	// 서버에서 이 컴퓨터의 파일을 읽으면 모든 플레이어가 서버 컴퓨터의 파일 하나를 함께 쓰게 되기 때문
+	// TrySaveGlobalVariables는 지금처럼 이 컴퓨터의 파일에 저장한다. 편집 화면은 플레이어의 컴퓨터에서 부르기 때문
+	public void SetGlobalVariablesFile(GlobalVariablesData file)
+	{
+		globalVariablesFile = file;
+	}
+
+	// 전역 변수 파일을 읽어 전역 변수를 초기값으로 다시 만든다
 	// 실행 중에 메모리 크기가 줄었어도 전역 변수는 모두 만든다. 칸 검사는 저장할 때만 하고, 줄어든 만큼은 Free가 0이 되는 것으로 드러난다(스택 규칙과 같음)
 	// 파일이 깨졌으면 GlobalVariablesConverter가 콘솔 오류를 남기고, 전역 변수 없이 시작한다
 	void LoadGlobalVariables()
 	{
-		GlobalVariablesData file = GlobalVariablesStorage.Load();
+		GlobalVariablesData file = globalVariablesFile ?? GlobalVariablesStorage.Load();
 		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, int.MaxValue, out var variables))
 			variables = new List<(string, VariableType, RuntimeValue)>();
 		memory.ResetGlobals(variables);
@@ -264,6 +341,7 @@ public class FunctionExecutor : MonoBehaviour
 			language = gameObject.AddComponent<LanguageRule>();
 		}
 		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick);
+		cooldowns.CooldownStarted += (skillId, endTick) => CooldownStarted?.Invoke(skillId, endTick - CurrentTick);
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));
 		castConditions.Add(new MemoryCondition(memory));
@@ -293,6 +371,8 @@ public class FunctionExecutor : MonoBehaviour
 
 	void FixedUpdate()
 	{
+		if (!TickEnabled) return;
+
 		fixedUpdateCount++;
 		if (fixedUpdateCount < fixedUpdatesPerTick) return;
 

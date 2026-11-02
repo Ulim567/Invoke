@@ -29,6 +29,11 @@ public class CooldownTracker
 	// 사용자 정의 함수는 자기 쿨타임이 없으므로, 「실행 중이면 다시 시전할 수 없음」 규칙은 이 기록만으로 지킨다
 	readonly Dictionary<FunctionBlock, FunctionTask> runningTasks = new Dictionary<FunctionBlock, FunctionTask>();
 
+	/// <summary>
+	/// 스킬의 쿨타임이 시작되거나 늘어났을 때 불린다 (스킬 고정 ID, 쿨타임이 끝나는 틱).
+	/// </summary>
+	public event Action<string, int> CooldownStarted;
+
 	public CooldownTracker(PlayerStats stats, Func<int> getCurrentTick)
 	{
 		this.stats = stats;
@@ -125,5 +130,6 @@ public class CooldownTracker
 		// 같은 스킬이 겹쳐 실행되었으면 더 늦게 끝나는 쿨타임을 남긴다. 먼저 끝난 쪽의 기록이 쿨타임을 줄이지 않게 하기 위함
 		if (cooldownEndTicks.TryGetValue(id, out int existing) && existing > endTick) return;
 		cooldownEndTicks[id] = endTick;
+		CooldownStarted?.Invoke(id, endTick);
 	}
 }

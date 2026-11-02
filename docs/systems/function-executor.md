@@ -10,6 +10,7 @@
   - 이펙트, 소리, 애니메이션을 하지 않는다. 연출은 `TaskStarted`, `TaskEnded` event를 받은 쪽이 한다.
   - code area, Overflow 시 재부팅 시간(디버프), Java의 try, 버그 공격의 메모리 효과(`MemoryOccupy`, `ReclaimBlock`)는 아직 다루지 않는다. 이후 이슈에서 추가한다. Overflow 때 프로세스를 새로 시작하는 것은 한다(#143).
   - 빈 슬롯을 거르지 않는다. 빈 슬롯이면 cast 담당 스크립트가 `Cast`를 부르지 않는다.
+- 멀티플레이 (#173): 함수는 서버의 실행기만 실행. 클라이언트의 실행기는 틱 진행 안 함(`TickEnabled` false), 서버가 알려 준 메모리·쿨타임 값으로 답함. 시전 요청·알림은 `FunctionExecutorNetwork`([network.md](network.md))
 
 ## 파일 위치
 - `Assets/_UL/Scripts/FunctionExecutor/` 아래 (#118)
@@ -222,9 +223,11 @@
   - 부르는 곳: 전역 변수 파일 저장, 사망(박진우), 재부팅(재부팅 이슈), 장소 이동(사냥터 ↔ 로비, 장소 이동 이슈), 연습장 초기화
   - 접속: `FunctionExecutor.Start`가 전역 변수만 만듦. 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전한 작업을 끊지 않기 위함
 - 전역 변수 파일 저장 위치: 이 컴퓨터의 `GlobalVariables.json` 하나(`GlobalVariablesStorage`). 서버 저장 전까지의 임시 저장소
+- 초기화 때 읽는 파일 (#173): `SetGlobalVariablesFile`로 정한 파일. 정하지 않았으면 이 컴퓨터의 파일
+  - 서버: 플레이어가 접속할 때 보낸 파일(`FunctionExecutorNetwork`, [network.md](network.md))
 - 아직 없음: 전역 array, 전역 변수 파일 편집 화면, 서버 저장, Mirror 동기화
 - 지금 한계 (서버 저장 이슈에서 해결)
-  - 전역 변수 파일이 컴퓨터마다 하나: 호스트(서버)에서는 모든 플레이어가 같은 파일을 읽고 덮어씀. 캐릭터 ID로 나눠 저장해야 함
+  - 전역 변수 파일이 컴퓨터마다 하나: 같은 컴퓨터의 다른 계정·캐릭터도 같은 파일을 보냄. 캐릭터 ID로 나눠 저장해야 함
   - 접속 직후 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전하면, 그 순간의 `Free`에 데이터 영역이 빠져 있음. 서버에서 불러오기를 기다린 뒤 전역 변수를 만드는 흐름으로 바꿀 때 함께 정리
 
 ### heap
@@ -378,18 +381,24 @@
 | --- | --- | --- | --- |
 | `Cast(FunctionBlock function)` | cast할 function (`PredefinedFunction` 또는 `UserFunction`) | `FunctionTask` | function을 cast한다. 넘긴 객체는 원본으로 남고 복사본이 실행되므로, 같은 객체를 여러 번 넘겨도 된다. `FunctionTask`는 다음 tick부터 진행한다. 시전 전 검사에 걸리면 `FunctionTask`를 만들지 않고 `CastRejected`를 알린 뒤 `null`을 돌려준다. |
 | `Cast(PredefinedFunction function, params RuntimeValue[] arguments)` | 사전 정의 함수, argument(`Parameters` 순서) | `FunctionTask` | argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 고른 대상을 넘긴다. 예: `Cast(thrust, RuntimeValue.FromBug(몬스터))`. 스킬은 `TryGetArgument`로 읽는다. 쓸 수 없는 대상이면 작업이 시작할 때 `InvalidTarget`. 파라미터 타입으로 맞출 수 없거나 파라미터보다 많으면 예외 (#131) |
-| `CastRejected` (event) | `FunctionBlock`, `CastRejection` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 거부 이유(`OnCooldown`, `NotEnoughMemory`)를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. |
+| `Cast(FunctionBlock function, out CastRejection? rejection)`, `Cast(PredefinedFunction function, RuntimeValue[] arguments, out CastRejection? rejection)` | 위와 같음 | `FunctionTask` | 위 두 `Cast`와 같고, 거부되면 거부 이유를 `rejection`으로 돌려준다(시전되면 `null`). `CastRejected`도 그대로 불린다. 시전한 쪽이 거부 이유를 바로 알아야 할 때 쓴다(`FunctionExecutorNetwork`) (#173) |
+| `CastRejected` (event) | `FunctionBlock`, `CastRejection` | - | 시전 전 검사에 걸려 거부했을 때 불린다. 거부한 function과 거부 이유(`OnCooldown`, `NotEnoughMemory`)를 넘긴다. 거부 이유를 화면에 보여 줄 때 쓴다. 멀티플레이에서 클라이언트는 `FunctionExecutorNetwork.CastRejected`를 받는다(`NoFunction` 포함, #173) |
 | `TaskStarted` (event) | `FunctionTask` | - | `FunctionTask`가 첫 tick을 진행하기 직전에 불린다. 연출을 시작할 때 쓴다. |
 | `TaskEnded` (event) | `FunctionTask` | - | `FunctionTask`가 끝나서 목록에서 빠질 때 불린다. 끝난 이유는 `task.EndReason`, 플레이어 책임으로 실패(`Failed`)했으면 `task.Failure`, `task.Error`로 확인한다. |
 | `InputRequested` (event) | `FunctionTask`, `PredefinedFunction` | - | `FunctionTask`가 입력 함수를 만나 입력을 기다리기 시작할 때 한 번 불린다. 기다리는 작업과 요청한 입력 함수를 넘긴다. 받는 쪽은 입력 함수의 `Id`(예: `input.get_bug`)로 자기가 맡은 입력인지 확인한다. (#131) |
 | `ProvideInput(FunctionTask task, RuntimeValue value)` | 기다리는 작업, 넣을 값 | `bool` | 입력을 기다리는 작업에 값을 넣는다. 작업은 다음 tick부터 이어서 진행한다. 대상 입력이면 `RuntimeValue.FromBug(몬스터)`, 고를 대상이 없으면 `FromBug(null)`. 작업이 이미 끝났거나 입력을 기다리지 않으면 `false`. 값의 타입이 요청한 타입과 다르면 예외. (#131) |
 | `CurrentTick` | - | `int` | 지금까지 지난 tick 수. 첫 tick이 1이다. |
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
-| `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. |
+| `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. `SetDisplayedCooldown`을 받은 실행기(클라이언트)는 받은 끝 시각으로 답한다 (#173) |
+| `CooldownStarted` (event) | `string` 스킬 고정 ID, `int` 지금부터 남은 tick 수 | - | 스킬의 쿨타임이 시작되거나 늘어났을 때. 서버가 소유 클라이언트에 쿨타임을 알릴 때 쓴다 (#173) |
+| `SetDisplayedCooldown(string skillId, float endTime)` | 스킬 고정 ID, 끝 시각(`Time.time` 기준) | - | 클라이언트의 실행기에 서버가 알려 준 쿨타임 끝 시각을 넣는다. 처음 부른 뒤로 `GetRemainingCooldownTicks`가 받은 시각으로 답한다. `FunctionExecutorNetwork`만 부른다 (#173) |
+| `TickEnabled` | - | `bool` (읽기·쓰기) | tick을 진행하는지. false이면 tick을 세지 않고 작업도 진행하지 않는다. 처음 값 true. 클라이언트의 실행기를 멈출 때 `FunctionExecutorNetwork`가 쓴다 (#173) |
+| `TryGetTask(int id, out FunctionTask task)` | 작업 번호(`FunctionTask.Id`) | `bool` | 진행 중인 작업과 다음 tick을 기다리는 작업에서 번호로 찾는다. 목록에서 빠졌거나 없는 번호면 `false`. 클라이언트가 보낸 작업 번호를 서버의 작업으로 바꿀 때 쓴다 (#173) |
 | `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
 | `Cancel(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 원본으로 시전한 `FunctionTask`만 `Cancelled`로 끊는다(진행 중, 다음 tick을 기다리는 것 모두). 끊은 작업이 있으면 `true`, 없으면 `false`. 플레이어가 그 슬롯의 작업을 취소할 때 부른다. 스킬 슬롯은 같은 스킬이 다른 function 안에서 실행 중이어도 끊지 않으므로, `IsRunning`이 `true`여도 `false`일 수 있다. 처리는 「끊기는 경우」 (#143) |
-| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 저장한 전역 변수 파일의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화에서 부른다. (#139) |
+| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화에서 부른다. (#139) |
+| `SetGlobalVariablesFile(GlobalVariablesData file)` | 전역 변수 파일 (`null`이면 이 컴퓨터의 파일) | - | 초기화 때 읽을 전역 변수 파일을 정한다. 정하기만 하고 초기화하지 않는다. 서버가 플레이어가 보낸 파일로 전역 변수를 만들 때 쓴다 (#173) |
 | `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장한 뒤 `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
 
 ### `FunctionTask`
@@ -398,6 +407,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
+| `Id` | - | `int` | 작업 번호. 실행기가 1부터 붙이고, 캐릭터(실행기)마다 따로 센다. 서버와 클라이언트가 같은 작업을 가리킬 때 쓴다 (#173) |
 | `Caster` | - | `GameObject` | 이 `FunctionTask`를 cast한 캐릭터 |
 | `Name` | - | `string` | cast한 function의 이름 |
 | `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 함수가 입력을 기다리는 중, #131), `Ended`(끝남) |
@@ -464,6 +474,7 @@
 ### `ProcessMemory`
 
 값은 `ProcessMemory`만 바꾼다. 다른 시스템은 읽기만 한다(예: memory 게이지 UI). heap 객체는 `Heap`의 함수로 다룬다.
+- 클라이언트 (#173): `Capacity`, `DataUsed`, `StackUsed`, `HeapUsed`, `Free`가 서버가 알려 준 값으로 답한다(`FunctionExecutorNetwork`). 읽는 쪽은 그대로 읽는다. `Heap`은 비어 있다
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
@@ -621,6 +632,7 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
   - `Cancel`이 `false`일 때(그 슬롯에서 시전한 작업이 없음): 지금처럼 `Cast`
   - 그 전까지: 플레이어가 자기 작업을 끊을 방법이 없음. 끝나지 않는 작업은 실행 중단 공격·재시작으로만 끝남
   - 지금 `SlotCaster`가 `Cast`의 반환 값(`null`이면 시전 거부)을 보지 않고 「바로 시전」 로그와 `CastRequested`를 냄
+- 박진우·임혜원에게 요청 (#173): 시전·입력 대기·시전 모션을 `FunctionExecutorNetwork`로. 목록은 [network.md](network.md)의 「맞춘 결과」
 - 박진우와 확인할 것 (#143)
   - `OnCancel`이 불리는 경우에 슬롯 취소와 Overflow 재시작이 더해짐. Overflow 재시작 때는 heap이 비워져 소환검도 `ObjectCleared`로 지워짐 ([predefined-function.md](predefined-function.md))
 - 임혜원과 확인할 것 (#143)

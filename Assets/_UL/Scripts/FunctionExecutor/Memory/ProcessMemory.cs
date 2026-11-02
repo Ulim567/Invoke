@@ -24,12 +24,19 @@ using UnityEngine;
 public class ProcessMemory : MonoBehaviour
 {
 	PlayerStats stats;
+	int stackUsed;
+	int heapUsed;
+
+	// 서버에서 받은 값으로 답하는지. 멀티플레이에서 실행기를 멈춘 화면(클라이언트)만 켠다(SetDisplayedValues)
+	// 그 화면의 이 컴포넌트는 함수를 실행하지 않아 자기 값이 늘 0이므로, 서버의 값을 받아 메모리 게이지에 보여 주기 위함
+	bool usesDisplayedValues;
+	int displayedCapacity, displayedDataUsed, displayedStackUsed, displayedHeapUsed;
 
 	/// <summary>
-	/// 메모리 전체 칸 수. PlayerStats.MemorySize를 그대로 돌려준다.
+	/// 메모리 전체 칸 수. PlayerStats.MemorySize를 그대로 돌려준다. 클라이언트 화면에서는 서버가 알려 준 값이다.
 	/// </summary>
 	// 값을 따로 저장하지 않고 읽을 때마다 PlayerStats에 묻는다. 레벨업, 버프로 능력치가 바뀌어도 Changed 이벤트를 받지 않고 바로 반영하기 위함
-	public int Capacity => stats.MemorySize;
+	public int Capacity => usesDisplayedValues ? displayedCapacity : stats.MemorySize;
 
 	/// <summary>
 	/// 이 캐릭터의 전역 변수 저장소. 블록은 실행 문맥(FunctionContext)을 거쳐 값을 읽고 쓴다.
@@ -41,17 +48,17 @@ public class ProcessMemory : MonoBehaviour
 	/// 지금 데이터 영역이 쓰고 있는 칸 수. 선언한 전역 변수 수와 같다.
 	/// </summary>
 	// 따로 세지 않고 전역 변수 저장소에서 읽는다. 두 값을 따로 두면 선언·초기화 때 어긋날 수 있기 때문
-	public int DataUsed => Globals.Count;
+	public int DataUsed => usesDisplayedValues ? displayedDataUsed : Globals.Count;
 
 	/// <summary>
-	/// 지금 스택이 쓰고 있는 칸 수. 실행 중인 모든 함수의 프레임 크기 합이다.
+	/// 지금 스택이 쓰고 있는 칸 수. 실행 중인 모든 함수의 프레임 크기 합이다. 클라이언트 화면에서는 서버가 알려 준 값이다.
 	/// </summary>
-	public int StackUsed { get; private set; }
+	public int StackUsed => usesDisplayedValues ? displayedStackUsed : stackUsed;
 
 	/// <summary>
-	/// 지금 힙이 쓰고 있는 칸 수. 해제하지 않은 객체와 누수된 객체의 크기 합이다.
+	/// 지금 힙이 쓰고 있는 칸 수. 해제하지 않은 객체와 누수된 객체의 크기 합이다. 클라이언트 화면에서는 서버가 알려 준 값이다.
 	/// </summary>
-	public int HeapUsed { get; private set; }
+	public int HeapUsed => usesDisplayedValues ? displayedHeapUsed : heapUsed;
 
 	/// <summary>
 	/// 이 캐릭터의 힙 객체 저장소. 스킬 코드가 힙에 올린 객체(소환검 등)를 포인터로 보관한다.
@@ -72,7 +79,7 @@ public class ProcessMemory : MonoBehaviour
 	{
 		if (size > Free) return false;
 
-		StackUsed += size;
+		stackUsed += size;
 		return true;
 	}
 
@@ -81,7 +88,7 @@ public class ProcessMemory : MonoBehaviour
 	/// </summary>
 	public void ReleaseStack(int size)
 	{
-		StackUsed -= size;
+		stackUsed -= size;
 	}
 
 	/// <summary>
@@ -93,7 +100,7 @@ public class ProcessMemory : MonoBehaviour
 	{
 		if (size > Free) return false;
 
-		HeapUsed += size;
+		heapUsed += size;
 		return true;
 	}
 
@@ -102,7 +109,21 @@ public class ProcessMemory : MonoBehaviour
 	/// </summary>
 	internal void ReleaseHeap(int size)
 	{
-		HeapUsed -= size;
+		heapUsed -= size;
+	}
+
+	/// <summary>
+	/// 서버가 알려 준 메모리 값을 받아 둔다. 이 뒤로 Capacity, DataUsed, StackUsed, HeapUsed, Free가 이 값으로 답한다.<br/>
+	/// 멀티플레이에서 실행기를 멈춘 화면(클라이언트)에서 FunctionExecutorNetwork만 부른다. 서버, 호스트, 네트워크를 켜지 않은 테스트에서는 부르지 않는다.
+	/// </summary>
+	// 스택·힙을 실제로 쓰는 함수(TryAllocateStack 등)는 그대로 둔다. 클라이언트 화면에서는 함수를 실행하지 않아 불리지 않기 때문
+	internal void SetDisplayedValues(int capacity, int data, int stack, int heap)
+	{
+		usesDisplayedValues = true;
+		displayedCapacity = capacity;
+		displayedDataUsed = data;
+		displayedStackUsed = stack;
+		displayedHeapUsed = heap;
 	}
 
 	// 전역 변수 저장소를 비우고 variables를 선언한다. 초기화(FunctionExecutor.RestartProcess)만 부른다

@@ -42,7 +42,7 @@
 | 방식 | 파라미터 | 예 |
 | --- | --- | --- |
 | 단일 | `Target` 1개 | 검 찌르기, 꼬챙이(첫 대상), 검 다중베기 |
-| 여러 명 선택 | `Target` list 1개 | 전장 휩쓸기 |
+| 여러 명 선택 | `Target` array 1개 (`VariableType.ArrayOf(Target)`, #191) | 전장 휩쓸기 |
 | 범위 | 없음. 캐릭터 주변에 바로 발동 | 검 크게베기, 검무 |
 | 대상 없음 | 없음 | 검 소환, 해제, 패링, 이동 계열 |
 
@@ -151,7 +151,7 @@ protected override void OnStart(FunctionContext context)
 | 이름 | 돌려주는 값 | 하는 일 |
 | --- | --- | --- |
 | `Malloc(FunctionContext context, object obj, int size)` | `int` | `obj`를 시전한 캐릭터의 heap `size`칸에 올리고 포인터를 돌려줌. heap이 모자라면 `HeapStorage.NullPointer`, 에러 없음 |
-| `Free(FunctionContext context, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음 |
+| `Free(FunctionContext context, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음(삭제는 `HeapStorage.ObjectFreed`를 받은 쪽, #191) |
 | `TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false` (C의 null 역참조) |
 | `GetGlobalPointers<T>(FunctionContext context)` | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
 | `CountHeapObjects<T>(FunctionContext context)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
@@ -188,6 +188,9 @@ protected override void OnTick(FunctionContext context, int tick)
 - 파라미터 값을 넘기는 곳: 함수 블록의 argument, 슬롯 직접 시전의 `FunctionExecutor.Cast(스킬, argument)` (#131). 값은 `Parameters`의 타입으로 맞춰서 넘어옴(캐릭터 언어의 숫자 타입 변환 규칙)
   - 지금 넘어오는 타입: `int`, `float`, `bool`, `string`, `char`, 포인터, 대상(`Target`, #131). 위치, 방향 등은 아직 언제나 「값 없음」
   - 대상: 몬스터는 `value.AsBug()`. 「대상 없음」, 죽은 대상, 없어진 대상은 실행기가 넘기기 전에 `InvalidTarget`으로 막으므로 스킬은 쓸 수 있는 대상만 받음
+  - 대상 array (#191): 몬스터들은 `value.AsBugs()`(원소 순서의 새 목록). 원소 하나라도 쓸 수 없으면 실행기가 시작 전에 `InvalidTarget`으로 막음
+    - 스킬이 시작한 뒤에 죽은 몬스터: 스킬이 `Monster.IsDead`, `null`로 거름
+    - 슬롯 직접 시전: `FunctionExecutor.Cast(스킬, RuntimeValue.FromBugs(고른 몬스터들))`
   - 값이 없을 때: 슬롯에서 바로 시전했을 때처럼 동작
 - 이름: `Parameters`에 적은 `ParameterData`의 이름
 - 반환 값이 쓰이는 곳: expression으로 쓴 함수 블록(예: `int n = CountSwords();`). statement로 놓으면 버림
@@ -286,6 +289,8 @@ protected override void OnTick(FunctionContext context, int tick)
   - 스킬의 동기·비동기: 모든 스킬 동기(`IsAsync` 기본값) (#131)
   - `Parameters`, `ReturnType`, `IsAsync` 위치: `PredefinedFunction` → `FunctionBlock`. 스킬의 `override`는 그대로 (#132)
   - 슬롯 직접 시전에서도 `Return` 누락·반환 타입 불일치가 콘솔 오류 + `InternalError` (#132)
+  - 여러 명 선택 파라미터: `Target` list → `Target` array. 값은 `RuntimeValue.FromBugs`, 읽기는 `AsBugs()` (#191)
+  - 해제한 소환검 삭제: `HeapStorage.ObjectFreed`를 받아서. `malloc(Sword)`의 소환검 생성은 `ProcessMemory.StructObjects`에 등록 ([function-executor.md](function-executor.md)의 `StructObjectRegistry`) (#191)
 - 박진우·임혜원과 확인할 것
   - 스킬 애니메이션 길이를 `TickCount`에 맞추는 방식 (#38)
   - 누수된 소환검 연출: `ObjectLeaked`를 받아 그 자리에 멈추고 흐리게 (#66)

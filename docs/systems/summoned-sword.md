@@ -72,11 +72,14 @@
 | `TryGetFirstReady(out SummonedSword)` | - | `bool` | 가장 먼저 소환한 사용 가능한 검 |
 | `Throw(SummonedSword, GameObject target)` | 검, 대상 (없으면 빗나감) | `bool` | 사용 가능한 검만 던진다 |
 | `Recall(SummonedSword)` / `RecallFirstThrown()` | 검 | `bool` | 던진 검을 되돌린다 |
+| `Stab(SummonedSword, GameObject target)` | 검, 대상 | `bool` | (#165) 사용 가능한 검을 대상에게 보내 찌르고 돌아오게 한다. 닿으면 `StabHit`, 돌아오면 다시 `Ready`. 대상이 사라지거나 1.2초 안에 못 닿으면 그냥 돌아온다. 소환검 찌르기가 쓴다 |
+| `StabHit` (event) | `SummonedSword`, `GameObject` | - | [로직] (#165) `Stab`으로 보낸 검이 대상에 닿았을 때. 데미지는 받은 스킬이 준다 |
 | `TryPickUpNearest()` | - | `bool` | 근처의 떨어진 소환검을 줍는다 |
 | `Changed` (event) | - | - | [표시] 목록·상태가 바뀔 때 |
 | `Hit` (event) | `SummonedSword`, `GameObject` | - | [로직] 던진 소환검이 대상에 닿았을 때 |
 
-`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked`), `StateChanged`(event, [표시]).
+`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked` / `Stabbing`), `StateChanged`(event, [표시]).
+- `Stabbing`(#165): 소환검 찌르기로 날아가 찌르고 돌아오는 중. 사용 가능 개수(`ReadyCount`)에 안 들어가서 다른 스킬에 쓰이지 않는다. 속도 `Stab Speed`(프리팹, 임시 35).
 
 ### 임시 표시
 - `SummonedSwordView`(소환검 프리팹): `StateChanged`를 받아서 누수면 반투명(`Leaked Alpha` 0.35)으로 바꾼다.

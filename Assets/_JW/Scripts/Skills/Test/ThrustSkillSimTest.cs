@@ -101,6 +101,7 @@ public class ThrustSkillSimTest : MonoBehaviour
 
 		// 5. 슬롯 1(Q)으로 시전 → 고른 몬스터가 맞음
 		SlotCaster caster = player.GetComponent<SlotCaster>();
+		player.GetComponent<SlotLoadout>().EquipSkill(0, PredefinedFunctionIds.Thrust);
 		hits.Clear();
 		yield return Press(Key.Q);
 		GameObject chosen = caster.CurrentTarget;

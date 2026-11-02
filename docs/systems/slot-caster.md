@@ -8,10 +8,14 @@
   - 여러 명: 단일처럼 고르면서 Space로 찍고, 떼면 찍은 대상 모두로 시전을 요청한다 (#95).
   - 범위: 누르는 순간 `FunctionExecutor.Cast`로 시전하고, 주변 범위 안의 몬스터를 대상으로 알린다 (#95).
   - 대상 없음: 누르는 순간 `FunctionExecutor.Cast`로 시전한다.
+  - 블록코딩 함수: 누르는 순간 시전한다. 함수 안의 `GetBug`가 대상을 기다리면 그때 고른다 (#159).
+- 슬롯 8개에 무엇을 넣었는지 가진다 (`SlotLoadout`, #159). 장착 화면(임혜원)이 이 API를 부른다.
+- 취소 키(C)로 가장 최근에 슬롯으로 시전한 작업을 끊는다 (#159).
 - 지금 고른 대상과 찍은 대상을 알려 준다 (대상 표시 연출용).
 - 하지 않는 일
   - 여러 명 선택의 대상 목록을 Target list 파라미터에 넣지 않는다. 실행기에 list 값이 아직 없어서 `CastRequested` 이벤트와 로그까지만 한다 (블록 실행 3 이슈).
-  - 슬롯에 함수를 장착하지 않는다. 「슬롯 8개에 함수 장착·해제하기」 이슈. 그 전까지는 Inspector의 `Slot Function Ids`에 고정 ID를 적는다(임시).
+  - 장착 화면(UI): 임혜원. 이 문서의 `SlotLoadout` API를 부른다.
+  - 코드 영역 크기 한도 검사: 크기만 알려 주고(`SlotLoadout.CodeSize`) 막지 않는다. 한도는 메모리 작업에서 정한다.
   - 관통(꼬챙이), 다단 히트(검 다중베기)의 맞는 방식: 입력은 단일과 같고, 맞는 방식은 각 스킬 이슈.
   - 쿨타임, 시전 가능 검사(메모리 등)는 하지 않는다. 「시전 가능한지 검사하기와 쿨타임」 이슈(이우림).
 
@@ -41,27 +45,72 @@
 - 경직·사망 중(`PlayerHealth.CanAct`가 false)에는 시전하지 않고, 고르던 대상도 취소한다. `PlayerHealth`가 없는 플레이어는 검사하지 않는다.
 - 내 캐릭터(`isLocalPlayer`)에서만 동작한다.
 
+### 장착 (`SlotLoadout`, #159)
+- 슬롯 하나에는 비어 있음 / 블록코딩 함수(GUID) / C 캐릭터 스킬(고정 ID) 중 하나가 들어간다.
+- 넣을 수 있는 스킬: `PredefinedFunctionRegistry`에 등록된 사전 정의 함수. 입력 함수(`input.*`)는 넣을 수 없다. 해금 여부는 아직 보지 않는다 (해금 저장이 생기면 해금한 것만).
+- 넣을 수 있는 블록 함수: `FunctionStorage`에 저장된 함수.
+- 같은 함수·스킬은 한 슬롯에만. 다른 슬롯에 넣으면 원래 슬롯은 빈다(옮겨짐).
+- 시전할 원본: 같은 슬롯은 같은 원본 객체를 계속 쓴다. 그래야 쿨타임, 실행 중 검사, 캔슬이 이어진다 (function-executor.md). 블록 함수는 장착할 때(또는 `ReloadFunctions`) `FunctionDataConverter`로 한 번 바꿔 둔다. 실행할 수 없는 함수면 변환기가 콘솔 오류를 내고 그 슬롯은 눌러도 시전되지 않는다.
+- 저장: 이 컴퓨터 파일 `persistentDataPath/SlotLoadout.json`. 장착을 바꿀 때마다 저장하고, 켤 때 불러온다. 파일이 없으면(처음) Inspector의 `Default Skill Ids`로 채운다. 서버 저장이 생기면 바꾼다.
+
+### GetBug 입력 (#159)
+- 슬롯으로 시전한 작업이 `GetBug`로 대상을 기다리면(`FunctionExecutor.InputRequested`)
+  - 그 작업을 시전한 슬롯 키를 아직 누르고 있으면: 단일 고르기와 똑같이 ← →로 고르고, 떼면 고른 몬스터를 `ProvideInput`으로 넣는다. 후보가 없으면 대상 없음(`FromBug(null)`).
+  - 누르고 있지 않으면(이미 뗐음, 다른 슬롯을 고르는 중, 함수 안에서 따로 시전된 작업): 가장 가까운 몬스터를 바로 넣는다. 없으면 대상 없음.
+- 고르는 중에 경직·사망으로 취소되면 대상 없음을 넣는다. 기다리던 작업이 끝나면(취소, 실행 중단 공격) 고르기도 끝낸다.
+- 대상 없음이 들어가면 그 값을 받은 스킬이 `InvalidTarget`으로 실패한다 (function-executor.md).
+
+### 취소 키 (#159)
+- `PlayerInputReader.CancelPressed`(C)가 들어오면, 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 원본으로 `FunctionExecutor.Cancel`을 부른다.
+- 실행기의 `Cancel`은 원본 단위다. 같은 슬롯으로 두 번 시전해 둘 다 진행 중이면 둘 다 끊긴다.
+- 슬롯 키는 시전만 한다 (연타해도 끊지 않음). 대상을 고르는 중인 슬롯은 아직 시전 전이라 C로 취소되지 않는다.
+
 ## 다른 시스템이 쓰는 것
 
 플레이어 프리팹에 `SlotCaster`가 붙어 있다. `GetComponent<SlotCaster>()`로 가져온다.
-- 같은 오브젝트에 `PlayerInputReader`, `FunctionExecutor`(+ `ProcessMemory`)가 있어야 한다.
+- 같은 오브젝트에 `PlayerInputReader`, `FunctionExecutor`(+ `ProcessMemory`), `SlotLoadout`이 있어야 한다.
 
 ### `SlotCaster`
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `CastRequested` (event) | `int` 슬롯 번호(0~7), `PredefinedFunction` 함수, `IReadOnlyList<GameObject>` 대상 목록 | - | [로직] 시전을 요청했을 때 불린다. 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안 몬스터 모두, 대상 없음은 빈 목록. 범위·대상 없음은 이미 `Cast`된 상태다. 단일은 고른 대상을 `target`으로 넘겨 이미 `Cast`된 상태다 (#152). 여러 명은 아직 `Cast`되지 않았다 (list 값이 생기면 같은 방식으로). 시전이 거부되면 불리지 않는다. 네트워크 동기화는 이 이벤트에서 시작하면 된다. |
+| `CastRequested` (event) | `int` 슬롯 번호(0~7), `FunctionBlock` 함수 (스킬은 `PredefinedFunction`, 블록 함수는 `UserFunction`, #159), `IReadOnlyList<GameObject>` 대상 목록 | - | [로직] 시전을 요청했을 때 불린다. 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안 몬스터 모두, 대상 없음은 빈 목록. 범위·대상 없음·블록 함수는 이미 `Cast`된 상태다 (블록 함수는 빈 목록). 단일은 고른 대상을 `target`으로 넘겨 이미 `Cast`된 상태다 (#152). 여러 명은 아직 `Cast`되지 않았다 (list 값이 생기면 같은 방식으로). 시전이 거부되면 불리지 않는다. 네트워크 동기화는 이 이벤트에서 시작하면 된다. |
 | `TargetChanged` (event) | `GameObject` 대상 | - | [표시] 선택된 대상이 바뀌었을 때 불린다 (고르기 시작, ← →, 끝). 끝나면 `null`. 대상 표시 연출에 쓴다. |
 | `MarkedChanged` (event) | `IReadOnlyList<GameObject>` 찍은 대상 | - | [표시] 여러 명 선택에서 찍은 대상이 바뀌었을 때 (찍기, 빼기, 끝). 끝나면 빈 목록. |
 | `CurrentTarget` | - | `GameObject` | 지금 선택된 대상. 고르는 중이 아니면 `null` |
 | `MarkedTargets` | - | `IReadOnlyList<GameObject>` | 여러 명 선택에서 지금까지 찍은 대상 (찍은 순서) |
-| `SelectingSlot` | - | `int` | 지금 대상을 고르는 슬롯 번호(0~7). 고르는 중이 아니면 -1 |
+| `SelectingSlot` | - | `int` | 지금 대상을 고르는 슬롯 번호(0~7). GetBug 입력을 고르는 중이어도 그 슬롯 번호. 고르는 중이 아니면 -1 |
+
+### `SlotLoadout` (장착, #159)
+
+플레이어 프리팹에 붙어 있다. `GetComponent<SlotLoadout>()`로 가져온다. 장착 화면(임혜원)이 쓴다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `SlotCount` | - | `int` (8) | 슬롯 수. 0~7 = Q W E R A S D F |
+| `GetEntry(int slot)` | 슬롯 번호 | `SlotLoadout.Entry` | 슬롯의 내용. `Kind`(`Empty`, `UserFunction`, `Skill`), `Id`(GUID 또는 고정 ID), `IsEmpty` |
+| `EquipFunction(int slot, string guid)` | 슬롯 번호, 함수 GUID | `bool` | 블록 함수를 넣는다. 저장된 함수가 아니면 `false` |
+| `EquipSkill(int slot, string skillId)` | 슬롯 번호, 고정 ID | `bool` | C 스킬을 넣는다. 없는 ID, 입력 함수면 `false` |
+| `Unequip(int slot)` | 슬롯 번호 | - | 비운다 |
+| `Swap(int a, int b)` | 슬롯 번호 두 개 | - | 맞바꾼다 (끌어 옮기기) |
+| `CodeSize` | - | `int` | 슬롯 전체 코드 영역 크기 (`CodeSizeCalculator`). 장착 화면에 보여 준다. 한도 검사는 하지 않음 |
+| `ReloadFunctions()` | - | - | 블록 함수를 저장소에서 다시 읽어 원본을 새로 만든다. 편집 화면에서 장착된 함수를 저장한 뒤 부른다 |
+| `TryGetFunction(int slot, out FunctionBlock function)` | 슬롯 번호 | `bool` | 시전할 원본. `SlotCaster`가 쓴다 |
+| `IsEquippableSkill(string skillId)` (static) | 고정 ID | `bool` | 슬롯에 넣을 수 있는 스킬인지. 장착 화면의 스킬 목록을 거를 때 |
+| `Changed` (event) | `int` 슬롯 번호 | - | [표시] 슬롯 내용이 바뀌었을 때. 여러 슬롯이 한꺼번에 바뀌면 -1. 장착 화면을 다시 그린다 |
+
+```csharp
+// 예시: 장착 화면에서 함수 목록의 함수를 W 슬롯에 끌어 놓음
+SlotLoadout loadout = NetworkClient.localPlayer.GetComponent<SlotLoadout>();
+if (!loadout.EquipFunction(1, function.Guid)) ShowError("넣을 수 없는 함수");
+sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
+```
 
 ### Inspector 값
 
 | 값 | 설명 |
 | --- | --- |
-| `Slot Function Ids` | (임시) 슬롯 1~8의 사전 정의 함수 고정 ID. 장착 이슈에서 없앤다. Player_JW: Q `c.thrust`, W `test.function_a`, E `c.battlefield_sweep`, R `c.wide_slash` |
+| `SlotLoadout` > `Default Skill Ids` | 저장한 장착 내용이 없을 때(처음 켤 때) 넣어 둘 스킬. 기본 Q `c.thrust`, W `test.function_a`, E `c.battlefield_sweep`, R `c.wide_slash` |
 | `Target Range` | 대상 후보를 찾는 거리 (유닛, 기본 8) |
 | `Target Layers` | 대상 후보 레이어 (Monster) |
 
@@ -71,13 +120,20 @@
 | --- | --- |
 | `SlotTargetMarker` | 고른 대상 위에 노란 V, 찍은 대상 위에 하늘색 V를 OnGUI로 그리는 임시 표시. 실제 대상 표시 연출(임혜원)이 생기면 바꾼다. |
 | `SlotMultiAreaSimTest` | Test_JW의 MultiTest. Play → Host, Game 창을 한 번 클릭. 슬롯 3(E)=전장 휩쓸기, 슬롯 4(R)=검 크게베기로 두 명 찍기, 안 찍고 떼기, 다시 찍어 빼기, 소환검 1개 제한, 범위를 확인. 시작할 때 검 소환을 2번 시전해 소환검 2개를 만들고(찍을 수 있는 인원 = 사용 가능한 소환검 수), 해제로 1개·0개로 줄인다. 「[MultiTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SlotLoadoutSimTest` | Test_JW의 LoadoutTest. 켜고 Play → Host (약 8초, 가짜 키 입력). 장착·거부·옮기기·자리 바꾸기·해제·코드 영역 크기, 저장 파일 다시 불러오기, W에 넣은 `Thrust(GetBug())`를 누른 채 고르고 떼면 고른 몬스터가 찔림, 슬롯 밖 시전은 가장 가까운 몬스터, E로 시전한 `while (true) { }`가 C로 `Cancelled`를 확인. 끝나면 원래 장착 내용으로 되돌리고 테스트 함수 파일을 지운다. 「[LoadoutTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SlotTargetInputSimTest` | Play → Host 2초 뒤 가짜 키 입력(Q, Q+→, Q+→, Q+←, 뗌)을 넣어 대상 넘기기를 확인한다. `TargetChanged` 5번이면 통과. 자동으로 돌기 때문에 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정함 (#133, #152)
   - 단일 대상 슬롯 시전은 `Cast(function, RuntimeValue.FromBug(몬스터))`로 넘긴다. 죽었거나 없어진 대상은 실행기가 `InvalidTarget`으로 막는다
-  - 함수 안의 `GetBug` 입력 대기(슬롯 키 누른 채 고르기 → `ProvideInput`)는 「슬롯 8개에 함수 장착·해제하기」 이슈에서 한다
-  - 스킬 캔슬: C 키를 누르면 가장 최근에 슬롯으로 시전한 작업 하나를 `FunctionExecutor.Cancel`로 끊는다. 슬롯 키는 시전만 한다(연타해도 안 끊김). C 키 입력(`PlayerInputReader`)은 이우림이 추가, 캔슬은 슬롯 장착 이슈에서 한다
+  - 함수 안의 `GetBug` 입력 대기(슬롯 키 누른 채 고르기 → `ProvideInput`): #159에서 함. 위 「GetBug 입력」
+  - 스킬 캔슬: C 키를 누르면 가장 최근에 슬롯으로 시전한 작업 하나를 `FunctionExecutor.Cancel`로 끊는다. 슬롯 키는 시전만 한다(연타해도 안 끊김). C 키 입력은 이우림이 추가(#157), 캔슬은 #159에서 함
+- 임혜원과 정할 것 (#159)
+  - 장착 화면은 `SlotLoadout` API로 만든다. 코드 영역 크기는 `CodeSize`로 표시
+  - 편집 화면에서 장착된 함수를 저장하면 `ReloadFunctions()`를 불러야 고친 내용으로 시전된다
+- 기획에 확인할 것 (#159)
+  - GetBug를 기다릴 때 슬롯 키를 이미 뗐으면 가장 가까운 몬스터를 자동으로 넣음 (다시 누르게 할지)
+  - 코드 영역 크기 한도
 - 이우림과 정해야 할 것
   - ← → 대상 넘기기가 동작하지 않는 문제
     - 원인: Input System의 Shortcut Keys Consume Input(Complexity Consumption) 때문에 `Move`(1D Axis 조합, 복잡도 3)가 ← →를 먼저 가져가고, `TargetPrev`/`TargetNext`(단일 키, 복잡도 1) 신호가 지워진다. `TargetPrev`/`TargetNext`를 조합으로 바꿔 복잡도를 맞춰도, 먼저 처리된 쪽이 나머지를 지우므로 해결되지 않는다.

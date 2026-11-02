@@ -26,6 +26,8 @@
   - 검 돌아오기(`Recall`): 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다.
 - 해제(free)할 수 없다.
 - 떨어진 검 오브젝트는 `SpawnDroppedSword` / `DespawnDroppedSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
+  - 안에서 `NetworkSpawner.Spawn` / `Despawn`을 부른다 (place-scenes.md, #125). 떨어진 검 프리팹은 `NetworkIdentity`를 붙이고 `Base` 씬과 Test_JW의 NetworkManager에 등록했다. 만들지 못하면 `Throw`가 `false`.
+- 떨어질 땅 찾기는 떨어진 검이 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다 (#125).
 - 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다. 못 주우면 근처에 떨어진 소환검을 줍는다 (`SummonedSwords.TryPickUpNearest`).
 
 ### 지금 값 (Player_JW)

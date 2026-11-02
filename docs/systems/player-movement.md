@@ -13,6 +13,7 @@
   - 애니메이션, 소리를 하지 않는다. 연출은 `IsGrounded` 등을 읽는 쪽이 한다.
 
 ## 동작 규칙
+- 바닥 판정, 발판 내려가기의 판정은 플레이어가 속한 장소 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다. 호스트에서도 바닥을 찾기 위함 (place-scenes.md, #125). 발판 충돌 끄기(`Physics2D.IgnoreCollision`)와 중력 값은 그대로 쓴다.
 - 이동 속도는 `PlayerStats.MoveSpeed`를 읽는다.
 - 달리기 (#93)
   - 왼쪽 Shift(`PlayerInputReader.RunHeld`)를 누르는 동안 이동 속도 × `Run Speed Multiplier`(임시 1.5).

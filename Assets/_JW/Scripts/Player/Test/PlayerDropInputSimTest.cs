@@ -40,8 +40,10 @@ public class PlayerDropInputSimTest : MonoBehaviour
 
 		Vector2 feet = new Vector2(body.bounds.center.x, body.bounds.min.y);
 		Vector2 size = new Vector2(body.bounds.size.x * 0.9f, 0.1f);
-		int now = Physics2D.OverlapBox(feet, size, 0f, groundOnlyLayers) ? 2
-			: Physics2D.OverlapBox(feet, size, 0f, platformLayers) ? 1 : 0;
+		// 플레이어가 속한 장소 씬의 물리 세계에 묻는다 (place-scenes.md)
+		PhysicsScene2D physics = player.gameObject.scene.GetPhysicsScene2D();
+		int now = physics.OverlapBox(feet, size, 0f, groundOnlyLayers) ? 2
+			: physics.OverlapBox(feet, size, 0f, platformLayers) ? 1 : 0;
 
 		if (now != standingOn) { standingOn = now; standStart = Time.time; return; }
 		if (now == 0 || Time.time - standStart < 1f) return;

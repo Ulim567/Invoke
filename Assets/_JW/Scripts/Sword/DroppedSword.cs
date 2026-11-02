@@ -77,7 +77,8 @@ public class DroppedSword : MonoBehaviour
 		phase = Phase.Falling;
 		fallSpeed = 0f;
 		transform.rotation = Quaternion.Euler(0f, 0f, -90f); // 칼끝이 아래로
-		RaycastHit2D ground = Physics2D.Raycast(transform.position, Vector2.down, 100f, groundLayers);
+		// 내가 속한 장소 씬의 물리 세계에서 땅을 찾는다 (place-scenes.md)
+		RaycastHit2D ground = gameObject.scene.GetPhysicsScene2D().Raycast(transform.position, Vector2.down, 100f, groundLayers);
 		// 아래에 바닥이 없으면 멀리까지 떨어진 뒤 멈춘다
 		landY = ground.collider != null ? ground.point.y : transform.position.y - 100f;
 	}

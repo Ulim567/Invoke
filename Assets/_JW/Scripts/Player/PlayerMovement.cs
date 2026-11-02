@@ -91,7 +91,7 @@ public class PlayerMovement : NetworkBehaviour
 			GetGroundCheckBox(out Vector2 center, out Vector2 size);
 			// 내려가는 중에는 발판을 바닥으로 치지 않는다 (발판 안을 지나가는 동안 다시 착지한 것으로 보지 않게)
 			LayerMask mask = IsDropping ? (groundLayers & ~platformLayers) : groundLayers;
-			return Physics2D.OverlapBox(center, size, 0f, mask) != null;
+			return ScenePhysics().OverlapBox(center, size, 0f, mask) != null;
 		}
 	}
 
@@ -172,10 +172,13 @@ public class PlayerMovement : NetworkBehaviour
 	{
 		GetGroundCheckBox(out Vector2 center, out Vector2 size);
 		LayerMask solidGround = groundLayers & ~platformLayers;
-		if (Physics2D.OverlapBox(center, size, 0f, solidGround) != null) return;
+		if (ScenePhysics().OverlapBox(center, size, 0f, solidGround) != null) return;
 
-		Collider2D[] platforms = Physics2D.OverlapBoxAll(center, size, 0f, platformLayers);
-		if (platforms.Length == 0) return;
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(platformLayers);
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		List<Collider2D> platforms = new List<Collider2D>();
+		if (ScenePhysics().OverlapBox(center, size, 0f, filter, platforms) == 0) return;
 
 		// 발판 전체를 끄지 않고 내 콜라이더와의 충돌만 끈다. 다른 플레이어는 그대로 발판 위에 선다
 		foreach (Collider2D platform in platforms)
@@ -185,6 +188,9 @@ public class PlayerMovement : NetworkBehaviour
 		}
 		dropEndTime = Time.time + dropDuration;
 	}
+
+	// 내가 속한 장소 씬의 물리 세계에 묻는다. 서버는 씬마다 물리 세계가 따로 있어서 Physics2D로는 못 찾는다 (place-scenes.md). 씬이 바뀔 수 있어 저장하지 않고 매번 가져온다
+	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();
 
 	// 몸이 아직 발판에 걸쳐 있는지. 걸친 채로 충돌을 다시 켜면 발판 속에 끼어 버린다
 	bool IsInsideDroppedPlatform()

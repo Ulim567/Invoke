@@ -82,12 +82,13 @@ public class SummonedSwords : MonoBehaviour
 	/// <summary>
 	/// 소환검 오브젝트를 하나 만든다. 아직 목록에 없고 포인터도 없다. 검 소환 스킬이 부른다.<br/>
 	/// 순서: SpawnSword → PredefinedFunction.Malloc → 성공하면 Register, NullPointer면 DespawnSword.<br/>
-	/// 소환검은 이 함수로만 만든다 (코드 작성 규칙 3). 네트워크를 붙일 때 여기만 NetworkServer.Spawn으로 바꾼다.
+	/// 소환검은 이 함수로만 만든다 (코드 작성 규칙 3). NetworkSpawner로 내 장소 씬에 만든다 (place-scenes.md). 서버에서만 부른다.
 	/// </summary>
 	public SummonedSword SpawnSword()
 	{
 		Vector2 at = (Vector2)transform.position + followOffset;
-		return Instantiate(swordPrefab, at, Quaternion.identity);
+		GameObject obj = NetworkSpawner.Spawn(swordPrefab.gameObject, at, Quaternion.identity, gameObject.scene);
+		return obj != null ? obj.GetComponent<SummonedSword>() : null;
 	}
 
 	/// <summary>
@@ -109,8 +110,7 @@ public class SummonedSwords : MonoBehaviour
 	{
 		if (sword == null) return;
 		bool listed = swords.Remove(sword);
-		// 네트워크를 붙일 때 여기만 NetworkServer.Destroy로 바꾼다
-		Destroy(sword.gameObject);
+		NetworkSpawner.Despawn(sword.gameObject);
 		if (listed) NotifyChanged();
 	}
 
@@ -232,8 +232,10 @@ public class SummonedSwords : MonoBehaviour
 			memory.Heap.ObjectLeaked -= OnObjectLeaked;
 			memory.Heap.ObjectCleared -= OnObjectCleared;
 		}
-		// 목록을 돌면서 빼면 안 되므로 복사본으로 없앤다. 캐릭터가 사라지는 중이라 Changed는 알리지 않아도 된다
-		foreach (SummonedSword s in swords.ToArray()) if (s != null) Destroy(s.gameObject);
+		// 클라이언트에서는 서버가 없애므로 부르지 않는다 (NetworkSpawner는 서버에서만 부름)
+		// 캐릭터가 사라지는 중이라 Changed는 알리지 않아도 된다
+		if (!(Mirror.NetworkClient.active && !Mirror.NetworkServer.active))
+			foreach (SummonedSword s in swords.ToArray()) if (s != null) NetworkSpawner.Despawn(s.gameObject);
 		swords.Clear();
 	}
 }

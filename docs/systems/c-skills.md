@@ -13,6 +13,9 @@
   - 소환검 관리: summoned-sword.md (#99)
 
 ## 규칙
+- 판정과 오브젝트 생성 (place-scenes.md, #125)
+  - 판정은 `Physics2D`로 바로 하지 않고 시전자가 속한 씬의 물리 세계(`task.Caster.scene.GetPhysicsScene2D()`)에 묻는다. `All`로 끝나는 함수는 `ContactFilter2D` + `List<Collider2D>`를 받는 함수로 쓴다.
+  - 게임 중에 생기는 네트워크 오브젝트(소환검, 검기 등)는 `NetworkSpawner.Spawn` / `Despawn`으로 만들고 없앤다. 이펙트처럼 보여 주기만 하는 것은 아니다.
 
 ### 수치 표
 - 에셋: `Assets/_JW/Resources/SkillTable.asset`. Inspector에서 고친다.

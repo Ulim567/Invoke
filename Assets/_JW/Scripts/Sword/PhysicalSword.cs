@@ -93,6 +93,8 @@ public class PhysicalSword : MonoBehaviour
 		int facing = movement != null ? movement.Facing : 1;
 		Vector2 hand = (Vector2)transform.position + new Vector2(handOffset.x * facing, handOffset.y);
 		dropped = SpawnDroppedSword(hand);
+		// 만들지 못했으면(프리팹 설정 오류, 클라이언트에서 부름) 던지지 않는다. 원인은 NetworkSpawner가 로그로 남긴다
+		if (dropped == null) return false;
 		dropped.Launch(this, target, throwSpeed, maxFlightTime, groundLayers);
 		SetState(SwordState.Flying);
 		return true;
@@ -146,20 +148,24 @@ public class PhysicalSword : MonoBehaviour
 		StateChanged?.Invoke(state);
 	}
 
-	// 떨어진 검은 이 두 함수로만 만들고 없앤다. 네트워크를 붙일 때 여기만 NetworkServer.Spawn / Destroy로 바꾼다
+	// 떨어진 검은 이 두 함수로만 만들고 없앤다 (코드 작성 규칙 3)
+	// NetworkSpawner: 내 장소 씬에 만들고, 서버면 모든 클라이언트에 보인다 (place-scenes.md)
 	DroppedSword SpawnDroppedSword(Vector2 position)
 	{
-		return Instantiate(droppedSwordPrefab, position, Quaternion.identity);
+		GameObject obj = NetworkSpawner.Spawn(droppedSwordPrefab.gameObject, position, Quaternion.identity, gameObject.scene);
+		return obj != null ? obj.GetComponent<DroppedSword>() : null;
 	}
 
 	void DespawnDroppedSword(DroppedSword sword)
 	{
-		if (sword != null) Destroy(sword.gameObject);
+		if (sword != null) NetworkSpawner.Despawn(sword.gameObject);
 	}
 
 	// 캐릭터가 사라지면 떨어진 검도 남기지 않는다
+	// 클라이언트에서는 서버가 없애므로 부르지 않는다 (NetworkSpawner는 서버에서만 부름)
 	void OnDestroy()
 	{
+		if (Mirror.NetworkClient.active && !Mirror.NetworkServer.active) return;
 		DespawnDroppedSword(dropped);
 	}
 

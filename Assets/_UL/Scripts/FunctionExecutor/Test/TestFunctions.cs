@@ -228,6 +228,28 @@ public class TestTargetFunction : PredefinedFunction
 }
 
 /// <summary>
+/// 대상 array 파라미터 테스트용 함수. 전장 휩쓸기처럼 종류를 정하지 않은 Target의 array 파라미터 targets 하나를 받고, 시작할 때 읽은 몬스터들을 TargetsRead로 알린다. 1틱 동안 진행한다.
+/// </summary>
+public class TestTargetArrayFunction : PredefinedFunction
+{
+	public override string Id => PredefinedFunctionIds.TestTargetArrayFunction;
+	public override string Name => "TestTargetArrayFunction";
+	public override int TickCount => 1;
+	public override System.Collections.Generic.IReadOnlyList<ParameterData> Parameters =>
+		new[] { new ParameterData("targets", VariableType.ArrayOf(new VariableType(VariableTypeKind.Target))) };
+
+	/// <summary>
+	/// 시작할 때 읽은 몬스터들(AsBugs). 값이 없으면 null을 넘긴다. 테스트 컴포넌트가 결과를 확인할 때 쓴다.
+	/// </summary>
+	public static event System.Action<System.Collections.Generic.List<Monster>> TargetsRead;
+
+	protected override void OnStart(FunctionContext context)
+	{
+		TargetsRead?.Invoke(TryGetArgument("targets", out RuntimeValue targets) ? targets.AsBugs() : null);
+	}
+}
+
+/// <summary>
 /// 반환 값 테스트용 함수. int 파라미터 amount를 받아 마지막 틱에 amount × 2를 돌려준다. 3틱 동안 진행하고 쿨타임은 4틱이다.
 /// </summary>
 public class TestReturnFunction : PredefinedFunction

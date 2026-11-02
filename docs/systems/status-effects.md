@@ -19,6 +19,7 @@
 - 출혈
   - 처음 건 뒤 `BleedInterval`(1초)마다 `BleedDamage`(5)를 준다. 지속 5초면 5번, 총 25.
   - 출혈 중에 다시 걸면 지속 시간만 늘어나고 데미지 간격은 그대로다.
+  - 출혈 배율 (#172): `AmplifyBleed(bonusRate)`를 부르면 지금 출혈이 풀릴 때까지 틱 데미지에 `BonusRate`를 더한다 (상처 가르기 +100% → 10). 겹치지 않고 큰 값 하나. 출혈이 풀리면(시간·`Clear`·죽음) 없어진다.
   - 데미지는 `DamageCalculator.Calculate(DamageRequest.Flat(BleedDamage))`를 거쳐 같은 오브젝트의 `IDamageable.TakeDamage`로 준다.
   - 출혈은 스킬 공격이 아니라서 **표식 2배와 처형을 받지 않는다** (대상 정보 없이 계산). 기획 확인 필요.
 - 표식: 걸려 있는 동안 `DamageTarget.FromMonster`가 `IsMarked = true`로 만들어 계산기가 +100%를 붙인다.
@@ -54,6 +55,8 @@
 | `IsMarked` | - | `bool` | 표식 중. 계산기가 자동으로 읽는다 |
 | `StatusApplied` (event) | `StatusType` | - | [표시] 걸렸을 때 (다시 걸 때도) |
 | `StatusRemoved` (event) | `StatusType` | - | [표시] 풀렸을 때 |
+| `AmplifyBleed(float bonusRate)` | 추가분 | - | (#172) 출혈 중이면 그 출혈이 끝날 때까지 틱 데미지 추가분. 상처 가르기가 부른다 |
+| `BleedBonusRate` | - | `float` | (#172) 지금 출혈 틱 데미지 추가분. 0이면 기본 |
 | `BleedTicked` (event) | `int` 데미지 | - | [로직] 출혈 데미지를 줬을 때 |
 
 ### `StatusIconView` (상태 이상 아이콘 표시)

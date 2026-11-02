@@ -20,6 +20,7 @@ GameObject:
   - component: {fileID: 6787085104944719434}
   - component: {fileID: -5998150243559993913}
   - component: {fileID: -8882788714917605207}
+  - component: {fileID: -4527870653899485198}
   m_Layer: 9
   m_Name: Loop
   m_TagString: Untagged
@@ -324,3 +325,18 @@ MonoBehaviour:
   hitDuration: 0.42
   shootDuration: 0.58
   idleSpeed: 0.35
+--- !u!114 &-4527870653899485198
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18b0666bb99dc41738d2928d72e7eec8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusIconView
+  iconPrefab: {fileID: 0}
+  heightAboveTop: 0.6
+  spacing: 1.1

@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 8018174992941989125}
   - component: {fileID: 2388773189563600908}
   - component: {fileID: 1822836462144901155}
+  - component: {fileID: 1258967271684101614}
   m_Layer: 9
   m_Name: Gateway
   m_TagString: Untagged
@@ -219,7 +220,7 @@ MonoBehaviour:
   fallingPacketPrefab: {fileID: 7454365375502019294, guid: febdee519fada5544af0bd4eccc61fb5, type: 3}
   slamDelay: 0.42
   extraDrops: 2
-  dropArea: {x: 24, y: 12}
+  dropArea: {x: 38, y: 12}
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
@@ -252,3 +253,18 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &1258967271684101614
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1495201610127570355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18b0666bb99dc41738d2928d72e7eec8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusIconView
+  iconPrefab: {fileID: 0}
+  heightAboveTop: 0.6
+  spacing: 1.1

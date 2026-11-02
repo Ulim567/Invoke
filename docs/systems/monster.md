@@ -35,9 +35,9 @@
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
 
 - 잡몹
-  - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
+  - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects` + `StatusIconView`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
     - 몸 약 2.5×1.5칸, 그림 Pivot은 몸 바닥(임혜원 #101). 판정 BoxCollider2D와 `ContactDamage` 상자는 Size (2.4, 1.2), Offset (0, 0.6) (#107)
-  - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형. `Monster` + `ContactDamage` + `FlyingShooterAI` + `ProjectileAttack` + `StatusEffects`. 공중을 떠다니다 사거리 안의 플레이어를 멈춰서 겨냥해 쏜다. 쫓아가지는 않는다. 체력 30, 접촉 피해 5, 투사체 체력 피해 8(`Loop_Shot`), 사거리 6, 쏘는 간격 2초, 모으는 시간 0.25초, 사망 대기 0.75초 (전부 임시, 프리팹 Inspector 값)
+  - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형. `Monster` + `ContactDamage` + `FlyingShooterAI` + `ProjectileAttack` + `StatusEffects` + `StatusIconView`. 공중을 떠다니다 사거리 안의 플레이어를 멈춰서 겨냥해 쏜다. 쫓아가지는 않는다. 체력 30, 접촉 피해 5, 투사체 체력 피해 8(`Loop_Shot`), 사거리 6, 쏘는 간격 2초, 모으는 시간 0.25초, 사망 대기 0.75초 (전부 임시, 프리팹 Inspector 값)
     - 원형 판정(CircleCollider2D) 지름 1.1, 그림 Pivot은 가운데(임혜원 #101). Rigidbody2D Gravity Scale 0
 - 몬스터끼리는 서로 통과한다(메이플 방식). 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌이 꺼져 있다(#81).
 - 순찰·추적 (`GroundChaseAI`)
@@ -72,10 +72,10 @@
   - 방향은 `Fire`를 부른 순간에 정해진다. 모으는 중에 죽거나 기절하면 투사체는 나가지 않는다.
 
 - 보스 Gateway (`GatewayAI`, #128)
-  - `Monster`(Is Boss 체크) + `ContactDamage` + `ProjectileAttack` + `GatewayAI` + `StatusEffects`. 제자리에 서 있고 움직이지 않는다. 체력 3000, 접촉 피해 10, 사망 대기 1.5초 (전부 임시)
+  - `Monster`(Is Boss 체크) + `ContactDamage` + `ProjectileAttack` + `GatewayAI` + `StatusEffects` + `StatusIconView`. 제자리에 서 있고 움직이지 않는다. 체력 3000, 접촉 피해 10, 사망 대기 1.5초 (전부 임시)
   - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(2초) 뒤, 그다음엔 `Attack Interval`(3초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
   - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 0.58초 = Throw 모션 8번째 장면에 손을 떠남. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
-  - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area` 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
+  - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area`(38×12, 보스방 가로 40칸에 맞춤) 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
   - 기절 중에는 공격을 고르지 않는다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
 - 낙하 (`FallingPacket`)
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
@@ -84,7 +84,7 @@
 - 관통 투사체: `MonsterProjectile`의 `Pierce`를 켜면 맞은 대상(Rigidbody 기준)마다 한 번씩 효과를 주고 계속 날아간다. 끄면 예전처럼 처음 맞은 대상에서 사라진다.
 
 - 상태 이상 반응 (#103)
-  - 상태 이상은 같은 오브젝트의 `StatusEffects`(박진우)에서 읽기만 한다. 몬스터 프리팹 최상위에 `StatusEffects`를 붙인다. 없으면 상태 이상에 반응하지 않는다.
+  - 상태 이상은 같은 오브젝트의 `StatusEffects`(박진우)에서 읽기만 한다. 몬스터 프리팹 최상위에 `StatusEffects`와 상태 이상 아이콘 `StatusIconView`(박진우, 머리 위 표시)를 붙인다. `StatusEffects`가 없으면 상태 이상에 반응하지 않는다.
   - 기절(`IsStunned`): 행동 불가. `GroundChaseAI`, `FlyingShooterAI`가 그 자리에 멈추고 탐지도 하지 않는다. `ContactDamage`는 피해를 주지 않고, `ProjectileAttack.Fire`는 쏘지 않는다. 발사를 모으는 중에 기절하면 투사체는 나가지 않는다.
   - 이속 감소(`MoveSpeedMultiplier`): `GroundChaseAI`의 순찰·추적 속도, `FlyingShooterAI`의 순찰 속도에 곱한다.
   - 실명(`IsBlinded`): 공격이 빗나간다. `ContactDamage`는 피해를 주지 않는다. 실명 중에 쏜 투사체는 `Misses`가 켜져 플레이어를 통과한다(날아가는 중에 실명이 풀려도 빗나감). 땅·발판에는 그대로 막힌다.
@@ -232,6 +232,7 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 상태 이상(#97)은 `StatusEffects`가 걸고 풀고, 몬스터 반응(기절·이속 감소·실명)은 김도훈이 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 한다(#103). 몬스터 프리팹에 `StatusEffects`를 붙이는 일은 김도훈이 한다.
+  - 상태 이상 아이콘(`StatusIconView`, #156)도 김도훈이 몬스터 프리팹(Leak, Loop, Gateway) 최상위에 붙인다.
   - 스킬이 맞힌 대상에게 `IDamageable.TakeDamage(int)`로 데미지를 준다.
   - 배율을 곱한 데미지는 데미지 계산 쪽에서 반올림해 정수로 바꾼다. 계산 값이 양수면 최소 1, 0 이하면 0이고 `TakeDamage`가 0을 무시한다.
   - 몬스터 공격의 체력 피해도 데미지 계산을 거친다. `MonsterAttackResolver`가 `DamageCalculator.Calculate(DamageRequest.Flat(effect.Amount))`를 부른다. 몬스터는 공격력 능력치가 없어서 `Amount`를 그대로 넘기고, 몬스터 공격은 처형하지 않으므로 대상 정보는 넘기지 않는다.

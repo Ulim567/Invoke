@@ -37,6 +37,7 @@
 | `HeldSlot` | - | `int` | 지금 누르고 있는 슬롯 번호(0~7, Slot1~Slot8). 누르고 있지 않으면 -1. 슬롯을 누른 프레임에 이 값이 그 슬롯 번호와 같으면, 그 슬롯이 대상 선택을 시작한 것 |
 | `TargetStep` | - | `int` | 슬롯을 누르고 있는 동안 이번 프레임에 → 를 누르면 1, ← 를 누르면 -1, 그 밖에는 0. 슬롯을 누르고 있지 않으면 항상 0. Player 액션 맵이 비활성화되어 있어야 ← → 를 받음 |
 | `MarkPressed` | - | `bool` | 슬롯을 누르고 있는 동안 이번 프레임에 Space를 눌렀으면 true. 여러 명 선택에서 고른 대상을 찍거나 빼는 데 씀. 슬롯을 누르고 있지 않으면 항상 false |
+| `CancelPressed` | - | `bool` | 이번 프레임에 취소 키(C)를 눌렀으면 true. Attack 액션 맵이 비활성화되어 있으면 항상 false |
 | `SlotPressed(int)` | 슬롯 번호(0~7) | `bool` | 이번 프레임에 그 슬롯을 눌렀으면 true |
 | `SlotReleased(int)` | 슬롯 번호(0~7) | `bool` | 이번 프레임에 그 슬롯을 뗐으면 true. 이 순간에 시전을 요청한다 |
 
@@ -52,7 +53,7 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `SetPlayerMapEnabled(bool)` | true: 활성화, false: 비활성화 | - | Player 액션 맵(Move, Jump, Run, Down, PickUp, Interact)을 활성화·비활성화. 내 캐릭터에서만 동작 |
-| `SetAttackMapEnabled(bool)` | true: 활성화, false: 비활성화 | - | Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext, Mark)을 활성화·비활성화. 비활성화하면 누르고 있던 슬롯도 해제(`HeldSlot`이 -1). 내 캐릭터에서만 동작 |
+| `SetAttackMapEnabled(bool)` | true: 활성화, false: 비활성화 | - | Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext, Mark, Cancel)을 활성화·비활성화. 비활성화하면 누르고 있던 슬롯도 해제(`HeldSlot`이 -1). 내 캐릭터에서만 동작 |
 
 - 여러 이유가 겹칠 때: 이 함수들은 이유를 기억하지 않는다. 예를 들어 슬롯 키를 누른 채 UI를 열었다 닫을 때, UI 쪽에서 `SetPlayerMapEnabled(true)`를 부르면 슬롯 키가 눌려 있어도 Player 액션 맵이 활성화된다.
 - 캐릭터가 사라질 때(`OnStopLocalPlayer`): 두 액션 맵 모두 다시 활성화된다. 재접속한 캐릭터가 비활성화 상태를 물려받지 않게 하기 위함.

@@ -135,6 +135,17 @@
 
 - `VitalStrikeMinigameView`: (임시) 머리 위에 다이얼을 OnGUI로 그린다. 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘. 실제 그림(임혜원)은 위 event와 값을 읽어 바꾼다.
 
+### 휘두르기 1: 검 휘두르기·검 크게베기 (#163)
+- 공통(`SwordWaveSkill`): 검기(투사체)를 몸 가운데에서 날린다.
+  - 검기는 플레이어의 `SwordWaveLauncher.SpawnWave` / `DespawnWave`로만 만들고 없앤다 (`NetworkSpawner`). 프리팹 `SwordWave`, `SwordWave_Wide`는 NetworkManager에 등록한다.
+  - heap: 날릴 때 검기를 heap에 올리고(`Malloc`, 표의 heap 크기 1), 검기가 끝나면(사거리 끝, 첫 대상에서 멈춤) 그 틱에 검기를 없애고 `Free`. 스킬이 끝날 때 아직 날고 있어도 같다. 플레이어가 해제할 필요 없음.
+  - heap이 모자라면 검기를 날리지 않는다 (에러 아님). 끊기면(실행 중단, 취소) 검기는 없애고 heap은 누수.
+  - 판정: 검기가 매 물리 프레임 판정 상자에 걸린 몬스터를 알리고(`SwordWave.MonsterHit`), 스킬이 데미지를 준다. 시전자 씬의 물리 세계.
+  - 데미지: `new DamageRequest(공격력, 표 배율)` → `DamageCalculator.Calculate` → `IDamageable.TakeDamage` → `SkillEffectEvents.Hit`. `Fired`는 날린 순간.
+- 검 휘두르기: 고른 대상(`target`)의 몸 가운데 쪽으로 날린다 (값이 없으면 바라보는 방향). 처음 닿은 몬스터 한 명에서 멈춘다. 검기 1×2, 사거리 8, 속도 25 (임시).
+- 검 크게베기: 바라보는 방향으로 날린다. 관통하며 판정 상자(1×4)에 걸린 몬스터를 한 번씩 벤다. 맞은 몬스터에 출혈(`StatusEffects.TryApply`). 사거리 6, 속도 25, 배율 0.5 (임시).
+- 그림: 임혜원 `_HW/Effects/SwordWave`, `SwordWave_Wide` (오른쪽을 보는 그림, 날아가는 방향으로 돌림).
+
 ### 검 소환·해제 (#102)
 - 검 소환 (`c.summon_sword`, malloc)
   - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, heapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
@@ -172,7 +183,7 @@
 | `Ended` (event) | `string` 스킬 ID, `bool` 끝까지 실행했으면 `true` | [연출] 스킬이 끝났을 때. 끊기거나 실패하면 `false` |
 
 - 순서: `Started` → (`Fired` → `Hit` 0번 이상) → `Ended`. 필요 조건(맨손 등)에 걸려 시작하지 못한 스킬은 아무 event도 내지 않는다.
-- `Started`, `Ended`는 `DataDrivenSkill`이 모든 C 스킬에 대해 낸다. `Fired`, `Hit`은 효과를 채운 스킬부터 낸다 (지금: 검 찌르기, 집중찌르기, 꼬챙이, 급소공략).
+- `Started`, `Ended`는 `DataDrivenSkill`이 모든 C 스킬에 대해 낸다. `Fired`, `Hit`은 효과를 채운 스킬부터 낸다 (지금: 검 찌르기, 집중찌르기, 꼬챙이, 급소공략, 검 휘두르기, 검 크게베기).
 - `Raise...` 함수는 C 스킬만 부른다. 네트워크를 붙이면 `[ClientRpc]`로 바꿔 모든 화면에서 불린다.
 - 찌르기 섬광: `ThrustEffectView`(플레이어)가 `Fired`를 받아 `ThrustFlash`(검 찌르기·집중찌르기) / `SkewerFlash`(꼬챙이) 프리팹을 찌르는 방향으로 만든다. 그림은 임혜원 #114 (`_HW/Effects/Thrust_Flash`, `Skewer_Flash`). 보여 주기만 하는 오브젝트라 `OneShotEffect`가 0.25초 뒤 스스로 없앤다.
 
@@ -188,6 +199,7 @@
 | --- | --- |
 | `ThrustSkillSimTest` | Test_JW의 ThrustTest. 켜고 Play → Host, Game 창을 한 번 클릭 (Unity가 화면 맨 앞에 있어야 가짜 키가 들어감). 검 찌르기(사거리 밖 몬스터에게 돌진 후 맞음, 데미지 = 공격력 × 배율), 집중찌르기(출혈 1.5배), 꼬챙이(일직선 뒤 몬스터 모두), 맨손 실패, 슬롯 Q로 고른 대상에게 맞음, 연출 event 순서를 확인. 「[ThrustTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `VitalStrikeSimTest` | Test_JW의 VitalTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 10초). Q에 급소공략을 넣고(끝나면 되돌림) 눈 칸 → 3.0배 + 실명, 미니게임 중 대상 고정, 발목 칸 → 3.0배 + 이속 감소, 미니게임 안 함 → 기본 데미지, 칸 밖에서 멈춤 → 기본 데미지, 결과는 한 번 쓰면 지워짐을 확인. 「[VitalTest] 전체 통과」면 통과. 평소에는 꺼 둔다. 직접 해 보려면 `Restore Slot`을 끄고 한 번 돌리면 Q에 급소공략이 남는다. |
+| `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
@@ -205,4 +217,7 @@
   - 급소공략 미니게임 한 바퀴 1.2초, 칸 크기 30도: 기획
   - 돌진이 몬스터 몸에 막히는 것 (지금은 막힘. 뚫고 지나갈지): 기획
   - 위 「가정한 것」 3개: 기획
-  - 검기가 해제가 필요한지, 날아간 뒤 자동 반환인지: 기획
+  - 검기 크기·사거리·속도 (휘두르기 1×2·8, 크게베기 1×4·6, 속도 25): 기획
+- 정한 것 (#163)
+  - 검기 heap은 검기가 사라지면 자동 해제 (플레이어가 free하지 않음)
+  - 검 휘두르기는 첫 대상에서 멈춤, 검 크게베기는 관통하며 판정 범위 안의 몬스터만

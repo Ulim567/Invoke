@@ -13,7 +13,7 @@ using UnityEngine.InputSystem;
 /// </para>
 /// <para>
 /// 이동 담당: MoveX, JumpPressed, RunHeld, DropPressed<br/>
-/// 시전 담당: HeldSlot, TargetStep, MarkPressed, SlotPressed(), SlotReleased()<br/>
+/// 시전 담당: HeldSlot, TargetStep, MarkPressed, CancelPressed, SlotPressed(), SlotReleased()<br/>
 /// 그 밖: PickUpPressed(검 줍기), InteractPressed(입구 들어가기, 스킬 트리 해금 장소)<br/>
 /// 액션 맵 활성화·비활성화: SetPlayerMapEnabled(), SetAttackMapEnabled()
 /// </para>
@@ -27,7 +27,7 @@ public class PlayerInputReader : NetworkBehaviour
 	const int SlotCount = 8;
 
 	InputActionMap playerMap, attackMap;
-	InputAction move, jump, run, down, pickUp, interact, targetPrev, targetNext, mark;
+	InputAction move, jump, run, down, pickUp, interact, targetPrev, targetNext, mark, cancel;
 	readonly InputAction[] slots = new InputAction[SlotCount];
 
 	// 내 캐릭터가 사라질 때 -=로 등록을 해제하려면 등록할 때와 같은 함수 객체가 필요하므로 보관
@@ -92,6 +92,12 @@ public class PlayerInputReader : NetworkBehaviour
 	public bool MarkPressed => IsSlotHeld && mark.WasPressedThisFrame();
 
 	/// <summary>
+	/// 이번 프레임에 취소 키(C)를 눌렀으면 true.
+	/// Attack 액션 맵에 있으므로, Attack 액션 맵이 비활성화되어 있으면 항상 false이다.
+	/// </summary>
+	public bool CancelPressed => cancel.WasPressedThisFrame();
+
+	/// <summary>
 	/// 이번 프레임에 index번 슬롯(0~7)을 눌렀으면 true.
 	/// </summary>
 	public bool SlotPressed(int index) => slots[index].WasPressedThisFrame();
@@ -114,7 +120,7 @@ public class PlayerInputReader : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext, Mark)을 활성화하거나 비활성화한다.<br/>
+	/// Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext, Mark, Cancel)을 활성화하거나 비활성화한다.<br/>
 	/// 비활성화하면 누르고 있던 슬롯도 해제된다 (HeldSlot이 -1).<br/>
 	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
 	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
@@ -147,6 +153,7 @@ public class PlayerInputReader : NetworkBehaviour
 		targetPrev = attackMap.FindAction("TargetPrev", true);
 		targetNext = attackMap.FindAction("TargetNext", true);
 		mark = attackMap.FindAction("Mark", true);
+		cancel = attackMap.FindAction("Cancel", true);
 
 		for (int i = 0; i < SlotCount; i++)
 		{

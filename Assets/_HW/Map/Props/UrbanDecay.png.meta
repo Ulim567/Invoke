@@ -1,0 +1,1317 @@
+fileFormatVersion: 2
+guid: 5cfad0c92d5bc44a6b0ada2f1c1015b7
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 747288047046089191
+    second: UrbanDecay_0
+  - first:
+      213: 4685383057249481866
+    second: UrbanDecay_1
+  - first:
+      213: -2920178564319210676
+    second: UrbanDecay_2
+  - first:
+      213: 1312884559477200812
+    second: UrbanDecay_3
+  - first:
+      213: -5136704562465328173
+    second: UrbanDecay_4
+  - first:
+      213: 4622840132324844234
+    second: UrbanDecay_5
+  - first:
+      213: -277581016386881702
+    second: UrbanDecay_6
+  - first:
+      213: -6157030304643327223
+    second: UrbanDecay_7
+  - first:
+      213: 148965930643363239
+    second: UrbanDecay_8
+  - first:
+      213: 89646677946776728
+    second: UrbanDecay_9
+  - first:
+      213: 3562351962925978201
+    second: UrbanDecay_10
+  - first:
+      213: 3279971164670251867
+    second: UrbanDecay_11
+  - first:
+      213: -243595852261636660
+    second: UrbanDecay_12
+  - first:
+      213: -7401286880910467447
+    second: UrbanDecay_13
+  - first:
+      213: 3132358128246740231
+    second: UrbanDecay_14
+  - first:
+      213: -3751120211036476279
+    second: UrbanDecay_15
+  - first:
+      213: 8505412756254754216
+    second: UrbanDecay_16
+  - first:
+      213: -279510813202472274
+    second: UrbanDecay_17
+  - first:
+      213: -3753356740320142259
+    second: UrbanDecay_18
+  - first:
+      213: 8218598096156200770
+    second: UrbanDecay_19
+  - first:
+      213: 3976167555384496378
+    second: UrbanDecay_20
+  - first:
+      213: 5968114665382620458
+    second: UrbanDecay_21
+  - first:
+      213: -2365371820168325238
+    second: UrbanDecay_22
+  - first:
+      213: 7360985739658041942
+    second: UrbanDecay_23
+  - first:
+      213: -7984356744314494331
+    second: UrbanDecay_24
+  - first:
+      213: -79162419206977024
+    second: UrbanDecay_25
+  - first:
+      213: -6204091194111618566
+    second: UrbanDecay_26
+  - first:
+      213: -4669847053242974714
+    second: UrbanDecay_27
+  - first:
+      213: 8593723669107886267
+    second: UrbanDecay_28
+  - first:
+      213: -4344811379413163002
+    second: UrbanDecay_29
+  - first:
+      213: 8586258933248537110
+    second: UrbanDecay_30
+  - first:
+      213: -5051110737854461346
+    second: UrbanDecay_31
+  - first:
+      213: 816107119696890545
+    second: UrbanDecay_32
+  - first:
+      213: -7358564797539243931
+    second: UrbanDecay_33
+  - first:
+      213: 8710080699145331949
+    second: UrbanDecay_34
+  - first:
+      213: 3789449317855769421
+    second: UrbanDecay_35
+  - first:
+      213: 6908481318729590663
+    second: UrbanDecay_36
+  - first:
+      213: -1911479371255987446
+    second: UrbanDecay_37
+  - first:
+      213: 6812922036787844350
+    second: UrbanDecay_38
+  - first:
+      213: -4535184010564601967
+    second: UrbanDecay_39
+  - first:
+      213: -2029946564209513140
+    second: UrbanDecay_40
+  - first:
+      213: -2288791033584783563
+    second: UrbanDecay_41
+  - first:
+      213: 1484327338822801737
+    second: UrbanDecay_42
+  - first:
+      213: 1824620079912952718
+    second: UrbanDecay_43
+  - first:
+      213: 7835390227165523105
+    second: UrbanDecay_44
+  - first:
+      213: 8968834018817865118
+    second: UrbanDecay_45
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 16
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationMethod: 0
+  spriteTessellationDetail: -1
+  spriteGeometrySubdivision: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: UrbanDecay_0
+      rect:
+        serializedVersion: 2
+        x: 32
+        y: 426
+        width: 16
+        height: 18
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7e9d31df486ee5a00800000000000000
+      internalID: 747288047046089191
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_1
+      rect:
+        serializedVersion: 2
+        x: 64
+        y: 426
+        width: 16
+        height: 18
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a843dfbf013d50140800000000000000
+      internalID: 4685383057249481866
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_2
+      rect:
+        serializedVersion: 2
+        x: 322
+        y: 433
+        width: 58
+        height: 12
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c431b0941117977d0800000000000000
+      internalID: -2920178564319210676
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_3
+      rect:
+        serializedVersion: 2
+        x: 73
+        y: 352
+        width: 135
+        height: 80
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ca7dbb60d8d483210800000000000000
+      internalID: 1312884559477200812
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_4
+      rect:
+        serializedVersion: 2
+        x: 221
+        y: 416
+        width: 19
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3d330267a62c6b8b0800000000000000
+      internalID: -5136704562465328173
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_5
+      rect:
+        serializedVersion: 2
+        x: 256
+        y: 416
+        width: 19
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ac264a48b90a72040800000000000000
+      internalID: 4622840132324844234
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_6
+      rect:
+        serializedVersion: 2
+        x: 323
+        y: 420
+        width: 55
+        height: 8
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a573ed94985d52cf0800000000000000
+      internalID: -277581016386881702
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_7
+      rect:
+        serializedVersion: 2
+        x: 16
+        y: 352
+        width: 39
+        height: 60
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 90b5b6c2f85dd8aa0800000000000000
+      internalID: -6157030304643327223
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_8
+      rect:
+        serializedVersion: 2
+        x: 320
+        y: 403
+        width: 64
+        height: 9
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7a512a389bb311200800000000000000
+      internalID: 148965930643363239
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_9
+      rect:
+        serializedVersion: 2
+        x: 222
+        y: 352
+        width: 52
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 89cbf4abd2d7e3100800000000000000
+      internalID: 89646677946776728
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_10
+      rect:
+        serializedVersion: 2
+        x: 300
+        y: 384
+        width: 24
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9525e137c34007130800000000000000
+      internalID: 3562351962925978201
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_11
+      rect:
+        serializedVersion: 2
+        x: 336
+        y: 368
+        width: 32
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b53d1bf656cc48d20800000000000000
+      internalID: 3279971164670251867
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_12
+      rect:
+        serializedVersion: 2
+        x: 288
+        y: 352
+        width: 48
+        height: 6
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cc5cf2decd29e9cf0800000000000000
+      internalID: -243595852261636660
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_13
+      rect:
+        serializedVersion: 2
+        x: 16
+        y: 304
+        width: 96
+        height: 32
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 98e9296abc8594990800000000000000
+      internalID: -7401286880910467447
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_14
+      rect:
+        serializedVersion: 2
+        x: 160
+        y: 320
+        width: 48
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 70554772f1f587b20800000000000000
+      internalID: 3132358128246740231
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_15
+      rect:
+        serializedVersion: 2
+        x: 288
+        y: 336
+        width: 48
+        height: 6
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 98ce167da0851fbc0800000000000000
+      internalID: -3751120211036476279
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_16
+      rect:
+        serializedVersion: 2
+        x: 17
+        y: 272
+        width: 46
+        height: 8
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8a504a496db490670800000000000000
+      internalID: 8505412756254754216
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_17
+      rect:
+        serializedVersion: 2
+        x: 224
+        y: 272
+        width: 128
+        height: 45
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ea2af24756afe1cf0800000000000000
+      internalID: -279510813202472274
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_18
+      rect:
+        serializedVersion: 2
+        x: 18
+        y: 176
+        width: 29
+        height: 53
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d4c56e94ee569ebc0800000000000000
+      internalID: -3753356740320142259
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_19
+      rect:
+        serializedVersion: 2
+        x: 49
+        y: 176
+        width: 29
+        height: 53
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 24f8719ac635e0270800000000000000
+      internalID: 8218598096156200770
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_20
+      rect:
+        serializedVersion: 2
+        x: 86
+        y: 176
+        width: 52
+        height: 53
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: af05022335f2e2730800000000000000
+      internalID: 3976167555384496378
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_21
+      rect:
+        serializedVersion: 2
+        x: 149
+        y: 176
+        width: 23
+        height: 90
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a2d2ee0faa003d250800000000000000
+      internalID: 5968114665382620458
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_22
+      rect:
+        serializedVersion: 2
+        x: 197
+        y: 176
+        width: 71
+        height: 90
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a87d521acd28c2fd0800000000000000
+      internalID: -2365371820168325238
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_23
+      rect:
+        serializedVersion: 2
+        x: 277
+        y: 176
+        width: 71
+        height: 90
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 65a9801b789772660800000000000000
+      internalID: 7360985739658041942
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_24
+      rect:
+        serializedVersion: 2
+        x: 357
+        y: 176
+        width: 6
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 582e32f08ddd13190800000000000000
+      internalID: -7984356744314494331
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_25
+      rect:
+        serializedVersion: 2
+        x: 16
+        y: 113
+        width: 7
+        height: 47
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 00a8b9bf232c6eef0800000000000000
+      internalID: -79162419206977024
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_26
+      rect:
+        serializedVersion: 2
+        x: 32
+        y: 145
+        width: 21
+        height: 14
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: af119dcfde3a6e9a0800000000000000
+      internalID: -6204091194111618566
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_27
+      rect:
+        serializedVersion: 2
+        x: 97
+        y: 128
+        width: 29
+        height: 20
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 60e3c04d8de513fb0800000000000000
+      internalID: -4669847053242974714
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_28
+      rect:
+        serializedVersion: 2
+        x: 166
+        y: 132
+        width: 37
+        height: 19
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb8ca03452a034770800000000000000
+      internalID: 8593723669107886267
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_29
+      rect:
+        serializedVersion: 2
+        x: 83
+        y: 128
+        width: 11
+        height: 10
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 604e00af11124b3c0800000000000000
+      internalID: -4344811379413163002
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_30
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 128
+        width: 12
+        height: 11
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 612bdc10205882770800000000000000
+      internalID: 8586258933248537110
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_31
+      rect:
+        serializedVersion: 2
+        x: 147
+        y: 128
+        width: 9
+        height: 10
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e5a060dbb89d6e9b0800000000000000
+      internalID: -5051110737854461346
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_32
+      rect:
+        serializedVersion: 2
+        x: 22
+        y: 96
+        width: 20
+        height: 15
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1ba4338f915635b00800000000000000
+      internalID: 816107119696890545
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_33
+      rect:
+        serializedVersion: 2
+        x: 50
+        y: 96
+        width: 13
+        height: 13
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 568aaf1dd4021e990800000000000000
+      internalID: -7358564797539243931
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_34
+      rect:
+        serializedVersion: 2
+        x: 68
+        y: 96
+        width: 12
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: de42b857f3c60e870800000000000000
+      internalID: 8710080699145331949
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_35
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 96
+        width: 34
+        height: 20
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d43b325c314d69430800000000000000
+      internalID: 3789449317855769421
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_36
+      rect:
+        serializedVersion: 2
+        x: 131
+        y: 96
+        width: 9
+        height: 5
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 787ac4c182bdfdf50800000000000000
+      internalID: 6908481318729590663
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_37
+      rect:
+        serializedVersion: 2
+        x: 146
+        y: 96
+        width: 28
+        height: 6
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a03ccc8a3af0975e0800000000000000
+      internalID: -1911479371255987446
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_38
+      rect:
+        serializedVersion: 2
+        x: 176
+        y: 96
+        width: 16
+        height: 6
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ef49b2dfe7c5c8e50800000000000000
+      internalID: 6812922036787844350
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_39
+      rect:
+        serializedVersion: 2
+        x: 196
+        y: 96
+        width: 23
+        height: 10
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 197f34bbb2acf01c0800000000000000
+      internalID: -4535184010564601967
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_40
+      rect:
+        serializedVersion: 2
+        x: 224
+        y: 96
+        width: 16
+        height: 8
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c4d644fda5e24d3e0800000000000000
+      internalID: -2029946564209513140
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_41
+      rect:
+        serializedVersion: 2
+        x: 243
+        y: 96
+        width: 38
+        height: 15
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 53f64167ea49c30e0800000000000000
+      internalID: -2288791033584783563
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_42
+      rect:
+        serializedVersion: 2
+        x: 31
+        y: 64
+        width: 18
+        height: 24
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9491fe0b9d3699410800000000000000
+      internalID: 1484327338822801737
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_43
+      rect:
+        serializedVersion: 2
+        x: 79
+        y: 64
+        width: 18
+        height: 24
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e83a141ab4a525910800000000000000
+      internalID: 1824620079912952718
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_44
+      rect:
+        serializedVersion: 2
+        x: 119
+        y: 14
+        width: 35
+        height: 53
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1aca4ced5e5ecbc60800000000000000
+      internalID: 7835390227165523105
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: UrbanDecay_45
+      rect:
+        serializedVersion: 2
+        x: 32
+        y: 32
+        width: 32
+        height: 16
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e95f31d6503b77c70800000000000000
+      internalID: 8968834018817865118
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 089b27c8ff7344e2ba5c860070598627
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":0,"keepEmptyRects":false,"isAlternate":false}'
+    nameFileIdTable:
+      UrbanDecay_0: 747288047046089191
+      UrbanDecay_1: 4685383057249481866
+      UrbanDecay_10: 3562351962925978201
+      UrbanDecay_11: 3279971164670251867
+      UrbanDecay_12: -243595852261636660
+      UrbanDecay_13: -7401286880910467447
+      UrbanDecay_14: 3132358128246740231
+      UrbanDecay_15: -3751120211036476279
+      UrbanDecay_16: 8505412756254754216
+      UrbanDecay_17: -279510813202472274
+      UrbanDecay_18: -3753356740320142259
+      UrbanDecay_19: 8218598096156200770
+      UrbanDecay_2: -2920178564319210676
+      UrbanDecay_20: 3976167555384496378
+      UrbanDecay_21: 5968114665382620458
+      UrbanDecay_22: -2365371820168325238
+      UrbanDecay_23: 7360985739658041942
+      UrbanDecay_24: -7984356744314494331
+      UrbanDecay_25: -79162419206977024
+      UrbanDecay_26: -6204091194111618566
+      UrbanDecay_27: -4669847053242974714
+      UrbanDecay_28: 8593723669107886267
+      UrbanDecay_29: -4344811379413163002
+      UrbanDecay_3: 1312884559477200812
+      UrbanDecay_30: 8586258933248537110
+      UrbanDecay_31: -5051110737854461346
+      UrbanDecay_32: 816107119696890545
+      UrbanDecay_33: -7358564797539243931
+      UrbanDecay_34: 8710080699145331949
+      UrbanDecay_35: 3789449317855769421
+      UrbanDecay_36: 6908481318729590663
+      UrbanDecay_37: -1911479371255987446
+      UrbanDecay_38: 6812922036787844350
+      UrbanDecay_39: -4535184010564601967
+      UrbanDecay_4: -5136704562465328173
+      UrbanDecay_40: -2029946564209513140
+      UrbanDecay_41: -2288791033584783563
+      UrbanDecay_42: 1484327338822801737
+      UrbanDecay_43: 1824620079912952718
+      UrbanDecay_44: 7835390227165523105
+      UrbanDecay_45: 8968834018817865118
+      UrbanDecay_5: 4622840132324844234
+      UrbanDecay_6: -277581016386881702
+      UrbanDecay_7: -6157030304643327223
+      UrbanDecay_8: 148965930643363239
+      UrbanDecay_9: 89646677946776728
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

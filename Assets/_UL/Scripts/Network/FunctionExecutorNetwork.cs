@@ -17,6 +17,13 @@ using UnityEngine;
 /// - 슬롯 장착 내용이 바뀌면(SlotLoadout.Changed) 슬롯과 함수를 다시 보낸다. 전역 변수는 접속할 때만 보낸다.<br/>
 /// - 서버는 받은 데이터로 슬롯마다 원본 함수를 만든다(ApplyPlayerData). 처음 다 만들면 IsDataReady가 true가 되고 DataReady가 불린다. 로딩 화면은 이것을 기다린다.
 /// </para>
+/// <para>
+/// 시전 (내 화면 → 서버 → 화면들)<br/>
+/// - 내 화면은 RequestCast(슬롯, 대상), RequestCancel(슬롯)로 서버에 부탁한다. FunctionExecutor.Cast, Cancel을 직접 부르지 않는다.<br/>
+/// - 서버의 답은 시전한 사람에게만 온다: 성공이면 CastAccepted(슬롯, 작업 번호), 거부면 CastRejected(슬롯, 이유).<br/>
+/// - 작업이 시작하고 끝나면 모든 화면에 TaskStarted(작업 번호, 슬롯, 함수 이름), TaskEnded(작업 번호, 끝난 이유)가 불린다.<br/>
+/// - 네트워크를 켜지 않은 테스트에서도 같은 함수와 event로 동작한다. 이때는 서버로 보내지 않고 그 자리에서 실행기를 부른다.
+/// </para>
 /// </summary>
 // FunctionExecutor와 따로 두는 이유: 실행기는 Mirror 없이 일반 코드로 두고, 네트워크는 이 컴포넌트에만 모으기 위함(CLAUDE.md 코드 작성 규칙)
 [RequireComponent(typeof(FunctionExecutor), typeof(SlotLoadout))]
@@ -40,6 +47,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	GlobalVariablesData receivingGlobals;
 	// [서버] 전역 변수를 한 번이라도 받아 적용했는지. 슬롯·함수와 전역 변수를 모두 받아야 준비된 것으로 본다
 	bool globalsApplied;
+	// [서버] 방금 실행기가 시전을 거부한 이유. 실행기는 Cast 안에서 CastRejected를 부르고 null을 돌려주므로, 그 사이에 받아 둔다
+	CastRejection? lastRejection;
 
 	// [내 화면] 슬롯 장착이 바뀌어 다시 보내야 하는지
 	// 장착을 한 번 바꿀 때 Changed가 여러 번 불리므로(자리 바꾸기, 다른 슬롯에서 옮겨 오기), 모아 두었다가 다음 Update에서 한 번만 보낸다
@@ -59,10 +68,50 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// </summary>
 	public event Action DataReady;
 
+	/// <summary>
+	/// [로직] 내가 부탁한 시전을 서버가 받아들였을 때 (슬롯 번호, 작업 번호). 시전한 사람의 화면에서만 불린다.
+	/// </summary>
+	public event Action<int, int> CastAccepted;
+
+	/// <summary>
+	/// [로직] 내가 부탁한 시전을 서버가 거부했을 때 (슬롯 번호, 거부 이유). 시전한 사람의 화면에서만 불린다.<br/>
+	/// 이유: OnCooldown(실행 중이거나 쿨타임 중), NotEnoughMemory(메모리 부족), NoFunction(서버에 그 슬롯의 함수가 없음).
+	/// </summary>
+	public event Action<int, CastRejection> CastRejected;
+
+	/// <summary>
+	/// [연출] 이 캐릭터의 작업이 진행을 시작할 때 (작업 번호, 슬롯 번호, 함수 이름). 모든 화면에서 불린다. 시전 모션에 쓴다.<br/>
+	/// 슬롯 번호는 슬롯에서 시전한 작업만 0~7이고, 함수 안에서 비동기로 시전된 작업은 -1이다.
+	/// </summary>
+	public event Action<int, int, string> TaskStarted;
+
+	/// <summary>
+	/// [로직] 이 캐릭터의 작업이 끝났을 때 (작업 번호, 끝난 이유). 모든 화면에서 불린다. 진행을 시작하기 전에 끊긴 작업은 TaskStarted 없이 이것만 불린다.
+	/// </summary>
+	public event Action<int, FunctionTaskEndReason> TaskEnded;
+
+	// 네트워크를 켜지 않은 테스트이면 true. 이때는 서버로 보내지 않고 이 컴퓨터에서 바로 처리한다
+	static bool IsOffline => !NetworkServer.active && !NetworkClient.active;
+
 	void Awake()
 	{
 		executor = GetComponent<FunctionExecutor>();
 		loadout = GetComponent<SlotLoadout>();
+	}
+
+	// 실행기의 event는 실행기가 돌고 있는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불린다. 받아서 화면들에 전한다
+	void OnEnable()
+	{
+		executor.TaskStarted += OnExecutorTaskStarted;
+		executor.TaskEnded += OnExecutorTaskEnded;
+		executor.CastRejected += OnExecutorCastRejected;
+	}
+
+	void OnDisable()
+	{
+		executor.TaskStarted -= OnExecutorTaskStarted;
+		executor.TaskEnded -= OnExecutorTaskEnded;
+		executor.CastRejected -= OnExecutorCastRejected;
 	}
 
 	public override void OnStartClient()
@@ -226,4 +275,120 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		if (newValue) DataReady?.Invoke();
 	}
+
+	/// <summary>
+	/// [내 화면] 서버에 slot번(0~7) 슬롯의 시전을 부탁한다. 대상(Target) 파라미터가 있는 스킬이면 target에 고른 몬스터를 넘기고, 없으면 null.<br/>
+	/// 답은 CastAccepted 또는 CastRejected로 온다. 슬롯 키 입력(SlotCaster)이 부른다.
+	/// </summary>
+	public void RequestCast(int slot, GameObject target = null)
+	{
+		if (IsOffline) ServerCast(slot, target);
+		else CmdCast(slot, target);
+	}
+
+	/// <summary>
+	/// [내 화면] 서버에 slot번 슬롯으로 시전한 작업을 끊어 달라고 부탁한다(FunctionExecutor.Cancel). 끊긴 작업은 TaskEnded(Cancelled)로 알 수 있다.<br/>
+	/// 취소 키(SlotCaster)가 부른다.
+	/// </summary>
+	public void RequestCancel(int slot)
+	{
+		if (IsOffline) ServerCancel(slot);
+		else CmdCancel(slot);
+	}
+
+	[Command]
+	void CmdCast(int slot, GameObject target) => ServerCast(slot, target);
+
+	[Command]
+	void CmdCancel(int slot) => ServerCancel(slot);
+
+	// 서버(또는 네트워크를 켜지 않은 테스트)에서 슬롯의 원본을 시전하고, 결과를 시전한 사람에게 알린다
+	// [Server]를 붙이지 않는다. 네트워크를 켜지 않은 테스트에서도 같은 함수로 시전하기 위함
+	void ServerCast(int slot, GameObject target)
+	{
+		FunctionBlock original = GetSlotOriginal(slot);
+		if (original == null)
+		{
+			ReplyCastRejected(slot, CastRejection.NoFunction);
+			return;
+		}
+
+		lastRejection = null;
+		FunctionTask task = TakesTarget(original) && target != null
+			? executor.Cast((PredefinedFunction)original, RuntimeValue.FromBug(target.GetComponent<Monster>()))
+			: executor.Cast(original);
+
+		// 실행기가 거부했으면 그 이유는 Cast 안에서 OnExecutorCastRejected가 받아 두었다
+		if (task == null) ReplyCastRejected(slot, lastRejection ?? CastRejection.NoFunction);
+		else ReplyCastAccepted(slot, task.Id);
+	}
+
+	void ServerCancel(int slot)
+	{
+		FunctionBlock original = GetSlotOriginal(slot);
+		bool cancelled = original != null && executor.Cancel(original);
+		Debug.Log($"[FunctionExecutorNetwork] {name}: 슬롯 {slot + 1} 취소 {(cancelled ? "끊음" : "끊을 작업 없음")}", this);
+	}
+
+	// 대상(Target) 파라미터 하나를 받는 스킬인지. 그때만 고른 몬스터를 argument로 넘긴다
+	// 파라미터가 없는 스킬에 argument를 넘기면 실행기가 예외를 던지기 때문
+	static bool TakesTarget(FunctionBlock function) =>
+		function is PredefinedFunction skill && skill.Parameters.Count > 0 && skill.Parameters[0].Type?.Kind == VariableTypeKind.Target;
+
+	// 슬롯의 원본. 네트워크를 켜지 않은 테스트에서는 서버로 받은 데이터가 없으므로 이 컴퓨터의 SlotLoadout에서 꺼낸다
+	FunctionBlock GetSlotOriginal(int slot)
+	{
+		if (slot < 0 || slot >= SlotLoadout.SlotCount) return null;
+		if (IsOffline) return loadout.TryGetFunction(slot, out FunctionBlock function) ? function : null;
+		return slotOriginals[slot];
+	}
+
+	// 작업을 시전한 슬롯 번호. 함수 안에서 비동기로 시전된 작업이나 다른 곳에서 시전한 작업은 -1
+	int SlotOf(FunctionTask task)
+	{
+		if (task.CastSource == null) return -1;
+		for (int i = 0; i < SlotLoadout.SlotCount; i++)
+			if (GetSlotOriginal(i) == task.CastSource) return i;
+		return -1;
+	}
+
+	void OnExecutorCastRejected(FunctionBlock function, CastRejection rejection) => lastRejection = rejection;
+
+	void OnExecutorTaskStarted(FunctionTask task)
+	{
+		if (IsOffline) TaskStarted?.Invoke(task.Id, SlotOf(task), task.Name);
+		else if (isServer) RpcTaskStarted(task.Id, SlotOf(task), task.Name);
+	}
+
+	void OnExecutorTaskEnded(FunctionTask task)
+	{
+		if (IsOffline) TaskEnded?.Invoke(task.Id, task.EndReason);
+		else if (isServer) RpcTaskEnded(task.Id, task.EndReason);
+	}
+
+	void ReplyCastAccepted(int slot, int taskId)
+	{
+		if (IsOffline) CastAccepted?.Invoke(slot, taskId);
+		else TargetCastAccepted(slot, taskId);
+	}
+
+	void ReplyCastRejected(int slot, CastRejection rejection)
+	{
+		if (IsOffline) CastRejected?.Invoke(slot, rejection);
+		else TargetCastRejected(slot, rejection);
+	}
+
+	// 시전 결과는 시전한 사람에게만 보낸다. 다른 플레이어의 시전이 거부된 것은 내 화면에 보일 필요가 없기 때문
+	[TargetRpc]
+	void TargetCastAccepted(int slot, int taskId) => CastAccepted?.Invoke(slot, taskId);
+
+	[TargetRpc]
+	void TargetCastRejected(int slot, CastRejection rejection) => CastRejected?.Invoke(slot, rejection);
+
+	// 작업의 시작·끝은 모든 화면에 보낸다. 다른 플레이어의 시전 모션도 보여야 하기 때문
+	[ClientRpc]
+	void RpcTaskStarted(int taskId, int slot, string functionName) => TaskStarted?.Invoke(taskId, slot, functionName);
+
+	[ClientRpc]
+	void RpcTaskEnded(int taskId, FunctionTaskEndReason reason) => TaskEnded?.Invoke(taskId, reason);
 }

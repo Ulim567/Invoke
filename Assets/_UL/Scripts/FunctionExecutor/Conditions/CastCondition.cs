@@ -8,6 +8,9 @@ public enum CastRejection
 	OnCooldown,
 	// 남은 메모리가 그 함수의 프레임 크기보다 적다
 	NotEnoughMemory,
+	// 시전할 함수가 없다. 멀티플레이에서 서버에 그 슬롯의 원본이 없을 때(데이터가 오기 전, 실행할 수 없는 함수) FunctionExecutorNetwork가 쓴다
+	// 새 값은 맨 끝에만 더한다. 중간에 끼우면 뒤 값들의 번호가 바뀌기 때문
+	NoFunction,
 }
 
 /// <summary>

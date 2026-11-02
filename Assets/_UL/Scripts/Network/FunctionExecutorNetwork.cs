@@ -24,6 +24,11 @@ using UnityEngine;
 /// - 작업이 시작하고 끝나면 모든 화면에 TaskStarted(작업 번호, 슬롯, 함수 이름), TaskEnded(작업 번호, 끝난 이유)가 불린다.<br/>
 /// - 네트워크를 켜지 않은 테스트에서도 같은 함수와 event로 동작한다. 이때는 서버로 보내지 않고 그 자리에서 실행기를 부른다.
 /// </para>
+/// <para>
+/// 입력 대기 (서버 → 시전한 사람 → 서버)<br/>
+/// - 내 작업이 입력 함수(GetBug)를 만나면 내 화면에 InputRequested(작업 번호, 입력 함수 ID, 슬롯)가 불린다.<br/>
+/// - 고른 몬스터는 ProvideTarget(작업 번호, 몬스터)로 서버에 보낸다. 고를 몬스터가 없으면 null(대상 없음). 고르는 방식은 받는 쪽(SlotCaster)이 정한다.
+/// </para>
 /// </summary>
 // FunctionExecutor와 따로 두는 이유: 실행기는 Mirror 없이 일반 코드로 두고, 네트워크는 이 컴포넌트에만 모으기 위함(CLAUDE.md 코드 작성 규칙)
 [RequireComponent(typeof(FunctionExecutor), typeof(SlotLoadout))]
@@ -90,6 +95,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// </summary>
 	public event Action<int, FunctionTaskEndReason> TaskEnded;
 
+	/// <summary>
+	/// [로직] 내 작업이 입력 함수를 만나 입력을 기다리기 시작했을 때 (작업 번호, 입력 함수 ID, 슬롯 번호). 시전한 사람의 화면에서만 불린다.<br/>
+	/// 입력 함수 ID로 자기가 맡은 입력인지 확인한다(예: input.get_bug). 슬롯 번호는 비동기로 시전된 작업이면 -1이다.<br/>
+	/// 값을 정하면 ProvideTarget을 부른다. 이 event 안에서 바로 불러도 된다.
+	/// </summary>
+	public event Action<int, string, int> InputRequested;
+
 	// 네트워크를 켜지 않은 테스트이면 true. 이때는 서버로 보내지 않고 이 컴퓨터에서 바로 처리한다
 	static bool IsOffline => !NetworkServer.active && !NetworkClient.active;
 
@@ -105,6 +117,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskStarted += OnExecutorTaskStarted;
 		executor.TaskEnded += OnExecutorTaskEnded;
 		executor.CastRejected += OnExecutorCastRejected;
+		executor.InputRequested += OnExecutorInputRequested;
 	}
 
 	void OnDisable()
@@ -112,6 +125,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskStarted -= OnExecutorTaskStarted;
 		executor.TaskEnded -= OnExecutorTaskEnded;
 		executor.CastRejected -= OnExecutorCastRejected;
+		executor.InputRequested -= OnExecutorInputRequested;
 	}
 
 	public override void OnStartClient()
@@ -296,6 +310,42 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		else CmdCancel(slot);
 	}
 
+	/// <summary>
+	/// [내 화면] 입력을 기다리는 내 작업(InputRequested의 작업 번호)에 고른 몬스터를 넣어 달라고 서버에 부탁한다. 고를 몬스터가 없으면 null(대상 없음).<br/>
+	/// 작업이 그사이 끝났으면(취소, 실행 중단 공격) 서버가 버린다. 대상 입력(input.get_bug)에 쓴다.
+	/// </summary>
+	public void ProvideTarget(int taskId, GameObject target)
+	{
+		if (IsOffline) ServerProvideTarget(taskId, target);
+		else CmdProvideTarget(taskId, target);
+	}
+
+	[Command]
+	void CmdProvideTarget(int taskId, GameObject target) => ServerProvideTarget(taskId, target);
+
+	// 작업 번호로 서버의 작업을 찾아 몬스터를 넣는다. 이미 끝났거나 입력을 기다리지 않는 작업이면 실행기가 false를 돌려주고 버린다
+	// 나중에 보안 검사(그 몬스터를 정말 고를 수 있었는지)를 넣을 곳이다
+	void ServerProvideTarget(int taskId, GameObject target)
+	{
+		if (!executor.TryGetTask(taskId, out FunctionTask task))
+		{
+			Debug.Log($"[FunctionExecutorNetwork] {name}: 작업 {taskId}이(가) 없어 입력을 버립니다 (이미 끝남)", this);
+			return;
+		}
+
+		Monster monster = target != null ? target.GetComponent<Monster>() : null;
+		try
+		{
+			if (!executor.ProvideInput(task, RuntimeValue.FromBug(monster)))
+				Debug.Log($"[FunctionExecutorNetwork] {name}: 작업 {taskId}이(가) 입력을 기다리지 않아 버립니다", this);
+		}
+		catch (ArgumentException e)
+		{
+			// Bug가 아닌 값을 기다리는 작업에 몬스터가 들어왔다. 클라이언트가 보낸 값 하나 때문에 서버의 Command 처리에서 처리되지 않은 오류가 나지 않게 예외를 받아 버린다
+			Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 작업 {taskId}에 맞지 않는 입력을 버립니다. {e.Message}", this);
+		}
+	}
+
 	[Command]
 	void CmdCast(int slot, GameObject target) => ServerCast(slot, target);
 
@@ -366,6 +416,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		else if (isServer) RpcTaskEnded(task.Id, task.EndReason);
 	}
 
+	// 입력 요청은 그 작업을 시전한 사람에게만 보낸다. 고르는 일은 그 사람의 화면에서 하기 때문
+	void OnExecutorInputRequested(FunctionTask task, PredefinedFunction inputFunction)
+	{
+		if (IsOffline) InputRequested?.Invoke(task.Id, inputFunction.Id, SlotOf(task));
+		else if (isServer) TargetInputRequested(task.Id, inputFunction.Id, SlotOf(task));
+	}
+
 	void ReplyCastAccepted(int slot, int taskId)
 	{
 		if (IsOffline) CastAccepted?.Invoke(slot, taskId);
@@ -391,4 +448,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	[ClientRpc]
 	void RpcTaskEnded(int taskId, FunctionTaskEndReason reason) => TaskEnded?.Invoke(taskId, reason);
+
+	[TargetRpc]
+	void TargetInputRequested(int taskId, string inputFunctionId, int slot) => InputRequested?.Invoke(taskId, inputFunctionId, slot);
 }

@@ -109,12 +109,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88faa98fc390cee4b9eef1be596a61f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MonsterSpawner
-  monsterPrefab: {fileID: 0}
-  spawnPoints:
-  - {fileID: 4526528269032382522}
-  - {fileID: 968876832024032380}
-  - {fileID: 187851017329128378}
+  monsterPrefab: {fileID: 8526818006109154282, guid: 08f459f85c0459f48a935f4dc97ab481, type: 3}
+  maxCount: 3
   respawnDelay: 5
+  areaSize: {x: 20, y: 6}
+  areaOffset: {x: 0, y: 0}
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 192
 --- !u!1 &5321401739379201767
 GameObject:
   m_ObjectHideFlags: 0

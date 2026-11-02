@@ -116,7 +116,7 @@ MonoBehaviour:
   areaOffset: {x: 0, y: 0}
   groundLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 192
 --- !u!1 &5321401739379201767
 GameObject:
   m_ObjectHideFlags: 0

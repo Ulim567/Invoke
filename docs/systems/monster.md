@@ -58,6 +58,10 @@
     - 구역 안 랜덤한 x의 높은 하늘(구역 위 100칸)에서 아래로 선을 그어 땅(`Ground Layers`)을 찾는다. 타일맵 Collider는 테두리(Outlines)만 있어서 선이 윗면·아랫면을 번갈아 맞으므로, 짝수 번째만 윗면으로 써서 땅 속에는 만들지 않는다.
     - 고른 자리 위로 몸 높이만큼 비어 있지 않거나 구역 안에 윗면이 없으면 x를 다시 뽑는다(최대 10번).
   - 몬스터는 `NetworkSpawner.Spawn`(이우림)으로 스포너가 있는 씬에 만든다. 그래서 사냥터 씬의 물리 세계와 플레이어에게 맞춰진다.
+  - 사냥터(`HuntingGround`, 임혜원 #176 맵 기준) 배치
+    - `LeakSpawner`: 위치 (-10, 1), 구역 56×12 (X -38~18, 바닥과 발판 3층), 최대 6마리
+    - `LoopSpawner`: 위치 (28.5, 0), 구역 17×10 (X 20~37, 위가 뚫린 구역), 최대 3마리
+    - 마리 수는 씬에 놓은 스포너에서만 바꾼다. 프리팹 원본(Leak 3, Loop 2)은 테스트용으로 그대로 둔다
   - 서버(Host 포함)에서만 만든다. 서버가 켜지는 순간 모든 지점에 만들고, 클라이언트는 서버가 만든 몬스터를 받기만 한다. 네트워크를 켜지 않으면 만들지 않는다.
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
   - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(몬스터 서버 동기화 이슈).
@@ -221,13 +225,11 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
 | `LandEffectPlayed` (event) | - | - | [연출] 패킷이 땅에 닿을 때 (착지 이펙트·소리) |
 
 ## 맞춘 결과
-- 이우림과 정해야 할 것
-  - 사냥터 씬(`HuntingGround`)에 `LeakSpawner` 프리팹을 놓고 구역을 맵에 맞추는 일 (#86에서는 프리팹까지만 만듦)
 - 이우림과 정한 것
   - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌을 껐다(#81). 그래서 몬스터 프리팹 콜라이더의 Exclude Layers에 `Monster`를 넣지 않아도 몬스터끼리 통과한다.
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
   - 스포너가 몬스터를 만들 수 있도록 김도훈이 Leak에 `NetworkIdentity`를 붙이고 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록한다(#86, 이우림 허락).
-  - 사냥터 씬(`HuntingGround`)에 `LeakSpawner` 프리팹을 놓고 스폰 지점 위치를 잡는 일은 이우림이 한다(#86).
+  - 사냥터 씬(`HuntingGround`)에 스포너를 놓고 구역을 맵에 맞추는 일은 김도훈이 한다 (처음엔 이우림이 하기로 했으나 김도훈이 맡음).
   - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 투사체 생성·삭제와 몬스터 삭제를 `NetworkSpawner`로 바꾸는 일은 몬스터 서버 동기화 이슈에서 한다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것

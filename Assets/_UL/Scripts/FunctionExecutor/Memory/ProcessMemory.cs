@@ -66,6 +66,11 @@ public class ProcessMemory : MonoBehaviour
 	public HeapStorage Heap { get; private set; }
 
 	/// <summary>
+	/// 이 캐릭터의 struct 객체 등록 자리. malloc 블록이 heap에 올릴 실제 객체(예: Sword의 소환검)를 만드는 함수를 struct마다 등록받는다.
+	/// </summary>
+	public StructObjectRegistry StructObjects { get; private set; }
+
+	/// <summary>
 	/// 남은 칸 수(Capacity - DataUsed - StackUsed - HeapUsed). 0보다 작아지지 않는다.
 	/// </summary>
 	// 데이터 영역과 힙을 함께 빼 두어, 전역 변수를 선언하거나 힙을 쓰면 스택이 쓸 수 있는 칸이 따로 고치지 않아도 줄어들게 한다
@@ -145,6 +150,7 @@ public class ProcessMemory : MonoBehaviour
 	{
 		stats = GetComponent<PlayerStats>();
 		Heap = new HeapStorage(this);
+		StructObjects = new StructObjectRegistry();
 		Globals = new VariableStore();
 	}
 }

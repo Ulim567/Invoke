@@ -73,6 +73,12 @@ public class HeapStorage
 	/// </summary>
 	public event Action<object> ObjectCleared;
 
+	/// <summary>
+	/// Free로 객체를 해제했을 때 불린다. 해제된 객체를 넘긴다. 플레이어의 free 블록과 스킬의 PredefinedFunction.Free가 모두 Free를 거친다.<br/>
+	/// 이 저장소는 오브젝트를 없애지 않으므로, 해제된 소환검 오브젝트를 없애는 일은 이 이벤트를 받은 소환검 코드가 한다.
+	/// </summary>
+	public event Action<object> ObjectFreed;
+
 	// ProcessMemory만 만든다
 	internal HeapStorage(ProcessMemory memory)
 	{
@@ -128,7 +134,7 @@ public class HeapStorage
 	/// <summary>
 	/// 포인터의 객체를 해제하고 힙 칸을 돌려준다.<br/>
 	/// NullPointer, 없는 포인터, 이미 해제한 포인터, 누수된 포인터이면 아무것도 하지 않고 false를 돌려준다.<br/>
-	/// 오브젝트를 없애지는 않는다. 오브젝트는 스킬 코드가 따로 없앤다.
+	/// 오브젝트를 없애지는 않는다. 해제에 성공하면 ObjectFreed로 알리고, 오브젝트는 그 이벤트를 받은 쪽이 없앤다.
 	/// </summary>
 	public bool Free(int pointer)
 	{
@@ -141,6 +147,9 @@ public class HeapStorage
 			pointers.Remove(pointer);
 
 		memory.ReleaseHeap(entry.Size);
+
+		// 기록을 다 지운 뒤에 알린다. 받은 쪽이 Malloc을 불러도 지우는 중인 기록과 섞이지 않게 하기 위함(Clear와 같음)
+		ObjectFreed?.Invoke(entry.Obj);
 		return true;
 	}
 

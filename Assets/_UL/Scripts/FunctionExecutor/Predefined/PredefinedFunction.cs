@@ -72,7 +72,7 @@ public abstract class PredefinedFunction : FunctionBlock
 	// sealed: 스킬 작성자가 덮어써서 쿨타임 검사나 기록을 빠뜨리지 못하게 한다
 	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
 	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
-	// 넘겨받은 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 시작하지 않고 InvalidTarget으로 실패한다
+	// 넘겨받은 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 시작하지 않고 InvalidTarget으로 실패한다. 대상 array는 원소 하나라도 쓸 수 없으면 실패한다
 	// 함수 안의 호출(CallBlock)과 슬롯 직접 시전(FunctionExecutor.Cast의 argument)이 모두 여기를 지난다. 스킬마다 검사 코드를 넣지 않기 위함
 	internal sealed override bool TryValidateStart(FunctionContext context)
 	{
@@ -80,10 +80,27 @@ public abstract class PredefinedFunction : FunctionBlock
 
 		foreach (RuntimeValue? argument in Arguments)
 		{
-			if (!argument.HasValue || argument.Value.Type?.Kind != VariableTypeKind.Target || argument.Value.IsUsableTarget) continue;
+			if (!argument.HasValue || HasOnlyUsableTargets(argument.Value)) continue;
 
 			context.RecordFailure(FunctionFailure.InvalidTarget);
 			return false;
+		}
+		return true;
+	}
+
+	// 대상 값이면 그 대상을, 대상 array이면 모든 원소를 검사한다. 대상이 아닌 값은 검사하지 않는다
+	// array도 단일 대상과 같은 규칙으로 막는 이유: 여러 명을 고르는 스킬(전장 휩쓸기)과 한 명을 고르는 스킬이 죽은 대상에 다르게 반응하지 않게 하기 위함
+	static bool HasOnlyUsableTargets(RuntimeValue value)
+	{
+		switch (value.Type?.Kind)
+		{
+			case VariableTypeKind.Target:
+				return value.IsUsableTarget;
+
+			case VariableTypeKind.Array when value.Type.ElementType?.Kind == VariableTypeKind.Target:
+				foreach (RuntimeValue element in value.AsArray().Elements)
+					if (!element.IsUsableTarget) return false;
+				return true;
 		}
 		return true;
 	}

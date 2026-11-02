@@ -22,7 +22,7 @@
 | `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `InputFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors`, `Input/GetBug` | 스킬 작성자가 쓰는 것, 입력 함수 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
-| `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance` | stack, heap |
+| `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance`, `StructObjectRegistry` | stack, heap, malloc할 struct 객체 등록 |
 | `Values` | `RuntimeValue`, `VariableStore`, `ArrayStorage` | 실행 중의 값, 지역 변수, array 원소 |
 | `Conversion` | `FunctionDataConverter` | 함수 데이터 → `UserFunction` |
 | `Test` | 테스트 컴포넌트, 테스트용 함수·블록 | 테스트 |
@@ -95,6 +95,9 @@
   - 직접 입력한 `0`: `NULL`로 보지 않음(`zeroIsNull`은 포인터 자리의 규칙)
   - 계산, 조건으로 쓰기(`if (b)`): `TypeMismatch`
   - 스킬에 argument로 넘길 때: 「대상 없음」, 죽은 대상(`Monster.IsDead`), 오브젝트가 없어진 대상이면 `InvalidTarget`. 변수에 담거나 비교할 때는 검사하지 않음(C의 해제한 포인터처럼 쓰는 순간에 에러)
+  - `Target` array를 스킬에 넘길 때 (#191): 원소 하나라도 쓸 수 없는 대상이면 `InvalidTarget`(단일 대상과 같은 규칙). 빈 array는 통과
+    - 검사 시점: 스킬이 시작하기 직전 한 번. 스킬이 시작한 뒤에 죽은 대상은 그 스킬이 거름
+  - 값 만들기·꺼내기 (#191): `RuntimeValue.FromBugs(몬스터들)`(타입 `ArrayOf(TargetOf(Bug))`), `value.AsBugs()`(원소 순서의 몬스터 목록, 「대상 없음」은 `null`)
 - 지역 변수
   - 저장: 실행 중인 `UserFunction` 복사본마다 변수 저장소(`VariableStore`) 하나. 같은 function을 두 번 시전하면 저장소 두 개
   - 찾기: 블록은 실행 문맥(`FunctionContext`)이 쌓아 둔 저장소 목록의 맨 위(지금 실행 중인 `UserFunction`의 것)에서 찾음. 함수 안에서 다른 함수를 부르면 위에 쌓이고, 끝나면 내려감(C의 호출 스택)
@@ -232,9 +235,13 @@
 
 ### heap
 - malloc: 스킬 코드가 객체를 heap에 올리고 포인터를 받음. `Free`가 모자라면 `NullPointer`(0), 에러 없음
-- free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 스킬 코드가 따로 함
-- `malloc` 블록 (#90): 미리 정한 struct(`PredefinedStructs`)의 객체(`StructInstance`)를 heap에 올리고 포인터를 내놓음. 칸 수는 그 struct의 `HeapSize`. 모자라면 `NullPointer`, 에러 없음
-  - 화면의 오브젝트(예: 소환검): 만들지 않음. 연결 방법은 박진우와 정할 것
+- free: 스킬 코드가 포인터로 객체를 해제. heap 칸은 즉시 반환. 오브젝트 삭제는 `ObjectFreed`를 받은 쪽 (#191)
+- `malloc` 블록 (#90): 미리 정한 struct(`PredefinedStructs`)의 객체를 heap에 올리고 포인터를 내놓음. 칸 수는 그 struct의 `HeapSize`. 모자라면 `NullPointer`, 에러 없음
+  - 등록한 struct (#191): `ProcessMemory.StructObjects`에 등록한 함수로 실제 객체(예: `Sword`의 소환검)를 만듦
+    - 순서: heap 남은 칸 확인 → 만들기 함수 → heap에 올리기 → 포인터 알리기 함수
+    - heap이 모자람: 만들기 함수를 부르지 않고 `NullPointer`
+    - 만들기 함수가 `null`(예: 소환검 5개): `NullPointer`. heap 부족과 같음. 플레이어는 `if (s != NULL)` 하나로 두 경우를 함께 처리
+  - 등록하지 않은 struct: 어떤 struct인지만 가진 객체(`StructInstance`). 화면의 오브젝트 없음
 - `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)이면 `InvalidPointer`(플레이어 코드 에러)
   - `NULL`(`NullPointer`, 직접 입력한 `NULL`, C에서 직접 입력한 `0`): C처럼 아무 일도 하지 않고 1 tick 뒤 끝남 (#120). 스킬이 쓰는 `PredefinedFunction.Free`는 그대로 `NullPointer`를 에러로 봄
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
@@ -300,7 +307,7 @@
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
 | `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣음. `NULL`은 실패가 아님 (#120) |
 | `NotInLoop` | 반복문 밖에서 `break`, `continue`를 만남 (#120) |
-| `InvalidTarget` | 스킬에 넘긴 대상이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어짐 (#131) |
+| `InvalidTarget` | 스킬에 넘긴 대상이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어짐 (#131). `Target` array는 원소 하나라도 그러함 (#191) |
 | `MissingReturn` | 반환 타입이 있는 사용자 정의 함수가 return 없이 끝나거나 `return;`을 만남 (#132) |
 | `IndexOutOfRange` | array의 범위 밖 원소를 읽거나 씀(음수 포함) (#132) |
 
@@ -484,6 +491,7 @@
 | `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. 해제하지 않은 객체와 누수 객체의 크기 합 |
 | `Free` | - | `int` | 남은 칸 수. `Capacity - DataUsed - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. (#139) |
 | `Heap` | - | `HeapStorage` | 이 캐릭터의 heap 객체 저장소 |
+| `StructObjects` | - | `StructObjectRegistry` | 이 캐릭터의 struct 객체 등록 자리. `malloc` 블록이 올릴 실제 객체를 만드는 함수를 struct마다 등록 (#191) |
 
 ### `HeapStorage` (heap 객체 저장소)
 
@@ -495,7 +503,7 @@
 | --- | --- | --- | --- |
 | `NullPointer` | - | `int` | null 포인터(0). malloc 실패 값. 이 값으로는 어떤 객체도 찾을 수 없음 |
 | `Malloc(FunctionTask owner, object obj, int size)` | malloc하는 작업, 올릴 객체, 칸 수 | `int` | 포인터. 그 포인터는 `owner`의 포인터 목록에 들어감(`owner`가 `null`이면 숨은 시스템 전역). heap이 모자라면 `NullPointer` |
-| `Free(int pointer)` | 포인터 | `bool` | 해제하고 heap 칸 반환. `NullPointer`, 없는·해제한·누수된 포인터이면 `false` |
+| `Free(int pointer)` | 포인터 | `bool` | 해제하고 heap 칸 반환. 성공하면 `ObjectFreed`를 부름. `NullPointer`, 없는·해제한·누수된 포인터이면 `false` |
 | `TryGet<T>(int pointer, out T obj)` | 포인터 | `bool` | 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터, 타입이 다른 객체, `Destroy`된 Unity 오브젝트이면 `false` |
 | `GetGlobalPointers<T>()` | - | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. malloc한 순서. 이름은 다른 시스템이 쓰고 있어 그대로 둠 |
 | `CountObjects<T>()` | - | `int` | heap의 `T` 객체 수. 누수 객체 포함 |
@@ -503,6 +511,24 @@
 | `Clear()` | - | - | 영역 비우기. heap 전부 비우고 `HeapUsed`를 0으로 |
 | `ObjectLeaked` (event) | `object` | - | 객체가 누수될 때. 누수된 소환검을 멈추고 흐리게 그리는 일은 받은 쪽 |
 | `ObjectCleared` (event) | `object` | - | `Clear`로 객체를 지울 때 객체마다. 소환검 오브젝트 삭제는 받은 쪽 |
+| `ObjectFreed` (event) | `object` | - | `Free`로 객체를 해제했을 때. 플레이어의 `free` 블록, 스킬의 `PredefinedFunction.Free` 모두. 소환검 오브젝트 삭제는 받은 쪽 (#191) |
+
+### `StructObjectRegistry` (struct 객체 등록 자리, #191)
+
+- 가져오기: `ProcessMemory.StructObjects`. 캐릭터마다 하나
+- 등록 시점: 그 struct의 객체를 맡은 컴포넌트의 `Start` (heap과 등록 자리는 `ProcessMemory.Awake`에서 만들어짐)
+  - 등록 전에 `malloc`한 struct: `StructInstance`가 올라감
+- 해제 뒤의 오브젝트 삭제: 이 등록 자리가 아니라 `HeapStorage.ObjectFreed`를 받은 쪽
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Register<T>(string structName, Func<T> create, Action<T, int> notifyAllocated)` | struct 이름(`PredefinedStructs`), 만들기 함수, 포인터 알리기 함수 | - | `create`: 객체를 만듦. 만들 수 없으면 `null`. heap이 모자라면 불리지 않음. `notifyAllocated`: heap에 올린 객체와 포인터를 받음. 목록에 없는 이름, 비운 함수, 같은 struct 두 번 등록: 예외 |
+| `Unregister(string structName)` | struct 이름 | - | 등록을 지움. 등록이 없으면 아무것도 하지 않음 |
+
+```csharp
+// 예시. 소환검 코드가 Start에서 등록 (박진우)
+memory.StructObjects.Register<SummonedSword>(PredefinedStructs.Sword, () => CanSummon ? SpawnSword() : null, Register);
+```
 
 ### `PredefinedFunction` (C 스킬, 공통 function, 특수 이동 function, 입력 function)
 - 만드는 방법: [predefined-function.md](predefined-function.md)
@@ -568,6 +594,7 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
   - 스킬이 파라미터 값을 읽는 `TryGetArgument(이름)`, 반환 값을 정하는 `Return` ([predefined-function.md](predefined-function.md))
 - 박진우와 정할 것 (#90)
   - `malloc` 블록이 heap에 올린 `StructInstance`(예: `Sword`)와 실제 소환검 오브젝트를 잇는 방법. 지금은 화면에 소환검이 나타나지 않음
+    - #191에서 정함: 실행기에 struct 객체 등록 자리(`StructObjectRegistry`). 박진우가 `Sword`에 소환검 만들기 함수를 등록. 아래 「박진우와 정한 것 (#191)」
 - 임혜원과 확인할 것 (#90)
   - 실패를 화면에 보여 줄 때 `GetFailureCategory`로 compile error / runtime error 구분
 - 박진우와 확인할 것 (#118)
@@ -638,3 +665,18 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
 - 임혜원과 확인할 것 (#143)
   - 끝난 이유 `Cancelled`(플레이어 취소)와 `Interrupted`(실행 중단 공격, 재시작에 함께 끊김)를 나누어 보여 줄지
   - Overflow 재시작: `Failed`(실패 종류 `Overflow`)로 끝난 작업 하나가 원인. 함께 끊긴 작업은 `Interrupted`
+- 박진우와 정한 것 (#191, 박진우의 「소환검 정리안」)
+  - `malloc(Sword)`: 실제 소환검 생성. 검 소환 스킬은 같은 일을 하는 슬롯용 바로가기
+  - 플레이어가 `Sword*`를 변수로 다룸
+  - 소환검 5개일 때 `malloc(Sword)`: `NullPointer`(실패 아님)
+  - `Sword` 크기: `PredefinedStructs`의 값(2칸) 하나
+  - `Target` array의 죽은 대상: 시작할 때 실행기가 `InvalidTarget`, 실행 중에 죽은 대상은 스킬이 거름
+- 박진우에게 요청 (#191)
+  - `SummonedSwords.Start`에서 `StructObjects.Register`로 `Sword` 등록 (위 `StructObjectRegistry` 예시)
+  - `ObjectFreed`를 받아 소환검 삭제. 그때 `CFreeSword`의 `swords.DespawnSword(sword)` 줄 삭제(두 번 지움 방지)
+  - 검 소환 스킬: `Sword*` 반환, `Sword` 크기를 `PredefinedStructs` 값에서 읽기
+  - 소환검을 쓰는 스킬: `Sword*` 파라미터(안 넘기면 지금처럼 자동 선택)
+  - `DataDrivenSkill.ParametersFor`의 `ListOf` → `ArrayOf`. 슬롯 여러 명 선택은 `RuntimeValue.FromBugs`로 넘기고, 스킬은 `AsBugs()`로 읽음
+  - 전장 휩쓸기: 실행 중에 죽은 대상(`Monster.IsDead`, `null`) 거르기
+  - 문서의 예전 표현: `c-skills.md` 38줄·168줄(「heap 사용량은 실행기가 읽는다」), `summoned-sword.md`의 검 소환 순서, `SkillData.cs:54` Tooltip
+  - 플레이어가 `malloc`한 소환검은 숨은 시스템 전역에 없음. 해제 스킬(`GetGlobalPointers`)의 대상이 아니고, 플레이어가 `free`로 해제

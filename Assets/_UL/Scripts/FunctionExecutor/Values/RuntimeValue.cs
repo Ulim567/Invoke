@@ -1,11 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 /// <summary>
 /// 블록을 실행하는 동안 만들어지는 값 하나. 예: 3, 0.5, true, 포인터 1
 /// <para>
 /// 사용법<br/>
-/// - FromInt, FromFloat, FromBool, FromString, FromChar, FromPointer, FromBug로 만들고, AsInt 등으로 꺼낸다.<br/>
+/// - FromInt, FromFloat, FromBool, FromString, FromChar, FromPointer, FromBug, FromBugs로 만들고, AsInt 등으로 꺼낸다.<br/>
 /// - 담은 타입과 다른 As 함수를 부르면 예외가 난다. 타입은 Type으로 먼저 확인한다.<br/>
 /// - 한 번 만든 값은 바꿀 수 없다. 변수의 값을 바꿀 때는 새 값을 만들어 VariableStore에 쓴다.
 /// </para>
@@ -67,6 +68,21 @@ public readonly struct RuntimeValue
 	/// Bug(몬스터 하나) 대상 값. 타입은 TargetOf(TargetKind.Bug)다. null이면 「대상 없음」이다.
 	/// </summary>
 	public static RuntimeValue FromBug(Monster bug) => new RuntimeValue(VariableType.TargetOf(TargetKind.Bug), bug);
+
+	/// <summary>
+	/// Bug 대상 array 값. 타입은 ArrayOf(TargetOf(TargetKind.Bug))이고, 원소는 bugs의 순서대로 FromBug 값이다. null 원소는 「대상 없음」이다.<br/>
+	/// 슬롯에서 여러 명을 골라 스킬에 넘길 때 쓴다. 예: Cast(전장 휩쓸기, RuntimeValue.FromBugs(고른 몬스터들))
+	/// </summary>
+	public static RuntimeValue FromBugs(IEnumerable<Monster> bugs)
+	{
+		if (bugs == null) throw new ArgumentNullException(nameof(bugs));
+
+		List<Monster> list = new List<Monster>(bugs);
+		VariableType bugType = VariableType.TargetOf(TargetKind.Bug);
+		ArrayStorage storage = new ArrayStorage(bugType, list.Count, NoTarget(bugType));
+		for (int i = 0; i < list.Count; i++) storage.Set(i, FromBug(list[i]));
+		return FromArray(VariableType.ArrayOf(bugType), storage);
+	}
 
 	/// <summary>
 	/// targetType(Target 타입) 변수의 「대상 없음」 값. 초기값을 비운 Target 변수에 쓴다.
@@ -156,6 +172,19 @@ public readonly struct RuntimeValue
 	// 종류가 Bug인 대상의 몬스터. 「대상 없음」이면 null이다
 	public Monster AsBug() => (Monster)value;
 	internal ArrayStorage AsArray() => (ArrayStorage)value;
+
+	/// <summary>
+	/// Bug 대상 array의 몬스터들. 원소 순서대로 담은 새 목록이고, 「대상 없음」 원소는 null이다. 원소가 Bug 대상이 아닌 array이면 예외가 난다.<br/>
+	/// 스킬이 시작할 때 실행기가 쓸 수 없는 대상이 든 array를 InvalidTarget으로 막지만, 실행 중에 죽은 몬스터는 받은 스킬이 거른다.
+	/// </summary>
+	// 원소 저장소(ArrayStorage)를 스킬 코드에 보이지 않고 몬스터만 꺼내 주기 위함. 목록을 새로 만들므로 스킬이 바꿔도 array 원소는 그대로다
+	public List<Monster> AsBugs()
+	{
+		ArrayStorage storage = AsArray();
+		List<Monster> bugs = new List<Monster>(storage.Length);
+		foreach (RuntimeValue element in storage.Elements) bugs.Add(element.AsBug());
+		return bugs;
+	}
 
 	// 종류와 상관없이 대상 오브젝트를 꺼낸다. 대상끼리 비교하거나 로그에 이름을 적을 때 쓴다. 「대상 없음」이면 null이다
 	internal UnityEngine.Object TargetObject => (UnityEngine.Object)value;

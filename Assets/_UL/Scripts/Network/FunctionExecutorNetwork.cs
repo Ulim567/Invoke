@@ -49,6 +49,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// [서버] 블록 함수의 원본(GUID → 원본). 함수 데이터가 그대로이면 다시 만들지 않고 이어 쓴다
 	// 슬롯 자리만 바꿨을 때 새 원본을 만들면, 실행 중인 함수를 같은 슬롯에서 다시 시전할 수 있게 되기 때문
 	readonly Dictionary<string, UserFunction> userFunctionOriginals = new Dictionary<string, UserFunction>();
+	// [서버] 슬롯에서 물러났지만 아직 그 원본으로 시전한 작업이 실행 중인 원본 (슬롯 번호, 원본)
+	// 함수를 고쳐 원본을 새로 만들어도, 실행 중인 작업을 그 슬롯의 취소로 끊고 끝날 때까지 다시 시전하지 못하게 하기 위함
+	// 실행기의 취소와 실행 중 검사는 원본 객체로 작업을 찾으므로, 새 원본만으로는 옛 원본의 작업을 찾지 못한다
+	readonly List<(int Slot, FunctionBlock Original)> retiredOriginals = new List<(int Slot, FunctionBlock Original)>();
 	// [서버] 원본을 만들 때 쓴 함수 데이터 전체의 JSON. 함수가 하나라도 바뀌었는지 비교한다
 	// 함수 하나만 바뀌어도 그 함수를 부르는 함수까지 다시 바꿔야 하므로, 바뀌면 블록 함수 원본을 모두 다시 만든다
 	string userFunctionsSnapshot;
@@ -222,10 +226,12 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	[Command]
 	void CmdReceiveGlobalVariables(string json)
 	{
+		// 읽을 수 없으면 선언이 없는 빈 파일로 본다(GlobalVariablesStorage.Load와 같은 처리)
+		// 버리면 전역 변수를 받은 적이 없어 「데이터 준비됨」이 켜지지 않고, 로딩 화면이 끝나지 않기 때문
 		if (!FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals))
 		{
-			Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 읽을 수 없는 전역 변수 파일을 받아 버립니다.", this);
-			return;
+			Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 읽을 수 없는 전역 변수 파일을 받아, 전역 변수 없이 시작합니다.", this);
+			globals = new GlobalVariablesData();
 		}
 		receivingGlobals = globals;
 	}
@@ -259,8 +265,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	public void ApplyPlayerData(IReadOnlyList<SlotLoadout.Entry> slots, IReadOnlyList<FunctionData> functions, GlobalVariablesData globals)
 	{
 		RefreshUserFunctionOriginals(functions);
+		FunctionBlock[] previous = (FunctionBlock[])slotOriginals.Clone();
 		for (int i = 0; i < slotOriginals.Length; i++)
 			slotOriginals[i] = slots != null && i < slots.Count ? BuildOriginal(i, slots[i], functions) : null;
+		RetireReplacedOriginals(previous);
 
 		if (globals != null)
 		{
@@ -271,6 +279,27 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 		Debug.Log($"[FunctionExecutorNetwork] {name}: 함수 {functions.Count}개, 슬롯 [{DescribeSlots()}]{(globals != null ? $", 전역 변수 {globals.Declarations.Count}개" : "")} 받음", this);
 		if (!dataReady && globalsApplied) dataReady = true;
+	}
+
+	// 슬롯에서 빠진 옛 원본 중 아직 작업이 실행 중인 것을 기억한다. 다른 슬롯으로 옮겨 간 원본(자리 바꾸기)은 그 슬롯이 맡으므로 기억하지 않는다
+	void RetireReplacedOriginals(FunctionBlock[] previous)
+	{
+		for (int i = 0; i < previous.Length; i++)
+		{
+			FunctionBlock old = previous[i];
+			if (old == null || Array.IndexOf(slotOriginals, old) >= 0 || !executor.IsRunning(old)) continue;
+			retiredOriginals.Add((i, old));
+		}
+	}
+
+	// slot번 슬롯에서 물러났고 아직 작업이 실행 중인 옛 원본. 작업이 끝난 원본은 이때 지운다
+	List<FunctionBlock> RunningRetiredOriginals(int slot)
+	{
+		retiredOriginals.RemoveAll(r => !executor.IsRunning(r.Original));
+		List<FunctionBlock> running = new List<FunctionBlock>();
+		foreach ((int retiredSlot, FunctionBlock original) in retiredOriginals)
+			if (retiredSlot == slot) running.Add(original);
+		return running;
 	}
 
 	// 함수 데이터가 하나라도 바뀌었으면 블록 함수 원본을 모두 버린다. 바뀌지 않았으면 그대로 이어 쓴다
@@ -402,6 +431,12 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			ReplyCastRejected(slot, CastRejection.NoFunction);
 			return;
 		}
+		// 함수를 고치기 전에 이 슬롯으로 시전한 작업이 아직 실행 중이면 거부한다. 한 슬롯의 작업은 하나뿐이라는 규칙을 지키기 위함
+		if (!IsOffline && RunningRetiredOriginals(slot).Count > 0)
+		{
+			ReplyCastRejected(slot, CastRejection.OnCooldown);
+			return;
+		}
 
 		lastRejection = null;
 		FunctionTask task = TakesTarget(original) && target != null
@@ -417,6 +452,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		FunctionBlock original = GetSlotOriginal(slot);
 		bool cancelled = original != null && executor.Cancel(original);
+		// 함수를 고치기 전에 이 슬롯으로 시전한 작업도 끊는다
+		if (!IsOffline)
+			foreach (FunctionBlock retired in RunningRetiredOriginals(slot))
+				cancelled |= executor.Cancel(retired);
 		Debug.Log($"[FunctionExecutorNetwork] {name}: 슬롯 {slot + 1} 취소 {(cancelled ? "끊음" : "끊을 작업 없음")}", this);
 	}
 
@@ -439,6 +478,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		if (task.CastSource == null) return -1;
 		for (int i = 0; i < SlotLoadout.SlotCount; i++)
 			if (GetSlotOriginal(i) == task.CastSource) return i;
+		foreach ((int retiredSlot, FunctionBlock original) in retiredOriginals)
+			if (original == task.CastSource) return retiredSlot;
 		return -1;
 	}
 

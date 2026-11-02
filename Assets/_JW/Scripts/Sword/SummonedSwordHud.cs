@@ -37,6 +37,7 @@ public class SummonedSwordHud : NetworkBehaviour
 		SummonedSwordState.Flying => "던져짐",
 		SummonedSwordState.Dropped => "떨어짐",
 		SummonedSwordState.Leaked => "누수",
+		SummonedSwordState.Stabbing => "찌르는 중",
 		_ => state.ToString(),
 	};
 }

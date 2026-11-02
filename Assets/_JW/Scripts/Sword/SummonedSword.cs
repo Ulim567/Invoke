@@ -8,6 +8,7 @@ public enum SummonedSwordState
 	Flying,  // 던져져서 날아가는 중
 	Dropped, // 땅에 떨어짐 (회수해야 다시 씀)
 	Leaked,  // 누수: 포인터를 잃어 그 자리에 멈춤. 힙과 개수는 계속 차지
+	Stabbing, // 소환검 찌르기: 대상에게 날아가 찌르고 돌아오는 중 (#165)
 }
 
 /// <summary>
@@ -18,6 +19,7 @@ public enum SummonedSwordState
 /// - 사용 가능: 플레이어 머리 뒤쪽의 자기 자리로 따라간다.<br/>
 /// - 날아가는 중: 대상을 향해 날아가 닿으면 그 자리에서 떨어진다. 대상이 없거나 시간 안에 못 닿으면 바로 떨어진다.<br/>
 /// - 떨어짐·누수: 그 자리에 있다.<br/>
+/// - 찌르는 중: 대상에게 날아가 닿으면 SummonedSwords에 알리고, 자기 자리로 돌아와 닿으면 알린다 (#165).<br/>
 /// 물리(Rigidbody)를 쓰지 않고 직접 움직인다 (DroppedSword와 같은 방식).
 /// </para>
 /// </summary>
@@ -33,6 +35,8 @@ public class SummonedSword : MonoBehaviour
 	[SerializeField, Min(0f)] float fallGravity = 40f;
 	[Tooltip("이 거리 안으로 들어오면 대상에 맞은 것으로 본다 (유닛)")]
 	[SerializeField, Min(0.01f)] float hitDistance = 0.4f;
+	[Tooltip("소환검 찌르기에서 날아가고 돌아오는 속도 (유닛/초, 임시)")]
+	[SerializeField, Min(0.1f)] float stabSpeed = 35f;
 
 	SummonedSwords owner;
 	GameObject target;
@@ -41,6 +45,7 @@ public class SummonedSword : MonoBehaviour
 	bool falling;
 	float fallSpeed;
 	float landY;
+	bool returning;
 
 	/// <summary>힙 포인터 (번호표). 해제되면 더 이상 쓸 수 없다.</summary>
 	public int Pointer { get; private set; }
@@ -78,6 +83,15 @@ public class SummonedSword : MonoBehaviour
 		if (target == null) StartFalling();
 	}
 
+	internal void LaunchStab(GameObject target)
+	{
+		this.target = target;
+		flightEndTime = Time.time + maxFlightTime;
+		returning = false;
+		falling = false;
+		SetState(SummonedSwordState.Stabbing);
+	}
+
 	internal void SetDropped()
 	{
 		falling = false;
@@ -106,6 +120,9 @@ public class SummonedSword : MonoBehaviour
 			case SummonedSwordState.Flying:
 				if (falling) Fall(); else Fly();
 				break;
+			case SummonedSwordState.Stabbing:
+				Stab();
+				break;
 		}
 	}
 
@@ -128,6 +145,37 @@ public class SummonedSword : MonoBehaviour
 		{
 			owner?.NotifyHit(this, target);
 			StartFalling();
+		}
+	}
+
+	// 대상에게 날아가 찌르고(닿으면 알림) 자기 자리(FollowPoint)로 돌아온다
+	void Stab()
+	{
+		if (!returning && (target == null || !target.activeInHierarchy || Time.time >= flightEndTime)) returning = true;
+
+		Vector2 aim;
+		if (returning) aim = FollowPoint;
+		else
+		{
+			Collider2D col = target.GetComponentInChildren<Collider2D>();
+			aim = col != null ? (Vector2)col.bounds.center : (Vector2)target.transform.position;
+		}
+
+		Vector2 next = Vector2.MoveTowards(transform.position, aim, stabSpeed * Time.deltaTime);
+		Vector2 dir = next - (Vector2)transform.position;
+		if (dir.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+		transform.position = next;
+
+		if (Vector2.Distance(next, aim) > hitDistance) return;
+		if (!returning)
+		{
+			returning = true;
+			owner?.NotifyStabHit(this, target);
+		}
+		else
+		{
+			// 상태는 SummonedSwords가 바꾼다
+			owner?.NotifyStabReturned(this);
 		}
 	}
 

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // 찌르기 계열 스킬. 수치는 SkillTable 표, 필요 조건 검사는 DataDrivenSkill이 맡는다.
-// 검 찌르기·집중찌르기·꼬챙이는 #152, 급소공략은 #161에서 채웠다 (ThrustSkill). 나머지 효과는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
+// 검 찌르기·집중찌르기·꼬챙이는 #152, 급소공략은 #161, 상처 공략·깊이찌르기·소환검 찌르기는 #165에서 채웠다. 나머지 효과는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
 
 /// <summary>
 /// 손에 든 검으로 대상을 찌르는 스킬의 기반 (#152). 검 찌르기, 검 집중찌르기, 꼬챙이가 상속한다.
@@ -80,6 +80,12 @@ public abstract class ThrustSkill : DataDrivenSkill
 	/// </summary>
 	protected virtual float BonusRate(Monster monster) => 0f;
 
+	/// <summary>치명타 확률 (0~1). 기본 0. 검 깊이찌르기가 덮어쓴다 (damage-calculation.md)</summary>
+	protected virtual float CritChance => 0f;
+
+	/// <summary>치명타일 때 더하는 추가분. 기본 0</summary>
+	protected virtual float CritBonusRate => 0f;
+
 	/// <summary>
 	/// 대상마다 데미지를 준 뒤 불린다. 상태 이상을 거는 스킬(급소공략)이 쓴다. 기본은 아무것도 안 함.
 	/// </summary>
@@ -99,7 +105,7 @@ public abstract class ThrustSkill : DataDrivenSkill
 		foreach (Monster monster in CollectHits(caster, target, dir))
 		{
 			if (monster == null || monster.IsDead) continue;
-			DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = BonusRate(monster) };
+			DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = BonusRate(monster), CritChance = CritChance, CritBonusRate = CritBonusRate };
 			DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 			Vector2 point = ClosestPoint(monster, caster.transform.position);
 			monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
@@ -243,20 +249,82 @@ public class CSkewer : ThrustSkill
 	}
 }
 
-/// <summary>소환검 찌르기. 소환검에게 명령해 검이 찌름 (단일)</summary>
+/// <summary>
+/// 소환검 찌르기 (#165). 캐릭터는 제자리에 있고, 가장 먼저 소환한 사용 가능한 소환검이 대상에게 날아가 찌른 뒤 돌아온다 (단일, 소환검 필요).
+/// <para>
+/// - 소환검 움직임은 SummonedSwords.Stab. 찌르는 동안 그 검은 Stabbing 상태라 다른 스킬에 쓰이지 않는다.<br/>
+/// - 데미지: 검이 대상에 닿은 순간(StabHit) 공격력 × 표 배율. 스킬이 끝나기 전(20틱)에 닿지 못하면 데미지 없이 돌아온다.<br/>
+/// - 대상 값이 없으면 검을 보내지 않는다.
+/// </para>
+/// </summary>
 public class CSummonedThrust : DataDrivenSkill
 {
 	public override string Id => PredefinedFunctionIds.SummonedThrust;
+
+	SummonedSwords swords;
+	SummonedSword sword;
+	GameObject caster;
+
+	protected override void OnSkillStart(FunctionContext task)
+	{
+		caster = task.Caster;
+		swords = caster.GetComponent<SummonedSwords>();
+		Monster target = TryGetArgument("target", out RuntimeValue value) ? value.AsBug() : null;
+		// 소환검이 없으면 DataDrivenSkill이 시작 전에 NoSummonedSwordError로 막는다
+		if (swords == null || target == null || !swords.TryGetFirstReady(out sword)) return;
+
+		swords.StabHit += OnStabHit;
+		Vector2 from = sword.transform.position;
+		Effects(task)?.RaiseFired(Id, from, (Vector2)target.transform.position - from);
+		if (!swords.Stab(sword, target.gameObject)) Unsubscribe();
+	}
+
+	protected override void OnSkillEnd(FunctionContext task) => Unsubscribe();
+
+	// 끊겨도 소환검은 하던 대로 돌아온다. 데미지만 주지 않는다
+	protected override void OnSkillCancel(FunctionContext task) => Unsubscribe();
+
+	void Unsubscribe()
+	{
+		if (swords != null) swords.StabHit -= OnStabHit;
+	}
+
+	void OnStabHit(SummonedSword hitSword, GameObject target)
+	{
+		if (hitSword != sword || target == null) return;
+		Unsubscribe();
+		Monster monster = target.GetComponentInParent<Monster>();
+		if (monster == null || monster.IsDead) return;
+
+		PlayerStats stats = caster.GetComponent<PlayerStats>();
+		int attackPower = stats != null ? stats.AttackPower : 0;
+		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
+		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, hitSword.transform.position, result);
+	}
 }
 
-/// <summary>상처 공략. 출혈 상태의 적에게 데미지 2.0배 (단일)</summary>
-public class CWoundExploit : DataDrivenSkill
+/// <summary>상처 공략 (#165). 검 찌르기와 같고, 출혈 상태의 적에게 데미지 2.0배 (단일, DamageBonus.BleedWoundExploit)</summary>
+public class CWoundExploit : ThrustSkill
 {
 	public override string Id => PredefinedFunctionIds.WoundExploit;
+
+	protected override float BonusRate(Monster monster)
+	{
+		StatusEffects status = monster.GetComponent<StatusEffects>();
+		return status != null && status.Has(StatusType.Bleed) ? DamageBonus.BleedWoundExploit : 0f;
+	}
 }
 
-/// <summary>검 깊이찌르기. 치명타 2.5배 (단일)</summary>
-public class CDeepThrust : DataDrivenSkill
+/// <summary>검 깊이찌르기 (#165). 검 찌르기와 같고, DeepCritChance 확률로 치명타가 나면 2.5배 (단일, DamageBonus.CritDeepThrust)</summary>
+public class CDeepThrust : ThrustSkill
 {
+	/// <summary>치명타 확률 (임시 30%)</summary>
+	public const float DeepCritChance = 0.3f;
+
 	public override string Id => PredefinedFunctionIds.DeepThrust;
+
+	protected override float CritChance => DeepCritChance;
+	protected override float CritBonusRate => DamageBonus.CritDeepThrust;
 }

@@ -321,7 +321,7 @@ public class SlotCaster : NetworkBehaviour
 
 	/// <summary>
 	/// 취소 키(C): 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것을 끊는다.<br/>
-	/// 실행기의 Cancel은 원본 단위라서, 같은 슬롯으로 두 번 시전해 둘 다 진행 중이면 둘 다 끊긴다.
+	/// 실행기의 Cancel은 원본 단위지만, 같은 원본은 실행 중이면 다시 시전되지 않으므로 한 슬롯의 작업은 늘 하나다.
 	/// </summary>
 	void CancelLatestCast()
 	{

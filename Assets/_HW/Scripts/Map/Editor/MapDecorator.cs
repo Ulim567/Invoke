@@ -10,6 +10,7 @@ using UnityEngine.Tilemaps;
 /// 사용법: 장소 씬을 열고 메뉴 Invoke → 맵 → 「지금 씬 소품 놓기」. Ctrl/Cmd+Z로 되돌릴 수 있고, 저장(Ctrl/Cmd+S)은 사람이 한다.<br/>
 /// - 스프라이트 소품: 씬 맨 위의 Props 오브젝트 아래에 다시 만든다 (이미 있으면 안의 것을 지우고 새로 놓음).<br/>
 /// - 타일 소품: Grid 아래 Decor 타일맵(충돌 없음, Sorting Layer BackProps)을 비우고 다시 찍는다. 없으면 만든다.<br/>
+/// - 연습장은 BackWall 타일맵(충돌 없음, Sorting Layer Sky)에 CyberLab 벽 무늬도 깐다.<br/>
 /// - 로비는 손으로 놓았으므로 배치표가 없다.
 /// </para>
 /// </summary>
@@ -18,6 +19,9 @@ public static class MapDecorator
 	const string PropsFolder = "Assets/_HW/Map/Props/";
 	const string NoMansLandPng = "Assets/_HW/Map/Tiles/NoMansLand_Tiles.png";
 	const string NoMansLandTiles = "Assets/_HW/Map/Palettes/NoMansLand_Tiles";
+	const string TilesFolder = "Assets/_HW/Map/Tiles/";
+	const string CyberLabTileSetPng = "Assets/_HW/Map/Tiles/CyberLab_TileSet.png";
+	const string CyberLabTiles = "Assets/_HW/Map/Palettes/CyberLab_Tiles";
 
 	// 스프라이트 소품 하나. sprite는 Props 폴더의 그림 이름 (UrbanDecay는 잘린 조각 이름). 위치는 그림의 Pivot 기준
 	struct Prop
@@ -38,6 +42,7 @@ public static class MapDecorator
 	{
 		public Prop[] props;
 		public Stamp[] stamps;
+		public RectInt backWall;   // 연습장처럼 실내 벽을 깔 칸 범위 (비우면 안 깖)
 	}
 
 	// No Man's Land 그림의 소품 칸 (왼쪽 위 칸, 가로, 세로)
@@ -84,8 +89,47 @@ public static class MapDecorator
 			TreeRound(-18, -2), TreeSmall(-16, -2), Thorns(-10, -2),
 			RockTall(-7, -4), Bush(-1, -4),
 			Mound(7, -3), Bush(10, -3),
-			Fence(13, -4), RockBig(23, -4),
+			Fence(13, -4),
 			Thorns(30, -1), TreeDead(34, -1), Bush(38, -1),
+		},
+	};
+
+	// 레이드 던전 (폭풍 밤). 바닥 윗면 Y -4, 양쪽 벽 X -25·-24, 23·24
+	const string Night = "5A5C80";
+	static Decoration RaidDungeon() => new Decoration
+	{
+		props = new[]
+		{
+			new Prop("UrbanDecay_23", -19, -1.19f, Night),
+			new Prop("UrbanDecay_21", 19, -1.19f, Night),
+			new Prop("UrbanDecay_13", 13, -3, Night),
+			new Prop("Grass_WTrash", -9, -4, Night),
+			new Prop("Grass", 6, -4, Night),
+			new Prop("Foxtail_Pink", -3, -4, Night),
+			new Prop("FloatingFlower_Blue", -12, 3, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 9, 4, null, "Props", 5),
+		},
+		stamps = new[]
+		{
+			Lamp(-22, -4), Lamp(21, -4),
+			RockBig(-15, -4), TreeDead(-6, -4), Thorns(2, -4), Grave(9, -4), RockTall(16, -4),
+		},
+	};
+
+	// 연습장 (실내). 바닥 윗면 Y -4, 천장 아랫면 Y 9, 양쪽 벽 X -25·-24, 23·24. CyberLab 소품은 그림 조각이라 Tiles 폴더에서 찾는다
+	static Decoration TrainingRoom() => new Decoration
+	{
+		backWall = new RectInt(-23, -4, 46, 13),
+		props = new[]
+		{
+			new Prop("CyberLab_Objects_2", -14, 8.75f), new Prop("CyberLab_Objects_2", -2, 8.75f), new Prop("CyberLab_Objects_2", 10, 8.75f),
+			new Prop("CyberLab_Objects_1", -20, 8.75f), new Prop("CyberLab_Objects_1", 4, 8.75f), new Prop("CyberLab_Objects_1", 16, 8.75f),
+			new Prop("CyberLab_Objects_14", -21, -3.16f), new Prop("CyberLab_Objects_14", -18.4f, -3.16f), new Prop("CyberLab_Objects_15", -16.4f, -3.16f),
+			new Prop("CyberLab_Objects_12", 6, -3.16f), new Prop("CyberLab_Objects_13", 8.8f, -3.53f),
+			new Prop("CyberLab_Objects_4", 19, -3.19f), new Prop("CyberLab_Objects_6", 21, -3.59f),
+			new Prop("CyberLab_Objects_9", -8, 3), new Prop("CyberLab_Objects_10", -5.9f, 3),
+			new Prop("CyberLab_Objects_7", 21, 4), new Prop("CyberLab_Objects_8", -22, 2),
+			new Prop("CyberLab_Objects_11", 14, 5), new Prop("CyberLab_Objects_0", -1, 4.5f),
 		},
 	};
 
@@ -94,6 +138,8 @@ public static class MapDecorator
 		switch (sceneName)
 		{
 			case PlaceScenes.HuntingGround: return HuntingGround();
+			case PlaceScenes.RaidDungeon: return RaidDungeon();
+			case PlaceScenes.TrainingRoom: return TrainingRoom();
 			default: return null;
 		}
 	}
@@ -105,12 +151,12 @@ public static class MapDecorator
 		Decoration deco = Find(scene.name);
 		if (deco == null)
 		{
-			EditorUtility.DisplayDialog("소품 놓기", $"'{scene.name}' 씬의 소품 배치표가 없어요. (지금은 HuntingGround만 있음)", "확인");
+			EditorUtility.DisplayDialog("소품 놓기", $"'{scene.name}' 씬의 소품 배치표가 없어요. (사냥터·레이드 던전·연습장만 있음)", "확인");
 			return;
 		}
 
 		int props = PlaceProps(scene, deco.props);
-		int tiles = StampDecor(deco.stamps);
+		int tiles = StampDecor(deco.stamps) + FillBackWall(deco.backWall);
 		EditorSceneManager.MarkSceneDirty(scene);
 		Debug.Log($"[MapDecorator] {scene.name}: 스프라이트 소품 {props}개, 타일 소품 {tiles}칸. 확인하고 Ctrl/Cmd+S로 저장한다");
 	}
@@ -160,16 +206,51 @@ public static class MapDecorator
 	// 낱장 그림은 이름.png, UrbanDecay처럼 여러 조각으로 자른 그림은 조각 이름으로 찾는다
 	static Sprite LoadSprite(string name)
 	{
-		var single = AssetDatabase.LoadAssetAtPath<Sprite>(PropsFolder + name + ".png");
-		if (single != null) return single;
-		int cut = name.LastIndexOf('_');
-		if (cut < 0) return null;
-		foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(PropsFolder + name.Substring(0, cut) + ".png"))
+		foreach (string folder in new[] { PropsFolder, TilesFolder })
 		{
-			if (asset is Sprite s && s.name == name) return s;
+			var single = AssetDatabase.LoadAssetAtPath<Sprite>(folder + name + ".png");
+			if (single != null) return single;
+			int cut = name.LastIndexOf('_');
+			if (cut < 0) continue;
+			foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(folder + name.Substring(0, cut) + ".png"))
+			{
+				if (asset is Sprite s && s.name == name) return s;
+			}
 		}
 		return null;
 	}
+
+	// 실내 벽 -----------------------------------------------------------------
+
+	// CyberLab 벽 판(6×6칸 무늬)을 범위 안에 반복해서 BackWall 타일맵에 깐다. 충돌 없음, Sky 층(가장 뒤)에 그린다
+	static int FillBackWall(RectInt area)
+	{
+		if (area.width <= 0 || area.height <= 0) return 0;
+		var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(CyberLabTileSetPng);
+		Dictionary<Vector2Int, TileBase> byCell = TilesOf(texture, CyberLabTiles);
+		Tilemap wall = FindOrCreateTilemap("BackWall", "Sky");
+		if (wall == null) return 0;
+
+		Undo.RegisterCompleteObjectUndo(wall, "Fill Back Wall");
+		wall.ClearAllTiles();
+		int count = 0;
+		for (int x = area.xMin; x < area.xMax; x++)
+		{
+			for (int y = area.yMin; y < area.yMax; y++)
+			{
+				// 무늬 판: 그림의 (1,7)부터 6×6칸. 맵은 아래쪽 줄부터 센다
+				int col = 1 + Mod(x - area.xMin, 6);
+				int row = 12 - Mod(y - area.yMin, 6);
+				if (!byCell.TryGetValue(new Vector2Int(col, row), out TileBase tile)) continue;
+				wall.SetTile(new Vector3Int(x, y, 0), tile);
+				count++;
+			}
+		}
+		wall.CompressBounds();
+		return count;
+	}
+
+	static int Mod(int a, int n) => ((a % n) + n) % n;
 
 	// 타일 소품 -------------------------------------------------------------
 
@@ -177,18 +258,11 @@ public static class MapDecorator
 	{
 		if (stamps == null || stamps.Length == 0) return 0;
 
-		Tilemap decor = FindOrCreateDecor();
+		Tilemap decor = FindOrCreateTilemap("Decor", "BackProps");
 		if (decor == null) return 0;
 
 		var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(NoMansLandPng);
-		var byCell = new Dictionary<Vector2Int, TileBase>();
-		foreach (string guid in AssetDatabase.FindAssets("t:Tile", new[] { NoMansLandTiles }))
-		{
-			var tile = AssetDatabase.LoadAssetAtPath<Tile>(AssetDatabase.GUIDToAssetPath(guid));
-			if (tile == null || tile.sprite == null || tile.sprite.texture != texture) continue;
-			Rect rect = tile.sprite.rect;
-			byCell[new Vector2Int(Mathf.RoundToInt(rect.x / 16f), Mathf.RoundToInt((texture.height - rect.yMax) / 16f))] = tile;
-		}
+		Dictionary<Vector2Int, TileBase> byCell = TilesOf(texture, NoMansLandTiles);
 
 		Undo.RegisterCompleteObjectUndo(decor, "Stamp Decor");
 		decor.ClearAllTiles();
@@ -210,13 +284,28 @@ public static class MapDecorator
 		return count;
 	}
 
-	// Grid 아래 Decor 타일맵. 없으면 충돌 없이 만들고 BackProps 층에 그린다
-	static Tilemap FindOrCreateDecor()
+	// 그 그림으로 만든 타일들을 원본 그림의 칸(왼쪽 위가 0,0)으로 찾을 수 있게 모은다
+	static Dictionary<Vector2Int, TileBase> TilesOf(Texture2D texture, string folder)
+	{
+		var byCell = new Dictionary<Vector2Int, TileBase>();
+		if (texture == null) return byCell;
+		foreach (string guid in AssetDatabase.FindAssets("t:Tile", new[] { folder }))
+		{
+			var tile = AssetDatabase.LoadAssetAtPath<Tile>(AssetDatabase.GUIDToAssetPath(guid));
+			if (tile == null || tile.sprite == null || tile.sprite.texture != texture) continue;
+			Rect rect = tile.sprite.rect;
+			byCell[new Vector2Int(Mathf.RoundToInt(rect.x / 16f), Mathf.RoundToInt((texture.height - rect.yMax) / 16f))] = tile;
+		}
+		return byCell;
+	}
+
+	// Grid 아래 이름이 name인 타일맵. 없으면 충돌 없이 만들고 sortingLayer 층에 그린다
+	static Tilemap FindOrCreateTilemap(string name, string sortingLayer)
 	{
 		Grid grid = null;
 		foreach (Tilemap map in Object.FindObjectsByType<Tilemap>(FindObjectsSortMode.None))
 		{
-			if (map.name == "Decor") return map;
+			if (map.name == name) return map;
 			if (map.name == "Ground") grid = map.layoutGrid;
 		}
 		if (grid == null)
@@ -224,12 +313,12 @@ public static class MapDecorator
 			EditorUtility.DisplayDialog("소품 놓기", "Grid(Ground 타일맵)를 못 찾았어요.", "확인");
 			return null;
 		}
-		var go = new GameObject("Decor");
-		Undo.RegisterCreatedObjectUndo(go, "Create Decor");
+		var go = new GameObject(name);
+		Undo.RegisterCreatedObjectUndo(go, "Create " + name);
 		go.transform.SetParent(grid.transform, false);
 		var tilemap = go.AddComponent<Tilemap>();
 		var renderer = go.AddComponent<TilemapRenderer>();
-		renderer.sortingLayerName = "BackProps";
+		renderer.sortingLayerName = sortingLayer;
 		return tilemap;
 	}
 }

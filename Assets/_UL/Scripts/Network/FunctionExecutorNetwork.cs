@@ -62,8 +62,6 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	GlobalVariablesData receivingGlobals;
 	// [서버] 전역 변수를 한 번이라도 받아 적용했는지. 슬롯·함수와 전역 변수를 모두 받아야 준비된 것으로 본다
 	bool globalsApplied;
-	// [서버] 방금 실행기가 시전을 거부한 이유. 실행기는 Cast 안에서 CastRejected를 부르고 null을 돌려주므로, 그 사이에 받아 둔다
-	CastRejection? lastRejection;
 
 	// [내 화면] 슬롯 장착이 바뀌어 다시 보내야 하는지
 	// 장착을 한 번 바꿀 때 Changed가 여러 번 불리므로(자리 바꾸기, 다른 슬롯에서 옮겨 오기), 모아 두었다가 다음 Update에서 한 번만 보낸다
@@ -134,7 +132,6 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		executor.TaskStarted += OnExecutorTaskStarted;
 		executor.TaskEnded += OnExecutorTaskEnded;
-		executor.CastRejected += OnExecutorCastRejected;
 		executor.InputRequested += OnExecutorInputRequested;
 		executor.CooldownStarted += OnExecutorCooldownStarted;
 	}
@@ -143,7 +140,6 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		executor.TaskStarted -= OnExecutorTaskStarted;
 		executor.TaskEnded -= OnExecutorTaskEnded;
-		executor.CastRejected -= OnExecutorCastRejected;
 		executor.InputRequested -= OnExecutorInputRequested;
 		executor.CooldownStarted -= OnExecutorCooldownStarted;
 	}
@@ -438,13 +434,12 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return;
 		}
 
-		lastRejection = null;
+		CastRejection? rejection;
 		FunctionTask task = TakesTarget(original) && target != null
-			? executor.Cast((PredefinedFunction)original, RuntimeValue.FromBug(target.GetComponent<Monster>()))
-			: executor.Cast(original);
+			? executor.Cast((PredefinedFunction)original, new[] { RuntimeValue.FromBug(target.GetComponent<Monster>()) }, out rejection)
+			: executor.Cast(original, out rejection);
 
-		// 실행기가 거부했으면 그 이유는 Cast 안에서 OnExecutorCastRejected가 받아 두었다
-		if (task == null) ReplyCastRejected(slot, lastRejection ?? CastRejection.NoFunction);
+		if (task == null) ReplyCastRejected(slot, rejection ?? CastRejection.NoFunction);
 		else ReplyCastAccepted(slot, task.Id);
 	}
 
@@ -482,8 +477,6 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			if (original == task.CastSource) return retiredSlot;
 		return -1;
 	}
-
-	void OnExecutorCastRejected(FunctionBlock function, CastRejection rejection) => lastRejection = rejection;
 
 	void OnExecutorTaskStarted(FunctionTask task)
 	{

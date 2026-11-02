@@ -43,6 +43,9 @@ public class FunctionExecutor : MonoBehaviour
 	// 틱을 멈춘 실행기(클라이언트 화면)가 쿨타임을 보여 줄 때 쓰는 값. 스킬 고정 ID → 쿨타임이 끝나는 시각(Time.time)
 	// 그 화면의 실행기는 스킬을 실행하지 않아 쿨타임 기록이 비어 있으므로, 서버가 알려 준 시각을 받아 둔다(SetDisplayedCooldown)
 	readonly Dictionary<string, float> displayedCooldownEndTimes = new Dictionary<string, float>();
+	// 쿨타임을 서버에서 받은 값으로 답하는지. SetDisplayedCooldown을 처음 부를 때 켠다
+	// TickEnabled로 판단하지 않는 이유: 서버에서도 다른 이유(일시 정지 등)로 틱을 멈출 수 있는데, 그때도 자기 쿨타임으로 답해야 하기 때문
+	bool usesDisplayedCooldowns;
 	ProcessMemory memory;
 	CooldownTracker cooldowns;
 	LanguageRule language;
@@ -98,11 +101,18 @@ public class FunctionExecutor : MonoBehaviour
 	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
 	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
 	/// </summary>
-	public FunctionTask Cast(FunctionBlock function)
+	public FunctionTask Cast(FunctionBlock function) => Cast(function, out _);
+
+	/// <summary>
+	/// Cast(function)과 같고, 거부되면 거부 이유를 rejection으로 돌려준다. 시전되면 rejection은 null이다.<br/>
+	/// 시전한 쪽이 거부 이유를 바로 알아야 할 때 쓴다(예: 서버가 시전한 사람에게 거부 이유를 보낼 때). CastRejected event도 그대로 불린다.
+	/// </summary>
+	// CastRejected event로 이유를 따로 받아 두지 않게 하기 위함. event로 받으면 다른 받는 쪽이 그 안에서 또 시전할 때 이유가 덮어써지기 때문
+	public FunctionTask Cast(FunctionBlock function, out CastRejection? rejection)
 	{
 		// 빈 슬롯은 시전하는 쪽(키 입력 처리)이 걸러 Cast를 부르지 않는다. 그래서 null은 코드 실수로 보고 바로 드러나게 한다
 		if (function == null) throw new ArgumentNullException(nameof(function));
-		return CastChecked(function, null);
+		return CastChecked(function, null, out rejection);
 	}
 
 	/// <summary>
@@ -111,10 +121,15 @@ public class FunctionExecutor : MonoBehaviour
 	/// arguments는 Parameters 순서이고, 뒤쪽 파라미터는 비워도 된다(「값 없음」). argument가 없으면 Cast(function)과 같다.<br/>
 	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 InvalidTarget으로 끝난다.
 	/// </summary>
-	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments)
+	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments) => Cast(function, arguments, out _);
+
+	/// <summary>
+	/// Cast(function, arguments)와 같고, 거부되면 거부 이유를 rejection으로 돌려준다. 시전되면 rejection은 null이다.
+	/// </summary>
+	public FunctionTask Cast(PredefinedFunction function, RuntimeValue[] arguments, out CastRejection? rejection)
 	{
 		if (function == null) throw new ArgumentNullException(nameof(function));
-		if (arguments == null || arguments.Length == 0) return CastChecked(function, null);
+		if (arguments == null || arguments.Length == 0) return CastChecked(function, null, out rejection);
 
 		// 값을 파라미터 타입으로 맞춘다. 맞출 수 없거나 파라미터보다 많으면 부르는 쪽의 코드 실수이므로 예외를 던진다
 		IReadOnlyList<ParameterData> parameters = function.Parameters;
@@ -128,21 +143,24 @@ public class FunctionExecutor : MonoBehaviour
 				throw new ArgumentException($"{function.Name}의 파라미터 {parameters[i].Name}({parameters[i].Type.Kind})에 {arguments[i].Type?.Kind} 값을 넘겼습니다.", nameof(arguments));
 			converted[i] = value;
 		}
-		return CastChecked(function, converted);
+		return CastChecked(function, converted, out rejection);
 	}
 
 	// 시전 전 검사를 한 뒤 작업을 만든다. arguments는 사전 정의 함수의 복사본에 넘길 값이고, 없으면 null
-	FunctionTask CastChecked(FunctionBlock function, RuntimeValue?[] arguments)
+	// 거부되면 그 이유를 rejection에 담아 null을 돌려준다
+	FunctionTask CastChecked(FunctionBlock function, RuntimeValue?[] arguments, out CastRejection? rejection)
 	{
 		foreach (CastCondition condition in castConditions)
 		{
-			if (condition.Check(function, out CastRejection rejection)) continue;
+			if (condition.Check(function, out CastRejection reason)) continue;
 
 			// 시전 거부는 플레이어 코드의 잘못이 아니므로 언어 규칙 표를 거치지 않고 바로 알린다
-			CastRejected?.Invoke(function, rejection);
+			rejection = reason;
+			CastRejected?.Invoke(function, reason);
 			return null;
 		}
 
+		rejection = null;
 		FunctionTask task = CastUnchecked(function, arguments);
 		task.CastSource = function;
 		cooldowns.Register(task);
@@ -154,20 +172,21 @@ public class FunctionExecutor : MonoBehaviour
 	/// 스킬이면 그 스킬(고정 ID)의 쿨타임이다. 사용자 정의 함수는 자기 쿨타임이 없으므로 0이다.
 	/// </summary>
 	// 쿨타임은 CooldownTracker가 가진다. 다른 시스템이 쓰는 접점을 바꾸지 않기 위해 실행기에도 남긴다
-	// 틱을 멈춘 실행기(클라이언트 화면)는 서버가 알려 준 끝나는 시각으로 답한다. 쿨타임 UI가 서버·클라이언트를 나누지 않고 이 함수 하나만 읽게 하기 위함
+	// 클라이언트 화면의 실행기는 서버가 알려 준 끝나는 시각으로 답한다. 쿨타임 UI가 서버·클라이언트를 나누지 않고 이 함수 하나만 읽게 하기 위함
 	public int GetRemainingCooldownTicks(FunctionBlock function)
 	{
-		if (TickEnabled) return cooldowns.GetRemainingTicks(function);
+		if (!usesDisplayedCooldowns) return cooldowns.GetRemainingTicks(function);
 		if (!(function is PredefinedFunction skill) || !displayedCooldownEndTimes.TryGetValue(skill.Id, out float endTime)) return 0;
 		return Mathf.Max(0, Mathf.CeilToInt((endTime - Time.time) / SecondsPerTick));
 	}
 
 	/// <summary>
-	/// 틱을 멈춘 실행기(클라이언트 화면)에 스킬의 쿨타임이 끝나는 시각(Time.time 기준)을 받아 둔다. 이 뒤로 GetRemainingCooldownTicks가 이 시각으로 답한다.<br/>
+	/// 클라이언트 화면의 실행기에 스킬의 쿨타임이 끝나는 시각(Time.time 기준)을 받아 둔다. 처음 부른 뒤로 GetRemainingCooldownTicks가 받은 시각으로 답한다.<br/>
 	/// 멀티플레이에서 FunctionExecutorNetwork만 부른다.
 	/// </summary>
 	public void SetDisplayedCooldown(string skillId, float endTime)
 	{
+		usesDisplayedCooldowns = true;
 		displayedCooldownEndTimes[skillId] = endTime;
 	}
 

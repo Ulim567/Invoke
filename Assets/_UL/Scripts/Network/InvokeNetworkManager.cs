@@ -34,6 +34,8 @@ public class InvokeNetworkManager : NetworkManager
 	// 레이드 던전 불러오기 요청. 동시에 불러오면 어느 씬이 어느 요청의 것인지 섞이므로 줄을 세워 하나씩 처리한다
 	readonly Queue<Action<Scene>> raidLoadRequests = new Queue<Action<Scene>>();
 	bool loadingRaid;
+	// 레이드 던전으로 이동을 요청하고 던전을 불러오기를 기다리는 연결. 씬을 불러오는 동안 같은 연결의 요청이 또 오면 막기 위함
+	readonly HashSet<NetworkConnectionToClient> raidWaitingConnections = new HashSet<NetworkConnectionToClient>();
 
 	// 장소 씬을 모두 불러왔으면 true. 씬을 다 불러오기 전에 접속한 플레이어는 이 값이 켜질 때까지 기다린다
 	bool scenesLoaded;
@@ -41,7 +43,16 @@ public class InvokeNetworkManager : NetworkManager
 	public override void OnStartServer()
 	{
 		base.OnStartServer();
+		// Mirror는 서버를 끌 때 등록한 처리 함수를 모두 지우므로, 서버를 켤 때마다 등록한다
+		NetworkServer.RegisterHandler<TravelRequestMessage>(OnTravelRequest);
 		StartCoroutine(LoadPlaceScenes());
+	}
+
+	public override void OnStartClient()
+	{
+		base.OnStartClient();
+		// Mirror는 클라이언트를 끌 때 등록한 처리 함수를 모두 지우므로, 접속할 때마다 등록한다
+		NetworkClient.RegisterHandler<TravelEndedMessage>(_ => PlaceTravelClient.Instance?.HandleTravelEnded());
 	}
 
 	IEnumerator LoadPlaceScenes()
@@ -194,7 +205,7 @@ public class InvokeNetworkManager : NetworkManager
 	/// - 클라이언트: 그 씬을 불러오라고 알린다. 클라이언트는 물리 분리 없이 기본 물리 세계에 불러온다.
 	/// <para>
 	/// 씬 이름이 아니라 Scene 값을 받는다. 레이드 던전처럼 같은 씬을 여러 번 불러와도 그대로 쓰기 위함이다.<br/>
-	/// 클라이언트가 이전 씬을 내리는 일과 플레이어 위치를 옮기는 일은 하지 않는다. 장소 사이 이동은 이 함수를 부른 뒤 따로 한다.
+	/// 클라이언트가 이전 씬을 내리는 일과 플레이어 위치를 옮기는 일은 하지 않는다. 장소 사이 이동은 TravelPlayer가 이 함수를 부르며 함께 한다.
 	/// </para>
 	/// </summary>
 	public void PutPlayerInScene(NetworkConnectionToClient conn, GameObject player, Scene scene)
@@ -204,6 +215,126 @@ public class InvokeNetworkManager : NetworkManager
 		// 호스트의 클라이언트는 서버와 씬을 같이 쓰므로 이미 불러와 있다. 알리면 Mirror가 "이미 불러왔다"는 경고를 남긴다
 		if (conn is LocalConnectionToClient) return;
 		conn.Send(new SceneMessage { sceneName = scene.name, sceneOperation = SceneOperation.LoadAdditive });
+	}
+
+	// [서버] 클라이언트의 장소 이동 요청(TravelRequestMessage)을 받는다
+	void OnTravelRequest(NetworkConnectionToClient conn, TravelRequestMessage msg)
+	{
+		// 조작된 요청(로비를 거치지 않는 이동 등)을 막는 검사는 아직 하지 않는다. 넣을 때는 여기에 넣는다
+
+		GameObject player = conn.identity != null ? conn.identity.gameObject : null;
+		if (player == null)
+		{
+			RejectTravel(conn, msg.destination, "플레이어 오브젝트가 아직 없습니다");
+			return;
+		}
+		if (raidWaitingConnections.Contains(conn))
+		{
+			RejectTravel(conn, msg.destination, "레이드 던전을 불러오는 중입니다");
+			return;
+		}
+		if (player.scene.name == msg.destination)
+		{
+			RejectTravel(conn, msg.destination, "이미 그 장소에 있습니다");
+			return;
+		}
+
+		// 레이드 던전은 들어가는 플레이어마다 한 번 더 불러온다 (파티 이슈에서 파티마다로 바꾼다)
+		if (msg.destination == PlaceScenes.RaidDungeon)
+		{
+			raidWaitingConnections.Add(conn);
+			LoadRaidDungeon(scene => OnRaidDungeonLoaded(conn, scene));
+			return;
+		}
+
+		if (!placeScenes.TryGetValue(msg.destination, out Scene target))
+		{
+			RejectTravel(conn, msg.destination, "모르는 장소입니다");
+			return;
+		}
+		TravelPlayer(conn, player, target);
+	}
+
+	void OnRaidDungeonLoaded(NetworkConnectionToClient conn, Scene scene)
+	{
+		raidWaitingConnections.Remove(conn);
+
+		// 불러오는 사이에 접속이 끊겼으면, 아무도 쓰지 않는 던전이 남지 않도록 바로 내린다
+		if (!NetworkServer.connections.ContainsKey(conn.connectionId) || conn.identity == null)
+		{
+			UnloadRaidDungeon(scene);
+			return;
+		}
+		TravelPlayer(conn, conn.identity.gameObject, scene);
+	}
+
+	// 이동하지 않을 때도 답을 보내야, 클라이언트가 로딩 화면을 닫고 액션 맵을 다시 활성화한다
+	static void RejectTravel(NetworkConnectionToClient conn, string destination, string reason)
+	{
+		Debug.LogWarning($"[InvokeNetworkManager] connId={conn.connectionId}의 {destination} 이동 요청을 거절합니다: {reason}");
+		conn.Send(new TravelEndedMessage());
+	}
+
+	/// <summary>
+	/// 서버에서 플레이어를 다른 장소 씬으로 옮긴다. 서버에서만 부른다.
+	/// <para>
+	/// - 서버: 플레이어가 실행 중인 함수를 모두 끊고, 그 씬으로 옮기고, 도착 위치(ArrivalPoint)로 순간이동시킨다.<br/>
+	/// - 클라이언트: 이전 씬 언로드 → 새 씬 로드 → teleport → TravelEndedMessage 순서로 받는다.<br/>
+	/// - 이전 씬이 레이드 던전이면 그 던전을 언로드한다.
+	/// </para>
+	/// <para>
+	/// 씬 이름이 아니라 Scene 값을 받는다. 레이드 던전처럼 같은 씬을 여러 번 불러와도 그대로 쓰기 위함이다.
+	/// </para>
+	/// </summary>
+	public void TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)
+	{
+		// 이전 씬에서 시전한 함수가 새 씬에서 계속 실행되지 않도록 끊는다 (몬스터를 기다리던 작업, 이전 씬에 만들 검 등)
+		if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll();
+
+		Scene previous = player.scene;
+
+		// 클라이언트는 알린 씬을 쌓아 두기만 하므로, 이전 장소의 바닥과 오브젝트가 남지 않도록 내리라고 알린다
+		// 호스트의 클라이언트는 서버와 씬을 같이 쓰므로 알리지 않는다 (서버는 이전 씬을 계속 돌려야 함)
+		if (!(conn is LocalConnectionToClient))
+			conn.Send(new SceneMessage { sceneName = previous.name, sceneOperation = SceneOperation.UnloadAdditive });
+
+		PutPlayerInScene(conn, player, target);
+
+		// Player는 클라이언트가 위치를 정하므로(Client To Server) 서버에서 위치만 바꾸면 클라이언트가 덮어쓴다
+		// ServerTeleport는 서버 쪽 위치를 바꾸고 클라이언트에도 순간이동(RpcTeleport)을 보낸다
+		// 씬 메시지 뒤에 보내는 이유: 클라이언트는 새 씬을 다 로드한 뒤에 teleport를 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아온다
+		// 한계: 로드하는 동안 클라이언트의 플레이어는 밟을 땅이 없어 떨어지고, 그 위치가 서버로 전송된다.
+		// 플레이어 움직임을 잠그는 함수를 박진우에게 요청함 (place-scenes.md 「맞춘 결과」). 함수가 생기면 이동하는 동안 잠근다
+		Vector3 position = FindArrivalPosition(target, previous.name);
+		player.GetComponent<NetworkTransformBase>().ServerTeleport(position, player.transform.rotation);
+
+		// 클라이언트는 받은 메시지를 보낸 순서대로 처리하므로, 이 메시지를 받으면 새 씬 로드와 teleport까지 끝난 것이다
+		conn.Send(new TravelEndedMessage());
+
+		// 레이드 던전에는 플레이어 한 명만 들어가므로 그 플레이어가 나오면 던전이 빈다
+		// 파티 이슈에서 "던전에 남은 플레이어가 없으면"으로 바꾼다
+		if (raidScenes.Contains(previous)) UnloadRaidDungeon(previous);
+	}
+
+	// 장소 사이를 이동한 플레이어가 도착할 위치를 찾는다.
+	// 떠나온 장소(fromPlace)가 같은 ArrivalPoint가 있으면 그 위치, 없으면 씬의 NetworkStartPosition 위치
+	static Vector3 FindArrivalPosition(Scene scene, string fromPlace)
+	{
+		bool hasArrivalPoint = false;
+		foreach (GameObject root in scene.GetRootGameObjects())
+		{
+			foreach (ArrivalPoint point in root.GetComponentsInChildren<ArrivalPoint>())
+			{
+				if (point.FromPlace == fromPlace) return point.transform.position;
+				hasArrivalPoint = true;
+			}
+		}
+
+		// 사냥터처럼 ArrivalPoint를 두지 않은 씬은 시작 위치가 정상이다.
+		// ArrivalPoint가 있는데 맞는 것이 없으면 fromPlace 오타일 수 있으므로 알린다
+		if (hasArrivalPoint)
+			Debug.LogWarning($"[InvokeNetworkManager] {scene.name} 씬에 {fromPlace}에서 온 플레이어의 ArrivalPoint가 없어서 시작 위치에 도착시킵니다.");
+		return FindStartPosition(scene);
 	}
 
 	// 씬 안의 NetworkStartPosition 위치를 찾는다.
@@ -220,12 +351,26 @@ public class InvokeNetworkManager : NetworkManager
 		return Vector3.zero;
 	}
 
+	public override void OnServerDisconnect(NetworkConnectionToClient conn)
+	{
+		raidWaitingConnections.Remove(conn);
+
+		// base가 플레이어 오브젝트를 삭제하므로, 그 전에 플레이어가 있던 씬을 기억한다
+		Scene scene = conn.identity != null ? conn.identity.gameObject.scene : default;
+		base.OnServerDisconnect(conn);
+
+		// 레이드 던전에는 플레이어 한 명만 들어가므로, 그 플레이어가 나가면 던전이 빈다
+		// 파티 이슈에서 "던전에 남은 플레이어가 없으면"으로 바꾼다
+		if (raidScenes.Contains(scene)) UnloadRaidDungeon(scene);
+	}
+
 	public override void OnStopServer()
 	{
 		base.OnStopServer();
 		scenesLoaded = false;
 		// 처리하지 못한 레이드 던전 요청은 버린다
 		raidLoadRequests.Clear();
+		raidWaitingConnections.Clear();
 
 		// 에디터에서 서버를 껐다 켤 때 같은 씬이 두 번 불러와지지 않도록 내린다
 		// 오브젝트가 꺼진 채로 불리면 코루틴을 시작할 수 없으므로 확인한다

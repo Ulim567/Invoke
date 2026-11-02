@@ -41,4 +41,4 @@
   - 레이드 입구는 "레이드 던전으로 가려고 함"만 알린다. 파티는 이우림
   - 프리팹은 `_HW` 폴더에 만들고 Lobby 씬에 놓는다 (PR 「씬·프리팹 변경」에 적음)
   - 창이 열린 동안 Player·Attack 액션 맵을 둘 다 끈다
-- 이우림이 이동 함수를 만들면 알려 주기로 함. 그때 이벤트 대신 그 함수를 부를지 정한다
+- 이동 함수를 만든 뒤에도 입구는 이벤트(`TravelRequested`, `RaidEntryRequested`) 그대로. 이우림의 `PlaceTravelClient`가 받아 서버에 요청 (#134, [place-scenes.md](place-scenes.md))

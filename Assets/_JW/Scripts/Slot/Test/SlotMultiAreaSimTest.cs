@@ -10,7 +10,7 @@ using UnityEngine.InputSystem.LowLevel;
 /// 콘솔에 「[MultiTest] … 통과/실패」가 찍힌다.
 /// <para>
 /// 시작할 때 검 소환(c.summon_sword)을 2번 시전해 소환검 2개를 만들고, 끝나면 해제(c.free_sword)로 지운다.<br/>
-/// Player_JW의 슬롯 3(E)에 여러 명 선택 스킬(c.battlefield_sweep), 슬롯 4(R)에 범위 스킬(c.wide_slash)이 들어 있어야 한다. 주변에 몬스터가 2마리 이상 있어야 한다.<br/>
+/// 시작할 때 슬롯 3(E)에 여러 명 선택 스킬(c.battlefield_sweep), 슬롯 4(R)에 범위 스킬(c.wide_slash)을 넣는다 (SlotLoadout). 주변에 몬스터가 2마리 이상 있어야 한다.<br/>
 /// 1. 두 명 찍고 떼기 → 찍은 두 명<br/>
 /// 2. 아무도 안 찍고 떼기 → 지금 고른 한 명<br/>
 /// 3. 찍었다가 다시 찍으면 빠짐<br/>
@@ -34,6 +34,9 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 
 		SlotCaster caster = NetworkClient.localPlayer.GetComponent<SlotCaster>();
 		executor = caster.GetComponent<FunctionExecutor>();
+		SlotLoadout loadout = caster.GetComponent<SlotLoadout>();
+		loadout.EquipSkill(2, PredefinedFunctionIds.BattlefieldSweep);
+		loadout.EquipSkill(3, PredefinedFunctionIds.WideSlash);
 		caster.CastRequested += (slot, f, targets) => lastTargets = new List<GameObject>(targets);
 
 		// 여러 명 선택은 사용 가능한 소환검 수만큼 찍을 수 있으므로 2개 소환해 둔다

@@ -144,6 +144,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2842981481539365227}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3685428814009308708}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -236,21 +239,13 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  slotFunctionIds:
-  - c.thrust
-  - test.function_a
-  - c.battlefield_sweep
-  - c.wide_slash
-  - 
-  - 
-  - 
-  - 
   targetRange: 8
   targetLayers:
     serializedVersion: 2
     m_Bits: 512
   input: {fileID: 1965934584990814665}
   executor: {fileID: 1518876502040340094}
+  loadout: {fileID: 0}
   health: {fileID: 877132152123956791}
 --- !u!114 &2690987339819865046
 MonoBehaviour:
@@ -424,6 +419,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThrustEffectView
   thrustFlashPrefab: {fileID: 2279675309158623242, guid: af7511bd27e694c31ab0ca57e94c26ba, type: 3}
   skewerFlashPrefab: {fileID: 8271863875450660268, guid: 06d74674d1e5c422f897809c135d892c, type: 3}
+--- !u!114 &3685428814009308708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29668a13660fc4201836f2846ea54de9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SlotLoadout
+  defaultSkillIds:
+  - c.thrust
+  - test.function_a
+  - c.battlefield_sweep
+  - c.wide_slash
+  - 
+  - 
+  - 
+  - 
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

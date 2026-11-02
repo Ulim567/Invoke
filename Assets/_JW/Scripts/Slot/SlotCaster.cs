@@ -14,18 +14,20 @@ using UnityEngine;
 /// - 대상 없음: 누르는 순간 FunctionExecutor.Cast로 시전하고 CastRequested (대상 0명).<br/>
 /// - 대상을 고르는 동안에는 Player 액션 맵(이동·점프·대시·내려가기)을 비활성화한다. 그래야 ← →가 Move가 아니라 대상 넘기기로, Space가 점프가 아니라 찍기로 들어간다 (#59).<br/>
 /// - 고를 대상이 필요한 함수는 주변에 후보가 없으면 시전하지 않는다.<br/>
-/// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 시전하지 않고, 고르던 대상도 취소한다.
+/// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 시전하지 않고, 고르던 대상도 취소한다.<br/>
+/// - 슬롯의 함수는 SlotLoadout에서 꺼낸다 (#159). 블록코딩 함수는 누르는 순간 시전하고, 함수 안의 GetBug가 대상을 기다리면 그때 고른다.<br/>
+/// - GetBug 입력: 그 함수를 시전한 슬롯 키를 누르고 있으면 ← →로 고르고 떼면 넣는다. 누르고 있지 않으면 가장 가까운 몬스터(없으면 대상 없음)를 바로 넣는다.<br/>
+/// - 취소 키(C): 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 원본을 FunctionExecutor.Cancel로 끊는다.
 /// </para>
 /// <para>
 /// 아직 하지 않는 일<br/>
-/// - 여러 명 선택의 대상 목록을 Target list 파라미터에 넣는 일: 실행기에 list 값이 아직 없어 CastRequested 이벤트와 로그까지만 한다 (블록 실행 3 이슈, #133).<br/>
-/// - 슬롯에 함수 장착: 「슬롯 8개에 함수 장착·해제하기」 이슈. 그 전까지는 Inspector의 Slot Function Ids에 고정 ID를 적어 둔다.
+/// - 여러 명 선택의 대상 목록을 Target list 파라미터에 넣는 일: 실행기에 list 값이 아직 없어 CastRequested 이벤트와 로그까지만 한다 (블록 실행 3 이슈, #133).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(PlayerInputReader))]
 public class SlotCaster : NetworkBehaviour
 {
-	const int SlotCount = 8;
+	const int SlotCount = SlotLoadout.SlotCount;
 
 	/// <summary>슬롯을 눌렀을 때의 입력 방식</summary>
 	public enum CastMode
@@ -36,10 +38,6 @@ public class SlotCaster : NetworkBehaviour
 		Area,        // 범위: 누르는 순간 주변 몬스터 모두
 	}
 
-	[Header("슬롯 (임시: 장착 이슈 전까지 고정 ID를 직접 적는다)")]
-	[Tooltip("슬롯 1~8(Q W E R A S D F)에 넣을 사전 정의 함수의 고정 ID. 예: c.thrust, test.function_a. 비우면 빈 슬롯")]
-	[SerializeField] string[] slotFunctionIds = new string[SlotCount];
-
 	[Header("대상 찾기")]
 	[Tooltip("대상 후보를 찾는 거리 (유닛)")]
 	[SerializeField, Min(0f)] float targetRange = 8f;
@@ -49,8 +47,22 @@ public class SlotCaster : NetworkBehaviour
 	[Header("연결")]
 	[SerializeField] PlayerInputReader input;
 	[SerializeField] FunctionExecutor executor;
+	[Tooltip("슬롯 장착 내용. 비워 두면 같은 오브젝트에서 찾는다")]
+	[SerializeField] SlotLoadout loadout;
 	[Tooltip("비워 두면 경직·사망 검사를 하지 않는다")]
 	[SerializeField] PlayerHealth health;
+
+	// 슬롯으로 시전한 작업 (시전한 순서). 취소 키와 GetBug 입력에서 어느 슬롯의 작업인지 찾을 때 쓴다. 끝난 작업은 그때그때 뺀다
+	struct SlotCast
+	{
+		public int Slot;
+		public FunctionTask Task;
+		public FunctionBlock Original;
+	}
+	readonly List<SlotCast> slotCasts = new List<SlotCast>();
+
+	// GetBug 입력을 위해 대상을 고르는 중이면 그 작업. 슬롯 시전을 위해 고르는 중이거나 고르지 않으면 null
+	FunctionTask inputTask;
 
 	// 대상을 고르는 중인 슬롯과 후보. 고르는 중이 아니면 selectingSlot = -1
 	int selectingSlot = -1;
@@ -85,16 +97,28 @@ public class SlotCaster : NetworkBehaviour
 	/// <summary>
 	/// [로직] 시전을 요청했을 때 불린다. (슬롯 번호, 함수, 대상 목록).<br/>
 	/// 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안의 몬스터 모두, 대상 없음은 빈 목록.<br/>
-	/// 대상을 고르는 함수(단일, 여러 명)는 아직 실제로 Cast하지 않는다. 대상을 Target 파라미터에 넣는 방법이 정해지면 이 이벤트를 받는 쪽에서 Cast한다.
+	/// 단일과 대상 없음·범위는 실제로 시전한 뒤 불린다. 여러 명은 list 값이 아직 없어 시전하지 않고 이 이벤트까지만 한다.<br/>
+	/// 블록코딩 함수는 누르는 순간 시전하고 대상 목록은 빈 목록이다 (대상은 함수 안의 GetBug가 받는다).
 	/// </summary>
-	public event Action<int, PredefinedFunction, IReadOnlyList<GameObject>> CastRequested;
+	public event Action<int, FunctionBlock, IReadOnlyList<GameObject>> CastRequested;
 
 	void Reset()
 	{
 		input = GetComponent<PlayerInputReader>();
 		executor = GetComponent<FunctionExecutor>();
+		loadout = GetComponent<SlotLoadout>();
 		health = GetComponent<PlayerHealth>();
 		targetLayers = LayerMask.GetMask("Monster");
+	}
+
+	void Awake()
+	{
+		if (loadout == null) loadout = GetComponent<SlotLoadout>();
+	}
+
+	void OnEnable()
+	{
+		if (executor != null) executor.InputRequested += OnInputRequested;
 	}
 
 	void Update()
@@ -105,6 +129,16 @@ public class SlotCaster : NetworkBehaviour
 		{
 			CancelSelection();
 			return;
+		}
+
+		if (input.CancelPressed) CancelLatestCast();
+
+		// GetBug 입력을 고르는 중에 그 작업이 끝났으면(취소, 실행 중단 공격) 고르기도 끝낸다
+		if (inputTask != null && inputTask.IsEnded)
+		{
+			Debug.Log($"[SlotCaster] {inputTask.Name}: 입력을 기다리던 작업이 끝나서 대상 고르기 끝");
+			inputTask = null;
+			if (selectingSlot >= 0) EndSelection();
 		}
 
 		for (int i = 0; i < SlotCount; i++)
@@ -138,9 +172,18 @@ public class SlotCaster : NetworkBehaviour
 		// 다른 슬롯으로 고르는 중이면 그 슬롯이 끝날 때까지 무시한다 (PlayerInputReader도 먼저 누른 슬롯 하나만 기록)
 		if (selectingSlot >= 0) return;
 
-		if (!TryGetSlotFunction(slot, out PredefinedFunction function))
+		if (!TryGetSlotFunction(slot, out FunctionBlock slotFunction))
 		{
 			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 빈 슬롯");
+			return;
+		}
+
+		// 블록코딩 함수: 파라미터로 대상을 넘길 수 없으므로 누르는 순간 시전한다. 대상은 함수 안의 GetBug가 받는다
+		if (!(slotFunction is PredefinedFunction function))
+		{
+			if (!TryCastBlock(slot, slotFunction)) return;
+			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {slotFunction.Name} 시전 (블록 함수)");
+			CastRequested?.Invoke(slot, slotFunction, Array.Empty<GameObject>());
 			return;
 		}
 
@@ -227,7 +270,16 @@ public class SlotCaster : NetworkBehaviour
 
 		EndSelection();
 
-		if (!TryGetSlotFunction(slot, out PredefinedFunction function)) return;
+		// GetBug 입력: 고른 몬스터를 기다리는 작업에 넣는다. 후보가 없었으면 대상 없음을 넣는다
+		if (inputTask != null)
+		{
+			FunctionTask task = inputTask;
+			inputTask = null;
+			ProvideBug(task, targets.Count > 0 ? targets[0] : null);
+			return;
+		}
+
+		if (!TryGetSlotFunction(slot, out FunctionBlock slotFunction) || !(slotFunction is PredefinedFunction function)) return;
 
 		if (targets.Count == 0)
 		{
@@ -248,11 +300,76 @@ public class SlotCaster : NetworkBehaviour
 
 	// 실행기에 시전을 맡긴다. 거부되면(쿨타임, 메모리 부족 등) 시전 로그와 CastRequested를 내지 않는다
 	// 거부 이유는 실행기가 CastRejected로 알린다
-	bool TryCast(int slot, PredefinedFunction function, params RuntimeValue[] arguments)
+	bool TryCast(int slot, PredefinedFunction function, params RuntimeValue[] arguments) =>
+		Record(slot, function, executor.Cast(function, arguments));
+
+	// 블록코딩 함수는 argument 없이 시전한다
+	bool TryCastBlock(int slot, FunctionBlock function) =>
+		Record(slot, function, executor.Cast(function));
+
+	bool Record(int slot, FunctionBlock original, FunctionTask task)
 	{
-		if (executor.Cast(function, arguments) != null) return true;
-		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 시전 거부됨");
-		return false;
+		if (task == null)
+		{
+			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {original.Name} 시전 거부됨");
+			return false;
+		}
+		slotCasts.RemoveAll(c => c.Task.IsEnded);
+		slotCasts.Add(new SlotCast { Slot = slot, Task = task, Original = original });
+		return true;
+	}
+
+	/// <summary>
+	/// 취소 키(C): 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것을 끊는다.<br/>
+	/// 실행기의 Cancel은 원본 단위지만, 같은 원본은 실행 중이면 다시 시전되지 않으므로 한 슬롯의 작업은 늘 하나다.
+	/// </summary>
+	void CancelLatestCast()
+	{
+		slotCasts.RemoveAll(c => c.Task.IsEnded);
+		if (slotCasts.Count == 0)
+		{
+			Debug.Log("[SlotCaster] 취소: 진행 중인 슬롯 작업 없음");
+			return;
+		}
+
+		SlotCast latest = slotCasts[slotCasts.Count - 1];
+		bool cancelled = executor.Cancel(latest.Original);
+		Debug.Log($"[SlotCaster] 취소: 슬롯 {latest.Slot + 1} {latest.Original.Name} {(cancelled ? "끊음" : "끊을 작업 없음")}");
+		slotCasts.RemoveAll(c => c.Original == latest.Original);
+	}
+
+	// 실행기가 입력 함수를 만나 입력을 기다리기 시작했다. 대상 입력(GetBug)만 맡는다
+	void OnInputRequested(FunctionTask task, PredefinedFunction inputFunction)
+	{
+		if (inputFunction.Id != PredefinedFunctionIds.GetBug) return;
+
+		// 그 작업을 시전한 슬롯 키를 아직 누르고 있고 다른 대상을 고르는 중이 아니면, 그 슬롯으로 고른다
+		int index = slotCasts.FindIndex(c => c.Task == task);
+		int slot = index >= 0 ? slotCasts[index].Slot : -1;
+		if (isLocalPlayer && slot >= 0 && selectingSlot < 0 && input.HeldSlot == slot && (health == null || health.CanAct))
+		{
+			inputTask = task;
+			BeginSelection(slot, CastMode.Single);
+			return;
+		}
+
+		// 누르고 있지 않으면(이미 뗐음, 함수 안에서 따로 시전된 작업 등) 가장 가까운 몬스터를 바로 넣는다
+		List<GameObject> around = FindMonsters(targetRange);
+		GameObject nearest = null;
+		float best = float.MaxValue;
+		foreach (GameObject monster in around)
+		{
+			float dist = (monster.transform.position - transform.position).sqrMagnitude;
+			if (dist < best) { best = dist; nearest = monster; }
+		}
+		ProvideBug(task, nearest);
+	}
+
+	void ProvideBug(FunctionTask task, GameObject target)
+	{
+		Monster monster = target != null ? target.GetComponent<Monster>() : null;
+		bool accepted = executor.ProvideInput(task, RuntimeValue.FromBug(monster));
+		Debug.Log($"[SlotCaster] {task.Name}: GetBug ← {(monster != null ? monster.name : "대상 없음")}{(accepted ? "" : " (작업이 이미 끝남)")}");
 	}
 
 	void CancelSelection()
@@ -260,6 +377,14 @@ public class SlotCaster : NetworkBehaviour
 		if (selectingSlot < 0) return;
 		Debug.Log($"[SlotCaster] 슬롯 {selectingSlot + 1}: 대상 고르기 취소");
 		EndSelection();
+
+		// GetBug 입력을 고르다 취소되면(경직·사망 등) 작업이 계속 기다리지 않게 대상 없음을 넣는다
+		if (inputTask != null)
+		{
+			FunctionTask task = inputTask;
+			inputTask = null;
+			ProvideBug(task, null);
+		}
 	}
 
 	void EndSelection()
@@ -286,7 +411,8 @@ public class SlotCaster : NetworkBehaviour
 	// 고르는 중에 꺼지거나 사라지면 꺼 둔 Player 맵을 남기지 않는다
 	void OnDisable()
 	{
-		if (selectingSlot >= 0) EndSelection();
+		if (executor != null) executor.InputRequested -= OnInputRequested;
+		if (selectingSlot >= 0) CancelSelection();
 		else SetPlayerMapBlocked(false);
 	}
 
@@ -367,20 +493,11 @@ public class SlotCaster : NetworkBehaviour
 
 	static bool IsGone(GameObject target) => target == null || (target.TryGetComponent(out Monster monster) && monster.IsDead);
 
-	bool TryGetSlotFunction(int slot, out PredefinedFunction function)
+	// 슬롯에 장착한 함수(원본). 빈 슬롯이거나 실행할 수 없으면 false (SlotLoadout)
+	bool TryGetSlotFunction(int slot, out FunctionBlock function)
 	{
 		function = null;
-		if (slot < 0 || slot >= slotFunctionIds.Length) return false;
-
-		string id = slotFunctionIds[slot];
-		if (string.IsNullOrWhiteSpace(id)) return false;
-
-		if (!PredefinedFunctionRegistry.TryGet(id, out function))
-		{
-			Debug.LogWarning($"[SlotCaster] 슬롯 {slot + 1}: 없는 함수 ID '{id}'");
-			return false;
-		}
-		return true;
+		return loadout != null && loadout.TryGetFunction(slot, out function);
 	}
 
 	void OnDrawGizmosSelected()

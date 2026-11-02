@@ -97,32 +97,29 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 9
       addedObject: {fileID: 5197172094904820648}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 10
       addedObject: {fileID: 1741652210532893673}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 11
       addedObject: {fileID: 1518876502040340094}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 12
       addedObject: {fileID: 8735626613347549550}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 13
       addedObject: {fileID: 937101453435024963}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 14
       addedObject: {fileID: 2690987339819865046}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 15
       addedObject: {fileID: 877132152123956791}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
+      insertIndex: 16
       addedObject: {fileID: 8410677118024237602}
-    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 8583556769451416292}
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 163385676324885216}
@@ -301,23 +298,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerFacingView
   movement: {fileID: 5197172094904820648}
   spriteRenderer: {fileID: 8670862466287496158}
---- !u!114 &8583556769451416292
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 933170754771805909}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7c210399716e8476397f20cf8191caca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerCameraFollow
-  syncDirection: 0
-  syncMode: 0
-  syncInterval: 0
-  offset: {x: 0, y: 6}
-  cameraZ: -10
 --- !u!114 &163385676324885216
 MonoBehaviour:
   m_ObjectHideFlags: 0

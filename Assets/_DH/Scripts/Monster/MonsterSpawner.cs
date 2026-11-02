@@ -80,6 +80,10 @@ public class MonsterSpawner : MonoBehaviour
 
 		groundFilter.SetLayerMask(groundLayers);
 		groundFilter.useTriggers = false;
+
+		// 설정이 비어 있으면 몬스터가 조용히 안 생기므로 원인을 바로 알린다
+		if (monsterPrefab == null) Debug.LogWarning($"[MonsterSpawner] {name}: Monster Prefab이 비어 있어 몬스터를 만들지 않습니다.", this);
+		if (groundLayers.value == 0) Debug.LogWarning($"[MonsterSpawner] {name}: Ground Layers가 비어 있어 땅을 찾지 못합니다. Ground, Platform으로 두세요.", this);
 	}
 
 	void Update()

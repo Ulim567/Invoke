@@ -9,6 +9,7 @@
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
 - 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)까지 있다.
+- 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
 - 하지 않는 일
@@ -85,6 +86,14 @@
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
   - 착지 순간 그림자 위 `Hit Size`(2×3, 아래 변이 땅) 상자 안의 플레이어에게 한 번씩 `Packet_Drop`(체력 피해 20, 패링 불가)을 적용한다. 그림자 밖으로 피하면 맞지 않는다.
   - `NetworkSpawner`로 만들고 없앤다(착지 `Despawn Delay` 0.3초 뒤). 판정·삭제는 서버(또는 네트워크 없는 테스트)에서만 한다.
+- 보스 체력 바 (`BossHealthBar`, #188)
+  - 위치는 임시로 화면 위쪽 가운데(프리팹의 Panel 위치만 바꾸면 옮겨진다. 그림·UI 배치 때 확정). 내 캐릭터와 같은 씬에 살아 있는 보스(`Monster.IsBoss`)가 있을 때만 보인다. 여러 마리면 최대 체력이 가장 큰 보스. `Search Interval`(0.5초)마다 찾는다.
+  - 빨간 막대 = 지금 체력, 흰 막대 = 맞은 뒤 `Trail Delay`(0.4초) 기다렸다가 천천히 따라 줄어듦, 숫자 = 지금 / 최대, 이름 = 보스 오브젝트 이름("(Clone)" 뗌)
+  - 페이즈 구분선을 70%, 40% 위치에 놓는다 (`Phase Thresholds`)
+  - 체력은 아직 동기화되지 않아 Host 화면에서만 정확하다. 몬스터 서버 동기화 이슈에서 맞춘다
+  - 지금은 색 막대(임시). 그림은 임혜원(테두리, 빨간 채움, 흰 채움, 구분선)
+  - UI 프리팹 `BossHealthBar`(`_DH`). Base 씬(공용) 화면 UI에 놓는 일은 이우림과 정한다
+- 스포너 설정 확인: `Monster Prefab`이나 `Ground Layers`가 비어 있으면 시작할 때 `[MonsterSpawner]` 경고를 남긴다 (#188)
 - 관통 투사체: `MonsterProjectile`의 `Pierce`를 켜면 맞은 대상(Rigidbody 기준)마다 한 번씩 효과를 주고 계속 날아간다. 끄면 예전처럼 처음 맞은 대상에서 사라진다.
 
 - 상태 이상 반응 (#103)
@@ -253,4 +262,5 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
   - Gateway 공격 타이밍: Throw 8번째 장면(0.58초)에 패킷이 손을 떠나고(`Fire Delay` 0.58), Slam 6번째 장면(0.42초)에 내려친다(`Slam Delay` 0.42). 두 모션 모두 9장면 0.75초
   - 패킷 공격 그림은 `_HW/Boss/Attack`(#146). `Packet_Throw` 2×2칸, `Packet_Fall` 1.5칸, `Packet_Shadow` 가로 2칸, 4장면 12fps 반복. 김도훈이 PacketThrow·FallingPacket 프리팹에 첫 장면과 컨트롤러를 붙였다(Scale 1). PacketThrow는 `ProjectileFacing`(임혜원)으로 왼쪽으로 날 때 flipX
 - 임혜원과 정해야 할 것
+  - 보스 체력 바 그림: 테두리, 빨간 채움, 흰 채움(단색 사각형), 페이즈 구분선. 이름은 Galmuri 글자로 코드가 쓴다
   - Gateway 프리팹의 그림·Animator. Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`를 받는다

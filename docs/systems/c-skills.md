@@ -107,6 +107,34 @@
 - 검 집중찌르기: 대상이 출혈이면 `BonusRate = DamageBonus.BleedFocusedThrust`(+50%).
 - 꼬챙이: 대상부터 찌르는 방향 뒤로 `CSkewer.PierceLength` 3유닛(임시), 높이 1.5유닛 안의 몬스터가 모두 맞는다. 배율은 표(0.5, 임시). 판정은 시전자 씬의 물리 세계.
 
+### 급소공략 (#161)
+- 찌르기와 같다(`ThrustSkill`: 대상, 돌진, 사거리, 데미지). 배율은 표(1.0).
+- 시작할 때(`OnSkillStart`) 시전자의 `VitalStrikeMinigame.TakeResult()`로 미니게임 결과를 한 번 가져간다.
+  - 눈(`Eye`): `BonusRate = DamageBonus.VitalStrikeMinigame`(+200%, 총 3.0배) + 맞은 대상에 실명(`StatusEffects.TryApply`, 기본 지속 시간)
+  - 발목(`Ankle`): +200% + 이속 감소
+  - 실패(`Miss`), 미니게임 안 함(`None`): 기본 데미지. 페널티 없음
+- 미니게임 입력은 슬롯 입력이 대상을 고르는 동안 한다 (slot-caster.md 「급소공략 미니게임」).
+- `ThrustSkill`에 `OnHitMonster(task, monster, result)`를 더했다. 대상마다 데미지를 준 뒤 불린다. 상태 이상을 거는 찌르기가 덮어쓴다.
+
+#### `VitalStrikeMinigame` (플레이어 프리팹)
+- 다이얼 위로 바늘이 0도(12시)에서 시계 방향으로 한 바퀴(`Revolution Seconds`, 임시 1.2초) 돈다.
+- 눈 칸, 발목 칸: 각각 `Zone Degrees`(임시 30도). 시작할 때마다 위치를 새로 정한다. 두 칸은 겹치지 않고, 출발 직후 `Zone Min Start Degrees`(70도) 전에는 놓지 않는다.
+- 멈춘 순간 바늘이 든 칸이 결과. 칸 밖이거나 한 바퀴 안에 안 멈추면 `Miss`.
+- 키 입력은 읽지 않는다. `SlotCaster`가 Space(`MarkPressed`)로 `Begin`, `Stop`을 부른다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Started` (event) | - | - | [표시] 미니게임 시작. 다이얼을 띄운다 |
+| `Finished` (event) | `VitalStrikeResult` | - | [표시] 끝남 (`Eye`, `Ankle`, `Miss`, 취소면 `None`). 성공·실패 연출 |
+| `IsRunning` | - | `bool` | 바늘이 도는 중 |
+| `NeedleAngle` | - | `float` | 바늘 각도 (0~360, 0 = 12시, 시계 방향) |
+| `EyeZoneStart`, `AnkleZoneStart`, `ZoneDegrees` | - | `float` | 칸 위치. 칸은 `Start` ~ `Start + ZoneDegrees` |
+| `PendingResult` | - | `VitalStrikeResult` | 급소공략이 아직 가져가지 않은 결과 |
+| `Begin()`, `Stop()`, `Cancel()` | - | - / `VitalStrikeResult` / - | `SlotCaster`가 부른다 |
+| `TakeResult()` | - | `VitalStrikeResult` | 급소공략이 시작할 때 부른다. 가져가면 지워짐. 진행 중이면 `Miss`로 끝냄 |
+
+- `VitalStrikeMinigameView`: (임시) 머리 위에 다이얼을 OnGUI로 그린다. 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘. 실제 그림(임혜원)은 위 event와 값을 읽어 바꾼다.
+
 ### 검 소환·해제 (#102)
 - 검 소환 (`c.summon_sword`, malloc)
   - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, heapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
@@ -144,7 +172,7 @@
 | `Ended` (event) | `string` 스킬 ID, `bool` 끝까지 실행했으면 `true` | [연출] 스킬이 끝났을 때. 끊기거나 실패하면 `false` |
 
 - 순서: `Started` → (`Fired` → `Hit` 0번 이상) → `Ended`. 필요 조건(맨손 등)에 걸려 시작하지 못한 스킬은 아무 event도 내지 않는다.
-- `Started`, `Ended`는 `DataDrivenSkill`이 모든 C 스킬에 대해 낸다. `Fired`, `Hit`은 효과를 채운 스킬부터 낸다 (지금: 검 찌르기, 집중찌르기, 꼬챙이).
+- `Started`, `Ended`는 `DataDrivenSkill`이 모든 C 스킬에 대해 낸다. `Fired`, `Hit`은 효과를 채운 스킬부터 낸다 (지금: 검 찌르기, 집중찌르기, 꼬챙이, 급소공략).
 - `Raise...` 함수는 C 스킬만 부른다. 네트워크를 붙이면 `[ClientRpc]`로 바꿔 모든 화면에서 불린다.
 - 찌르기 섬광: `ThrustEffectView`(플레이어)가 `Fired`를 받아 `ThrustFlash`(검 찌르기·집중찌르기) / `SkewerFlash`(꼬챙이) 프리팹을 찌르는 방향으로 만든다. 그림은 임혜원 #114 (`_HW/Effects/Thrust_Flash`, `Skewer_Flash`). 보여 주기만 하는 오브젝트라 `OneShotEffect`가 0.25초 뒤 스스로 없앤다.
 
@@ -159,6 +187,7 @@
 | 이름 | 설명 |
 | --- | --- |
 | `ThrustSkillSimTest` | Test_JW의 ThrustTest. 켜고 Play → Host, Game 창을 한 번 클릭 (Unity가 화면 맨 앞에 있어야 가짜 키가 들어감). 검 찌르기(사거리 밖 몬스터에게 돌진 후 맞음, 데미지 = 공격력 × 배율), 집중찌르기(출혈 1.5배), 꼬챙이(일직선 뒤 몬스터 모두), 맨손 실패, 슬롯 Q로 고른 대상에게 맞음, 연출 event 순서를 확인. 「[ThrustTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `VitalStrikeSimTest` | Test_JW의 VitalTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 10초). Q에 급소공략을 넣고(끝나면 되돌림) 눈 칸 → 3.0배 + 실명, 미니게임 중 대상 고정, 발목 칸 → 3.0배 + 이속 감소, 미니게임 안 함 → 기본 데미지, 칸 밖에서 멈춤 → 기본 데미지, 결과는 한 번 쓰면 지워짐을 확인. 「[VitalTest] 전체 통과」면 통과. 평소에는 꺼 둔다. 직접 해 보려면 `Restore Slot`을 끄고 한 번 돌리면 Q에 급소공략이 남는다. |
 | `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
@@ -173,6 +202,7 @@
 - 정해야 할 것
   - 수치 전부 (데미지, 쿨타임, 메모리, 틱 수): 기획
   - 찌르기 사거리 2.5, 꼬챙이 관통 길이 3, 돌진 속도 30: 기획
+  - 급소공략 미니게임 한 바퀴 1.2초, 칸 크기 30도: 기획
   - 돌진이 몬스터 몸에 막히는 것 (지금은 막힘. 뚫고 지나갈지): 기획
   - 위 「가정한 것」 3개: 기획
   - 검기가 해제가 필요한지, 날아간 뒤 자동 반환인지: 기획

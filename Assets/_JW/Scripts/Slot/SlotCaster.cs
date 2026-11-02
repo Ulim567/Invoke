@@ -17,7 +17,8 @@ using UnityEngine;
 /// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 시전하지 않고, 고르던 대상도 취소한다.<br/>
 /// - 슬롯의 함수는 SlotLoadout에서 꺼낸다 (#159). 블록코딩 함수는 누르는 순간 시전하고, 함수 안의 GetBug가 대상을 기다리면 그때 고른다.<br/>
 /// - GetBug 입력: 그 함수를 시전한 슬롯 키를 누르고 있으면 ← →로 고르고 떼면 넣는다. 누르고 있지 않으면 가장 가까운 몬스터(없으면 대상 없음)를 바로 넣는다.<br/>
-/// - 취소 키(C): 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 원본을 FunctionExecutor.Cancel로 끊는다.
+/// - 취소 키(C): 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 원본을 FunctionExecutor.Cancel로 끊는다.<br/>
+/// - 급소공략 미니게임 (#161): 급소공략 슬롯(또는 GetBug 입력)으로 대상을 고르는 중 Space(MarkPressed)를 누르면 미니게임 시작, 한 번 더 누르면 판정. 시작하면 대상이 고정된다. 결과는 급소공략이 시작할 때 가져간다.
 /// </para>
 /// <para>
 /// 아직 하지 않는 일<br/>
@@ -49,6 +50,8 @@ public class SlotCaster : NetworkBehaviour
 	[SerializeField] FunctionExecutor executor;
 	[Tooltip("슬롯 장착 내용. 비워 두면 같은 오브젝트에서 찾는다")]
 	[SerializeField] SlotLoadout loadout;
+	[Tooltip("급소공략 미니게임. 비워 두면 같은 오브젝트에서 찾는다. 없으면 미니게임 없이 시전")]
+	[SerializeField] VitalStrikeMinigame minigame;
 	[Tooltip("비워 두면 경직·사망 검사를 하지 않는다")]
 	[SerializeField] PlayerHealth health;
 
@@ -63,6 +66,10 @@ public class SlotCaster : NetworkBehaviour
 
 	// GetBug 입력을 위해 대상을 고르는 중이면 그 작업. 슬롯 시전을 위해 고르는 중이거나 고르지 않으면 null
 	FunctionTask inputTask;
+
+	// 이번 대상 고르기에서 Space로 급소공략 미니게임을 할 수 있는지, 이미 시작했는지 (시작하면 대상 고정)
+	bool minigameAllowed;
+	bool minigameStarted;
 
 	// 대상을 고르는 중인 슬롯과 후보. 고르는 중이 아니면 selectingSlot = -1
 	int selectingSlot = -1;
@@ -107,6 +114,7 @@ public class SlotCaster : NetworkBehaviour
 		input = GetComponent<PlayerInputReader>();
 		executor = GetComponent<FunctionExecutor>();
 		loadout = GetComponent<SlotLoadout>();
+		minigame = GetComponent<VitalStrikeMinigame>();
 		health = GetComponent<PlayerHealth>();
 		targetLayers = LayerMask.GetMask("Monster");
 	}
@@ -114,6 +122,7 @@ public class SlotCaster : NetworkBehaviour
 	void Awake()
 	{
 		if (loadout == null) loadout = GetComponent<SlotLoadout>();
+		if (minigame == null) minigame = GetComponent<VitalStrikeMinigame>();
 	}
 
 	void OnEnable()
@@ -165,6 +174,7 @@ public class SlotCaster : NetworkBehaviour
 		if (step != 0) MoveSelection(step);
 
 		if (selectingMode == CastMode.MultiSelect && input.MarkPressed) ToggleMark();
+		else if (minigameAllowed && input.MarkPressed) OnMinigameKey();
 	}
 
 	void OnSlotPressed(int slot)
@@ -219,12 +229,20 @@ public class SlotCaster : NetworkBehaviour
 		// ← → 넘기는 순서와 화면 순서를 맞춘다
 		candidates.Sort((a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
 		selectedIndex = NearestCandidateIndex();
+
+		// 급소공략 슬롯이거나 GetBug 입력이면 Space로 미니게임을 할 수 있다. 이전에 남은 결과는 지운다
+		minigameAllowed = minigame != null && mode == CastMode.Single && (inputTask != null || IsVitalStrikeSlot(slot));
+		minigameStarted = false;
+		if (minigame != null) minigame.ClearResult();
+
 		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 대상 고르기 시작 ({(mode == CastMode.MultiSelect ? "여러 명" : "단일")}, 후보 {candidates.Count}명)");
 		NotifyTargetChanged();
 	}
 
 	void MoveSelection(int step)
 	{
+		// 미니게임을 시작하면 대상이 고정된다
+		if (minigameStarted) return;
 		RemoveDeadCandidates();
 		if (candidates.Count == 0) return;
 
@@ -232,6 +250,26 @@ public class SlotCaster : NetworkBehaviour
 		selectedIndex = ((selectedIndex + step) % candidates.Count + candidates.Count) % candidates.Count;
 		NotifyTargetChanged();
 	}
+
+	// 급소공략 미니게임: 처음 누르면 시작, 다음에 누르면 판정. 판정이 끝난 뒤에는 다시 시작하지 않는다
+	void OnMinigameKey()
+	{
+		if (!minigameStarted)
+		{
+			if (CurrentTarget == null) return;
+			minigameStarted = true;
+			minigame.Begin();
+			Debug.Log($"[SlotCaster] 슬롯 {selectingSlot + 1}: 급소공략 미니게임 시작 (대상 {CurrentTarget.name} 고정)");
+		}
+		else if (minigame.IsRunning)
+		{
+			VitalStrikeResult result = minigame.Stop();
+			Debug.Log($"[SlotCaster] 슬롯 {selectingSlot + 1}: 급소공략 미니게임 판정 {result}");
+		}
+	}
+
+	bool IsVitalStrikeSlot(int slot) =>
+		TryGetSlotFunction(slot, out FunctionBlock function) && function is PredefinedFunction predefined && predefined.Id == PredefinedFunctionIds.VitalStrike;
 
 	// 지금 고른 대상을 찍는다. 이미 찍었으면 뺀다
 	void ToggleMark()
@@ -283,6 +321,7 @@ public class SlotCaster : NetworkBehaviour
 
 		if (targets.Count == 0)
 		{
+			if (minigame != null) minigame.Cancel();
 			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} 대상이 없어서 시전하지 않음");
 			return;
 		}
@@ -376,6 +415,7 @@ public class SlotCaster : NetworkBehaviour
 	{
 		if (selectingSlot < 0) return;
 		Debug.Log($"[SlotCaster] 슬롯 {selectingSlot + 1}: 대상 고르기 취소");
+		if (minigameStarted) minigame.Cancel();
 		EndSelection();
 
 		// GetBug 입력을 고르다 취소되면(경직·사망 등) 작업이 계속 기다리지 않게 대상 없음을 넣는다
@@ -387,9 +427,12 @@ public class SlotCaster : NetworkBehaviour
 		}
 	}
 
+	// 미니게임 결과는 지우지 않는다. 떼서 시전하면 급소공략이 시작할 때 가져간다 (진행 중이었으면 그때 Miss)
 	void EndSelection()
 	{
 		SetPlayerMapBlocked(false);
+		minigameAllowed = false;
+		minigameStarted = false;
 		selectingSlot = -1;
 		candidates.Clear();
 		selectedIndex = -1;

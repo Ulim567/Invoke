@@ -147,6 +147,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3685428814009308708}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3961019048472786949}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8342864698802295376}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -246,6 +252,7 @@ MonoBehaviour:
   input: {fileID: 1965934584990814665}
   executor: {fileID: 1518876502040340094}
   loadout: {fileID: 0}
+  minigame: {fileID: 0}
   health: {fileID: 877132152123956791}
 --- !u!114 &2690987339819865046
 MonoBehaviour:
@@ -440,6 +447,36 @@ MonoBehaviour:
   - 
   - 
   - 
+--- !u!114 &3961019048472786949
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c7b621ca3dcf40edb3ace083f70cc57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VitalStrikeMinigame
+  revolutionSeconds: 1.2
+  zoneDegrees: 30
+  zoneMinStartDegrees: 70
+--- !u!114 &8342864698802295376
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b62268ebeb3534723a79118f1c02afb2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VitalStrikeMinigameView
+  radius: 48
+  worldOffset: {x: 0, y: 3.2, z: 0}
+  resultSeconds: 0.6
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

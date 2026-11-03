@@ -153,6 +153,7 @@ void CmdPickUp()
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `RequestCast(int slot, GameObject target = null)` | 슬롯 번호(0~7), 대상 몬스터 | - | [소유 클라이언트] 서버에 시전 요청. 대상(`Target`) 파라미터가 있는 스킬만 `target` 사용. 답은 `CastAccepted` / `CastRejected` |
+| `RequestCast(int slot, GameObject[] targets)` | 슬롯 번호(0~7), 고른 몬스터들 | - | [소유 클라이언트] 대상 array(`Target` array) 파라미터가 있는 스킬(전장 휩쓸기)의 시전 요청. 서버가 순서대로 `RuntimeValue.FromBugs`로 바꿔 첫 파라미터에 넣음. 서버에 없는 몬스터는 「대상 없음」 원소. 대상 없는 시전은 `RequestCast(slot)`(`RequestCast(slot, null)`은 컴파일 오류). 답은 `CastAccepted` / `CastRejected` (#238) |
 | `RequestCancel(int slot)` | 슬롯 번호 | - | [소유 클라이언트] 그 슬롯으로 시전한 작업 끊기 요청(`FunctionExecutor.Cancel`). 끊기면 `TaskEnded(Cancelled)` |
 | `ProvideTarget(int taskId, GameObject target)` | 작업 번호, 고른 몬스터(없으면 `null`) | - | [소유 클라이언트] 입력을 기다리는 이 플레이어의 작업에 몬스터 넣기 요청. 이미 끝난 작업이면 서버가 버림 |
 | `CastAccepted` (event) | `int` 슬롯, `int` 작업 번호 | - | [로직] 시전 성공. 소유 클라이언트에만 |
@@ -174,7 +175,7 @@ void CmdPickUp()
 ### 시험
 | 이름 | 설명 |
 | --- | --- |
-| `CastSyncTest` | `NetworkTest` 씬. 에디터 Play → Host, 시험 빌드(`NetworkTest` 씬만 넣은 Windows 빌드) → Client. 서버가 플레이어마다 몬스터와 시험 슬롯을 넣고, 클라이언트가 시전·입력 대기·메모리·쿨타임·거부를 확인. 「[CastSyncTest] 클라이언트 전체 통과」면 통과. 활성화되어 있으면 Host로 시작할 때 자동으로 동작(플레이어 슬롯을 시험 슬롯으로 바꾸고 몬스터를 만듦) |
+| `CastSyncTest` | `NetworkTest` 씬. 에디터 Play → Host, 시험 빌드(`NetworkTest` 씬만 넣은 Windows 빌드) → Client. 서버가 플레이어마다 몬스터와 시험 슬롯을 넣고, 클라이언트가 시전·입력 대기·메모리·쿨타임·대상 array 시전(#238)·거부를 확인. 「[CastSyncTest] 클라이언트 전체 통과」와 에디터의 「[CastSyncTest] [서버] 대상 array 시험 스킬이 몬스터 2마리를 읽음: 통과」면 통과. 활성화되어 있으면 Host로 시작할 때 자동으로 동작(플레이어 슬롯을 시험 슬롯으로 바꾸고 몬스터를 만듦) |
 
 ## 맞춘 결과
 - 이우림 결정 (#173)
@@ -187,6 +188,9 @@ void CmdPickUp()
   - 시전 직후 처리(로그, `CastRequested`, 취소용 기록): `CastAccepted` / `CastRejected`를 받은 뒤로
   - 입력 대기: `executor.InputRequested` → `FunctionExecutorNetwork.InputRequested`, `executor.ProvideInput` → `ProvideTarget(작업 번호, 몬스터)`. 기다리는 작업은 작업 번호로 기억, 끝났는지는 `TaskEnded`
   - 고르는 방식(가장 가까운 몬스터, ← →): 그대로
+- 박진우에게 요청 (#238, `SlotCaster`)
+  - 슬롯 여러 명 선택이 끝날 때: `RequestCast(슬롯, 고른 몬스터들의 GameObject 배열)`
+  - 거부·결과: 단일 대상과 같이 `CastRejected`, `TaskEnded`
 - 임혜원에게 요청 (#173)
   - `PlayerAnimator`: 시전 모션 event `FunctionExecutor.TaskStarted` → `FunctionExecutorNetwork.TaskStarted`
   - `MemoryGauge`: `DataUsed` 그리기(#139 요청과 같음). 읽는 값은 그대로 `ProcessMemory`

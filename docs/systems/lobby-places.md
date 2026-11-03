@@ -19,6 +19,7 @@
 - 키: `PlayerInputReader.InteractPressed`(↑)만 읽는다
 - 창이 열린 동안 Player·Attack 맵을 둘 다 끈다 (이우림과 정함). 슬롯 키가 눌리지 않으므로 SlotCaster가 대상 고르기를 끝내며 Player 맵을 다시 켜는 일이 없다
 - 창은 버튼으로 닫는다. 창이 꺼지거나 사라질 때도 맵을 다시 켠다
+- 로비 밖에서도 같은 방식을 쓴다 (#225): `PanelStation`(LobbyInteractable)이 ↑에 `InputBlockingPanel.OpenFor(player)`를 부른다. 연습장의 편집 터미널(`BlockEditorPanel`), 장착대(`SlotEquipPanel`)
 - 창(`LobbyEntrancePanel`, `SkillTreePanel`)은 Lobby 씬에 하나씩 두고, 입구들이 같이 쓴다
 
 | 입구 | `Destination` | 「들어가기」를 누르면 |

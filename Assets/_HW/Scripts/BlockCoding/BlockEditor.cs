@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Mirror;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -118,6 +119,11 @@ public class BlockEditor : MonoBehaviour
 	{
 		FunctionStorage.Save(Function);
 		ReloadSavedFunctions();
+
+		// 슬롯에 넣어 둔 함수를 고쳤을 수 있으므로, 내 캐릭터의 슬롯 원본을 새로 만든다 (slot-caster.md 「ReloadFunctions」)
+		// ReloadFunctions가 Changed를 내면 FunctionExecutorNetwork가 서버로 함수를 다시 보낸다 (network.md 「함수 데이터 전송」)
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (localPlayer != null && localPlayer.TryGetComponent(out SlotLoadout loadout)) loadout.ReloadFunctions();
 		Debug.Log($"[BlockEditor] 「{Function.Name}」 저장함: {FunctionStorage.PathOf(Function)}");
 	}
 

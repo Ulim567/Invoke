@@ -39,6 +39,11 @@ public abstract class InputBlockingPanel : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 창을 연다. PanelStation(연습장의 편집 터미널·장착대 등)이 부른다. 열 때 할 일이 있는 창은 덮어쓴다.
+	/// </summary>
+	public virtual void OpenFor(PlayerInputReader player) => Show(player);
+
+	/// <summary>
 	/// 창을 닫고 꺼 둔 액션 맵을 다시 켠다. 닫기 버튼의 On Click()에 연결한다.
 	/// </summary>
 	public void Close()

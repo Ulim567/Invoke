@@ -12,9 +12,14 @@
   - 함수 실행은 하지 않는다. `FunctionExecutor`(이우림)가 한다.
   - 구조 검사(빈 칸, 선언하지 않은 변수, 짝 없는 else 등)는 하지 않는다. 「만든 함수를 서버로 보내 검사·저장하기」(이우림)에서 한다.
   - 서버 저장은 하지 않는다. 위 이슈에서 `FunctionStorage`를 바꾸거나 대신한다.
-  - 편집 화면을 여닫을 때 플레이어 입력 끄기(`PlayerInputReader.SetPlayerMapEnabled`)는 아직 하지 않는다. 편집 화면을 게임에 붙일 때 한다.
 
 ## 동작 규칙
+### 연습장에서 열기 (#225)
+- 연습장(TrainingRoom)의 편집 터미널(`PanelStation`)에서 ↑ → `BlockEditorPanel`이 편집 화면을 연다. 열린 동안 Player·Attack 액션 맵이 꺼진다 (`InputBlockingPanel`, lobby-places.md)
+- 저장하면 내 캐릭터의 `SlotLoadout.ReloadFunctions()`를 부른다. 슬롯에 넣어 둔 함수를 고쳐도 바로 고친 내용으로 시전되고, `FunctionExecutorNetwork`가 서버로 함수를 다시 보낸다 (slot-caster.md, network.md)
+- 슬롯 장착은 같은 연습장의 장착대(`SlotEquipPanel`)에서 한다: 위의 슬롯 칸을 고르고 아래 목록(저장한 함수, C 스킬)에서 누르면 들어간다. `SlotLoadout`의 `EquipFunction`, `EquipSkill`, `Unequip`, `CodeSize`, `Changed`만 쓴다 (박진우 #160)
+- 연습장 허수아비: `Monster`의 「체력 안 줄어듦」(`invulnerable`, 김도훈 #214) + `DamageNumberView`(맞으면 머리 위에 데미지 숫자)
+
 - 스크립트: `Assets/_HW/Scripts/BlockCoding`
 
 | 스크립트 | 하는 일 |

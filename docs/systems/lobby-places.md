@@ -15,6 +15,7 @@
 - 스크립트: `Assets/_HW/Scripts/Lobby/`
 - 프리팹: `Assets/_HW/Lobby/` (입구, 해금 장소, 창). Lobby 씬에 놓는다.
 - 가까이 있는지: 입구·해금 장소의 Collider 2D(Is Trigger)에 내 캐릭터(`isLocalPlayer`)가 들어와 있으면. 안내(↑ 표시)를 켠다
+- 내 캐릭터가 다른 장소로 가면 놓아준다: 내 캐릭터의 물리 세계(`scene.GetPhysicsScene2D()`)가 로비와 다르면 안내를 끄고 ↑에 반응하지 않는다. 호스트는 로비 씬이 남아 있어 `OnTriggerExit2D`가 불리지 않기 때문 (이우림 #190 알림, #209)
 - 키: `PlayerInputReader.InteractPressed`(↑)만 읽는다
 - 창이 열린 동안 Player·Attack 맵을 둘 다 끈다 (이우림과 정함). 슬롯 키가 눌리지 않으므로 SlotCaster가 대상 고르기를 끝내며 Player 맵을 다시 켜는 일이 없다
 - 창은 버튼으로 닫는다. 창이 꺼지거나 사라질 때도 맵을 다시 켠다

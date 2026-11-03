@@ -10,7 +10,7 @@ using UnityEngine.Serialization;
 /// 페이즈 (체력 비율)<br/>
 /// - 1페이즈 100~70%: 플레이어를 처음 발견하고 First Gimmick Delay초 뒤 기믹 1(기둥 파괴)을 한 번<br/>
 /// - 2페이즈 70% 이하: 들어오는 순간 Transition Pause초 멈췄다가 기믹 2(전체 공격)를 한 번<br/>
-/// - 3페이즈 40% 이하: 같은 방식으로 기믹 3(진짜 찾기)을 한 번 (기믹 3 이슈에서 만든다)<br/>
+/// - 3페이즈 40% 이하: 같은 방식으로 기믹 3(진짜 찾기)을 한 번<br/>
 /// - 기믹은 페이즈마다 한 번만 나온다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다.
 /// </para>
 /// <para>
@@ -23,6 +23,12 @@ using UnityEngine.Serialization;
 /// 기믹 2: 전체 공격<br/>
 /// - 보스가 Charge Time초 동안 기를 모은다(ChargeEffectPlayed, 그동안 기본 공격 멈춤). 보스 왼쪽·오른쪽에 안전지대(SafeZone)를 하나씩 땅 위에 만든다.<br/>
 /// - 시간이 되면 안전지대 밖의 같은 씬 살아 있는 플레이어 모두에게 Overload Attack을 적용하고(OverloadEffectPlayed), 안전지대를 없앤다.
+/// </para>
+/// <para>
+/// 기믹 3: 진짜 찾기<br/>
+/// - 보스 기준 Clone Slots(X) 자리에 진짜 1 + 분신(가짜) 나머지를 세운다. 진짜는 그중 랜덤한 자리로 순간이동한다. 그동안 진짜도 공격하지 않는다.<br/>
+/// - 분신은 Monster(보스 아님, 체력이 커서 죽지 않음)라 스킬로 맞는다. 분신이 맞을 때마다 같은 씬의 살아 있는 플레이어 모두에게 Reflect Attack(반사).<br/>
+/// - 진짜가 기믹 동안 Reveal Damage만큼 피해를 받거나 Clone Duration초가 지나면, 분신이 사라지고(사망 연출) 진짜가 다시 공격한다.
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster, GatewayAI, StatusEffects와 함께 붙인다. 기둥 프리팹은 NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다.<br/>
@@ -68,6 +74,22 @@ public class GatewayPhases : MonoBehaviour
 	[SerializeField, Tooltip("보스에서 안전지대 중심까지 가로 거리 범위 (유닛). x 최소, y 최대. 왼쪽·오른쪽에 하나씩 이 범위에서 랜덤")]
 	Vector2 safeZoneDistance = new Vector2(6f, 15f);
 
+	[Header("기믹 3: 진짜 찾기")]
+	[SerializeField, Tooltip("분신 프리팹 (Monster, 보스 아님, 체력 큼). NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다")]
+	Monster clonePrefab;
+
+	[SerializeField, Tooltip("보스 위치에서 진짜·분신이 설 가로 거리들 (유닛). 개수만큼 선다 (진짜 1 + 나머지 분신)")]
+	float[] cloneSlots = { -10f, 0f, 10f };
+
+	[SerializeField, Min(1), Tooltip("진짜가 이만큼 피해를 받으면 분신이 사라진다")]
+	int revealDamage = 150;
+
+	[SerializeField, Min(1f), Tooltip("이 시간(초)이 지나면 못 찾아도 분신이 사라진다")]
+	float cloneDuration = 20f;
+
+	[SerializeField, Tooltip("분신을 때렸을 때 같은 씬의 모든 플레이어에게 적용할 반사 공격")]
+	MonsterAttackData reflectAttack;
+
 	[Header("공통")]
 	[SerializeField, Tooltip("기둥·안전지대를 놓을 땅 레이어. Ground, Platform으로 둔다")]
 	LayerMask groundLayers;
@@ -88,6 +110,12 @@ public class GatewayPhases : MonoBehaviour
 	readonly List<SafeZone> safeZones = new List<SafeZone>(2);
 	bool overloadActive;
 	float overloadTime;
+
+	// 기믹 3 진행 상태
+	readonly List<Monster> clones = new List<Monster>(2);
+	bool clonesActive;
+	float cloneEndTime;
+	int damageDuringClones;
 
 	// 기믹 1 진행 상태
 	readonly List<Monster> pillars = new List<Monster>(3);
@@ -160,12 +188,21 @@ public class GatewayPhases : MonoBehaviour
 
 		if (pillarsActive) UpdatePillars(now);
 		if (overloadActive && now >= overloadTime) ReleaseOverload();
+		if (clonesActive && now >= cloneEndTime) EndClones();
 	}
 
 	// 체력이 문턱을 넘으면 다음 페이즈로 간다 (Damaged는 로직 event라 서버에서만 불린다)
 	void OnDamaged(int damage)
 	{
 		if (monster.IsDead || monster.MaxHp <= 0) return;
+
+		// 분신 기믹 중에 진짜가 충분히 맞으면 분신을 없앤다
+		if (clonesActive)
+		{
+			damageDuringClones += damage;
+			if (damageDuringClones >= revealDamage) EndClones();
+		}
+
 		float ratio = (float)monster.Hp / monster.MaxHp;
 
 		int next = phase;
@@ -189,9 +226,8 @@ public class GatewayPhases : MonoBehaviour
 		switch (forPhase)
 		{
 			case 1: StartPillars(); break;
-			// 기믹 3은 다음 이슈에서 만든다
 			case 2: StartOverload(); break;
-			case 3: Debug.Log("[GatewayPhases] 3페이즈 기믹(진짜 찾기)은 아직 없음"); break;
+			case 3: StartClones(); break;
 		}
 	}
 
@@ -296,17 +332,7 @@ public class GatewayPhases : MonoBehaviour
 		overloadActive = false;
 		PlayOverloadEffect();
 
-		if (overloadAttack != null)
-		{
-			PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
-			for (int i = 0; i < players.Length; i++)
-			{
-				PlayerHealth p = players[i];
-				if (p.IsDead || p.gameObject.scene != gameObject.scene || InSafeZone(p.transform.position)) continue;
-				Collider2D body = p.GetComponentInChildren<Collider2D>();
-				if (body != null) MonsterAttackResolver.Apply(overloadAttack, body);
-			}
-		}
+		ApplyToPlayers(overloadAttack, true);
 
 		ClearSafeZones();
 	}
@@ -326,15 +352,95 @@ public class GatewayPhases : MonoBehaviour
 		safeZones.Clear();
 	}
 
+	// ── 기믹 3: 진짜 찾기 ──
+
+	void StartClones()
+	{
+		if (clonesActive || clonePrefab == null || cloneSlots.Length == 0) return;
+		clonesActive = true;
+		cloneEndTime = Time.time + cloneDuration;
+		damageDuringClones = 0;
+		clones.Clear();
+
+		// 기믹이 끝날 때까지 진짜도 공격하지 않는다 (공격하면 진짜가 들킨다)
+		ai.Pause(cloneDuration + 1f);
+
+		Vector3 center = transform.position;
+		int realSlot = UnityEngine.Random.Range(0, cloneSlots.Length);
+		bool flip = TryGetComponent(out SpriteRenderer sr) && sr.flipX;
+
+		for (int i = 0; i < cloneSlots.Length; i++)
+		{
+			Vector3 pos = new Vector3(center.x + cloneSlots[i], center.y, center.z);
+			if (i == realSlot)
+			{
+				// 진짜는 랜덤한 자리로 순간이동한다 (움직이지 않는 보스라 위치를 바로 바꾼다)
+				transform.position = pos;
+				continue;
+			}
+
+			GameObject obj = NetworkSpawner.Spawn(clonePrefab.gameObject, pos, Quaternion.identity, gameObject.scene);
+			if (obj == null) continue;
+
+			Monster clone = obj.GetComponent<Monster>();
+			clone.Damaged += OnCloneDamaged;
+			clones.Add(clone);
+			// 진짜와 같은 쪽을 보게 한다 (연출)
+			if (obj.TryGetComponent(out SpriteRenderer cloneSr)) cloneSr.flipX = flip;
+		}
+	}
+
+	// 분신을 때리면 같은 씬의 모든 플레이어가 반사 피해를 받는다 (TakeDamage에는 때린 사람 정보가 없어서 파티 전체)
+	void OnCloneDamaged(int damage) => ApplyToPlayers(reflectAttack, false);
+
+	// 분신을 없애고(사망 연출) 진짜가 다시 공격한다
+	void EndClones()
+	{
+		if (!clonesActive) return;
+		clonesActive = false;
+		ClearClones();
+		if (!monster.IsDead) ai.Resume();
+	}
+
+	// 분신을 없애는 일도 Monster를 거친다 (체력을 0으로 → 사망 연출 뒤 사라짐)
+	void ClearClones()
+	{
+		for (int i = 0; i < clones.Count; i++)
+		{
+			Monster c = clones[i];
+			if (c == null) continue;
+			c.Damaged -= OnCloneDamaged;
+			if (!c.IsDead) c.TakeDamage(c.Hp);
+		}
+		clones.Clear();
+	}
+
+	// 같은 씬의 살아 있는 플레이어 모두에게 attack을 적용한다. skipSafe면 안전지대 안은 뺀다
+	void ApplyToPlayers(MonsterAttackData attack, bool skipSafe)
+	{
+		if (attack == null) return;
+		PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+		for (int i = 0; i < players.Length; i++)
+		{
+			PlayerHealth p = players[i];
+			if (p.IsDead || p.gameObject.scene != gameObject.scene) continue;
+			if (skipSafe && InSafeZone(p.transform.position)) continue;
+			Collider2D body = p.GetComponentInChildren<Collider2D>();
+			if (body != null) MonsterAttackResolver.Apply(attack, body);
+		}
+	}
+
 	// 보스가 죽으면 남은 기둥도 터뜨리고 기믹을 멈춘다
 	void OnDied()
 	{
 		pillarsActive = false;
 		pendingGimmickTime = 0f;
 		BreakRemainingPillars();
-		// 모으던 전체 공격은 취소한다
+		// 모으던 전체 공격은 취소하고, 분신도 없앤다
 		overloadActive = false;
 		ClearSafeZones();
+		clonesActive = false;
+		ClearClones();
 	}
 
 	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)

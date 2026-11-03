@@ -1,3 +1,4 @@
+#if UNITY_SERVER || UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,7 +25,8 @@ public enum CreateCharacterResult
 /// 계정과 캐릭터를 DB(SQLite)에 저장하고 읽는 곳. 서버에서만 쓴다.
 /// <para>
 /// DB를 읽고 쓰는 코드는 이 클래스에만 둔다. 나중에 MySQL 같은 다른 DB로 옮기면 이 클래스만 고친다.<br/>
-/// 입력 규칙(아이디 길이 등)은 검사하지 않는다. 규칙 검사는 클라이언트의 요청을 받는 쪽이 이 클래스를 부르기 전에 한다.
+/// 입력 규칙(아이디 길이 등)은 검사하지 않는다. 규칙 검사는 클라이언트의 요청을 받는 쪽이 이 클래스를 부르기 전에 한다.<br/>
+/// DB 코드가 클라이언트 빌드에 들어가지 않도록, 계정 DB 관련 파일은 서버 빌드와 에디터에서만 컴파일한다.
 /// </para>
 /// <para>
 /// 사용법<br/>
@@ -163,3 +165,4 @@ public class AccountStore : IDisposable
 
 	static string NormalizeLoginId(string loginId) => loginId.ToLowerInvariant();
 }
+#endif

@@ -354,6 +354,8 @@ public class InvokeNetworkManager : NetworkManager
 	public override void OnServerDisconnect(NetworkConnectionToClient conn)
 	{
 		raidWaitingConnections.Remove(conn);
+		// 끊긴 계정을 접속 중 목록에서 지워야 그 계정이 다시 로그인할 때 이미 끊긴 연결을 또 끊으려 하지 않는다
+		if (authenticator is InvokeAuthenticator accountAuthenticator) accountAuthenticator.OnServerDisconnected(conn);
 
 		// base가 플레이어 오브젝트를 삭제하므로, 그 전에 플레이어가 있던 씬을 기억한다
 		Scene scene = conn.identity != null ? conn.identity.gameObject.scene : default;

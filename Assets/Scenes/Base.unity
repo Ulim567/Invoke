@@ -357,6 +357,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1924799196249494994}
   - component: {fileID: 9053282931568076821}
+  - component: {fileID: 9053282931568076823}
   - component: {fileID: 8306918693391998660}
   - component: {fileID: 3589625349336239779}
   - component: {fileID: 9053282931568076822}
@@ -463,7 +464,7 @@ MonoBehaviour:
   maxConnections: 100
   disconnectInactiveConnections: 0
   disconnectInactiveTimeout: 60
-  authenticator: {fileID: 0}
+  authenticator: {fileID: 9053282931568076823}
   playerPrefab: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
   autoCreatePlayer: 1
   playerSpawnMethod: 0
@@ -502,6 +503,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b979f26c95d34324ba005bfacfa9c4fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Mirror.Components::Mirror.SceneInterestManagement
+--- !u!114 &9053282931568076823
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4138530712472164788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8334aac734e1545448400f47ab3813aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InvokeAuthenticator
+  OnServerAuthenticated:
+    m_PersistentCalls:
+      m_Calls: []
+  OnClientAuthenticated:
+    m_PersistentCalls:
+      m_Calls: []
+  kickDisconnectDelay: 0.5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

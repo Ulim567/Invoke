@@ -1,3 +1,4 @@
+#if UNITY_SERVER || UNITY_EDITOR
 using System.Security.Cryptography;
 
 /// <summary>
@@ -59,3 +60,4 @@ public static class PasswordHasher
 		return diff == 0;
 	}
 }
+#endif

@@ -1,3 +1,4 @@
+#if UNITY_SERVER || UNITY_EDITOR
 using System;
 using SQLite;
 
@@ -27,3 +28,4 @@ public class CharacterRecord
 
 	public DateTime CreatedAt { get; set; }
 }
+#endif

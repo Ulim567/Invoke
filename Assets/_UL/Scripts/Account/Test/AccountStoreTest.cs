@@ -1,3 +1,4 @@
+#if UNITY_SERVER || UNITY_EDITOR
 using System.Diagnostics;
 using System.IO;
 using UnityEngine;
@@ -79,3 +80,4 @@ public class AccountStoreTest : MonoBehaviour
 		}
 	}
 }
+#endif

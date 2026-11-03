@@ -210,7 +210,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c19c64dbaadab6c49b5463578ef3fb73, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GatewayAI
-  patterns: 0000000001000000i
+  patterns: 00000000010000000200000003000000i
   attackInterval: 3
   firstAttackDelay: 2
   targetLayers:
@@ -225,6 +225,15 @@ MonoBehaviour:
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
+  wormPrefab: {fileID: 2701535415265043455, guid: cbb27e0076425b042b620920d4ed30f8, type: 3}
+  summonDelay: 0.58
+  wormsPerSummon: 2
+  maxWorms: 4
+  wormSpawnDistance: 4.5
+  smashAttack: {fileID: 11400000, guid: 45d946f6b68ed0040a5f18346246c83b, type: 2}
+  smashRange: 6
+  smashDelay: 0.42
+  smashSize: {x: 6, y: 4}
 --- !u!114 &2388773189563600908
 MonoBehaviour:
   m_ObjectHideFlags: 0

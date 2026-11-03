@@ -8,7 +8,7 @@
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
-- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)과 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격)·기믹 3(진짜 찾기, `GatewayPhases`)까지 있다.
+- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128), 공격 2(웜 소환·때리기, #203)와 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격)·기믹 3(진짜 찾기, `GatewayPhases`)까지 있다.
 - 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
@@ -81,7 +81,10 @@
   - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(2초) 뒤, 그다음엔 `Attack Interval`(3초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
   - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 0.58초 = Throw 모션 8번째 장면에 손을 떠남. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
   - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area`(38×12, 보스방 가로 40칸에 맞춤) 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
-  - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+  - 웜 소환(`Summon`, #203): 연출 `SummonEffectPlayed`(Throw 모션) 뒤 `Summon Delay`(0.58초)에 보스 양옆 `Worm Spawn Distance`(4.5칸) 아래 땅 위에 웜 2마리를 만든다. 살아 있는 웜이 `Max Worms`(4) 이상이면 고르지 않는다
+  - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 실행 중단은 함수 실행기 연결 전까지 로그만 남는다
+  - 공격 고르기: 목록(던지기, 낙하, 소환, 때리기)에서 랜덤. 직전 공격과 지금 쓸 수 없는 공격(가까운 플레이어 없는 때리기, 웜이 가득 찬 소환)은 뺀다
+  - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 모으던 낙하·소환·때리기는 취소된다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
 - 페이즈와 기믹 (`GatewayPhases`)
   - 1페이즈 100~70%, 2페이즈 70% 이하, 3페이즈 40% 이하 (`Phase Thresholds`). 기믹은 **페이즈마다 한 번**만 나온다.
   - 1페이즈 기믹: 플레이어를 처음 발견하고 `First Gimmick Delay`(15초) 뒤 기믹 1
@@ -105,6 +108,10 @@
     - 진짜가 기믹 동안 `Reveal Damage`(150) 이상 피해를 받거나 `Clone Duration`(20초)이 지나면 분신이 사라지고(체력 0 → 사망 연출) 진짜가 다시 공격한다(`GatewayAI.Resume`)
     - 보스가 죽으면 분신도 사라진다
   - 수치는 전부 임시
+- 웜 (`Worm` 프리팹, #203)
+  - 땅을 기어 플레이어를 쫓는 몬스터. 새 코드 없이 Leak과 같은 부품: `Monster`(체력 20, 사망 대기 1.2초) + `GroundChaseAI`(Chase Players 켬, 발견 거리 30, 놓치는 거리 40, 추적 속도 3) + `ContactDamage`(피해 12, 간격 1초) + `StatusEffects` + `StatusIconView`
+  - 낭떠러지·벽에서 멈추고 떨어지지 않는다. 스스로 사라지지 않으므로 처치해야 한다(동시 최대 4마리)
+  - 그림은 오른쪽을 보고 그리고 왼쪽은 flipX (GroundChaseAI). 연출은 잡몹처럼 `HitEffectPlayed`, `DeathEffectPlayed`, 이동은 `GroundChaseAI.IsMoving`
 - 낙하 (`FallingPacket`)
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
   - 착지 순간 그림자 위 `Hit Size`(2×3, 아래 변이 땅) 상자 안의 플레이어에게 한 번씩 `Packet_Drop`(체력 피해 20, 패링 불가)을 적용한다. 그림자 밖으로 피하면 맞지 않는다.
@@ -244,7 +251,8 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
 | --- | --- | --- | --- |
 | `Target` | - | `PlayerHealth` | 지금 바라보는 가장 가까운 플레이어. 범위 안에 없으면 `null` |
 | `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
-| `SlamEffectPlayed` (event) | - | - | [연출] 패킷 낙하를 시작할 때. Slam 모션에 쓴다. 그림자는 `Slam Delay`초 뒤 |
+| `SlamEffectPlayed` (event) | - | - | [연출] 패킷 낙하·때리기를 시작할 때. Slam 모션에 쓴다. 그림자는 `Slam Delay`초 뒤, 때리기 판정은 `Smash Delay`초 뒤 |
+| `SummonEffectPlayed` (event) | - | - | [연출] 웜 소환을 시작할 때. Throw 모션에 쓴다. 웜은 `Summon Delay`초 뒤 |
 | `Pause(float seconds)` | 멈출 시간(초) | - | 그동안 공격을 멈춘다. 모으는 중인 낙하는 취소. `GatewayPhases`가 페이즈 전환 때 부른다 |
 | `Resume()` | - | - | `Pause`를 바로 풀고 한 간격 뒤부터 다시 공격한다 (분신 기믹이 일찍 끝날 때) |
 | 던지기 연출 | - | - | 같은 오브젝트의 `ProjectileAttack.FireEffectPlayed`를 받는다 (Throw 모션) |
@@ -308,6 +316,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
   - 기둥 그림 2×4칸: 체력 50% 초과 멀쩡, 50% 이하 금 감, 사망(`DeathEffectPlayed`) 때 부서지는 모션 약 0.5초. 지금은 임시 그림
   - Gateway Groggy 모션은 `GatewayPhases.GroggyEffectPlayed`(그로기 시간을 넘김)를 받는다
   - 분신 프리팹(`GatewayClone`)에도 Gateway와 같은 그림·Animator·MonsterAnimator를 붙인다. 가짜가 사라지는 연출은 `DeathEffectPlayed`
+  - 웜 프리팹(`Worm`)에 Animator(Worm.controller)·MonsterAnimator(Base State Crawl)를 붙인다. 땅을 기어 다닌다. 소환은 Gateway Throw 모션(`SummonEffectPlayed`), 때리기는 Slam 모션(`SlamEffectPlayed`, 낙하와 같이 씀)
   - 안전지대 바닥 그림(가로 4칸, 빛나는 바닥, 반복). Gateway Charge 모션은 `GatewayPhases.ChargeEffectPlayed`, 터지는 연출은 `OverloadEffectPlayed`
   - 보스 체력 바 그림: 테두리, 빨간 채움, 흰 채움(단색 사각형), 페이즈 구분선. 이름은 Galmuri 글자로 코드가 쓴다
   - Gateway 프리팹의 그림·Animator. Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`를 받는다

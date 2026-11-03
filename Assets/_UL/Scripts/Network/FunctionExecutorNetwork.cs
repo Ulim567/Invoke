@@ -341,7 +341,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// <summary>
 	/// [소유 클라이언트] 함수 하나를 서버에 저장하라고 요청한다. 같은 GUID의 함수가 있으면 덮어쓴다. 결과는 PlayerDataRequestAnswered.<br/>
 	/// 슬롯 함수(ReceivedSlots의 GUID)와 페이지 함수 모두 이 요청으로 저장한다. 슬롯 함수를 저장하면 그 슬롯은 새 내용으로 시전된다.<br/>
-	/// 새 GUID는 페이지 함수로 세고, 이미 ProgressRules.MaxPageFunctions개면 TooManyFunctions.
+	/// 새 GUID는 페이지 함수로 세고, 이미 ProgressRules.MaxPageFunctions개면 TooManyFunctions.<br/>
+	/// 슬롯 함수의 이름(slot1~slot8)이나 파라미터(없음)가 바뀌어 있으면 SlotFunctionLocked.
 	/// </summary>
 	public void RequestSaveFunction(FunctionData function)
 	{
@@ -387,10 +388,17 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return;
 		}
 
+		// 슬롯 함수는 function body만 바꿀 수 있다. 이름(slot1~slot8)과 파라미터(없음)가 다르면 거부한다
+		int slot = Array.FindIndex(serverSlots, e => e.Kind == SlotLoadout.EntryKind.UserFunction && e.Id == function.Guid);
+		if (slot >= 0 && (function.Name != ProgressRules.SlotFunctionName(slot) || (function.Parameters != null && function.Parameters.Count > 0)))
+		{
+			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.SlotFunctionLocked);
+			return;
+		}
+
 		int index = serverFunctions.FindIndex(f => f.Guid == function.Guid);
 #if UNITY_SERVER || UNITY_EDITOR
 		// 새 GUID는 페이지 함수다. 슬롯 함수 8개는 캐릭터를 만들 때 서버가 만들고, 그 GUID는 바뀌지 않기 때문
-		// 슬롯 함수의 이름·파라미터를 바꾼 요청인지는 검사하지 않는다. 편집 화면이 바꾸지 못하게 막는다(클라이언트 값 검사는 나중에, 넣을 곳은 여기)
 		bool isNew = !store.HasFunction(characterKey, function.Guid);
 		if (isNew && store.CountPageFunctions(characterKey) >= ProgressRules.MaxPageFunctions)
 		{

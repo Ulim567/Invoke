@@ -118,7 +118,8 @@
 - 개수 제한: 페이지 함수만 최대 `ProgressRules.MaxPageFunctions`개 (임시 5). 슬롯 함수 8개는 세지 않음. 제한 숫자는 DB가 아니라 서버·클라이언트가 함께 읽는 한 곳에 둠
   - 서버: 새 GUID 저장 요청을 페이지 함수로 보고, 페이지 함수 row 수(`CountPageFunctions`)가 제한이면 거부하고 이유를 알림. 이미 있는 함수(슬롯 함수 포함)를 고쳐 저장하는 것은 거부하지 않음
   - 클라이언트: 편집 화면이 먼저 검사해 안내를 보여 줌 (서버도 다시 검사)
-- 슬롯 함수의 이름·파라미터를 바꾼 저장 요청: 서버가 검사하지 않음. 편집 화면이 바꾸지 못하게 막음 (클라이언트 값 검사는 나중에, 넣을 곳은 `CmdSaveFunction`)
+- 슬롯 함수의 이름·파라미터를 바꾼 저장 요청: 서버가 거부(`SlotFunctionLocked`). 이름이 `ProgressRules.SlotFunctionName(슬롯 번호)`와 다르거나 파라미터가 있으면 거부. 편집 화면도 바꾸지 못하게 막음
+  - 반환 타입(`ReturnType`)·비동기 여부(`IsAsync`): 검사 안 함 (정할 것)
 - 함수 지우기: 지금 없음. 생기면 페이지 함수만 지울 수 있음 (슬롯 함수는 지우지 않음)
 
 #### `CharacterGlobals`
@@ -196,7 +197,7 @@
 
 | 요청 함수 (소유 클라이언트) | 서버가 하는 일 | 거부 |
 | --- | --- | --- |
-| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청 | `InvalidData`, `TooManyFunctions` |
+| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked` |
 | `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected` |
 
 - 장착을 바꾸는 요청: 없음 (슬롯 함수 GUID 고정)
@@ -247,6 +248,7 @@
 ## 정할 것
 - `FunctionStorage`(임혜원)가 PC 파일 대신 `RequestSaveFunction`을 부르게 바꾸는 일
 - `SlotLoadout.SetEntries`(박진우)가 생긴 뒤 `FunctionExecutorNetwork`에서 부르는 일
+- 슬롯 함수의 반환 타입·비동기 여부도 바꾸지 못하게 할지
 - 공용 `Player.prefab`에 실행기 컴포넌트(`FunctionExecutor`, `LanguageRule`, `ProcessMemory`, `SlotLoadout`, `FunctionExecutorNetwork`)와 `PlayerProgress`를 합치는 일: 박진우·임혜원의 Variant에서 중복 컴포넌트를 지우는 일과 함께 별도 이슈
 
 ## 맞춘 결과

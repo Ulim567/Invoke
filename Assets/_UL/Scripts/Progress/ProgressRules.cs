@@ -30,5 +30,6 @@ public enum PlayerDataRequestResult
 	NotAllowed,       // 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)
 	InvalidData,      // JSON을 읽을 수 없음, GUID가 없음
 	TooManyFunctions, // 새 함수(페이지 함수)인데 이미 ProgressRules.MaxPageFunctions개
+	SlotFunctionLocked, // 슬롯 함수의 이름(slot1~slot8)이나 파라미터(없음)를 바꾸려 함. 슬롯 함수는 function body만 바꿀 수 있음
 	GlobalsRejected,  // 전역 변수 검사에 걸림 (칸 부족 등. 이유는 서버 콘솔 오류)
 }

@@ -92,6 +92,9 @@ public class SlotLoadoutSimTest : MonoBehaviour
 		Check("다시 불러와도 같은 내용", same);
 		Destroy(reloaded);
 
+		// 장착이 바뀌면 FunctionExecutorNetwork가 다음 프레임에 서버로 보낸다. 서버가 받기 전에 누르면 예전 슬롯이 시전되므로 기다린다 (#212)
+		yield return new WaitForSeconds(0.3f);
+
 		// ── 3. W 누른 채 GetBug 고르기 → 떼면 찌름 ──
 		GameObject hitTarget = null;
 		effects.Hit += (id, target, point, result) => { if (id == PredefinedFunctionIds.Thrust) hitTarget = target; };

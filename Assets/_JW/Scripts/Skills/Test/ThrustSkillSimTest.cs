@@ -102,6 +102,8 @@ public class ThrustSkillSimTest : MonoBehaviour
 		// 5. 슬롯 1(Q)으로 시전 → 고른 몬스터가 맞음
 		SlotCaster caster = player.GetComponent<SlotCaster>();
 		player.GetComponent<SlotLoadout>().EquipSkill(0, PredefinedFunctionIds.Thrust);
+		// 장착이 바뀌면 FunctionExecutorNetwork가 다음 프레임에 서버로 보낸다. 서버가 받기 전에 누르면 예전 슬롯이 시전되므로 기다린다 (#212)
+		yield return new WaitForSeconds(0.3f);
 		hits.Clear();
 		yield return Press(Key.Q);
 		GameObject chosen = caster.CurrentTarget;

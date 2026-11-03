@@ -4,10 +4,14 @@
 
 ## 하는 일
 - 슬롯 키(Q W E R A S D F)로 함수를 시전하는 입력 흐름을 맡는다.
-  - 단일: 슬롯을 누르면 주변 몬스터가 후보가 되고, 누른 채 ← →로 고르고, 떼면 고른 몬스터를 `target`으로 넘겨 시전한다 (#152, `FunctionExecutor.Cast(function, RuntimeValue.FromBug(몬스터))`).
+  - 단일: 슬롯을 누르면 주변 몬스터가 후보가 되고, 누른 채 ← →로 고르고, 떼면 고른 몬스터를 대상으로 시전을 부탁한다 (`FunctionExecutorNetwork.RequestCast(슬롯, 몬스터)`, #212).
   - 여러 명: 단일처럼 고르면서 Space로 찍고, 떼면 찍은 대상 모두로 시전을 요청한다 (#95).
-  - 범위: 누르는 순간 `FunctionExecutor.Cast`로 시전하고, 주변 범위 안의 몬스터를 대상으로 알린다 (#95).
-  - 대상 없음: 누르는 순간 `FunctionExecutor.Cast`로 시전한다.
+  - 범위: 누르는 순간 시전을 부탁하고, 주변 범위 안의 몬스터를 대상으로 알린다 (#95).
+  - 대상 없음: 누르는 순간 시전을 부탁한다.
+- 시전은 이 컴퓨터의 실행기를 직접 부르지 않고 `FunctionExecutorNetwork`로 서버에 부탁한다 (#212, network.md). 함수는 서버의 실행기에서만 돈다.
+  - 시전: `RequestCast(슬롯, 대상)` → 답 `CastAccepted(슬롯, 작업 번호)` / `CastRejected(슬롯, 이유)`. 시전 로그, `CastRequested`, 취소용 기록은 `CastAccepted`를 받은 뒤에 한다. 거부되면 로그만(급소공략 미니게임 결과도 지움).
+  - 작업은 작업 번호로 기억하고, 끝났는지는 `TaskEnded`로 안다.
+  - 대상 고르기(← →, Space 찍기, 급소공략 미니게임)는 그대로 내 화면에서 한다.
   - 블록코딩 함수: 누르는 순간 시전한다. 함수 안의 `GetBug`가 대상을 기다리면 그때 고른다 (#159).
 - 슬롯 8개에 무엇을 넣었는지 가진다 (`SlotLoadout`, #159). 장착 화면(임혜원)이 이 API를 부른다.
 - 취소 키(C)로 가장 최근에 슬롯으로 시전한 작업을 끊는다 (#159).
@@ -54,8 +58,8 @@
 - 저장: 이 컴퓨터 파일 `persistentDataPath/SlotLoadout.json`. 장착을 바꿀 때마다 저장하고, 켤 때 불러온다. 파일이 없으면(처음) Inspector의 `Default Skill Ids`로 채운다. 서버 저장이 생기면 바꾼다.
 
 ### GetBug 입력 (#159)
-- 슬롯으로 시전한 작업이 `GetBug`로 대상을 기다리면(`FunctionExecutor.InputRequested`)
-  - 그 작업을 시전한 슬롯 키를 아직 누르고 있으면: 단일 고르기와 똑같이 ← →로 고르고, 떼면 고른 몬스터를 `ProvideInput`으로 넣는다. 후보가 없으면 대상 없음(`FromBug(null)`).
+- 슬롯으로 시전한 작업이 `GetBug`로 대상을 기다리면(`FunctionExecutorNetwork.InputRequested(작업 번호, 입력 함수 ID, 슬롯)`, #212)
+  - 그 작업을 시전한 슬롯 키를 아직 누르고 있으면: 단일 고르기와 똑같이 ← →로 고르고, 떼면 고른 몬스터를 `ProvideTarget(작업 번호, 몬스터)`로 서버에 보낸다. 후보가 없으면 대상 없음(`FromBug(null)`).
   - 누르고 있지 않으면(이미 뗐음, 다른 슬롯을 고르는 중, 함수 안에서 따로 시전된 작업): 가장 가까운 몬스터를 바로 넣는다. 없으면 대상 없음.
 - 고르는 중에 경직·사망으로 취소되면 대상 없음을 넣는다. 기다리던 작업이 끝나면(취소, 실행 중단 공격) 고르기도 끝낸다.
 - 대상 없음이 들어가면 그 값을 받은 스킬이 `InvalidTarget`으로 실패한다 (function-executor.md).
@@ -71,14 +75,14 @@
 - 여러 명 선택 스킬의 Space(찍기)와는 겹치지 않는다 (급소공략은 단일).
 
 ### 취소 키 (#159)
-- `PlayerInputReader.CancelPressed`(C)가 들어오면, 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 원본으로 `FunctionExecutor.Cancel`을 부른다.
+- `PlayerInputReader.CancelPressed`(C)가 들어오면, 슬롯으로 시전해 아직 끝나지 않은 작업 중 가장 최근 것의 슬롯으로 `FunctionExecutorNetwork.RequestCancel(슬롯)`을 부른다 (#212). 서버가 `FunctionExecutor.Cancel`로 끊는다.
 - 실행기의 `Cancel`은 원본 단위지만, 같은 원본은 실행 중이면 다시 시전되지 않으므로(쿨타임으로 거부) 한 슬롯의 작업은 늘 하나다. 그래서 C 한 번에 작업 하나만 끊긴다.
 - 슬롯 키는 시전만 한다 (연타해도 끊지 않음). 대상을 고르는 중인 슬롯은 아직 시전 전이라 C로 취소되지 않는다.
 
 ## 다른 시스템이 쓰는 것
 
 플레이어 프리팹에 `SlotCaster`가 붙어 있다. `GetComponent<SlotCaster>()`로 가져온다.
-- 같은 오브젝트에 `PlayerInputReader`, `FunctionExecutor`(+ `ProcessMemory`), `SlotLoadout`이 있어야 한다. `VitalStrikeMinigame`이 있으면 급소공략 미니게임을 한다.
+- 같은 오브젝트에 `PlayerInputReader`, `FunctionExecutor`(+ `ProcessMemory`), `SlotLoadout`, `FunctionExecutorNetwork`(Sync Mode: Owner, #212)가 있어야 한다. `VitalStrikeMinigame`이 있으면 급소공략 미니게임을 한다.
 
 ### `SlotCaster`
 
@@ -136,7 +140,10 @@ sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
 ## 맞춘 결과
 - 이우림과 정함 (#133, #152)
   - 단일 대상 슬롯 시전은 `Cast(function, RuntimeValue.FromBug(몬스터))`로 넘긴다. 죽었거나 없어진 대상은 실행기가 `InvalidTarget`으로 막는다
-  - 함수 안의 `GetBug` 입력 대기(슬롯 키 누른 채 고르기 → `ProvideInput`): #159에서 함. 위 「GetBug 입력」
+  - 함수 안의 `GetBug` 입력 대기(슬롯 키 누른 채 고르기 → `ProvideInput`): #159에서 함. #212에서 `ProvideTarget`으로 바꿈. 위 「GetBug 입력」
+- 이우림 요청 반영 (#173 → #212)
+  - 시전·취소·입력을 `FunctionExecutorNetwork`로. 클라이언트로만 접속한 플레이어도 슬롯으로 시전된다
+  - 아직 남은 것(다음 이슈): 찌르기 돌진·바라보는 방향·급소공략 미니게임 결과·스킬 이펙트·검 줍기 서버 동기화, 여러 명 선택 대상 배열
   - 스킬 캔슬: C 키를 누르면 가장 최근에 슬롯으로 시전한 작업 하나를 `FunctionExecutor.Cancel`로 끊는다. 슬롯 키는 시전만 한다(연타해도 안 끊김). C 키 입력은 이우림이 추가(#157), 캔슬은 #159에서 함
 - 임혜원과 정할 것 (#159)
   - 장착 화면은 `SlotLoadout` API로 만든다. 코드 영역 크기는 `CodeSize`로 표시

@@ -16,6 +16,7 @@ public enum AccountFailure
 	LanguageTaken,
 	NicknameTaken,
 	LoggedInElsewhere,
+	CharacterNotFound,
 }
 
 /// <summary>실패 이유를 화면에 보여 줄 글자로 바꾼다.</summary>
@@ -35,6 +36,7 @@ public static class AccountFailureText
 			case AccountFailure.LanguageTaken: return "이 언어의 캐릭터가 이미 있습니다.";
 			case AccountFailure.NicknameTaken: return "이미 있는 닉네임입니다.";
 			case AccountFailure.LoggedInElsewhere: return "다른 곳에서 같은 계정으로 로그인했습니다.";
+			case AccountFailure.CharacterNotFound: return "이 언어의 캐릭터가 없습니다. 먼저 만들어 주세요.";
 			default: return failure.ToString();
 		}
 	}
@@ -49,6 +51,8 @@ public struct AccountAuthRequest : NetworkMessage
 	public string password;
 	// true면 회원가입. 회원가입에 성공하면 바로 로그인된다
 	public bool isSignUp;
+	// true면 에디터 전용 「로그인 건너뛰기」. 에디터에서 켠 서버만 받아들이고, 빌드한 서버는 일반 로그인처럼 검사해 거부한다
+	public bool skipLogin;
 }
 
 /// <summary>
@@ -68,6 +72,44 @@ public struct AccountAuthResult : NetworkMessage
 {
 	public AccountFailure failure;
 	public CharacterSummary[] characters;
+
+	public bool Success => failure == AccountFailure.None;
+}
+
+/// <summary>
+/// 내 화면 → 서버: 캐릭터 만들기 요청. 로그인한 뒤에만 보낼 수 있다. InvokeAuthenticator.RequestCreateCharacter가 보낸다.
+/// </summary>
+public struct CreateCharacterRequest : NetworkMessage
+{
+	public string language;
+	public string nickname;
+}
+
+/// <summary>
+/// 서버 → 내 화면: 캐릭터 만들기 결과. 성공하든 실패하든 그 계정의 지금 캐릭터 목록이 들어 있다.
+/// </summary>
+public struct CreateCharacterResultMessage : NetworkMessage
+{
+	public AccountFailure failure;
+	public CharacterSummary[] characters;
+
+	public bool Success => failure == AccountFailure.None;
+}
+
+/// <summary>
+/// 내 화면 → 서버: 그 언어의 캐릭터로 게임에 들어가기 요청. 로그인한 뒤에만 보낼 수 있다. InvokeAuthenticator.RequestEnter가 보낸다.
+/// </summary>
+public struct EnterGameRequest : NetworkMessage
+{
+	public string language;
+}
+
+/// <summary>
+/// 서버 → 내 화면: 들어가기 결과. 성공하면 이 메시지 다음에 서버가 로비에 플레이어를 만든다.
+/// </summary>
+public struct EnterGameResultMessage : NetworkMessage
+{
+	public AccountFailure failure;
 
 	public bool Success => failure == AccountFailure.None;
 }

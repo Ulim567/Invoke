@@ -40,6 +40,14 @@ public class InvokeNetworkManager : NetworkManager
 	// 장소 씬을 모두 불러왔으면 true. 씬을 다 불러오기 전에 접속한 플레이어는 이 값이 켜질 때까지 기다린다
 	bool scenesLoaded;
 
+	public override void Awake()
+	{
+		base.Awake();
+		// Mirror는 이 값이 켜져 있으면 로그인하자마자 플레이어를 만든다.
+		// 캐릭터를 고른 뒤에 만들어야 하므로 Inspector 값과 상관없이 끈다. 끄면 Mirror는 접속 뒤 준비(Ready)만 한다
+		autoCreatePlayer = false;
+	}
+
 	public override void OnStartServer()
 	{
 		base.OnStartServer();
@@ -173,7 +181,18 @@ public class InvokeNetworkManager : NetworkManager
 
 	public override void OnServerAddPlayer(NetworkConnectionToClient conn)
 	{
-		// Mirror 기본 코드는 플레이어를 기준 씬에 만들므로 부르지 않고, 로비에 만든다
+		// 플레이어는 캐릭터를 골라 「들어가기」에 성공했을 때만 SpawnPlayer로 만든다.
+		// autoCreatePlayer를 꺼 두었으므로 이 함수가 불리면 캐릭터를 고르지 않은 요청이다
+		Debug.LogWarning($"[InvokeNetworkManager] 캐릭터를 고르지 않은 플레이어 생성 요청을 무시합니다 (connId={conn.connectionId}).");
+	}
+
+	/// <summary>
+	/// 서버에서 그 연결의 플레이어를 로비 시작 위치에 만든다. 서버에서만 부른다.<br/>
+	/// InvokeAuthenticator가 「들어가기」에 성공한 연결에 대해 부른다. 이미 플레이어가 있는 연결이면 아무것도 하지 않는다.
+	/// </summary>
+	public void SpawnPlayer(NetworkConnectionToClient conn)
+	{
+		if (conn.identity != null) return;
 		StartCoroutine(SpawnPlayerInLobby(conn));
 	}
 

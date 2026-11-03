@@ -83,23 +83,32 @@ public class AccountScreen : MonoBehaviour
 		GUILayout.Label("> 캐릭터");
 		GUILayout.Label($"닉네임: {flow.Nickname}");
 
-		foreach (string language in CharacterLanguages.All)
+		// 언어 카드: 선택한 카드는 밝게, 나머지는 어둡게, 준비 중인 카드는 누를 수 없게 (Canvas 화면에서는 컨셉 아트가 배경에 깔린다)
+		bool wasEnabled = GUI.enabled;
+		GUILayout.BeginHorizontal();
+		foreach (string language in flow.Languages)
 		{
-			GUILayout.BeginHorizontal();
-			GUILayout.Label(language, GUILayout.Width(40));
+			CharacterState state = flow.GetCharacterState(language);
+			Color previous = GUI.color;
+			if (language != flow.SelectedLanguage) GUI.color = new Color(1f, 1f, 1f, 0.45f);
+			GUI.enabled = wasEnabled && state != CharacterState.Locked;
+			if (GUILayout.Button($"{language}\n{StateLabel(state)}", GUILayout.Height(48))) flow.Select(language);
+			GUI.color = previous;
+		}
+		GUILayout.EndHorizontal();
 
-			if (flow.HasCharacter(language))
-			{
-				GUILayout.Label("만들어 둠");
-				if (GUILayout.Button("들어가기", GUILayout.Width(80))) flow.Enter(language);
-			}
-			else
-			{
-				GUILayout.Label("아직 만들지 않음");
-				if (GUILayout.Button("만들기", GUILayout.Width(80))) flow.CreateCharacter(language);
-			}
+		GUI.enabled = wasEnabled && flow.CanConfirm;
+		if (GUILayout.Button(flow.ConfirmLabel)) flow.Confirm();
+		GUI.enabled = wasEnabled;
+	}
 
-			GUILayout.EndHorizontal();
+	static string StateLabel(CharacterState state)
+	{
+		switch (state)
+		{
+			case CharacterState.Owned: return "보유 중";
+			case CharacterState.NotOwned: return "미보유";
+			default: return "준비 중";
 		}
 	}
 

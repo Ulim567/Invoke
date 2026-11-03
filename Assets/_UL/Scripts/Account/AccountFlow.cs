@@ -24,12 +24,23 @@ public enum AccountField
 	PasswordConfirm,
 }
 
+/// <summary>캐릭터 화면의 언어 카드 하나의 상태.</summary>
+public enum CharacterState
+{
+	// 보유 중: 이 언어의 캐릭터를 만들어 둠. 버튼은 「들어가기」
+	Owned,
+	// 미보유: 만들 수 있지만 아직 만들지 않음. 버튼은 「만들기」
+	NotOwned,
+	// 준비 중: 아직 열지 않은 언어. 선택할 수 없음
+	Locked,
+}
+
 /// <summary>
 /// 로그인·회원가입·캐릭터 화면이 쓰는 것을 하나로 모은 컴포넌트. 화면은 이 컴포넌트만 쓴다.
 /// <para>
 /// 하는 일<br/>
-/// - 지금 화면, 응답을 기다리는 중인지, 안내 문장과 강조할 칸, 계정 닉네임, 만든 캐릭터, 팝업 문장을 들고 있다.<br/>
-/// - 버튼이 부를 함수(Login, SignUp, CreateCharacter, Enter 등)를 준다. 회원가입은 서버에 보내기 전에 규칙과 비밀번호 확인을 먼저 검사한다.<br/>
+/// - 지금 화면, 응답을 기다리는 중인지, 안내 문장과 강조할 칸, 계정 닉네임, 언어 카드마다 상태와 선택한 언어, 팝업 문장을 들고 있다.<br/>
+/// - 버튼이 부를 함수(Login, SignUp, Select, Confirm 등)를 준다. 회원가입은 서버에 보내기 전에 규칙과 비밀번호 확인을 먼저 검사한다.<br/>
 /// - 서버의 결과, 쫓겨남, 접속 실패, 연결 끊김을 상태에 반영한다. 캐릭터 화면이나 게임 중에 끊기면 팝업 문장을 채운다.
 /// </para>
 /// <para>
@@ -44,6 +55,8 @@ public class AccountFlow : MonoBehaviour
 	public const string PasswordMismatchMessage = "비밀번호가 서로 다릅니다.";
 	const string ConnectFailedMessage = "서버에 접속하지 못했습니다.";
 	const string DisconnectedMessage = "서버와 연결이 끊겼습니다.";
+	const string EnterLabel = "들어가기";
+	const string CreateLabel = "만들기";
 
 	InvokeAuthenticator authenticator;
 	readonly List<string> ownedLanguages = new List<string>();
@@ -96,8 +109,28 @@ public class AccountFlow : MonoBehaviour
 	/// <summary>에디터 전용 Host 버튼을 보여 줄지. 빌드에서는 늘 false.</summary>
 	public bool CanStartHost => Application.isEditor && !NetworkClient.active && !NetworkServer.active;
 
-	/// <summary>그 언어(CharacterLanguages)의 캐릭터를 만들어 두었으면 true. true면 「들어가기」, false면 「만들기」를 보여 준다.</summary>
-	public bool HasCharacter(string language) => ownedLanguages.Contains(language);
+	/// <summary>캐릭터 화면에 보여 줄 언어. 화면은 이 순서대로 카드를 그린다.</summary>
+	public IReadOnlyList<string> Languages => CharacterLanguages.Shown;
+
+	/// <summary>
+	/// 캐릭터 화면에서 선택한 언어. 언제나 Languages 가운데 준비 중이 아닌 하나다.
+	/// 로그인하면 보유한 첫 캐릭터의 언어, 보유한 캐릭터가 없으면 C. 화면은 이 카드를 밝게 그린다.
+	/// </summary>
+	public string SelectedLanguage { get; private set; } = CharacterLanguages.C;
+
+	/// <summary>오른쪽 아래 버튼의 글자. 선택한 언어가 보유 중이면 「들어가기」, 미보유면 「만들기」.</summary>
+	public string ConfirmLabel => GetCharacterState(SelectedLanguage) == CharacterState.Owned ? EnterLabel : CreateLabel;
+
+	/// <summary>오른쪽 아래 버튼을 누를 수 있으면 true. 응답을 기다리는 중이면 false.</summary>
+	public bool CanConfirm => Page == AccountPage.Characters && !IsWaiting;
+
+	/// <summary>그 언어 카드의 상태: 보유 중, 미보유, 준비 중.</summary>
+	public CharacterState GetCharacterState(string language)
+	{
+		// 서버가 만들 수 없는 언어는 캐릭터 목록과 상관없이 잠긴 언어로 본다
+		if (!CharacterLanguages.IsKnown(language)) return CharacterState.Locked;
+		return ownedLanguages.Contains(language) ? CharacterState.Owned : CharacterState.NotOwned;
+	}
 
 	void Awake()
 	{
@@ -176,20 +209,25 @@ public class AccountFlow : MonoBehaviour
 		if (!authenticator.RequestSignUp(loginId, password, nickname)) StopWaiting();
 	}
 
-	/// <summary>캐릭터 화면의 만들기 버튼. 결과는 Changed로 알린다 (성공하면 HasCharacter가 true).</summary>
-	public void CreateCharacter(string language)
+	/// <summary>캐릭터 화면의 언어 카드. 그 언어를 선택한다. 준비 중인 언어는 무시한다 (화면은 그 카드를 누를 수 없게 그린다).</summary>
+	public void Select(string language)
 	{
-		if (!CanSend() || Page != AccountPage.Characters) return;
-		BeginWaiting();
-		if (!authenticator.RequestCreateCharacter(language)) StopWaiting();
+		if (IsWaiting || Page != AccountPage.Characters || language == SelectedLanguage) return;
+		// Shown에 없는 언어는 IsKnown도 false이므로 Locked로 함께 걸러진다
+		if (GetCharacterState(language) == CharacterState.Locked) return;
+		SelectedLanguage = language;
+		Notify();
 	}
 
-	/// <summary>캐릭터 화면의 들어가기 버튼. 성공하면 Page가 Hidden이 되고 서버가 로비에 플레이어를 만든다.</summary>
-	public void Enter(string language)
+	/// <summary>
+	/// 캐릭터 화면의 오른쪽 아래 버튼. 선택한 언어가 보유 중이면 들어가고, 미보유면 만든다.
+	/// 결과는 Changed로 알린다. 만들기에 성공하면 같은 언어가 보유 중이 되고, 들어가기에 성공하면 Page가 Hidden이 된다.
+	/// </summary>
+	public void Confirm()
 	{
-		if (!CanSend() || Page != AccountPage.Characters) return;
-		BeginWaiting();
-		if (!authenticator.RequestEnter(language)) StopWaiting();
+		if (!CanSend() || !CanConfirm) return;
+		if (GetCharacterState(SelectedLanguage) == CharacterState.Owned) Enter(SelectedLanguage);
+		else CreateCharacter(SelectedLanguage);
 	}
 
 	/// <summary>팝업의 확인 버튼. 팝업을 닫는다 (뒤에는 로그인 화면이 있다).</summary>
@@ -223,6 +261,7 @@ public class AccountFlow : MonoBehaviour
 
 		Nickname = result.nickname ?? "";
 		SetOwnedLanguages(result.characters);
+		SelectFirstOwned();
 		Page = AccountPage.Characters;
 		SetMessage("", AccountField.None);
 	}
@@ -275,6 +314,31 @@ public class AccountFlow : MonoBehaviour
 		if (IsWaiting || (page != AccountPage.Login && page != AccountPage.SignUp) || Page == AccountPage.Characters || Page == AccountPage.Hidden) return;
 		Page = page;
 		SetMessage("", AccountField.None);
+	}
+
+	// 화면은 Confirm만 부른다. 버튼 하나가 상태에 맞는 요청을 고르게 하기 위해 두 요청은 숨긴다
+	void CreateCharacter(string language)
+	{
+		BeginWaiting();
+		if (!authenticator.RequestCreateCharacter(language)) StopWaiting();
+	}
+
+	void Enter(string language)
+	{
+		BeginWaiting();
+		if (!authenticator.RequestEnter(language)) StopWaiting();
+	}
+
+	// 로그인했을 때의 선택: 화면 순서에서 보유한 첫 캐릭터, 없으면 C
+	void SelectFirstOwned()
+	{
+		SelectedLanguage = CharacterLanguages.C;
+		foreach (string language in CharacterLanguages.Shown)
+		{
+			if (GetCharacterState(language) != CharacterState.Owned) continue;
+			SelectedLanguage = language;
+			return;
+		}
 	}
 
 	// 응답을 기다리는 중에는 같은 요청을 두 번 보내지 않는다

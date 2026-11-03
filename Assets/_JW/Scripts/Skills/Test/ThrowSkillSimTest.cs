@@ -8,7 +8,7 @@ using UnityEngine;
 /// <para>
 /// 1. 소환검 던지기: 사거리 안 몬스터가 맞고 소환검이 몬스터에 꽂혀 따라다님 <br/>
 /// 2. 검 던지기: 가장 가까운 몬스터가 사거리 안이면 맞고 데미지, 검이 떨어짐 (사거리 밖이면 빗나가 안 맞음)<br/>
-/// 3. 검 돌아오기 두 번: 먼저 던진 소환검이 먼저 곁으로 오며 오는 길(꽂혀 있던 몬스터)에서 데미지, 그다음 물리 검이 손으로<br/>
+/// 3. 검 돌아오기: 소환검이 곁으로 오며 오는 길(꽂혀 있던 몬스터)에서 데미지. 물리 검은 땅에 그대로 있다. 한 번 더 써도 물리 검은 안 온다 (#232)<br/>
 /// 4. 처형: 체력 2% 이하로 만든 몬스터에게 검 던지기가 맞으면 처형되어 죽음<br/>
 /// 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다.
 /// </para>
@@ -71,15 +71,17 @@ public class ThrowSkillSimTest : MonoBehaviour
 			Debug.LogWarning($"{Tag} 가장 가까운 몬스터가 사거리 {CSwordThrow.HitRange} 밖이라 명중은 확인 못 함");
 		}
 
-		// 3. 검 돌아오기 두 번 (소환검을 먼저 던졌으므로 소환검부터)
+		// 3. 검 돌아오기: 소환검만 돌아오고 물리 검은 땅에 남는다 (#232)
 		hits.Clear();
 		yield return Cast(PredefinedFunctionIds.SwordReturn, null);
 		yield return WaitUntil(() => first.State == SummonedSwordState.Ready, 2f);
-		Check("검 돌아오기 1: 먼저 던진 소환검이 곁으로", first.State == SummonedSwordState.Ready && physical.State == SwordState.OnGround);
+		Check("검 돌아오기 1: 소환검이 곁으로, 물리 검은 땅에 그대로", first.State == SummonedSwordState.Ready && physical.State == SwordState.OnGround);
 		Check($"검 돌아오기 1: 오는 길의 몬스터가 데미지 (맞은 수 {hits.Count})", hits.Exists(h => h.target == summonTarget.gameObject));
 		yield return Cast(PredefinedFunctionIds.SwordReturn, null);
-		yield return WaitUntil(() => physical.State == SwordState.InHand, 2f);
-		Check("검 돌아오기 2: 물리 검이 손으로", physical.State == SwordState.InHand);
+		yield return new WaitForSeconds(0.5f);
+		Check("검 돌아오기 2: 던진 소환검이 없으면 아무 일도 없음 (물리 검은 안 옴)", physical.State == SwordState.OnGround);
+		// 처형 확인을 위해 물리 검을 손으로 (플레이어라면 Z로 줍는다)
+		physical.Recall();
 
 		// 4. 처형
 		Monster victim = Nearest(player);

@@ -140,11 +140,12 @@ public class CSummonedThrow : ThrowSkillBase
 }
 
 /// <summary>
-/// 검 돌아오기 (#167). 던진 검(물리 검, 소환검) 중 가장 먼저 던진 것 하나를 날려서 돌려받는다 (경로, 맨손 가능).
+/// 검 돌아오기 (#167, #232). 던진 소환검 중 가장 먼저 던진 것 하나를 날려서 돌려받는다 (경로, 맨손 가능).
 /// <para>
-/// - 순서: PhysicalSword.ThrowOrder, SummonedSword.ThrowOrder (SwordThrowOrder 번호표)가 가장 작은 것.<br/>
+/// - 물리 검은 돌려받지 않는다. 물리 검은 Z로만 줍는다 (#232).<br/>
+/// - 순서: SummonedSword.ThrowOrder (SwordThrowOrder 번호표)가 가장 작은 것.<br/>
 /// - 돌아오는 길에 지나가는 몬스터를 한 번씩 공격력 × 표 배율로 벤다 (ReturnHit).<br/>
-/// - 돌려받을 검이 없으면 아무 일도 없이 끝난다. 돌아오는 중인 검, 누수된 소환검은 고르지 않는다.<br/>
+/// - 돌려받을 소환검이 없으면 아무 일도 없이 끝난다. 돌아오는 중인 검, 누수된 소환검은 고르지 않는다.<br/>
 /// - 스킬(20틱)이 끝난 뒤에도 검은 계속 날아오지만, 그 뒤에 지나간 몬스터에게는 데미지를 주지 않는다.
 /// </para>
 /// </summary>
@@ -152,51 +153,30 @@ public class CSwordReturn : ThrowSkillBase
 {
 	public override string Id => PredefinedFunctionIds.SwordReturn;
 
-	PhysicalSword physical;
 	SummonedSwords swords;
 	SummonedSword returning;
 
 	protected override void OnSkillStart(FunctionContext task)
 	{
 		caster = task.Caster;
-		physical = caster.GetComponent<PhysicalSword>();
 		swords = caster.GetComponent<SummonedSwords>();
-
-		// 가장 먼저 던진 검 찾기
-		int best = int.MaxValue;
-		bool pickPhysical = false;
 		returning = null;
-		if (physical != null && (physical.State == SwordState.Flying || physical.State == SwordState.OnGround) && physical.ThrowOrder < best)
-		{
-			best = physical.ThrowOrder;
-			pickPhysical = true;
-		}
-		if (swords != null)
-		{
-			foreach (SummonedSword s in swords.Swords)
-			{
-				if (s == null || (s.State != SummonedSwordState.Flying && s.State != SummonedSwordState.Dropped) || s.ThrowOrder >= best) continue;
-				best = s.ThrowOrder;
-				returning = s;
-				pickPhysical = false;
-			}
-		}
+		if (swords == null) return;
 
-		if (pickPhysical)
+		// 가장 먼저 던진 소환검 찾기
+		int best = int.MaxValue;
+		foreach (SummonedSword s in swords.Swords)
 		{
-			returning = null;
-			Vector2 from = physical.Dropped != null ? (Vector2)physical.Dropped.transform.position : physical.HandPosition;
-			physical.ReturnHit += OnPhysicalReturnHit;
-			if (!physical.StartReturn()) { Unsubscribe(); return; }
-			Effects(task)?.RaiseFired(Id, from, physical.HandPosition - from);
+			if (s == null || (s.State != SummonedSwordState.Flying && s.State != SummonedSwordState.Dropped) || s.ThrowOrder >= best) continue;
+			best = s.ThrowOrder;
+			returning = s;
 		}
-		else if (returning != null)
-		{
-			Vector2 from = returning.transform.position;
-			swords.ReturnHit += OnSummonedReturnHit;
-			if (!swords.StartReturn(returning)) { Unsubscribe(); return; }
-			Effects(task)?.RaiseFired(Id, from, (Vector2)caster.transform.position - from);
-		}
+		if (returning == null) return;
+
+		Vector2 from = returning.transform.position;
+		swords.ReturnHit += OnSummonedReturnHit;
+		if (!swords.StartReturn(returning)) { Unsubscribe(); return; }
+		Effects(task)?.RaiseFired(Id, from, (Vector2)caster.transform.position - from);
 	}
 
 	protected override void OnSkillEnd(FunctionContext task) => Unsubscribe();
@@ -204,12 +184,8 @@ public class CSwordReturn : ThrowSkillBase
 
 	void Unsubscribe()
 	{
-		if (physical != null) physical.ReturnHit -= OnPhysicalReturnHit;
 		if (swords != null) swords.ReturnHit -= OnSummonedReturnHit;
 	}
-
-	void OnPhysicalReturnHit(GameObject monster) =>
-		DealDamage(monster, physical.Dropped != null ? (Vector2)physical.Dropped.transform.position : Center(monster));
 
 	void OnSummonedReturnHit(SummonedSword sword, GameObject monster)
 	{

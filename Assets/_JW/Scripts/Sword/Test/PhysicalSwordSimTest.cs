@@ -10,7 +10,7 @@ using UnityEngine.InputSystem.LowLevel;
 /// 1. 빗나감: 대상 없이 던지면 바로 떨어져 땅에 멈추고 맨손이 된다.<br/>
 /// 2. 맨손 스킬: 검 찌르기는 UnarmedError, 검 돌아오기는 정상으로 끝난다.<br/>
 /// 3. 줍기: 가짜 Z 키를 넣으면 다시 손에 든다 (SwordPickUpInput, PlayerInputReader.PickUpPressed).<br/>
-/// 4. 맞음: 가장 가까운 몬스터에게 던지면 Hit가 불리고 떨어진다. Recall(검 돌아오기)로 다시 손에 든다.
+/// 4. 맞음: 가장 가까운 몬스터에게 던지면 Hit가 불리고 떨어진다. Recall(테스트용 바로 되돌리기)로 다시 손에 든다.
 /// </para>
 /// 가짜 키 입력은 Game 창에 초점이 있어야 들어간다. 자동으로 돌기 때문에 평소에는 꺼 둔다.
 /// </summary>
@@ -53,7 +53,7 @@ public class PhysicalSwordSimTest : MonoBehaviour
 		yield return WaitFor(() => sword.State == SwordState.InHand, 1f);
 		Check("Z로 주우면 다시 손에 듦", sword.State == SwordState.InHand && sword.Dropped == null);
 
-		// 4. 맞음 + 검 돌아오기
+		// 4. 맞음 + Recall로 되돌리기
 		Monster monster = NearestMonster(sword.transform.position);
 		if (monster == null)
 		{
@@ -70,7 +70,7 @@ public class PhysicalSwordSimTest : MonoBehaviour
 			Check("대상에 맞으면 Hit", hit == monster.gameObject);
 			Check("맞은 뒤 땅에 떨어짐", sword.State == SwordState.OnGround);
 			Check("떨어진 자리는 몬스터 근처", sword.Dropped != null && Mathf.Abs(sword.Dropped.transform.position.x - monster.transform.position.x) < 1.5f);
-			Check("검 돌아오기로 회수", sword.Recall() && sword.State == SwordState.InHand);
+			Check("Recall로 회수", sword.Recall() && sword.State == SwordState.InHand);
 		}
 
 		if (failures == 0) Debug.Log("[SwordTest] 전체 통과");

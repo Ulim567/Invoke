@@ -7,7 +7,7 @@
 - 다른 기능(C 스킬의 맨손 검사, 던지기 스킬, UI)이 맨손인지 읽을 수 있게 한다.
 - 던진 검 오브젝트(떨어진 검 프리팹)를 만들고 없앤다.
 - 하지 않는 일
-  - 던지기·검 돌아오기 스킬의 데미지, 처형, 돌아오는 경로 판정: 던지기 스킬 이슈 (`Hit` 이벤트를 받아서 처리)
+  - 검 던지기 스킬의 데미지, 처형: 던지기 스킬 이슈 (`Hit` 이벤트를 받아서 처리)
   - 소환검: summoned-sword.md
   - 네트워크 동기화 (#229): 상태는 서버만 바꾸고 `[SyncVar]`로 클라이언트에 보낸다(클라이언트에서도 `State`, `IsUnarmed`, `StateChanged`가 맞음). 떨어진 검 위치는 떨어진 검 프리팹의 `NetworkTransform`(Server To Client)이 맞춘다. 줍기(Z)는 `SwordPickUpInput`이 `[Command]`로 서버에 요청한다.
 
@@ -23,8 +23,8 @@
   - 맨손이면 공격 스킬은 `UnarmedError`로 끝난다. 검 돌아오기, 소환(검 소환·해제), 이동 계열은 쓸 수 있다 (c-skills.md 표의 `usableUnarmed`).
 - 회수
   - 줍기(`TryPickUp`): 땅에 떨어진 검과 `Pick Up Range`(기본 1.5유닛) 안에 있을 때만.
-  - 검 돌아오기 스킬(`StartReturn`, #167): 지금 자리에서 손(`HandPosition`)으로 날아온다(`Return Speed`, 임시 30). 오는 길에 지나가는 몬스터를 `ReturnHit`으로 한 번씩 알리고, 손에 닿으면 손으로 돌아온다. 날아오는 동안은 `Returning` 상태(맨손).
-  - `Recall`: 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다. 테스트에서 쓴다.
+  - 물리 검은 검 돌아오기 스킬로 돌아오지 않는다. 플레이어는 Z(줍기)로만 손에 든다 (#232). #167의 날아서 돌아오기(`StartReturn`, `ReturnHit`, `Returning` 상태)는 지웠다.
+  - `Recall`: 거리와 상관없이 (날아가는 중이어도) 바로 손으로 돌아온다. 스킬은 쓰지 않고 테스트·시스템 정리에서 쓴다.
 - 해제(free)할 수 없다.
 - 떨어진 검 오브젝트는 `SpawnDroppedSword` / `DespawnDroppedSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
   - 안에서 `NetworkSpawner.Spawn` / `Despawn`을 부른다 (place-scenes.md, #125). 떨어진 검 프리팹은 `NetworkIdentity`를 붙이고 `Base` 씬과 Test_JW의 NetworkManager에 등록했다. 만들지 못하면 `Throw`가 `false`.
@@ -51,21 +51,18 @@
 | `State` | - | `SwordState` | `InHand`(손에 있음), `Flying`(날아가는 중), `OnGround`(땅에 떨어짐) |
 | `IsUnarmed` | - | `bool` | 손에 없으면 `true`. 공격 스킬 시전 검사, 맨손 그림에 쓴다 |
 | `CanPickUp` | - | `bool` | 땅에 떨어져 있고 줍기 거리 안이면 `true`. 「줍기」 안내 표시에 쓴다 |
-| `Dropped` | - | `DroppedSword` | 던진 검 오브젝트. 손에 있으면 `null`. 위치 표시, 검 돌아오기 경로에 쓴다 |
+| `Dropped` | - | `DroppedSword` | 던진 검 오브젝트. 손에 있으면 `null`. 위치 표시에 쓴다 |
 | `Throw(GameObject target)` | 대상 (없으면 `null` = 빗나감) | `bool` | 검을 던진다. 손에 없으면 `false`. 검 던지기 스킬이 부른다 |
 | `TryPickUp()` | - | `bool` | 근처의 떨어진 검을 줍는다. 주울 수 없으면 `false`. 줍기 키를 눌렀을 때 부른다 |
-| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false` |
-| `StartReturn()` | - | `bool` | (#167) 던진 검을 손으로 날아오게 한다. 손에 있거나 이미 돌아오는 중이면 `false`. 검 돌아오기 스킬이 부른다 |
-| `ReturnHit` (event) | `GameObject` 몬스터 | - | [로직] (#167) 돌아오는 검이 몬스터를 지나갔을 때. 몬스터마다 한 번 |
-| `ThrowOrder` | - | `int` | (#167) 마지막으로 던진 순서 (`SwordThrowOrder`, 소환검과 같은 번호표) |
-| `HandPosition` | - | `Vector2` | 던지는 손 위치. 돌아오는 검이 여기로 온다 |
+| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false`. 스킬은 쓰지 않음 (테스트·시스템용, #232) |
+| `HandPosition` | - | `Vector2` | 던지는 손 위치 |
 | `StateChanged` (event) | `SwordState` | - | [표시] 상태가 바뀔 때. 손 그림, 맨손 표시 |
 | `Hit` (event) | `GameObject` 맞은 대상 | - | [로직] 던진 검이 대상에 닿았을 때. 데미지·처형은 이 이벤트를 받는 쪽(검 던지기 스킬)이 준다 |
 
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
-| `PhysicalSwordSimTest` | Test_JW의 SwordTest. 켜고 Play → Host, Game 창을 한 번 클릭(가짜 키 입력이 들어가게). 빗나감(바로 떨어져 맨손), 맨손 스킬(검 찌르기 `UnarmedError`, 대시 정상), 줍기(가짜 Z 키), 맞음(가장 가까운 몬스터에게 `Hit`, 근처에 떨어짐), 검 돌아오기를 확인. 「[SwordTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `PhysicalSwordSimTest` | Test_JW의 SwordTest. 켜고 Play → Host, Game 창을 한 번 클릭(가짜 키 입력이 들어가게). 빗나감(바로 떨어져 맨손), 맨손 스킬(검 찌르기 `UnarmedError`, 대시 정상), 줍기(가짜 Z 키), 맞음(가장 가까운 몬스터에게 `Hit`, 근처에 떨어짐), `Recall`로 되돌리기를 확인. 「[SwordTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정함

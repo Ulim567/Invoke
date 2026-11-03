@@ -17,9 +17,10 @@ public static class AccountRules
 	public const int NicknameMinLength = 2;
 	public const int NicknameMaxLength = 10;
 
-	static readonly Regex LoginIdPattern = new Regex("^[A-Za-z0-9]+$");
+	// \A, \z: 문자열의 처음과 끝. $는 끝에 붙은 줄바꿈 앞에서도 맞다고 보므로 쓰지 않는다. 쓰면 끝에 줄바꿈을 붙여 보이는 모양이 같은 닉네임을 만들 수 있다
+	static readonly Regex LoginIdPattern = new Regex(@"\A[A-Za-z0-9]+\z");
 	// 가-힣: 완성형 한글 (가~힣)
-	static readonly Regex NicknamePattern = new Regex("^[가-힣A-Za-z0-9]+$");
+	static readonly Regex NicknamePattern = new Regex(@"\A[가-힣A-Za-z0-9]+\z");
 
 	/// <summary>아이디: 영문과 숫자 4~16자. 대소문자는 AccountStore가 구분하지 않는다.</summary>
 	public static AccountFailure CheckLoginId(string loginId)

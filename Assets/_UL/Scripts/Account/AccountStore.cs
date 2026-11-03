@@ -170,6 +170,7 @@ public class AccountStore : IDisposable
 		return db.Table<AccountRow>().Where(a => a.LoginId == normalizedId).FirstOrDefault();
 	}
 
-	static string NormalizeLoginId(string loginId) => loginId.ToLowerInvariant();
+	/// <summary>아이디를 저장하는 모양(소문자)으로 바꾼다. 아이디는 대소문자를 구분하지 않기 때문이다.</summary>
+	public static string NormalizeLoginId(string loginId) => loginId.ToLowerInvariant();
 }
 #endif

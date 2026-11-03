@@ -19,15 +19,16 @@ using UnityEngine;
 public class AccountServer : IDisposable
 {
 	readonly AccountStore store;
-	// 같은 계정의 먼저 접속한 연결을 끊는 함수. 끊김 알림이 도착할 시간을 두고 끊어야 하므로 부르는 쪽(MonoBehaviour)이 정한다
-	readonly Action<NetworkConnectionToClient> disconnectLater;
+	// 같은 계정의 먼저 접속한 연결에서 플레이어를 없애고 잠시 뒤 끊는 함수.
+	// 끊김 알림이 도착할 시간을 두고 끊어야 하므로 부르는 쪽(MonoBehaviour)이 정한다
+	readonly Action<NetworkConnectionToClient> kickLater;
 	// 계정 key → 그 계정으로 로그인한 연결
 	readonly Dictionary<string, NetworkConnectionToClient> onlineAccounts = new Dictionary<string, NetworkConnectionToClient>();
 
-	public AccountServer(string dbPath, Action<NetworkConnectionToClient> disconnectLater)
+	public AccountServer(string dbPath, Action<NetworkConnectionToClient> kickLater)
 	{
 		store = new AccountStore(dbPath);
-		this.disconnectLater = disconnectLater;
+		this.kickLater = kickLater;
 	}
 
 	/// <summary>
@@ -50,7 +51,7 @@ public class AccountServer : IDisposable
 
 		KickOtherConnection(accountKey, conn);
 		onlineAccounts[accountKey] = conn;
-		conn.authenticationData = new AccountSession(accountKey, request.loginId, nickname);
+		conn.authenticationData = new AccountSession(accountKey, AccountStore.NormalizeLoginId(request.loginId), nickname);
 
 		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = GetSummaries(accountKey) });
 		Debug.Log($"[AccountServer] {(request.isSignUp ? "회원가입" : "로그인")}: {request.loginId} ({nickname}, connId={conn.connectionId})");
@@ -59,11 +60,19 @@ public class AccountServer : IDisposable
 
 	/// <summary>
 	/// 로그인한 연결의 캐릭터 만들기 요청을 처리하고, 결과와 그 계정의 지금 캐릭터 목록을 conn에 보낸다.
-	/// 이미 게임에 들어간 연결, 임시 계정의 요청은 무시한다.
+	/// 이미 게임에 들어간 연결, 임시 계정, 곧 끊길 연결의 요청은 만들지 않고 RequestNotAllowed를 보낸다.
 	/// </summary>
 	public void HandleCreateCharacter(NetworkConnectionToClient conn, CreateCharacterRequest request)
 	{
-		if (!(conn.authenticationData is AccountSession session) || session.HasEntered || session.IsTemporary) return;
+		if (!(conn.authenticationData is AccountSession session)) return;
+		// 무시하면 내 화면이 결과를 기다리며 멈추므로, 받을 수 없는 요청에도 결과를 보낸다
+		if (session.HasEntered || session.IsTemporary || session.IsKicked)
+		{
+			// 캐릭터 목록은 그대로 보낸다. 빈 목록을 보내면 내 화면이 만든 캐릭터가 없어진 것으로 그린다
+			CharacterSummary[] current = session.IsTemporary ? TemporaryCharacters() : GetSummaries(session.AccountKey);
+			conn.Send(new CreateCharacterResultMessage { failure = AccountFailure.RequestNotAllowed, characters = current });
+			return;
+		}
 
 		AccountFailure failure = ToFailure(store.CreateCharacter(session.AccountKey, request.language, out _));
 
@@ -75,11 +84,17 @@ public class AccountServer : IDisposable
 	/// <summary>
 	/// 로그인한 연결의 들어가기 요청을 처리한다. 그 계정에 그 언어의 캐릭터가 있으면 세션에 적고 true를 돌려준다.
 	/// 부르는 쪽은 true일 때 플레이어를 만든다. 결과는 성공·실패 모두 conn에 보낸다.<br/>
-	/// 이미 게임에 들어간 연결의 요청은 무시하고 false를 돌려준다.
+	/// 이미 게임에 들어간 연결, 곧 끊길 연결의 요청은 RequestNotAllowed를 보내고 false를 돌려준다.
 	/// </summary>
 	public bool TryEnter(NetworkConnectionToClient conn, EnterGameRequest request)
 	{
-		if (!(conn.authenticationData is AccountSession session) || session.HasEntered) return false;
+		if (!(conn.authenticationData is AccountSession session)) return false;
+		// 무시하면 내 화면이 결과를 기다리며 멈추므로, 받을 수 없는 요청에도 결과를 보낸다
+		if (session.HasEntered || session.IsKicked)
+		{
+			conn.Send(new EnterGameResultMessage { failure = AccountFailure.RequestNotAllowed });
+			return false;
+		}
 
 		if (session.IsTemporary)
 		{
@@ -111,8 +126,7 @@ public class AccountServer : IDisposable
 	{
 		string nickname = TemporaryNickname(conn);
 		conn.authenticationData = new AccountSession($"editor-{conn.connectionId}", "(로그인 건너뛰기)", nickname, isTemporary: true);
-		var characters = new[] { new CharacterSummary { language = CharacterLanguages.C } };
-		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = characters });
+		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = TemporaryCharacters() });
 		Debug.Log($"[AccountServer] 로그인 건너뛰기: 임시 계정 (connId={conn.connectionId})");
 	}
 #endif
@@ -173,10 +187,11 @@ public class AccountServer : IDisposable
 		if (!onlineAccounts.TryGetValue(accountKey, out NetworkConnectionToClient oldConn) || oldConn == newConn) return;
 
 		onlineAccounts.Remove(accountKey);
+		// 인증은 풀지 않는다. 풀면 그 연결이 보내는 다음 게임 메시지에서 Mirror가 바로 끊어, 끊김 알림이 도착하지 못한다.
+		// 대신 세션에 표시해 캐릭터 요청과 다시 로그인을 막고, 플레이어는 kickLater가 바로 없앤다
+		if (oldConn.authenticationData is AccountSession oldSession) oldSession.MarkKicked();
 		oldConn.Send(new AccountKickedMessage { reason = AccountFailure.LoggedInElsewhere });
-		// 끊기 전까지 그 연결이 게임 메시지를 보내지 못하게 한다
-		oldConn.isAuthenticated = false;
-		disconnectLater(oldConn);
+		kickLater(oldConn);
 		Debug.Log($"[AccountServer] 같은 계정이 다시 로그인해서 이전 접속을 끊습니다 (connId={oldConn.connectionId})");
 	}
 
@@ -191,6 +206,9 @@ public class AccountServer : IDisposable
 	}
 
 	static string TemporaryNickname(NetworkConnectionToClient conn) => $"Editor{conn.connectionId}";
+
+	// 임시 계정은 DB에 캐릭터가 없으므로 C 캐릭터 하나가 있는 것으로 보여 준다
+	static CharacterSummary[] TemporaryCharacters() => new[] { new CharacterSummary { language = CharacterLanguages.C } };
 
 	CharacterSummary[] GetSummaries(string accountKey)
 	{

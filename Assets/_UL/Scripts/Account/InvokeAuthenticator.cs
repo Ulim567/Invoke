@@ -58,7 +58,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	public override void OnStartServer()
 	{
 #if UNITY_SERVER || UNITY_EDITOR
-		accountServer = new AccountServer(AccountStore.DefaultPath, conn => StartCoroutine(DisconnectLater(conn)));
+		accountServer = new AccountServer(AccountStore.DefaultPath, KickLater);
 		// 로그인하기 전에 받는 메시지이므로 인증을 요구하지 않는다
 		NetworkServer.RegisterHandler<AccountAuthRequest>(OnAuthRequest, false);
 		// 캐릭터 요청은 로그인한 연결만 보낼 수 있다
@@ -97,8 +97,8 @@ public class InvokeAuthenticator : NetworkAuthenticator
 #if UNITY_SERVER || UNITY_EDITOR
 	void OnAuthRequest(NetworkConnectionToClient conn, AccountAuthRequest request)
 	{
-		// 이미 로그인한 연결은 다른 계정으로 다시 로그인할 수 없다
-		if (conn.isAuthenticated) return;
+		// 이미 로그인한 연결은 다시 로그인할 수 없다. 쫓겨나 곧 끊길 연결도 세션이 남아 있으므로 여기서 막힌다
+		if (conn.isAuthenticated || conn.authenticationData != null) return;
 
 #if UNITY_EDITOR
 		if (request.skipLogin)
@@ -125,6 +125,13 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		else Debug.LogError("[InvokeAuthenticator] InvokeNetworkManager가 없어서 플레이어를 만들 수 없습니다.");
 	}
 #endif
+
+	// 쫓겨난 연결: 같은 캐릭터가 둘이 되지 않도록 플레이어는 바로 없애고, 끊김 알림이 도착할 시간을 둔 뒤 끊는다
+	void KickLater(NetworkConnectionToClient conn)
+	{
+		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.DespawnPlayer(conn);
+		StartCoroutine(DisconnectLater(conn));
+	}
 
 	IEnumerator DisconnectLater(NetworkConnectionToClient conn)
 	{

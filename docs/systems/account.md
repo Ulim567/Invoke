@@ -30,7 +30,7 @@
    - 성공·실패 모두 그 계정의 지금 캐릭터 목록 포함
 4. 들어가기: 클라이언트 → 서버 `EnterGameRequest { language }` → 서버 → 클라이언트 `EnterGameResultMessage { failure }`
    - 성공: 서버가 `InvokeNetworkManager.SpawnPlayer(conn)`로 로비에 플레이어 생성 (장소 씬을 다 불러온 뒤)
-   - 같은 연결의 두 번째 들어가기: 무시
+   - 받을 수 없는 요청 (이미 들어감, 임시 계정의 만들기, 쫓겨난 연결): 결과 `RequestNotAllowed` (무시하면 화면이 결과를 기다리며 멈춤)
 - 플레이어 생성 시점: 들어가기 성공 뒤
   - `InvokeNetworkManager.Awake`에서 `autoCreatePlayer`를 끔 (Inspector 값 무시). 접속 직후에는 Ready만
   - `OnServerAddPlayer`: 경고 로그만. 플레이어는 `SpawnPlayer`로만 생성
@@ -60,7 +60,12 @@
 - DB 코드는 `AccountStore` 한 클래스에 모음 (나중에 다른 DB로 옮길 때 이 클래스만)
 
 ### 같은 계정의 중복 접속
-- 이미 접속 중인 계정으로 로그인하면: 서버가 먼저 접속한 쪽에 `AccountKickedMessage { reason = LoggedInElsewhere }` → 인증 해제 → 0.5초 뒤 끊기(`kickDisconnectDelay`), 새 쪽은 로그인 성공
+- 이미 접속 중인 계정으로 로그인하면: 새 쪽은 로그인 성공. 먼저 접속한 쪽은
+  1. 세션에 쫓겨남 표시 (`AccountSession.IsKicked`): 캐릭터 요청은 `RequestNotAllowed`, 다시 로그인은 무시
+  2. `AccountKickedMessage { reason = LoggedInElsewhere }`
+  3. 플레이어 바로 제거 (`InvokeNetworkManager.DespawnPlayer`): 같은 캐릭터가 둘이 되지 않게
+  4. 0.5초 뒤 끊기 (`kickDisconnectDelay`)
+- 인증은 풀지 않음: 풀면 그 연결이 보내는 다음 게임 메시지에서 Mirror가 바로 끊어, 끊김 알림이 도착하지 못함
 - 끊긴 쪽의 화면: 로그인 화면으로 돌아가 이유 표시
 
 ### 로그인 건너뛰기 (에디터)
@@ -175,7 +180,7 @@
 | `AccountAuthResult` | `failure`, `nickname`, `characters`, `Success` | 로그인·회원가입 결과. 성공이면 계정 닉네임과 캐릭터 목록 (없으면 빈 배열 또는 `null`) |
 | `CreateCharacterResultMessage` | `failure`, `characters`, `Success` | 캐릭터 만들기 결과와 지금 캐릭터 목록 |
 | `EnterGameResultMessage` | `failure`, `Success` | 들어가기 결과 |
-| `AccountFailure` | `None`, `InvalidLoginId`, `InvalidPassword`, `InvalidNickname`, `LoginIdTaken`, `WrongLoginOrPassword`, `UnknownLanguage`, `LanguageTaken`, `NicknameTaken`, `LoggedInElsewhere`, `CharacterNotFound` | 실패 이유. 새 값은 맨 뒤에만 추가 (메시지로 숫자가 오가므로) |
+| `AccountFailure` | `None`, `InvalidLoginId`, `InvalidPassword`, `InvalidNickname`, `LoginIdTaken`, `WrongLoginOrPassword`, `UnknownLanguage`, `LanguageTaken`, `NicknameTaken`, `LoggedInElsewhere`, `CharacterNotFound`, `RequestNotAllowed` | 실패 이유. 새 값은 맨 뒤에만 추가 (메시지로 숫자가 오가므로) |
 | `AccountFailure.ToMessage()` | - | 실패 이유의 한국어 문장 |
 | `AccountRules` | `LoginIdMinLength`(4), `LoginIdMaxLength`(16), `PasswordMinLength`(8), `PasswordMaxLength`(64), `NicknameMinLength`(2), `NicknameMaxLength`(10) | 입력칸 글자 수 제한에 사용 |
 | `AccountRules.CheckLoginId(string)`, `CheckPassword(string)`, `CheckNickname(string)` | 돌려주는 값: `AccountFailure` (통과하면 `None`) | 서버와 같은 규칙. 화면이 보내기 전에 먼저 검사할 때 사용 |
@@ -190,6 +195,7 @@
 | `AccountKey` | `string` | 계정 key (GUID) |
 | `LoginId` | `string` | 아이디 (소문자) |
 | `IsTemporary` | `bool` | 에디터 로그인 건너뛰기의 임시 계정. DB에 없음 → 진행도 저장하지 않음 |
+| `IsKicked` | `bool` | 같은 계정이 다른 곳에서 로그인해 곧 끊길 연결. 플레이어는 이미 제거됨 |
 | `HasEntered` | `bool` | 들어가기 성공 여부 |
 | `CharacterKey` | `string` | 들어간 캐릭터의 key. 들어가기 전에는 `null`. 진행도 저장의 기준 (DB 이슈) |
 | `Nickname` | `string` | 계정의 닉네임. 로그인할 때부터 있음 |

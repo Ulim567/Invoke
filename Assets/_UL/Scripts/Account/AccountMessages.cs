@@ -17,6 +17,8 @@ public enum AccountFailure
 	NicknameTaken,
 	LoggedInElsewhere,
 	CharacterNotFound,
+	// 지금은 받을 수 없는 요청 (이미 들어감, 임시 계정의 캐릭터 만들기, 곧 끊길 연결)
+	RequestNotAllowed,
 }
 
 /// <summary>실패 이유를 화면에 보여 줄 글자로 바꾼다.</summary>
@@ -37,6 +39,7 @@ public static class AccountFailureText
 			case AccountFailure.NicknameTaken: return "이미 있는 닉네임입니다.";
 			case AccountFailure.LoggedInElsewhere: return "다른 곳에서 같은 계정으로 로그인했습니다.";
 			case AccountFailure.CharacterNotFound: return "이 언어의 캐릭터가 없습니다. 먼저 만들어 주세요.";
+			case AccountFailure.RequestNotAllowed: return "지금은 할 수 없는 요청입니다.";
 			default: return failure.ToString();
 		}
 	}

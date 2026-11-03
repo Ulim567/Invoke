@@ -26,6 +26,9 @@ public class AccountSession
 	/// <summary>캐릭터를 골라 게임에 들어갔으면 true. 한 연결은 한 번만 들어갈 수 있다.</summary>
 	public bool HasEntered => CharacterKey != null;
 
+	/// <summary>같은 계정이 다른 곳에서 로그인해 곧 끊길 연결이면 true. 끊길 때까지 캐릭터 요청을 받지 않는다.</summary>
+	public bool IsKicked { get; private set; }
+
 	public AccountSession(string accountKey, string loginId, string nickname, bool isTemporary = false)
 	{
 		AccountKey = accountKey;
@@ -38,5 +41,11 @@ public class AccountSession
 	public void Enter(string characterKey)
 	{
 		CharacterKey = characterKey;
+	}
+
+	/// <summary>같은 계정이 다시 로그인해 이 연결을 끊기로 했을 때 AccountServer가 부른다.</summary>
+	public void MarkKicked()
+	{
+		IsKicked = true;
 	}
 }

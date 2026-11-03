@@ -196,6 +196,20 @@ public class InvokeNetworkManager : NetworkManager
 		StartCoroutine(SpawnPlayerInLobby(conn));
 	}
 
+	/// <summary>
+	/// 서버에서 그 연결의 플레이어를 접속은 둔 채 없앤다. 서버에서만 부른다.<br/>
+	/// 같은 계정이 다시 로그인해 먼저 접속한 연결을 끊기 전에 InvokeAuthenticator가 부른다. 끊김 알림이 도착하는 동안 같은 캐릭터가 둘이 되지 않게 하기 위함이다.
+	/// </summary>
+	public void DespawnPlayer(NetworkConnectionToClient conn)
+	{
+		if (conn.identity == null) return;
+
+		Scene scene = conn.identity.gameObject.scene;
+		NetworkServer.RemovePlayerForConnection(conn, RemovePlayerOptions.Destroy);
+		// 레이드 던전에는 플레이어 한 명만 들어가므로, 그 플레이어가 없어지면 던전이 빈다 (OnServerDisconnect와 같은 이유)
+		if (raidScenes.Contains(scene)) UnloadRaidDungeon(scene);
+	}
+
 	IEnumerator SpawnPlayerInLobby(NetworkConnectionToClient conn)
 	{
 		// 서버가 켜지자마자 접속하면 장소 씬을 아직 불러오는 중일 수 있으므로 기다린다

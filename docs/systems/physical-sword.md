@@ -9,7 +9,7 @@
 - 하지 않는 일
   - 던지기·검 돌아오기 스킬의 데미지, 처형, 돌아오는 경로 판정: 던지기 스킬 이슈 (`Hit` 이벤트를 받아서 처리)
   - 소환검: summoned-sword.md
-  - 네트워크 동기화: 「소환검·검기를 서버에서 생성하고 동기화하기」 이슈
+  - 네트워크 동기화 (#229): 상태는 서버만 바꾸고 `[SyncVar]`로 클라이언트에 보낸다(클라이언트에서도 `State`, `IsUnarmed`, `StateChanged`가 맞음). 떨어진 검 위치는 떨어진 검 프리팹의 `NetworkTransform`(Server To Client)이 맞춘다. 줍기(Z)는 `SwordPickUpInput`이 `[Command]`로 서버에 요청한다.
 
 ## 규칙
 - 처음에는 손에 있다.

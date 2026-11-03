@@ -39,8 +39,11 @@ public class SummonedSwords : MonoBehaviour
 	/// <summary>소환검 목록 (포인터 순서). HUD, 스킬이 읽는다.</summary>
 	public IReadOnlyList<SummonedSword> Swords => swords;
 
-	/// <summary>heap에 있는 소환검 수 (누수 포함). 최대 개수 검사에 쓴다.</summary>
-	public int Count => memory.Heap.CountObjects<SummonedSword>();
+	/// <summary>heap에 있는 소환검 수 (누수 포함). 최대 개수 검사에 쓴다. 클라이언트에서는 서버가 알려 준 소환검 목록의 수다 (#229).</summary>
+	public int Count => IsClientOnly ? swords.Count : memory.Heap.CountObjects<SummonedSword>();
+
+	// 클라이언트로만 접속한 화면이면 true. 이때 heap은 비어 있고 목록은 SummonedSword가 스스로 채운다 (#229)
+	static bool IsClientOnly => Mirror.NetworkClient.active && !Mirror.NetworkServer.active;
 
 	/// <summary>더 소환할 수 있으면 true (최대 5개).</summary>
 	public bool CanSummon => Count < MaxCount;
@@ -271,8 +274,33 @@ public class SummonedSwords : MonoBehaviour
 
 	void NotifyChanged() => Changed?.Invoke();
 
+	// [클라이언트] 서버가 보낸 소환검이 주인 목록에 들어오고 나간다 (#229). SummonedSword만 부른다
+	// 클라이언트에는 heap이 없어서, 서버의 목록 대신 소환검 오브젝트가 알려 주는 포인터·상태로 목록을 만든다 (HUD, 여러 명 선택 최대 인원이 읽음)
+	internal void ClientAdd(SummonedSword sword)
+	{
+		if (!IsClientOnly || sword == null || swords.Contains(sword)) return;
+		swords.Add(sword);
+		ClientSwordChanged(sword);
+	}
+
+	internal void ClientRemove(SummonedSword sword)
+	{
+		if (!IsClientOnly) return;
+		if (swords.Remove(sword)) NotifyChanged();
+	}
+
+	// 포인터 순서(소환 순서)로 다시 줄 세우고 알린다
+	internal void ClientSwordChanged(SummonedSword sword)
+	{
+		if (!IsClientOnly || !swords.Contains(sword)) return;
+		swords.Sort((a, b) => a.Pointer.CompareTo(b.Pointer));
+		NotifyChanged();
+	}
+
 	void LateUpdate()
 	{
+		// 클라이언트에서는 소환검이 움직이지 않으므로 자리를 정하지 않는다 (#229)
+		if (IsClientOnly) return;
 		// 사용 가능한 검을 머리 뒤쪽에 순서대로 줄 세운다
 		int facing = movement != null ? movement.Facing : 1;
 		int slot = 0;

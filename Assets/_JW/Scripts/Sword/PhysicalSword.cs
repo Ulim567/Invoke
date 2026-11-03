@@ -1,4 +1,5 @@
 using System;
+using Mirror;
 using UnityEngine;
 
 /// <summary>물리 검(손에 든 레이피어)의 상태</summary>
@@ -31,10 +32,14 @@ public static class SwordThrowOrder
 /// - 물리 검은 해제(free)할 수 없다. 해제는 소환검만 대상으로 한다.
 /// </para>
 /// <para>
-/// 하지 않는 일: 던지기·검 돌아오기 스킬의 데미지와 경로 판정(던지기 스킬 이슈), 네트워크 동기화(서버 동기화 이슈)
+/// 하지 않는 일: 던지기·검 돌아오기 스킬의 데미지와 경로 판정(던지기 스킬 이슈)
+/// </para>
+/// <para>
+/// 네트워크 (#229): 상태는 서버만 바꾸고 [SyncVar]로 클라이언트에 보낸다. 클라이언트에서도 State, IsUnarmed가 맞고 StateChanged가 불린다 (손 그림, 맨손 표시).<br/>
+/// 떨어진 검의 위치는 DroppedSword 프리팹의 NetworkTransform이 맞춘다. 줍기는 SwordPickUpInput이 [Command]로 서버에 요청한다.
 /// </para>
 /// </summary>
-public class PhysicalSword : MonoBehaviour
+public class PhysicalSword : NetworkBehaviour
 {
 	[Header("떨어진 검")]
 	[Tooltip("던졌을 때 만들어지는 떨어진 검 프리팹")]
@@ -61,8 +66,11 @@ public class PhysicalSword : MonoBehaviour
 	PlayerMovement movement;
 	DroppedSword dropped;
 
-	/// <summary>지금 상태. 처음에는 손에 있다.</summary>
+	/// <summary>지금 상태. 처음에는 손에 있다. 클라이언트에서는 서버가 보낸 값이다 (#229).</summary>
 	public SwordState State { get; private set; } = SwordState.InHand;
+
+	// [SyncVar] 서버의 State를 클라이언트에 보낸다 (#229). 서버에서는 SetState만 바꾼다
+	[SyncVar(hook = nameof(OnSyncedState))] SwordState syncedState = SwordState.InHand;
 
 	/// <summary>
 	/// 맨손이면 true (날아가는 중, 땅에 떨어짐). 맨손이면 공격 스킬을 쓸 수 없다 (DataDrivenSkill이 읽는다).
@@ -197,6 +205,15 @@ public class PhysicalSword : MonoBehaviour
 	void SetState(SwordState state)
 	{
 		if (State == state) return;
+		State = state;
+		if (isServer) syncedState = state;
+		StateChanged?.Invoke(state);
+	}
+
+	// [클라이언트] 서버가 보낸 상태 (#229). Host는 서버 쪽 값을 그대로 쓴다
+	void OnSyncedState(SwordState _, SwordState state)
+	{
+		if (isServer || State == state) return;
 		State = state;
 		StateChanged?.Invoke(state);
 	}

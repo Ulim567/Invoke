@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>소환검 하나의 상태</summary>
@@ -25,8 +26,12 @@ public enum SummonedSwordState
 /// - 찌르는 중: 대상에게 날아가 닿으면 SummonedSwords에 알리고, 자기 자리로 돌아와 닿으면 알린다 (#165).<br/>
 /// 물리(Rigidbody)를 쓰지 않고 직접 움직인다 (DroppedSword와 같은 방식).
 /// </para>
+/// <para>
+/// 네트워크 (#229): 움직임은 서버에서만 한다. 위치·회전은 프리팹의 NetworkTransform이 클라이언트에 맞춘다.<br/>
+/// 포인터, 상태, 주인 플레이어는 [SyncVar]로 클라이언트에 보낸다. 클라이언트에서는 주인의 SummonedSwords 목록에 스스로 들어가고, 상태가 바뀌면 StateChanged가 불린다 (HUD, 누수 반투명).
+/// </para>
 /// </summary>
-public class SummonedSword : MonoBehaviour
+public class SummonedSword : NetworkBehaviour
 {
 	[Tooltip("자기 자리로 따라가는 빠르기 (클수록 빨리 붙음)")]
 	[SerializeField, Min(0.1f)] float followSharpness = 12f;
@@ -61,11 +66,20 @@ public class SummonedSword : MonoBehaviour
 	Vector2 stuckOffset;
 	readonly HashSet<Monster> returnHits = new HashSet<Monster>();
 
-	/// <summary>힙 포인터 (번호표). 해제되면 더 이상 쓸 수 없다.</summary>
+	/// <summary>힙 포인터 (번호표). 해제되면 더 이상 쓸 수 없다. 클라이언트에서는 서버가 보낸 값이다 (#229).</summary>
 	public int Pointer { get; private set; }
 
-	/// <summary>지금 상태.</summary>
+	/// <summary>지금 상태. 클라이언트에서는 서버가 보낸 값이다 (#229).</summary>
 	public SummonedSwordState State { get; private set; } = SummonedSwordState.Ready;
+
+	// [SyncVar] 서버의 Pointer, State, 주인을 클라이언트에 보낸다 (#229). 서버에서는 Init, SetState만 바꾼다
+	// 주인을 마지막에 둔다: 한 번에 같이 오면 포인터·상태가 먼저 들어간 뒤 주인 목록에 들어가게 하기 위함
+	[SyncVar(hook = nameof(OnSyncedPointer))] int syncedPointer;
+	[SyncVar(hook = nameof(OnSyncedState))] SummonedSwordState syncedState = SummonedSwordState.Ready;
+	[SyncVar(hook = nameof(OnSyncedOwner))] NetworkIdentity syncedOwner;
+
+	// [클라이언트] 들어가 있는 주인 목록
+	SummonedSwords clientOwner;
 
 	/// <summary>마지막으로 던진 순서 (SwordThrowOrder). 검 돌아오기가 가장 먼저 던진 검을 고를 때 읽는다 (#167)</summary>
 	public int ThrowOrder { get; private set; }
@@ -86,6 +100,11 @@ public class SummonedSword : MonoBehaviour
 		Pointer = pointer;
 		this.groundLayers = groundLayers;
 		SetState(SummonedSwordState.Ready);
+		if (isServer)
+		{
+			syncedPointer = pointer;
+			syncedOwner = owner.GetComponent<NetworkIdentity>();
+		}
 	}
 
 	internal void SetReady()
@@ -150,11 +169,62 @@ public class SummonedSword : MonoBehaviour
 	void SetState(SummonedSwordState state)
 	{
 		State = state;
+		if (isServer) syncedState = state;
 		StateChanged?.Invoke(state);
+	}
+
+	// [클라이언트] 서버가 보낸 값 (#229). Host는 서버 쪽 값을 그대로 쓰므로 하지 않는다
+	void OnSyncedPointer(int _, int pointer)
+	{
+		if (isServer) return;
+		Pointer = pointer;
+		if (clientOwner != null) clientOwner.ClientSwordChanged(this);
+	}
+
+	void OnSyncedState(SummonedSwordState _, SummonedSwordState state)
+	{
+		if (isServer) return;
+		State = state;
+		StateChanged?.Invoke(state);
+		if (clientOwner != null) clientOwner.ClientSwordChanged(this);
+	}
+
+	void OnSyncedOwner(NetworkIdentity _, NetworkIdentity identity)
+	{
+		if (isServer) return;
+		JoinClientOwner(identity);
+	}
+
+	// 이미 주인이 정해진 채로 처음 보일 때 (늦게 들어온 클라이언트)
+	public override void OnStartClient()
+	{
+		if (isServer) return;
+		Pointer = syncedPointer;
+		State = syncedState;
+		StateChanged?.Invoke(State);
+		JoinClientOwner(syncedOwner);
+	}
+
+	public override void OnStopClient()
+	{
+		if (isServer) return;
+		if (clientOwner != null) clientOwner.ClientRemove(this);
+		clientOwner = null;
+	}
+
+	void JoinClientOwner(NetworkIdentity identity)
+	{
+		SummonedSwords next = identity != null ? identity.GetComponent<SummonedSwords>() : null;
+		if (next == clientOwner) return;
+		if (clientOwner != null) clientOwner.ClientRemove(this);
+		clientOwner = next;
+		if (clientOwner != null) clientOwner.ClientAdd(this);
 	}
 
 	void Update()
 	{
+		// 클라이언트에서는 움직이지 않는다. 위치는 NetworkTransform이 서버에 맞춘다 (#229)
+		if (isClientOnly) return;
 		switch (State)
 		{
 			case SummonedSwordState.Ready:

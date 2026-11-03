@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -9,10 +10,11 @@ using UnityEngine;
 /// - 관통이 아니면 처음 맞은 몬스터에서 멈추고, 관통이면 같은 몬스터를 두 번 맞히지 않고 계속 간다.<br/>
 /// - 사거리 끝에 닿거나 멈추면 IsFinished가 된다. 없애는 일은 스킬이 SwordWaveLauncher.DespawnWave로 한다.<br/>
 /// - 판정은 이 오브젝트가 속한 장소 씬의 물리 세계에 묻는다 (place-scenes.md).<br/>
-/// - 그림은 오른쪽을 보는 기준이다. 날아가는 방향으로 돌린다.
+/// - 그림은 오른쪽을 보는 기준이다. 날아가는 방향으로 돌린다.<br/>
+/// - 네트워크 (#229): 판정은 서버에서만 한다. 서버가 Launch하면 [ClientRpc]로 출발 위치·방향·속도·사거리를 보내고, 클라이언트는 같은 길로 그림만 날린다 (판정 없음). 없애는 일은 서버가 한다.
 /// </para>
 /// </summary>
-public class SwordWave : MonoBehaviour
+public class SwordWave : NetworkBehaviour
 {
 	Vector2 direction;
 	float speed;
@@ -21,6 +23,8 @@ public class SwordWave : MonoBehaviour
 	Vector2 hitSize;
 	bool pierce;
 	bool launched;
+	// [클라이언트] 서버가 보낸 길로 그림만 날리는 중이면 true (판정 안 함, #229)
+	bool visualOnly;
 	readonly HashSet<Monster> alreadyHit = new HashSet<Monster>();
 
 	/// <summary>[로직] 몬스터가 맞았을 때 (맞은 몬스터). 몬스터마다 한 번</summary>
@@ -53,8 +57,27 @@ public class SwordWave : MonoBehaviour
 		launched = true;
 		transform.rotation = Quaternion.FromToRotation(Vector3.right, this.direction);
 
+		// 클라이언트에도 같은 길을 알린다 (#229). 네트워크 없는 테스트에서는 보내지 않는다
+		if (isServer) RpcLaunch(transform.position, this.direction, speed, range);
+
 		// 만든 자리에 이미 몬스터가 있으면 바로 맞힌다
 		CheckHits();
+	}
+
+	// [클라이언트] 서버의 검기와 같은 길로 그림만 날린다. Host는 서버 쪽이 이미 날리고 있다
+	[ClientRpc]
+	void RpcLaunch(Vector2 origin, Vector2 direction, float speed, float range)
+	{
+		if (isServer) return;
+		transform.position = origin;
+		this.direction = direction;
+		this.speed = speed;
+		this.range = range;
+		travelled = 0f;
+		IsFinished = false;
+		visualOnly = true;
+		launched = true;
+		transform.rotation = Quaternion.FromToRotation(Vector3.right, direction);
 	}
 
 	void FixedUpdate()
@@ -70,7 +93,8 @@ public class SwordWave : MonoBehaviour
 
 	void CheckHits()
 	{
-		if (IsFinished) return;
+		// 클라이언트의 그림은 판정하지 않는다 (판정은 서버)
+		if (IsFinished || visualOnly) return;
 
 		ContactFilter2D filter = new ContactFilter2D();
 		filter.SetLayerMask(LayerMask.GetMask("Monster"));

@@ -9,7 +9,8 @@ using UnityEngine;
 /// - 읽는 곳 (없으면 임시 값으로 대신한다)<br/>
 ///   · 이동: Rigidbody2D 가로 속도<br/>
 ///   · 공중: <c>PlayerMovement.IsGrounded</c> (박진우). 없으면 세로 속도로 임시 판단<br/>
-///   · 시전: <c>FunctionExecutor.TaskStarted</c> (이우림)<br/>
+///   · 시전: <c>FunctionExecutorNetwork.TaskStarted</c> (이우림). 함수는 서버에서만 실행되므로 모든 화면에 알려 주는 이쪽을 받는다.
+///     FunctionExecutorNetwork가 없는 시험용 플레이어는 <c>FunctionExecutor.TaskStarted</c><br/>
 ///   · 피격·사망: <c>PlayerHealth.HitEffectPlayed</c>, <c>DeathEffectPlayed</c>, <c>RespawnEffectPlayed</c> (김도훈)
 /// </para>
 /// </summary>
@@ -46,6 +47,7 @@ public class PlayerAnimator : MonoBehaviour
 	PlayerMovement movement;
 	PlayerHealth health;
 	FunctionExecutor executor;
+	FunctionExecutorNetwork executorNetwork;
 
 	float castEndTime;
 	float hitEndTime;
@@ -59,6 +61,7 @@ public class PlayerAnimator : MonoBehaviour
 		movement = GetComponent<PlayerMovement>();
 		health = GetComponent<PlayerHealth>();
 		executor = GetComponent<FunctionExecutor>();
+		executorNetwork = GetComponent<FunctionExecutorNetwork>();
 		if (fallbackGroundLayers.value == 0) fallbackGroundLayers = LayerMask.GetMask("Ground", "Platform");
 	}
 
@@ -70,7 +73,9 @@ public class PlayerAnimator : MonoBehaviour
 			health.DeathEffectPlayed += OnDeath;
 			health.RespawnEffectPlayed += OnRespawn;
 		}
-		if (executor != null) executor.TaskStarted += OnCastStarted;
+		// 둘 다 있으면 네트워크 쪽만 받는다. FunctionExecutorNetwork는 네트워크 없이 돌 때도 TaskStarted를 불러 주므로 두 번 받지 않게 한다
+		if (executorNetwork != null) executorNetwork.TaskStarted += OnNetworkCastStarted;
+		else if (executor != null) executor.TaskStarted += OnCastStarted;
 	}
 
 	void OnDisable()
@@ -81,7 +86,8 @@ public class PlayerAnimator : MonoBehaviour
 			health.DeathEffectPlayed -= OnDeath;
 			health.RespawnEffectPlayed -= OnRespawn;
 		}
-		if (executor != null) executor.TaskStarted -= OnCastStarted;
+		if (executorNetwork != null) executorNetwork.TaskStarted -= OnNetworkCastStarted;
+		else if (executor != null) executor.TaskStarted -= OnCastStarted;
 	}
 
 	void Update()
@@ -138,7 +144,13 @@ public class PlayerAnimator : MonoBehaviour
 		castEndTime = 0f;
 	}
 
-	void OnCastStarted(FunctionTask task)
+	// FunctionExecutorNetwork.TaskStarted (작업 번호, 슬롯, 함수 이름). 모든 화면에서 불린다
+	void OnNetworkCastStarted(int taskId, int slot, string functionName) => StartCast();
+
+	// FunctionExecutor.TaskStarted. FunctionExecutorNetwork가 없는 시험용 플레이어만
+	void OnCastStarted(FunctionTask task) => StartCast();
+
+	void StartCast()
 	{
 		castEndTime = Time.time + castDuration;
 		currentState = null; // 연달아 시전해도 처음부터 다시 튼다

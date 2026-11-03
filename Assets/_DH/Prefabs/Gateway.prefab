@@ -293,7 +293,10 @@ MonoBehaviour:
   - 15
   pillarTimeLimit: 15
   groggyDuration: 6
-  failAttack: {fileID: 11400000, guid: 17a8e43cb4e81a34ab1a3c26eae2493d, type: 2}
+  overloadAttack: {fileID: 11400000, guid: 17a8e43cb4e81a34ab1a3c26eae2493d, type: 2}
+  safeZonePrefab: {fileID: 8694663767195707958, guid: 18c19a4f2ec281748bc28be998d79614, type: 3}
+  chargeTime: 3
+  safeZoneDistance: {x: 6, y: 15}
   groundLayers:
     serializedVersion: 2
     m_Bits: 192

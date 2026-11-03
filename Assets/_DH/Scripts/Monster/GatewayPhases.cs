@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// 레이드 보스 Gateway의 페이즈 전환과 기믹. 기본 공격은 같은 오브젝트의 GatewayAI가 하고, 이 컴포넌트는 페이즈와 기믹만 맡는다.
 /// <para>
 /// 페이즈 (체력 비율)<br/>
 /// - 1페이즈 100~70%: 플레이어를 처음 발견하고 First Gimmick Delay초 뒤 기믹 1(기둥 파괴)을 한 번<br/>
-/// - 2페이즈 70% 이하: 들어오는 순간 Transition Pause초 멈췄다가 기믹 2(전체 공격)를 한 번 (기믹 2 이슈에서 만든다)<br/>
+/// - 2페이즈 70% 이하: 들어오는 순간 Transition Pause초 멈췄다가 기믹 2(전체 공격)를 한 번<br/>
 /// - 3페이즈 40% 이하: 같은 방식으로 기믹 3(진짜 찾기)을 한 번 (기믹 3 이슈에서 만든다)<br/>
 /// - 기믹은 페이즈마다 한 번만 나온다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다.
 /// </para>
@@ -16,7 +17,12 @@ using UnityEngine;
 /// 기믹 1: 기둥 파괴<br/>
 /// - 보스 기준 Pillar Offsets(X) 위치의 땅에 기둥(Monster)을 세운다. 기둥은 스킬로 때려 부술 수 있다. 보스는 그동안 기본 공격을 계속한다.<br/>
 /// - Pillar Time Limit초 안에 모두 부수면 성공: 보스에게 기절 Groggy Duration초(그로기, StatusEffects). GroggyEffectPlayed(연출).<br/>
-/// - 시간이 다 되면 실패: 남은 기둥이 터지고, 같은 씬의 살아 있는 플레이어 모두에게 Fail Attack을 적용한다 (기믹 2가 생기면 그걸로 바꾼다).
+/// - 시간이 다 되면 실패: 남은 기둥이 터지고 기믹 2(전체 공격)로 이어진다.
+/// </para>
+/// <para>
+/// 기믹 2: 전체 공격<br/>
+/// - 보스가 Charge Time초 동안 기를 모은다(ChargeEffectPlayed, 그동안 기본 공격 멈춤). 보스 왼쪽·오른쪽에 안전지대(SafeZone)를 하나씩 땅 위에 만든다.<br/>
+/// - 시간이 되면 안전지대 밖의 같은 씬 살아 있는 플레이어 모두에게 Overload Attack을 적용하고(OverloadEffectPlayed), 안전지대를 없앤다.
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster, GatewayAI, StatusEffects와 함께 붙인다. 기둥 프리팹은 NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다.<br/>
@@ -49,10 +55,21 @@ public class GatewayPhases : MonoBehaviour
 	[SerializeField, Min(0f), Tooltip("성공했을 때 보스 그로기(기절) 시간(초)")]
 	float groggyDuration = 6f;
 
-	[SerializeField, Tooltip("실패했을 때 같은 씬의 모든 플레이어에게 적용할 공격 (임시 전체 공격)")]
-	MonsterAttackData failAttack;
+	[Header("기믹 2: 전체 공격")]
+	[SerializeField, FormerlySerializedAs("failAttack"), Tooltip("전체 공격. 안전지대 밖의 같은 씬 플레이어 모두에게 적용한다")]
+	MonsterAttackData overloadAttack;
 
-	[SerializeField, Tooltip("기둥을 세울 땅 레이어. Ground, Platform으로 둔다")]
+	[SerializeField, Tooltip("안전지대 프리팹 (SafeZone). NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다")]
+	SafeZone safeZonePrefab;
+
+	[SerializeField, Min(0.5f), Tooltip("기를 모으는 시간(초). 이 동안 안전지대로 들어가야 한다")]
+	float chargeTime = 3f;
+
+	[SerializeField, Tooltip("보스에서 안전지대 중심까지 가로 거리 범위 (유닛). x 최소, y 최대. 왼쪽·오른쪽에 하나씩 이 범위에서 랜덤")]
+	Vector2 safeZoneDistance = new Vector2(6f, 15f);
+
+	[Header("공통")]
+	[SerializeField, Tooltip("기둥·안전지대를 놓을 땅 레이어. Ground, Platform으로 둔다")]
 	LayerMask groundLayers;
 
 	Monster monster;
@@ -66,6 +83,11 @@ public class GatewayPhases : MonoBehaviour
 	float firstGimmickTime;
 	// 페이즈 전환으로 멈춘 뒤 기믹을 시작할 시각. 0이면 기다리는 기믹 없음
 	float pendingGimmickTime;
+
+	// 기믹 2 진행 상태
+	readonly List<SafeZone> safeZones = new List<SafeZone>(2);
+	bool overloadActive;
+	float overloadTime;
 
 	// 기믹 1 진행 상태
 	readonly List<Monster> pillars = new List<Monster>(3);
@@ -81,6 +103,16 @@ public class GatewayPhases : MonoBehaviour
 	/// [로직] 페이즈가 바뀐 순간 불린다. 새 페이즈 번호를 넘긴다.
 	/// </summary>
 	public event Action<int> PhaseChanged;
+
+	/// <summary>
+	/// [연출] 전체 공격을 위해 기를 모으기 시작할 때 불린다. Charge 모션에 쓴다. 모으는 시간(초)을 넘긴다.
+	/// </summary>
+	public event Action<float> ChargeEffectPlayed;
+
+	/// <summary>
+	/// [연출] 전체 공격이 터질 때 불린다. 화면 번쩍임, 흔들림, 소리에 쓴다.
+	/// </summary>
+	public event Action OverloadEffectPlayed;
 
 	/// <summary>
 	/// [연출] 기둥을 모두 부숴 보스가 그로기(기절)에 들어갈 때 불린다. Groggy 모션에 쓴다. 그로기 시간(초)을 넘긴다.
@@ -127,6 +159,7 @@ public class GatewayPhases : MonoBehaviour
 		}
 
 		if (pillarsActive) UpdatePillars(now);
+		if (overloadActive && now >= overloadTime) ReleaseOverload();
 	}
 
 	// 체력이 문턱을 넘으면 다음 페이즈로 간다 (Damaged는 로직 event라 서버에서만 불린다)
@@ -156,8 +189,8 @@ public class GatewayPhases : MonoBehaviour
 		switch (forPhase)
 		{
 			case 1: StartPillars(); break;
-			// 기믹 2·3은 다음 이슈에서 만든다
-			case 2: Debug.Log("[GatewayPhases] 2페이즈 기믹(전체 공격)은 아직 없음"); break;
+			// 기믹 3은 다음 이슈에서 만든다
+			case 2: StartOverload(); break;
 			case 3: Debug.Log("[GatewayPhases] 3페이즈 기믹(진짜 찾기)은 아직 없음"); break;
 		}
 	}
@@ -201,7 +234,8 @@ public class GatewayPhases : MonoBehaviour
 		{
 			pillarsActive = false;
 			BreakRemainingPillars();
-			FailAttack();
+			// 실패하면 전체 공격으로 이어진다
+			StartOverload();
 		}
 	}
 
@@ -223,18 +257,73 @@ public class GatewayPhases : MonoBehaviour
 		pillars.Clear();
 	}
 
-	// 임시 전체 공격: 같은 씬의 살아 있는 플레이어 모두에게 failAttack을 적용한다 (기믹 2가 생기면 바꾼다)
-	void FailAttack()
+	// ── 기믹 2: 전체 공격 ──
+
+	void StartOverload()
 	{
-		if (failAttack == null) return;
-		PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
-		for (int i = 0; i < players.Length; i++)
+		if (overloadActive) return;
+		overloadActive = true;
+		overloadTime = Time.time + chargeTime;
+		// 모으는 동안 기본 공격을 멈춘다. 터진 뒤 조금 더 쉰다
+		ai.Pause(chargeTime + 0.5f);
+		SpawnSafeZones();
+		PlayChargeEffect();
+	}
+
+	// 보스 왼쪽·오른쪽에 하나씩, 땅 위에 안전지대를 만든다
+	void SpawnSafeZones()
+	{
+		safeZones.Clear();
+		if (safeZonePrefab == null) return;
+
+		Vector2 boss = transform.position;
+		PhysicsScene2D physics = gameObject.scene.GetPhysicsScene2D();
+		for (int side = -1; side <= 1; side += 2)
 		{
-			PlayerHealth p = players[i];
-			if (p.IsDead || p.gameObject.scene != gameObject.scene) continue;
-			Collider2D body = p.GetComponentInChildren<Collider2D>();
-			if (body != null) MonsterAttackResolver.Apply(failAttack, body);
+			float dx = UnityEngine.Random.Range(safeZoneDistance.x, Mathf.Max(safeZoneDistance.x, safeZoneDistance.y));
+			Vector2 from = new Vector2(boss.x + side * dx, boss.y + 10f);
+			RaycastHit2D hit = physics.Raycast(from, Vector2.down, 40f, groundLayers);
+			if (!hit) continue;
+
+			GameObject obj = NetworkSpawner.Spawn(safeZonePrefab.gameObject, hit.point, Quaternion.identity, gameObject.scene);
+			if (obj != null) safeZones.Add(obj.GetComponent<SafeZone>());
 		}
+	}
+
+	// 안전지대 밖의 같은 씬 살아 있는 플레이어 모두에게 전체 공격을 적용하고 안전지대를 없앤다
+	void ReleaseOverload()
+	{
+		overloadActive = false;
+		PlayOverloadEffect();
+
+		if (overloadAttack != null)
+		{
+			PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+			for (int i = 0; i < players.Length; i++)
+			{
+				PlayerHealth p = players[i];
+				if (p.IsDead || p.gameObject.scene != gameObject.scene || InSafeZone(p.transform.position)) continue;
+				Collider2D body = p.GetComponentInChildren<Collider2D>();
+				if (body != null) MonsterAttackResolver.Apply(overloadAttack, body);
+			}
+		}
+
+		ClearSafeZones();
+	}
+
+	bool InSafeZone(Vector2 feet)
+	{
+		for (int i = 0; i < safeZones.Count; i++)
+			if (safeZones[i] != null && safeZones[i].Contains(feet)) return true;
+		return false;
+	}
+
+	// 안전지대를 없애는 곳은 여기 하나다 (코드 작성 규칙 3)
+	void ClearSafeZones()
+	{
+		for (int i = 0; i < safeZones.Count; i++)
+			if (safeZones[i] != null) NetworkSpawner.Despawn(safeZones[i].gameObject);
+		safeZones.Clear();
 	}
 
 	// 보스가 죽으면 남은 기둥도 터뜨리고 기믹을 멈춘다
@@ -243,10 +332,17 @@ public class GatewayPhases : MonoBehaviour
 		pillarsActive = false;
 		pendingGimmickTime = 0f;
 		BreakRemainingPillars();
+		// 모으던 전체 공격은 취소한다
+		overloadActive = false;
+		ClearSafeZones();
 	}
 
 	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
 	void PlayGroggyEffect() => GroggyEffectPlayed?.Invoke(groggyDuration);
+
+	void PlayChargeEffect() => ChargeEffectPlayed?.Invoke(chargeTime);
+
+	void PlayOverloadEffect() => OverloadEffectPlayed?.Invoke();
 
 	// 서버이거나 네트워크를 켜지 않은 테스트면 true
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;

@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MonsterAttackData
   effects:
   - type: 0
-    amount: 40
+    amount: 60
     duration: 0
   parryable: 0

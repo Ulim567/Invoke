@@ -174,7 +174,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a230c00bc95a44998183ee21d300d90, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
-  syncDirection: 0
+  syncDirection: 1
   syncMode: 0
   syncInterval: 0
   jumpHeight: 4
@@ -399,6 +399,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 63a73a21aa6414c48a749778acb50eb3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SkillEffectEvents
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
 --- !u!114 &2842981481539365227
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -446,6 +449,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c7b621ca3dcf40edb3ace083f70cc57, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VitalStrikeMinigame
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   revolutionSeconds: 1.2
   zoneDegrees: 30
   zoneMinStartDegrees: 70

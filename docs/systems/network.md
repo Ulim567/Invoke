@@ -84,7 +84,7 @@ public class SkillEffectEvents : NetworkBehaviour
 **3. 서버의 스킬이 플레이어 오브젝트의 이동을 바꿈 → `[TargetRpc]`**
 - 플레이어 이동은 소유 클라이언트가 정함(공용 `Player.prefab`의 `NetworkRigidbodyReliable2D`, Sync Direction: Client To Server). 서버에서 `PlayerMovement`를 불러도 움직이지 않음
 - 서버가 그 플레이어 오브젝트의 소유 클라이언트에 `[TargetRpc]`로 이동을 요청
-- 예: 찌르기의 `PlayerMovement.StartLunge` — 「맞춘 결과」의 박진우에게 제안
+- 예: 찌르기의 `PlayerMovement.StartLunge` — #223에서 반영 (player-movement.md)
 
 **4. 로컬 플레이어 입력의 결과를 서버로 → `[Command]`**
 - 키는 로컬 플레이어의 클라이언트에서 읽고, 값을 바꾸는 일은 서버에 요청
@@ -182,7 +182,7 @@ void CmdPickUp()
 - 임혜원에게 요청 (#173)
   - `PlayerAnimator`: 시전 모션 event `FunctionExecutor.TaskStarted` → `FunctionExecutorNetwork.TaskStarted`
   - `MemoryGauge`: `DataUsed` 그리기(#139 요청과 같음). 읽는 값은 그대로 `ProcessMemory`
-- 박진우에게 제안 (이우림 결정, 박진우 확인 전)
+- 박진우에게 제안 (이우림 결정) → 박진우 반영 (#223). 아래 제안대로 함. 돌진·돌아서기는 `PlayerMovement` 안에서 `[TargetRpc]`로 보내므로 스킬 코드는 그대로
   - 찌르기 돌진 (`ThrustSkill` → `PlayerMovement.StartLunge`)
     - 지금: 클라이언트로 접속한 플레이어의 찌르기가 제자리에서 나감(멀리 있는 대상에게 달려가지 않음)
     - 이유: 스킬은 서버에서 실행, 플레이어 위치는 소유 클라이언트가 정함(`NetworkRigidbodyReliable2D`, Client To Server). 서버의 `StartLunge`는 소유 클라이언트의 플레이어 오브젝트를 움직이지 못함
@@ -205,7 +205,7 @@ void CmdPickUp()
   - 그 밖: 스킬 이펙트(`SkillEffectEvents`)는 「경우별 처리 방법」 2번, 검 줍기(`SwordPickUpInput`)는 4번
     - 검 줍기: 지금은 소유 클라이언트에서 `PhysicalSword.TryPickUp`을 불러 `NetworkSpawner.Despawn`이 클라이언트 오류를 냄
 - 다른 이슈로 넘긴 것
-  - 박진우 서버 동기화: 찌르기 돌진·바라보는 방향, 급소공략 미니게임 판정, `SkillEffectEvents` 연출 전달
+  - 박진우 서버 동기화: 찌르기 돌진·바라보는 방향, 급소공략 미니게임 판정, `SkillEffectEvents` 연출 전달 → #223에서 함
   - 「소환검·검기를 서버에서 생성하고 동기화하기」: 검 오브젝트 위치·상태, 소환검 HUD, 줍기
   - 몬스터 서버 동기화: 몬스터 체력·사망
   - 「데미지·상태 이상을 서버에서 판정하기」: 상태 이상

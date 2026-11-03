@@ -127,6 +127,10 @@
 - 눈 칸, 발목 칸: 각각 `Zone Degrees`(임시 30도). 시작할 때마다 위치를 새로 정한다. 두 칸은 겹치지 않고, 출발 직후 `Zone Min Start Degrees`(70도) 전에는 놓지 않는다.
 - 멈춘 순간 바늘이 든 칸이 결과. 칸 밖이거나 한 바퀴 안에 안 멈추면 `Miss`.
 - 키 입력은 읽지 않는다. `SlotCaster`가 Space(`MarkPressed`)로 `Begin`, `Stop`을 부른다.
+- 네트워크 (#223, network.md 「경우별 처리 방법」 4번): `NetworkBehaviour`다. 미니게임은 소유 클라이언트 화면에서 돌고, 결과가 바뀔 때마다(판정, `Miss`로 끝남, 취소, 지우기) `[Command]`로 서버의 `VitalStrikeMinigame`에 같은 결과를 넣는다. 서버의 급소공략은 서버의 `TakeResult()`로 읽는다.
+  - Mirror는 보낸 순서대로 처리하므로 결과가 시전 요청보다 먼저 서버에 닿는다. 그래서 바늘이 도는 중에 슬롯을 떼면 `SlotCaster`가 시전 요청 전에 `FinishAsMiss()`로 끝낸다.
+  - Host·네트워크 없는 테스트는 같은 오브젝트라 보내지 않는다.
+  - 한계: 조작한 클라이언트가 늘 `Eye`를 보낼 수 있다 (보안은 나중).
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
@@ -137,6 +141,7 @@
 | `EyeZoneStart`, `AnkleZoneStart`, `ZoneDegrees` | - | `float` | 칸 위치. 칸은 `Start` ~ `Start + ZoneDegrees` |
 | `PendingResult` | - | `VitalStrikeResult` | 급소공략이 아직 가져가지 않은 결과 |
 | `Begin()`, `Stop()`, `Cancel()` | - | - / `VitalStrikeResult` / - | `SlotCaster`가 부른다 |
+| `FinishAsMiss()` | - | - | 진행 중이면 `Miss`로 끝낸다. 슬롯을 떼서 시전하기 직전에 `SlotCaster`가 부른다 (#223) |
 | `TakeResult()` | - | `VitalStrikeResult` | 급소공략이 시작할 때 부른다. 가져가면 지워짐. 진행 중이면 `Miss`로 끝냄 |
 
 - `VitalStrikeMinigameView`: (임시) 머리 위에 다이얼을 OnGUI로 그린다. 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘. 실제 그림(임혜원)은 위 event와 값을 읽어 바꾼다.
@@ -221,7 +226,10 @@
 
 - 순서: `Started` → (`Fired` → `Hit` 0번 이상) → `Ended`. 필요 조건(맨손 등)에 걸려 시작하지 못한 스킬은 아무 event도 내지 않는다.
 - `Started`, `Ended`는 `DataDrivenSkill`이 모든 C 스킬에 대해 낸다. `Fired`, `Hit`은 효과를 채운 스킬부터 낸다 (지금: 찌르기·던지기 계열 전부, 휘두르기 계열(전장 휩쓸기 빼고)).
-- `Raise...` 함수는 C 스킬만 부른다. 네트워크를 붙이면 `[ClientRpc]`로 바꿔 모든 화면에서 불린다.
+- `Raise...` 함수는 C 스킬만 부른다.
+- 네트워크 (#223, network.md 「경우별 처리 방법」 2번): `SkillEffectEvents`는 `NetworkBehaviour`다. 서버에서 `Raise...`를 부르면 서버(Host 포함)에서 바로 event를 내고, `[ClientRpc]`로 다른 클라이언트에서도 같은 event를 낸다. 받는 쪽은 바꿀 것 없음.
+  - `Hit`의 대상은 `NetworkIdentity`가 있는 오브젝트만 클라이언트에 전해진다. 없으면 클라이언트에서는 `null` (맞은 위치는 옴).
+  - 네트워크 없는 테스트에서는 그 자리에서만 낸다.
 - 찌르기 섬광: `ThrustEffectView`(플레이어)가 `Fired`를 받아 `ThrustFlash`(검 찌르기·집중찌르기) / `SkewerFlash`(꼬챙이) 프리팹을 찌르는 방향으로 만든다. 그림은 임혜원 #114 (`_HW/Effects/Thrust_Flash`, `Skewer_Flash`). 보여 주기만 하는 오브젝트라 `OneShotEffect`가 0.25초 뒤 스스로 없앤다.
 
 ### 새 스킬 효과 만들기 (`DataDrivenSkill`)
@@ -238,6 +246,7 @@
 | `VitalStrikeSimTest` | Test_JW의 VitalTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 10초). Q에 급소공략을 넣고(끝나면 되돌림) 눈 칸 → 3.0배 + 실명, 미니게임 중 대상 고정, 발목 칸 → 3.0배 + 이속 감소, 미니게임 안 함 → 기본 데미지, 칸 밖에서 멈춤 → 기본 데미지, 결과는 한 번 쓰면 지워짐을 확인. 「[VitalTest] 전체 통과」면 통과. 평소에는 꺼 둔다. 직접 해 보려면 `Restore Slot`을 끄고 한 번 돌리면 Q에 급소공략이 남는다. |
 | `Slash2SimTest` | Test_JW의 Slash2Test. 켜고 Play → Host (약 12초). 사용 가능한 소환검을 3개까지 소환한 뒤 소환검 휘두르기(날린 검기 수만큼 맞음. heap이 모자라면 소환검 수보다 적게 날림, heap 원래대로, 검은 제자리), 상처 가르기(출혈 대상 배율 +100%, 다음 출혈 틱 2배, 출혈 풀리면 배율 없어짐, 출혈 아닌 대상은 배율 없음), 검 다중베기(소환검 수만큼 벰, 검 모두 돌아옴)를 확인. 「[Slash2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordPointerSimTest` | Test_JW의 SwordPointerTest. 켜고 Play → Host (약 12초). 몬스터 2마리 이상. 블록코딩 `malloc(Sword)` → `free(s)`(진짜 소환검이 생겼다 사라짐, heap 원래대로), `Sword* s = SummonSword(); FreeSword(s);`, 소환검 던지기·찌르기에 두 번째 검 포인터를 넘기면 그 검을 씀, 해제에 포인터를 넘기면 그 검만 해제·같은 포인터로 또 해제하면 `InvalidPointerError`, 전장 휩쓸기 `[a, b, a]`(각 1번씩 맞음, 검 모두 돌아옴)를 확인. 「[SwordPointerTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SkillSyncLogTest` | Test_JW의 SkillSyncLog (#223). 켜 두고 에디터 Play → Host, `Test_JW`만 넣은 빌드 → Client. 클라이언트 캐릭터로 스킬을 쓰면 Host 콘솔에 「[SkillSyncLog] [클라이언트 …] 스킬 발사: 방향 / 명중: 대상, 데미지, 실명·이속감소」가 남는다. 돌진·바라보는 방향·급소공략 결과가 서버에 왔는지 사람이 로그로 확인한다. 평소에는 꺼 둔다. |
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기 두 번(먼저 던진 소환검부터·오는 길 몬스터에 데미지, 그다음 물리 검), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |

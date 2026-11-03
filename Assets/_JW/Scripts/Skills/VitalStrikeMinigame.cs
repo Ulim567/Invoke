@@ -1,4 +1,5 @@
 using System;
+using Mirror;
 using UnityEngine;
 
 /// <summary>급소공략 미니게임 결과</summary>
@@ -16,10 +17,12 @@ public enum VitalStrikeResult
 /// - 다이얼 위로 바늘이 0도에서 시작해 시계 방향으로 한 바퀴 돈다. 다이얼에는 눈 칸과 발목 칸이 있고, 시작할 때마다 위치가 바뀐다.<br/>
 /// - Stop을 부른 순간 바늘이 들어 있는 칸이 결과다. 칸 밖이거나, 한 바퀴를 다 돌 때까지 안 멈추면 Miss.<br/>
 /// - 결과는 다음 급소공략이 시작할 때 TakeResult로 한 번 가져간다. 새로 Begin하거나 ClearResult를 부르면 지워진다.<br/>
-/// - 각도: 0도 = 12시, 시계 방향으로 커진다.
+/// - 각도: 0도 = 12시, 시계 방향으로 커진다.<br/>
+/// - 네트워크 (#223, network.md 「경우별 처리 방법」 4번): 미니게임은 소유 클라이언트의 화면에서 돌고, 결과가 바뀔 때마다(판정, 취소, 지우기) [Command]로 서버의 이 컴포넌트에 같은 결과를 넣는다.<br/>
+///   서버의 급소공략(CVitalStrike)은 서버의 TakeResult로 읽는다. Mirror는 보낸 순서대로 처리하므로 결과가 시전 요청보다 먼저 서버에 닿는다. Host·네트워크 없는 테스트는 같은 오브젝트라 보내지 않는다.
 /// </para>
 /// </summary>
-public class VitalStrikeMinigame : MonoBehaviour
+public class VitalStrikeMinigame : NetworkBehaviour
 {
 	[Tooltip("바늘이 한 바퀴 도는 시간 (초, 임시)")]
 	[SerializeField, Min(0.2f)] float revolutionSeconds = 1.2f;
@@ -59,7 +62,7 @@ public class VitalStrikeMinigame : MonoBehaviour
 	/// <summary>미니게임을 시작한다. 칸 위치를 새로 정하고 바늘을 0도로 돌린다. 남아 있던 결과는 지운다.</summary>
 	public void Begin()
 	{
-		result = VitalStrikeResult.None;
+		SetResult(VitalStrikeResult.None);
 		PlaceZones();
 		needle = 0f;
 		running = true;
@@ -79,8 +82,17 @@ public class VitalStrikeMinigame : MonoBehaviour
 	{
 		if (!running && result == VitalStrikeResult.None) return;
 		running = false;
-		result = VitalStrikeResult.None;
+		SetResult(VitalStrikeResult.None);
 		Finished?.Invoke(VitalStrikeResult.None);
+	}
+
+	/// <summary>
+	/// 진행 중이면 멈추지 않은 것으로 보고 Miss로 끝낸다 (#223). 진행 중이 아니면 아무 일도 없다.<br/>
+	/// 슬롯을 떼서 시전하기 직전에 SlotCaster가 부른다. 서버는 바늘이 도는 줄 모르므로, 소유 클라이언트가 먼저 끝내고 결과를 보낸다.
+	/// </summary>
+	public void FinishAsMiss()
+	{
+		if (running) Finish(VitalStrikeResult.Miss);
 	}
 
 	/// <summary>
@@ -96,7 +108,7 @@ public class VitalStrikeMinigame : MonoBehaviour
 	}
 
 	/// <summary>가져가지 않은 결과를 지운다.</summary>
-	public void ClearResult() => result = VitalStrikeResult.None;
+	public void ClearResult() => SetResult(VitalStrikeResult.None);
 
 	/// <summary>각도가 칸 안인지 (표시·테스트용)</summary>
 	public VitalStrikeResult Judge(float angle)
@@ -120,8 +132,24 @@ public class VitalStrikeMinigame : MonoBehaviour
 	void Finish(VitalStrikeResult value)
 	{
 		running = false;
-		result = value;
+		SetResult(value);
 		Finished?.Invoke(value);
+	}
+
+	// 결과를 바꾸는 곳은 여기 하나 (코드 작성 규칙 2). 소유 클라이언트(서버가 아닌 쪽)면 서버에도 같은 결과를 넣는다
+	void SetResult(VitalStrikeResult value)
+	{
+		result = value;
+		if (isClient && !isServer && isOwned) CmdSetResult(value);
+	}
+
+	// [서버] 소유 클라이언트가 판정한 결과 (#223). 서버에서는 바늘이 돌지 않으므로 결과만 받아 둔다
+	// 한계: 조작한 클라이언트가 늘 Eye를 보낼 수 있다 (보안은 나중, network.md)
+	[Command]
+	void CmdSetResult(VitalStrikeResult value)
+	{
+		running = false;
+		result = value;
 	}
 
 	bool InZone(float angle, float start) => angle >= start && angle <= start + zoneDegrees;

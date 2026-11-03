@@ -307,6 +307,8 @@ public class SlotCaster : NetworkBehaviour
 		if (mode == CastMode.MultiSelect && marked.Count > 0) targets.AddRange(marked);
 		else if (CurrentTarget != null) targets.Add(CurrentTarget); // 단일, 또는 아무도 찍지 않은 여러 명 선택
 
+		// 바늘이 도는 중에 떼면 Miss로 끝내고 그 결과를 서버에 먼저 보낸다 (#223). 서버의 급소공략은 서버에 받아 둔 결과를 읽는다
+		if (minigameStarted && minigame != null) minigame.FinishAsMiss();
 		EndSelection();
 
 		// GetBug 입력: 고른 몬스터를 기다리는 작업에 넣는다. 후보가 없었으면 대상 없음을 넣는다

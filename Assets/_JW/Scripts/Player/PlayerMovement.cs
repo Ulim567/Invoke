@@ -17,6 +17,12 @@ using Mirror;
 /// - 입력은 PlayerInputReader에서만 읽는다.<br/>
 /// - 움직임 잠그기(SetMovementLocked, #207): 장소 이동처럼 씬을 바꾸는 동안 그 자리에 멈춰 둔다. 잠근 동안 속도 0, 중력 없음, 입력·돌진 무시.
 /// </para>
+/// <para>
+/// 네트워크 (#223, network.md 「경우별 처리 방법」 3번)<br/>
+/// - 플레이어 위치는 소유 클라이언트가 정한다 (NetworkRigidbodyReliable2D, Client To Server). 그래서 서버의 스킬이 StartLunge / StopLunge / FaceTowards를 부르면,<br/>
+///   그 플레이어가 다른 컴퓨터의 플레이어일 때 [TargetRpc]로 소유 클라이언트에 요청하고 거기서 움직인다. Host의 내 캐릭터, 네트워크 없는 테스트는 그 자리에서 한다.<br/>
+/// - Facing은 [SyncVar]다. 이 컴포넌트의 Sync Direction을 Client To Server로 둬서, 소유 클라이언트가 바꾼 방향이 서버와 다른 클라이언트에 맞춰진다.
+/// </para>
 /// </summary>
 [RequireComponent(typeof(PlayerStats), typeof(PlayerInputReader), typeof(Rigidbody2D))]
 public class PlayerMovement : NetworkBehaviour
@@ -88,10 +94,13 @@ public class PlayerMovement : NetworkBehaviour
 
 	/// <summary>
 	/// 바라보는 방향. 오른쪽 1, 왼쪽 -1. 처음에는 오른쪽이다.
-	/// 스킬이 앞쪽 방향(판정, 투사체)을 정할 때, 그림 뒤집기(PlayerFacingView)가 읽는다.
+	/// 스킬이 앞쪽 방향(판정, 투사체)을 정할 때, 그림 뒤집기(PlayerFacingView)가 읽는다.<br/>
+	/// [SyncVar] (#223): 소유 클라이언트가 바꾸면 서버와 다른 클라이언트에 맞춰진다 (Sync Direction: Client To Server).
 	/// </summary>
-	// TODO: 네트워크를 붙이면 [SyncVar]로 다른 플레이어 화면에도 맞춘다 (코드 작성 규칙 2)
-	public int Facing { get; private set; } = 1;
+	public int Facing => facing;
+
+	// 바꾸는 곳은 UpdateFacing, FaceTowards 두 군데뿐이다 (코드 작성 규칙 2)
+	[SyncVar] int facing = 1;
 
 	/// <summary>움직임이 잠겨 있으면 true (#207).</summary>
 	public bool IsMovementLocked => movementLocked;
@@ -128,6 +137,13 @@ public class PlayerMovement : NetworkBehaviour
 	/// </summary>
 	public void StartLunge(float targetX)
 	{
+		// 다른 컴퓨터의 플레이어면 소유 클라이언트에 돌진을 맡긴다 (#223). 서버에서는 바라보는 방향만 먼저 맞춰 둔다
+		if (OwnedByRemoteClient)
+		{
+			SetFacingTowards(targetX);
+			TargetStartLunge(targetX);
+			return;
+		}
 		// 움직임이 잠겨 있으면 돌진하지 않는다 (#207)
 		if (movementLocked) return;
 		lunging = true;
@@ -139,6 +155,11 @@ public class PlayerMovement : NetworkBehaviour
 	/// <summary>돌진을 멈춘다. 스킬이 끝나거나 끊길 때 부른다.</summary>
 	public void StopLunge()
 	{
+		if (OwnedByRemoteClient)
+		{
+			TargetStopLunge();
+			return;
+		}
 		if (!lunging) return;
 		lunging = false;
 		body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
@@ -147,10 +168,30 @@ public class PlayerMovement : NetworkBehaviour
 	/// <summary>x 위치 쪽을 바라본다. 스킬이 대상 쪽으로 돌아설 때 부른다.</summary>
 	public void FaceTowards(float x)
 	{
-		float dx = x - transform.position.x;
-		if (dx > 0.01f) Facing = 1;
-		else if (dx < -0.01f) Facing = -1;
+		SetFacingTowards(x);
+		// 방향은 소유 클라이언트가 정하므로, 다른 컴퓨터의 플레이어면 거기에도 알린다 (#223). 서버의 값은 위에서 먼저 바꿔 둬서 같은 틱의 스킬이 바로 읽는다
+		if (OwnedByRemoteClient) TargetFaceTowards(x);
 	}
+
+	// 서버에서 불렸고, 이 플레이어를 다른 컴퓨터(원격 클라이언트)가 움직이면 true. Host의 내 캐릭터, 네트워크 없는 테스트는 false
+	bool OwnedByRemoteClient => isServer && !isLocalPlayer && connectionToClient != null;
+
+	void SetFacingTowards(float x)
+	{
+		float dx = x - transform.position.x;
+		if (dx > 0.01f) facing = 1;
+		else if (dx < -0.01f) facing = -1;
+	}
+
+	// [소유 클라이언트] 서버의 스킬이 요청한 돌진·멈춤·돌아서기 (#223). 받은 쪽은 내 캐릭터이므로 그대로 움직인다
+	[TargetRpc]
+	void TargetStartLunge(float targetX) => StartLunge(targetX);
+
+	[TargetRpc]
+	void TargetStopLunge() => StopLunge();
+
+	[TargetRpc]
+	void TargetFaceTowards(float x) => SetFacingTowards(x);
 
 	/// <summary>
 	/// 지금 바닥에 서 있으면 true. 올라가는 중(발판을 아래에서 뚫고 오르는 중 등)에는 false다.
@@ -256,8 +297,8 @@ public class PlayerMovement : NetworkBehaviour
 	// 움직이는 방향을 바라본다. 멈추면(0) 마지막 방향을 유지한다
 	void UpdateFacing(float moveX)
 	{
-		if (moveX > 0f) Facing = 1;
-		else if (moveX < 0f) Facing = -1;
+		if (moveX > 0f) facing = 1;
+		else if (moveX < 0f) facing = -1;
 	}
 
 	// 지금 중력에서 jumpHeight만큼 오르는 데 필요한 속도를 바로 넣는다 (v = √(2gh))

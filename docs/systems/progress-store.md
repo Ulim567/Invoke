@@ -184,13 +184,15 @@
 - 서버 → 소유 클라이언트 (플레이어를 만든 직후, `ApplyPlayerData` 뒤): 함수 JSON 목록, 슬롯 8개, 전역 변수 JSON (`[TargetRpc]`). 클라이언트는 받은 데이터로 편집 화면·장착 화면을 그림
 - 소유 클라이언트 → 서버 (`[Command]`), 서버는 처리 뒤 결과를 소유 클라이언트에 보냄 (`[TargetRpc]`)
 
-| 요청 | 서버가 하는 일 |
-| --- | --- |
-| 함수 저장 (함수 JSON) | JSON 읽기 → 새 함수면 개수 제한 검사 → `CharacterFunctions`에 씀 → 그 함수를 장착한 슬롯의 원본을 다시 만듦 |
-| 장착 바꾸기 (`EquipFunction`, `EquipSkill`, `Unequip`, `Swap`) | 서버의 `SlotLoadout`에 같은 동작 → 바뀐 슬롯의 `CharacterSlots` row를 한 트랜잭션으로 씀 |
-| 전역 변수 저장 (전역 변수 JSON) | `FunctionExecutor.TrySaveGlobalVariables` (검사 → 저장 → 초기화). 저장은 `CharacterGlobals`에 씀 |
+| 요청 함수 (소유 클라이언트) | 서버가 하는 일 | 거부 |
+| --- | --- | --- |
+| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 새 함수면 개수 제한(`ProgressRules.MaxFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦 | `InvalidData`, `TooManyFunctions` |
+| `RequestEquipFunction(slot, guid)`, `RequestEquipSkill(slot, id)`, `RequestUnequip(slot)`, `RequestSwap(a, b)` | `SlotLoadout`과 같은 규칙(같은 함수·스킬은 한 슬롯에만)으로 바꿈 → 바뀐 슬롯의 `CharacterSlots` row를 한 트랜잭션으로 씀 → 슬롯 원본을 다시 만듦 | `InvalidSlot`, `UnknownFunction`, `NotEquippable` |
+| `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected` |
 
-- 거부되면 이유를 보내고, 클라이언트의 데이터는 바꾸지 않음
+- 결과: `PlayerDataRequestAnswered(요청 종류, 결과)`. 성공(`Saved`)이면 그보다 먼저 `ReceivedSlots`·`ReceivedFunctions`·`ReceivedGlobals`가 새 값으로 바뀌고 `PlayerDataReceived`가 불림
+- 거부되면 `ReceivedXxx`는 그대로. 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)의 요청은 `NotAllowed`
+- 장착할 때 해금 여부는 아직 보지 않음 (정할 것)
 - 「로그인 건너뛰기」 임시 계정: 지금처럼 PC 파일
 - 함수 내용 검사(구조, 해금한 블록만 썼는지): 「만든 함수를 서버로 보내 검사·저장하기」. 이번 이슈는 JSON 읽기와 개수 제한까지
 
@@ -226,6 +228,8 @@
 - 정할 것: 테이블 설계 뒤 저장·불러오기 함수와 서버가 클라이언트에게 보내는 데이터
 
 ## 정할 것
+- 장착할 때 해금한 스킬만 넣게 할지 (`PlayerProgress.Unlocked`로 서버가 검사)
+- `FunctionStorage`(임혜원)·`SlotLoadout`(박진우)이 PC 파일 대신 위 요청 함수를 부르게 바꾸는 일
 - 공용 `Player.prefab`에 실행기 컴포넌트(`FunctionExecutor`, `LanguageRule`, `ProcessMemory`, `SlotLoadout`, `FunctionExecutorNetwork`)와 `PlayerProgress`를 합치는 일: 박진우·임혜원의 Variant에서 중복 컴포넌트를 지우는 일과 함께 별도 이슈
 
 ## 맞춘 결과

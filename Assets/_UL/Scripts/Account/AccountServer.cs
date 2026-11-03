@@ -129,7 +129,7 @@ public class AccountServer : IDisposable
 		if (player.TryGetComponent(out PlayerProgress progress)) progress.ApplyLoaded(data, store.Progress, session.CharacterKey);
 		else Debug.LogError($"[AccountServer] {player.name}에 PlayerProgress가 없어서 레벨·재료 등을 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
 
-		if (player.TryGetComponent(out FunctionExecutorNetwork network)) network.ApplyLoadedData(data);
+		if (player.TryGetComponent(out FunctionExecutorNetwork network)) network.ApplyLoadedData(data, store.Progress, session.CharacterKey);
 		else Debug.LogError($"[AccountServer] {player.name}에 FunctionExecutorNetwork가 없어서 슬롯·함수·전역 변수를 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
 
 		session.ClearLoadedProgress();

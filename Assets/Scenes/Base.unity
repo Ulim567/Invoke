@@ -359,8 +359,10 @@ GameObject:
   - component: {fileID: 9053282931568076821}
   - component: {fileID: 9053282931568076823}
   - component: {fileID: 9053282931568076824}
+  - component: {fileID: 9053282931568076826}
   - component: {fileID: 3589625349336239779}
   - component: {fileID: 9053282931568076822}
+  - component: {fileID: 9053282931568076825}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -445,7 +447,7 @@ MonoBehaviour:
   offlineScene: 
   onlineScene: 
   offlineSceneLoadDelay: 0
-  transport: {fileID: 3589625349336239779}
+  transport: {fileID: 9053282931568076825}
   networkAddress: localhost
   maxConnections: 100
   disconnectInactiveConnections: 0
@@ -527,6 +529,35 @@ MonoBehaviour:
     y: 40
     width: 300
     height: 9999
+--- !u!114 &9053282931568076825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4138530712472164788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0aa135acc32a4383ae9a5817f018cb06, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror.Transports::Mirror.Transports.Encryption.EncryptionTransport
+  Inner: {fileID: 3589625349336239779}
+  ClientValidateServerPubKey: 1
+  ClientTrustedPubKeySignatures: []
+  ServerLoadKeyPairFromFile: 0
+  ServerKeypairPath: ./server-keys.json
+--- !u!114 &9053282931568076826
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4138530712472164788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6cb2d71cb5c8dc48a3d5097cb93916c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EncryptionKeySetup
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

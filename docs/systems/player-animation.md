@@ -21,6 +21,7 @@
 | Hit | `PlayerHealth.HitEffectPlayed`부터 `HitStunTime`(0.3초) 동안 | 김도훈 |
 | Death | `PlayerHealth.DeathEffectPlayed`부터 `RespawnEffectPlayed`까지 | 김도훈 |
 
+- 붙이는 곳: 공용 `Assets/Prefabs/Player.prefab` 최상위 (#221). SpriteRenderer(그림 `C_Idle` 첫 장면, Sorting Layer Player) + Animator(`Assets/_HW/Player/Animations/C_Player.controller`) + `PlayerAnimator`. 개인 테스트 프리팹(Player_JW 등)은 공용 프리팹의 변형이라 같이 받는다
 - 컴포넌트가 없으면 그 상태는 건너뛴다. 예: `PlayerHealth`가 없으면 피격·사망 애니메이션이 나오지 않을 뿐 에러는 나지 않는다.
 - Animator Controller에는 상태 6개만 두고 Transition은 만들지 않는다. 상태 이름은 위 표의 영어 이름과 같아야 한다.
 - 클립은 12fps로 만들고, 상태의 Speed로 길이를 맞춘다.

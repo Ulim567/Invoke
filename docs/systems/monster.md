@@ -8,7 +8,7 @@
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
-- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)과 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격, `GatewayPhases`)까지 있다.
+- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)과 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격)·기믹 3(진짜 찾기, `GatewayPhases`)까지 있다.
 - 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
@@ -96,7 +96,14 @@
     - 시간이 되면 안전지대 밖의 같은 씬 살아 있는 플레이어 모두에게 `Gateway_Overload`(체력 피해 60)를 적용하고(연출 `OverloadEffectPlayed`), 안전지대를 없앤다. 안전 여부는 플레이어 발 위치로 본다
     - 플레이어 무적(1초) 중이면 기존 피격 규칙대로 무시된다. 모으는 동안 보스가 기본 공격을 하지 않아 겹칠 일이 거의 없다
     - 보스가 죽으면 모으던 전체 공격은 취소하고 안전지대를 없앤다
-  - 기믹 3(진짜 찾기)은 다음 이슈. 지금은 로그만 남긴다
+  - 기믹 3 진짜 찾기: 3페이즈 기믹
+    - 보스 기준 `Clone Slots`(X -10, 0, +10)에 진짜 1 + 분신 2를 세운다. 진짜는 그중 랜덤한 자리로 순간이동한다. 분신은 본체와 그림·크기가 같고 진짜와 같은 쪽을 본다
+    - 구분 힌트: 분신만 2~3초마다 0.1초 색이 바뀐다(`CloneGlitch`, 연출 전용, 위치는 안 바꿈)
+    - 기믹 동안 진짜도 공격하지 않는다(`GatewayAI.Pause`)
+    - 분신(`GatewayClone`)은 `Monster`(보스 아님, 체력 99999)라 스킬로 맞고 죽지 않는다. 보스가 아니라 화면 위 체력 바에는 진짜만 나온다
+    - 분신이 맞을 때마다 같은 씬의 살아 있는 플레이어 모두에게 `Gateway_Reflect`(체력 피해 15, 반사). `TakeDamage`에는 때린 사람 정보가 없어서 파티 전체가 받는다. 분신에 걸린 출혈 틱도 맞을 때마다 반사된다
+    - 진짜가 기믹 동안 `Reveal Damage`(150) 이상 피해를 받거나 `Clone Duration`(20초)이 지나면 분신이 사라지고(체력 0 → 사망 연출) 진짜가 다시 공격한다(`GatewayAI.Resume`)
+    - 보스가 죽으면 분신도 사라진다
   - 수치는 전부 임시
 - 낙하 (`FallingPacket`)
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
@@ -239,11 +246,12 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
 | `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
 | `SlamEffectPlayed` (event) | - | - | [연출] 패킷 낙하를 시작할 때. Slam 모션에 쓴다. 그림자는 `Slam Delay`초 뒤 |
 | `Pause(float seconds)` | 멈출 시간(초) | - | 그동안 공격을 멈춘다. 모으는 중인 낙하는 취소. `GatewayPhases`가 페이즈 전환 때 부른다 |
+| `Resume()` | - | - | `Pause`를 바로 풀고 한 간격 뒤부터 다시 공격한다 (분신 기믹이 일찍 끝날 때) |
 | 던지기 연출 | - | - | 같은 오브젝트의 `ProjectileAttack.FireEffectPlayed`를 받는다 (Throw 모션) |
 
 ### `GatewayPhases`
 
-Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께 붙인다. Inspector에서 `Pillar Prefab`(Pillar), `Overload Attack`(Gateway_Overload), `Safe Zone Prefab`(SafeZone), `Ground Layers`(Ground·Platform)를 넣는다.
+Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께 붙인다. Inspector에서 `Pillar Prefab`(Pillar), `Overload Attack`(Gateway_Overload), `Safe Zone Prefab`(SafeZone), `Clone Prefab`(GatewayClone), `Reflect Attack`(Gateway_Reflect), `Ground Layers`(Ground·Platform)를 넣는다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
@@ -252,6 +260,8 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 | `GroggyEffectPlayed` (event) | `float` (그로기 시간) | - | [연출] 기둥을 모두 부숴 그로기에 들어갈 때. Groggy 모션에 쓴다 |
 | `ChargeEffectPlayed` (event) | `float` (모으는 시간) | - | [연출] 전체 공격을 모으기 시작할 때. Charge 모션에 쓴다 |
 | `OverloadEffectPlayed` (event) | - | - | [연출] 전체 공격이 터질 때. 화면 번쩍임·흔들림·소리 |
+
+분신(`GatewayClone` 프리팹)은 `Monster`(체력 99999, 보스 아님, 사망 대기 0.75) + `ContactDamage` + `CloneGlitch` + `StatusEffects` + `StatusIconView` + Gateway와 같은 판정(BoxCollider2D) + `NetworkIdentity`. 진짜와 구분되는 컴포넌트는 `CloneGlitch`뿐이다.
 
 안전지대(`SafeZone` 프리팹)는 `SafeZone`(가로 `Width` 4, 높이 `Height` 5, Pivot 바닥) + 자식 그림 + `NetworkIdentity`. `Contains(Vector2)`로 안에 있는지 알려 준다.
 
@@ -297,6 +307,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 - 임혜원과 정해야 할 것
   - 기둥 그림 2×4칸: 체력 50% 초과 멀쩡, 50% 이하 금 감, 사망(`DeathEffectPlayed`) 때 부서지는 모션 약 0.5초. 지금은 임시 그림
   - Gateway Groggy 모션은 `GatewayPhases.GroggyEffectPlayed`(그로기 시간을 넘김)를 받는다
+  - 분신 프리팹(`GatewayClone`)에도 Gateway와 같은 그림·Animator·MonsterAnimator를 붙인다. 가짜가 사라지는 연출은 `DeathEffectPlayed`
   - 안전지대 바닥 그림(가로 4칸, 빛나는 바닥, 반복). Gateway Charge 모션은 `GatewayPhases.ChargeEffectPlayed`, 터지는 연출은 `OverloadEffectPlayed`
   - 보스 체력 바 그림: 테두리, 빨간 채움, 흰 채움(단색 사각형), 페이즈 구분선. 이름은 Galmuri 글자로 코드가 쓴다
   - Gateway 프리팹의 그림·Animator. Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`를 받는다

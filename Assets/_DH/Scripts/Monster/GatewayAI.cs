@@ -14,7 +14,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster(Is Boss 체크), ProjectileAttack과 함께 붙인다. 움직이지 않으므로 Rigidbody2D는 필요 없다.<br/>
-/// 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 공격을 고르지 않는다. Pause(초)를 부르면 그동안 공격을 멈춘다(페이즈 전환).<br/>
+/// 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 공격을 고르지 않는다. Pause(초)를 부르면 그동안 공격을 멈추고, Resume()으로 바로 풀 수 있다(페이즈 전환, 분신 기믹).<br/>
 /// 네트워크를 붙이면 패턴은 서버에서만 돌린다. 판정은 보스가 속한 씬의 물리 세계에 한다.
 /// </para>
 /// </summary>
@@ -100,6 +100,15 @@ public class GatewayAI : MonoBehaviour
 		pausedUntil = Mathf.Max(pausedUntil, Time.time + seconds);
 		// 멈춤이 끝나면 바로 공격하지 않고 한 간격을 기다린다
 		nextAttackTime = Mathf.Max(nextAttackTime, pausedUntil + attackInterval);
+	}
+
+	/// <summary>
+	/// Pause로 멈춘 것을 지금 풀고, 한 간격 뒤부터 다시 공격한다. 서버에서만 부른다.
+	/// </summary>
+	public void Resume()
+	{
+		pausedUntil = Time.time;
+		nextAttackTime = Time.time + attackInterval;
 	}
 
 	/// <summary>

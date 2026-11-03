@@ -297,6 +297,14 @@ MonoBehaviour:
   safeZonePrefab: {fileID: 8694663767195707958, guid: 18c19a4f2ec281748bc28be998d79614, type: 3}
   chargeTime: 3
   safeZoneDistance: {x: 6, y: 15}
+  clonePrefab: {fileID: 6873335778508936988, guid: f3a30460638c2724cb7e49e95e93eff2, type: 3}
+  cloneSlots:
+  - -10
+  - 0
+  - 10
+  revealDamage: 150
+  cloneDuration: 20
+  reflectAttack: {fileID: 11400000, guid: 2c2eaa5eaf2e4e74ba37f71783e32113, type: 2}
   groundLayers:
     serializedVersion: 2
     m_Bits: 192

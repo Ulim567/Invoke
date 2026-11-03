@@ -637,6 +637,7 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
     - 기다리는 중에 작업이 끝남(`TaskEnded`): 고르기를 끝냄
   - 슬롯에서 스킬을 바로 시전할 때(단일): 키를 뗄 때 `CastRequested` 대신 `executor.Cast(function, RuntimeValue.FromBug(target.GetComponent<Monster>()))`. 여러 명 선택(`Target` list)은 list 값이 생기는 블록 실행 3 이슈에서
     - #132에서 list 대신 array로 정함. 아래 「박진우와 확인할 것 (#132)」
+    - 네트워크에서 여러 명 선택 시전: 아래 「박진우와 정한 것 (#238)」
   - 스킬의 `Target` 파라미터: 종류 없이 둬도 `Bug` 값을 받음. 몬스터는 `TryGetArgument("target", out RuntimeValue v)` 뒤 `v.AsBug()`. 쓸 수 없는 대상은 실행기가 `InvalidTarget`으로 막으므로 스킬이 시작하지 않음
 - 임혜원과 정할 것 (#131)
   - 선언 블록의 타입 목록(`BlockView.DeclareTypes`)에 `Target`(종류 `Bug`) 추가, 화면 이름(`BlockLabels.TypeName`)은 `Bug`. 그 전까지 플레이어는 `Thrust(GetBug())`처럼 값 칸에 바로 끼워서만 씀
@@ -681,3 +682,9 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
   - 전장 휩쓸기: 실행 중에 죽은 대상(`Monster.IsDead`, `null`) 거르기
   - 문서의 예전 표현: `c-skills.md` 38줄·168줄(「heap 사용량은 실행기가 읽는다」), `summoned-sword.md`의 검 소환 순서, `SkillData.cs:54` Tooltip
   - 플레이어가 `malloc`한 소환검은 숨은 시스템 전역에 없음. 해제 스킬(`GetGlobalPointers`)의 대상이 아니고, 플레이어가 `free`로 해제
+- 박진우와 정한 것 (#238, 박진우 요청)
+  - 슬롯 여러 명 선택 시전: `FunctionExecutorNetwork.RequestCast(int slot, GameObject[] targets)`. 대상마다 `NetworkIdentity`가 있는 몬스터 `GameObject`
+  - 서버: 첫 파라미터가 `Target` array인 스킬이면 `targets`를 순서대로 `RuntimeValue.FromBugs`로 바꿔 넣음. 스킬은 그대로 `AsBugs()`로 읽음
+  - 서버에 없는 몬스터: 「대상 없음」(`null`) 원소. 죽은 대상은 시작할 때 실행기가 `InvalidTarget`
+  - 첫 파라미터가 `Target` array가 아닌 스킬: argument 없이 시전(단일 대상 `RequestCast`와 같은 규칙)
+  - 거부·결과: `CastRejected`, `TaskEnded`. 함수 목록은 [network.md](network.md)

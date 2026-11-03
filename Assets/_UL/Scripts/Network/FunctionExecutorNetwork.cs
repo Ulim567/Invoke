@@ -24,7 +24,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 시전 (내 화면 → 서버 → 화면들)<br/>
-/// - 내 화면은 RequestCast(슬롯, 대상), RequestCancel(슬롯)로 서버에 부탁한다. FunctionExecutor.Cast, Cancel을 직접 부르지 않는다.<br/>
+/// - 내 화면은 RequestCast(슬롯, 대상) 또는 RequestCast(슬롯, 대상 배열), RequestCancel(슬롯)로 서버에 부탁한다. FunctionExecutor.Cast, Cancel을 직접 부르지 않는다.<br/>
 /// - 서버의 답은 시전한 사람에게만 온다: 성공이면 CastAccepted(슬롯, 작업 번호), 거부면 CastRejected(슬롯, 이유).<br/>
 /// - 작업이 시작하고 끝나면 모든 화면에 TaskStarted(작업 번호, 슬롯, 함수 이름), TaskEnded(작업 번호, 끝난 이유)가 불린다.<br/>
 /// - 네트워크를 켜지 않은 테스트에서도 같은 함수와 event로 동작한다. 이때는 서버로 보내지 않고 그 자리에서 실행기를 부른다.
@@ -627,8 +627,19 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// </summary>
 	public void RequestCast(int slot, GameObject target = null)
 	{
-		if (IsOffline) ServerCast(slot, target);
+		if (IsOffline) ServerCast(slot, target, null);
 		else CmdCast(slot, target);
+	}
+
+	/// <summary>
+	/// [내 화면] 서버에 slot번(0~7) 슬롯의 시전을 부탁하며 고른 몬스터 여러 마리를 넘긴다. 대상 array(Target array) 파라미터가 있는 스킬(전장 휩쓸기)에 쓴다.<br/>
+	/// 서버는 targets를 순서대로 RuntimeValue.FromBugs로 바꿔 첫 파라미터에 넣는다. 그사이 사라진 몬스터는 「대상 없음」 원소가 된다.<br/>
+	/// 답은 CastAccepted 또는 CastRejected로 온다. 대상 없이 시전하려면 RequestCast(slot)을 부른다. RequestCast(slot, null)은 어느 함수인지 정할 수 없어 컴파일 오류가 난다.
+	/// </summary>
+	public void RequestCast(int slot, GameObject[] targets)
+	{
+		if (IsOffline) ServerCast(slot, null, targets);
+		else CmdCastTargets(slot, targets);
 	}
 
 	/// <summary>
@@ -678,14 +689,20 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	}
 
 	[Command]
-	void CmdCast(int slot, GameObject target) => ServerCast(slot, target);
+	void CmdCast(int slot, GameObject target) => ServerCast(slot, target, null);
+
+	// Mirror의 Command는 이름으로 구분되므로 CmdCast를 오버로드하지 않고 이름을 따로 둔다
+	[Command]
+	void CmdCastTargets(int slot, GameObject[] targets) => ServerCast(slot, null, targets);
 
 	[Command]
 	void CmdCancel(int slot) => ServerCancel(slot);
 
 	// 서버(또는 네트워크를 켜지 않은 테스트)에서 슬롯의 원본을 시전하고, 결과를 시전한 사람에게 알린다
 	// [Server]를 붙이지 않는다. 네트워크를 켜지 않은 테스트에서도 같은 함수로 시전하기 위함
-	void ServerCast(int slot, GameObject target)
+	// 대상 하나(target)와 여러 대상(targets)을 한 함수에서 받는다. 슬롯 확인과 거부 규칙을 한 곳에만 두기 위함
+	// 나중에 보안 검사(그 몬스터들을 정말 고를 수 있었는지)를 넣을 곳이다
+	void ServerCast(int slot, GameObject target, GameObject[] targets)
 	{
 		FunctionBlock original = GetSlotOriginal(slot);
 		if (original == null)
@@ -701,9 +718,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		}
 
 		CastRejection? rejection;
-		FunctionTask task = TakesTarget(original) && target != null
-			? executor.Cast((PredefinedFunction)original, new[] { RuntimeValue.FromBug(target.GetComponent<Monster>()) }, out rejection)
-			: executor.Cast(original, out rejection);
+		FunctionTask task;
+		if (TakesTargetArray(original) && targets != null)
+			task = executor.Cast((PredefinedFunction)original, new[] { RuntimeValue.FromBugs(ToMonsters(targets)) }, out rejection);
+		else if (TakesTarget(original) && target != null)
+			task = executor.Cast((PredefinedFunction)original, new[] { RuntimeValue.FromBug(target.GetComponent<Monster>()) }, out rejection);
+		else
+			task = executor.Cast(original, out rejection);
 
 		if (task == null) ReplyCastRejected(slot, rejection ?? CastRejection.NoFunction);
 		else ReplyCastAccepted(slot, task.Id);
@@ -724,6 +745,21 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// 파라미터가 없는 스킬에 argument를 넘기면 실행기가 예외를 던지기 때문
 	static bool TakesTarget(FunctionBlock function) =>
 		function is PredefinedFunction skill && skill.Parameters.Count > 0 && skill.Parameters[0].Type?.Kind == VariableTypeKind.Target;
+
+	// 첫 파라미터가 대상 array(Target array)인 스킬인지. 그때만 고른 몬스터들을 argument로 넘긴다 (전장 휩쓸기)
+	static bool TakesTargetArray(FunctionBlock function) =>
+		function is PredefinedFunction skill && skill.Parameters.Count > 0
+		&& skill.Parameters[0].Type?.Kind == VariableTypeKind.Array
+		&& skill.Parameters[0].Type.ElementType?.Kind == VariableTypeKind.Target;
+
+	// 받은 오브젝트들을 순서 그대로 몬스터로 바꾼다. 서버에서 찾지 못한 오브젝트(null)나 몬스터가 아닌 오브젝트는 null(대상 없음)로 둔다
+	static List<Monster> ToMonsters(GameObject[] targets)
+	{
+		List<Monster> monsters = new List<Monster>(targets.Length);
+		foreach (GameObject target in targets)
+			monsters.Add(target != null ? target.GetComponent<Monster>() : null);
+		return monsters;
+	}
 
 	// 슬롯의 원본. 네트워크를 켜지 않은 테스트에서는 서버로 받은 데이터가 없으므로 이 컴퓨터의 SlotLoadout에서 꺼낸다
 	FunctionBlock GetSlotOriginal(int slot)

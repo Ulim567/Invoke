@@ -8,7 +8,7 @@
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
-- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)과 페이즈 전환·기믹 1(기둥 파괴, `GatewayPhases`)까지 있다.
+- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)과 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격, `GatewayPhases`)까지 있다.
 - 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
@@ -88,9 +88,15 @@
   - 2·3페이즈: 문턱을 넘는 순간 보스가 `Transition Pause`(1.5초) 멈췄다가(`GatewayAI.Pause`) 그 페이즈 기믹. 연출은 없다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다
   - 기믹 1 기둥 파괴: 보스 기준 X -15, -8, +15의 땅에 기둥(`Pillar`, `Monster`, 체력 150) 3개를 세운다. 스킬로 부술 수 있다. 보스는 그동안 기본 공격을 계속한다
     - `Pillar Time Limit`(15초) 안에 모두 부수면 성공: 보스에게 기절 `Groggy Duration`(6초) = 그로기. 연출 `GroggyEffectPlayed`
-    - 시간이 다 되면 실패: 남은 기둥이 터지고(체력 0), 같은 씬의 살아 있는 플레이어 모두에게 `Gateway_Overload`(체력 피해 40, 임시 전체 공격). 기믹 2가 생기면 그걸로 바꾼다
+    - 시간이 다 되면 실패: 남은 기둥이 터지고(체력 0) 기믹 2(전체 공격)로 이어진다
     - 보스가 죽으면 남은 기둥도 터진다
-  - 기믹 2(전체 공격·안전지대), 기믹 3(진짜 찾기)은 다음 이슈. 지금은 로그만 남긴다
+  - 기믹 2 전체 공격: 2페이즈 기믹이자 기믹 1 실패 결과
+    - 보스가 `Charge Time`(3초) 동안 기를 모은다(연출 `ChargeEffectPlayed`). 그동안 기본 공격은 멈춘다(`GatewayAI.Pause`, 모으는 시간 + 0.5초)
+    - 보스 왼쪽·오른쪽에 하나씩, 보스에서 가로 `Safe Zone Distance`(6~15칸) 랜덤 거리의 땅 위에 안전지대(`SafeZone`, 가로 4 × 높이 5)를 만든다. 이동 속도 5라 3초면 어느 쪽이든 닿는다
+    - 시간이 되면 안전지대 밖의 같은 씬 살아 있는 플레이어 모두에게 `Gateway_Overload`(체력 피해 60)를 적용하고(연출 `OverloadEffectPlayed`), 안전지대를 없앤다. 안전 여부는 플레이어 발 위치로 본다
+    - 플레이어 무적(1초) 중이면 기존 피격 규칙대로 무시된다. 모으는 동안 보스가 기본 공격을 하지 않아 겹칠 일이 거의 없다
+    - 보스가 죽으면 모으던 전체 공격은 취소하고 안전지대를 없앤다
+  - 기믹 3(진짜 찾기)은 다음 이슈. 지금은 로그만 남긴다
   - 수치는 전부 임시
 - 낙하 (`FallingPacket`)
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
@@ -237,13 +243,17 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
 
 ### `GatewayPhases`
 
-Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께 붙인다. Inspector에서 `Pillar Prefab`(Pillar), `Fail Attack`(Gateway_Overload), `Ground Layers`(Ground·Platform)를 넣는다.
+Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께 붙인다. Inspector에서 `Pillar Prefab`(Pillar), `Overload Attack`(Gateway_Overload), `Safe Zone Prefab`(SafeZone), `Ground Layers`(Ground·Platform)를 넣는다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Phase` | - | `int` | 지금 페이즈 (1, 2, 3) |
 | `PhaseChanged` (event) | `int` (새 페이즈) | - | [로직] 페이즈가 바뀐 순간 |
 | `GroggyEffectPlayed` (event) | `float` (그로기 시간) | - | [연출] 기둥을 모두 부숴 그로기에 들어갈 때. Groggy 모션에 쓴다 |
+| `ChargeEffectPlayed` (event) | `float` (모으는 시간) | - | [연출] 전체 공격을 모으기 시작할 때. Charge 모션에 쓴다 |
+| `OverloadEffectPlayed` (event) | - | - | [연출] 전체 공격이 터질 때. 화면 번쩍임·흔들림·소리 |
+
+안전지대(`SafeZone` 프리팹)는 `SafeZone`(가로 `Width` 4, 높이 `Height` 5, Pivot 바닥) + 자식 그림 + `NetworkIdentity`. `Contains(Vector2)`로 안에 있는지 알려 준다.
 
 기둥(`Pillar` 프리팹)은 `Monster`(체력 150, 보스 아님) + BoxCollider2D 2×4칸(Pivot 바닥) + `NetworkIdentity`. 연출은 잡몹처럼 `HitEffectPlayed`, `DeathEffectPlayed`, `Hp`/`MaxHp`를 읽으면 된다.
 
@@ -287,5 +297,6 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 - 임혜원과 정해야 할 것
   - 기둥 그림 2×4칸: 체력 50% 초과 멀쩡, 50% 이하 금 감, 사망(`DeathEffectPlayed`) 때 부서지는 모션 약 0.5초. 지금은 임시 그림
   - Gateway Groggy 모션은 `GatewayPhases.GroggyEffectPlayed`(그로기 시간을 넘김)를 받는다
+  - 안전지대 바닥 그림(가로 4칸, 빛나는 바닥, 반복). Gateway Charge 모션은 `GatewayPhases.ChargeEffectPlayed`, 터지는 연출은 `OverloadEffectPlayed`
   - 보스 체력 바 그림: 테두리, 빨간 채움, 흰 채움(단색 사각형), 페이즈 구분선. 이름은 Galmuri 글자로 코드가 쓴다
   - Gateway 프리팹의 그림·Animator. Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`를 받는다

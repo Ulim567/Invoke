@@ -14,7 +14,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster(Is Boss 체크), ProjectileAttack과 함께 붙인다. 움직이지 않으므로 Rigidbody2D는 필요 없다.<br/>
-/// 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 공격을 고르지 않는다.<br/>
+/// 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 공격을 고르지 않는다. Pause(초)를 부르면 그동안 공격을 멈춘다(페이즈 전환).<br/>
 /// 네트워크를 붙이면 패턴은 서버에서만 돌린다. 판정은 보스가 속한 씬의 물리 세계에 한다.
 /// </para>
 /// </summary>
@@ -84,11 +84,23 @@ public class GatewayAI : MonoBehaviour
 	bool dropPending;
 	float dropTime;
 	int facing = 1;
+	// 이 시각까지 공격을 멈춘다 (페이즈 전환 등)
+	float pausedUntil;
 
 	/// <summary>
 	/// [연출] 패킷 낙하를 시작할 때 불린다(Slam 모션). 그림자는 Slam Delay초 뒤에 나타난다.
 	/// </summary>
 	public event Action SlamEffectPlayed;
+
+	/// <summary>
+	/// seconds초 동안 공격을 멈춘다. 모으는 중인 낙하는 취소된다. 페이즈 전환(GatewayPhases)이 부른다. 서버에서만 부른다.
+	/// </summary>
+	public void Pause(float seconds)
+	{
+		pausedUntil = Mathf.Max(pausedUntil, Time.time + seconds);
+		// 멈춤이 끝나면 바로 공격하지 않고 한 간격을 기다린다
+		nextAttackTime = Mathf.Max(nextAttackTime, pausedUntil + attackInterval);
+	}
 
 	/// <summary>
 	/// 지금 바라보는(던질) 플레이어. 공격 범위 안에 아무도 없으면 null.
@@ -114,13 +126,13 @@ public class GatewayAI : MonoBehaviour
 	void Update()
 	{
 		// 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다. 죽거나 기절하면 공격하지 않는다
-		if (!IsAuthority() || monster.IsDead || (status != null && status.IsStunned))
+		float now = Time.time;
+		if (!IsAuthority() || monster.IsDead || (status != null && status.IsStunned) || now < pausedUntil)
 		{
 			dropPending = false;
 			return;
 		}
 
-		float now = Time.time;
 		if (dropPending && now >= dropTime)
 		{
 			dropPending = false;

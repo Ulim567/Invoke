@@ -12,7 +12,8 @@ using UnityEngine;
 /// - 에디터에서 Play → Host, 시험 빌드에서 Client로 접속하면 자동으로 돈다. 평소에는 꺼 둔다.
 /// </para>
 /// <para>
-/// 서버: 들어온 플레이어마다 옆에 몬스터를 만들고, 시험 슬롯을 넣는다(슬롯 1 Thrust(GetBug()), 슬롯 2 쿨타임 시험 스킬, 슬롯 8 비움).<br/>
+/// 서버: 들어온 플레이어마다 옆에 몬스터 2마리를 만들고, 시험 슬롯을 넣는다(슬롯 1 Thrust(GetBug()), 슬롯 2 쿨타임 시험 스킬, 슬롯 3 대상 array 시험 스킬, 슬롯 8 비움).<br/>
+/// 서버: 대상 array 시험 스킬이 읽은 몬스터 수를 확인한다(#238). 「[CastSyncTest][서버] 대상 array 시험 스킬이 몬스터 2마리를 읽음: 통과」면 통과.<br/>
 /// 클라이언트: 차례로 시전하며 받은 알림과 메모리·쿨타임 값을 확인한다. 「[CastSyncTest] 클라이언트 전체 통과」면 통과.<br/>
 /// 호스트 화면: 다른 플레이어의 시작 알림이 오는지, 그 플레이어의 거부 알림이 오지 않는지 확인한다. 서버 값(메모리, 몬스터 체력)은 비교용으로 로그만 남긴다.
 /// </para>
@@ -35,6 +36,10 @@ public class CastSyncTest : MonoBehaviour
 	bool clientTestStarted;
 	int failedCount;
 
+	// [서버] 대상 array 시험 스킬은 static event로 읽은 몬스터를 알려 주므로, 플레이어마다가 아니라 한 번만 붙인다
+	void OnEnable() => TestTargetArrayFunction.TargetsRead += OnTargetsRead;
+	void OnDisable() => TestTargetArrayFunction.TargetsRead -= OnTargetsRead;
+
 	void Update()
 	{
 		if (NetworkServer.active) PrepareNewPlayers();
@@ -53,7 +58,9 @@ public class CastSyncTest : MonoBehaviour
 			if (net == null || !net.IsDataReady) continue;
 
 			preparedPlayers.Add(player);
-			Monster monster = SpawnMonsterNear(player.gameObject);
+			Monster monster = SpawnMonsterNear(player.gameObject, 1.5f);
+			// 슬롯 3의 대상 array 시험에서 고를 두 번째 몬스터
+			SpawnMonsterNear(player.gameObject, 3f);
 			ApplyTestSlots(net);
 
 			FunctionExecutor executor = player.GetComponent<FunctionExecutor>();
@@ -66,13 +73,25 @@ public class CastSyncTest : MonoBehaviour
 		}
 	}
 
-	Monster SpawnMonsterNear(GameObject player)
+	Monster SpawnMonsterNear(GameObject player, float offsetX)
 	{
-		GameObject obj = NetworkSpawner.Spawn(monsterPrefab, player.transform.position + new Vector3(1.5f, 0f, 0f), Quaternion.identity, player.scene);
+		GameObject obj = NetworkSpawner.Spawn(monsterPrefab, player.transform.position + new Vector3(offsetX, 0f, 0f), Quaternion.identity, player.scene);
 		return obj != null ? obj.GetComponent<Monster>() : null;
 	}
 
-	// 슬롯 1: Thrust(GetBug()), 슬롯 2: 쿨타임 20틱 시험 스킬, 나머지 비움
+	// [서버] 대상 array 시험 스킬이 읽은 몬스터. 클라이언트가 보낸 2마리가 모두 몬스터로 바뀌어 들어왔는지 확인한다
+	void OnTargetsRead(List<Monster> monsters)
+	{
+		int count = monsters?.Count ?? 0;
+		int found = 0;
+		if (monsters != null)
+			foreach (Monster monster in monsters)
+				if (monster != null) found++;
+		string names = monsters != null ? string.Join(", ", monsters.ConvertAll(m => m != null ? m.name : "null")) : "값 없음";
+		Check("[서버] 대상 array 시험 스킬이 몬스터 2마리를 읽음", count == 2 && found == 2, names);
+	}
+
+	// 슬롯 1: Thrust(GetBug()), 슬롯 2: 쿨타임 20틱 시험 스킬, 슬롯 3: 대상 array 시험 스킬, 나머지 비움
 	static void ApplyTestSlots(FunctionExecutorNetwork net)
 	{
 		FunctionData thrustGetBug = FunctionData.Create("CastSyncThrustGetBug");
@@ -83,6 +102,7 @@ public class CastSyncTest : MonoBehaviour
 		for (int i = 0; i < slots.Length; i++) slots[i] = SlotLoadout.Entry.Empty;
 		slots[0] = SlotLoadout.Entry.Function(thrustGetBug.Guid);
 		slots[1] = SlotLoadout.Entry.Skill(CooldownSkillId);
+		slots[2] = SlotLoadout.Entry.Skill(PredefinedFunctionIds.TestTargetArrayFunction);
 		net.ApplyPlayerData(slots, new List<FunctionData> { thrustGetBug }, null);
 	}
 
@@ -180,7 +200,21 @@ public class CastSyncTest : MonoBehaviour
 		Check("쿨타임 중 다시 시전하면 OnCooldown 거부", rejected.Count == 1 && rejected[0].Reason == CastRejection.OnCooldown,
 			rejected.Count > 0 ? rejected[0].Reason.ToString() : "거부 알림 없음");
 
-		// 4. 빈 슬롯 8: NoFunction 거부
+		// 4. 슬롯 3 대상 array 시험 스킬: 몬스터 2마리를 배열로 넘겨 시전 → 정상 종료. 읽은 몬스터 수는 서버 로그에서 확인한다 (#238)
+		List<Monster> nearMonsters = null;
+		yield return WaitFor(() => (nearMonsters = FindNearestMonsters(player.transform.position, 2)).Count == 2);
+		GameObject[] targets = nearMonsters.ConvertAll(m => m.gameObject).ToArray();
+		accepted.Clear();
+		rejected.Clear();
+		net.RequestCast(2, targets);
+		yield return WaitFor(() => accepted.Count > 0 || rejected.Count > 0);
+		Check("슬롯 3 대상 array 시전 성공", accepted.Count == 1 && accepted[0].Slot == 2, $"성공 {accepted.Count}, 거부 {rejected.Count}");
+		int arrayTaskId = accepted.Count > 0 ? accepted[0].TaskId : -1;
+		yield return WaitFor(() => ended.ContainsKey(arrayTaskId));
+		Check("대상 array 작업이 정상 종료", ended.TryGetValue(arrayTaskId, out FunctionTaskEndReason arrayReason) && arrayReason == FunctionTaskEndReason.Completed,
+			ended.ContainsKey(arrayTaskId) ? ended[arrayTaskId].ToString() : "끝 알림 없음");
+
+		// 5. 빈 슬롯 8: NoFunction 거부
 		rejected.Clear();
 		net.RequestCast(7);
 		yield return WaitFor(() => rejected.Count > 0);
@@ -215,5 +249,14 @@ public class CastSyncTest : MonoBehaviour
 			if (distance < best) { best = distance; nearest = monster; }
 		}
 		return nearest;
+	}
+
+	// 가까운 순서로 몬스터를 count마리까지 찾는다
+	static List<Monster> FindNearestMonsters(Vector3 from, int count)
+	{
+		List<Monster> monsters = new List<Monster>(FindObjectsByType<Monster>(FindObjectsSortMode.None));
+		monsters.Sort((a, b) => (a.transform.position - from).sqrMagnitude.CompareTo((b.transform.position - from).sqrMagnitude));
+		if (monsters.Count > count) monsters.RemoveRange(count, monsters.Count - count);
+		return monsters;
 	}
 }

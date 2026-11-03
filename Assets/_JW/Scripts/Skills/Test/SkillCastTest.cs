@@ -33,6 +33,7 @@ public class SkillCastTest : MonoBehaviour
 		// 서버가 플레이어 데이터를 받으면 프로세스를 다시 시작해(RestartProcess) 실행 중인 작업이 끊긴다. 그 뒤에 시작한다 (#220)
 		yield return new WaitForSeconds(1.5f);
 		SummonedSwords swords = executor.GetComponent<SummonedSwords>();
+		PhysicalSword physical = executor.GetComponent<PhysicalSword>();
 
 		SkillTable table = SkillTable.Instance;
 		if (table == null)
@@ -46,6 +47,8 @@ public class SkillCastTest : MonoBehaviour
 		{
 			// 소환검이 필요한 스킬은 사용 가능한 소환검을 하나 이상 준비한다. 앞 스킬이 던진 검은 되돌린다 (#220)
 			if (data.NeedsSummonedSword && swords != null) yield return PrepareSword(executor, swords);
+			// 앞에서 던진 물리 검은 손으로 되돌린다. 검 돌아오기는 물리 검을 돌려받지 않으므로 (#232) 그대로 두면 뒤의 공격 스킬이 맨손으로 실패한다
+			if (physical != null && physical.IsUnarmed) physical.Recall();
 			yield return CastAndWait(executor, data.Id, FunctionTaskEndReason.Completed, null, data.TickCount);
 		}
 		yield return CheckUnarmed(executor);

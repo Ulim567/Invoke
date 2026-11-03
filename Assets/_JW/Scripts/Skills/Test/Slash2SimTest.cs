@@ -7,7 +7,7 @@ using UnityEngine;
 /// 휘두르기 2 테스트 (#172). Test_JW의 Slash2Test. 켜고 Play → Host (약 12초). 주변에 몬스터가 있어야 한다.
 /// <para>
 /// 시작할 때 사용 가능한 소환검이 3개가 되도록 소환한다.<br/>
-/// 1. 소환검 휘두르기: 소환검 수만큼 검기가 날아가 대상이 그만큼 맞음, 끝나면 heap이 원래대로<br/>
+/// 1. 소환검 휘두르기: 날린 검기 수(소환검 수, heap이 모자라면 그보다 적게)만큼 대상이 맞음, 끝나면 heap이 원래대로<br/>
 /// 2. 상처 가르기: 출혈 중인 몬스터를 맞히면 다음 출혈 틱 데미지가 2배, 출혈이 아닌 몬스터는 그대로<br/>
 /// 3. 검 다중베기: 소환검 수만큼 대상이 베이고, 검이 모두 돌아옴<br/>
 /// 몬스터에 StatusEffects가 없으면 붙인다. 「[Slash2Test] 전체 통과」면 통과. 평소에는 꺼 둔다.
@@ -53,10 +53,15 @@ public class Slash2SimTest : MonoBehaviour
 		Monster target = Nearest(player);
 		int heapBefore = memory.HeapUsed;
 		hits.Clear();
+		// 검기도 하나당 heap 1칸이라, heap이 모자라면 소환검 수보다 적게 날린다. 실제로 날린 수(Fired)와 비교한다 (#220)
+		int fired = 0;
+		System.Action<string, Vector2, Vector2> onFired = (id, from, dir) => { if (id == PredefinedFunctionIds.SummonedSlash) fired++; };
+		effects.Fired += onFired;
 		yield return Cast(PredefinedFunctionIds.SummonedSlash, target);
+		effects.Fired -= onFired;
 		yield return new WaitForFixedUpdate();
 		int slashHits = hits.FindAll(h => h.id == PredefinedFunctionIds.SummonedSlash && h.target == target.gameObject).Count;
-		Check($"소환검 휘두르기: 검기 {ready}개가 {target.name}을 맞힘 (맞은 수 {slashHits})", slashHits == ready);
+		Check($"소환검 휘두르기: 검기 {fired}개(소환검 {ready}개)가 {target.name}을 맞힘 (맞은 수 {slashHits})", fired >= 1 && fired <= ready && slashHits == fired);
 		Check($"소환검 휘두르기: 끝나면 heap이 원래대로 ({heapBefore} → {memory.HeapUsed})", memory.HeapUsed == heapBefore);
 		Check("소환검 휘두르기: 소환검은 제자리 (사용 가능 그대로)", swords.ReadyCount == ready);
 

@@ -7,13 +7,19 @@ using UnityEngine;
 /// C 스킬 24개 데이터 테스트 (#67). 씬의 아무 오브젝트에 붙이고 Play → Host. 콘솔에 「[SkillTest] … 통과/실패」가 찍힌다.
 /// <para>
 /// 1. 표 검사: 표의 모든 줄이 등록된 스킬이고, 이름·틱 수·파라미터를 표에서 읽는지. 등록된 DataDrivenSkill이 모두 표에 있는지.<br/>
-/// 2. 시전: 표의 스킬을 하나씩 내 캐릭터의 FunctionExecutor로 시전해서, 표의 틱 수만큼 실행되고 정상으로 끝나는지.<br/>
+/// 2. 시전: 표의 스킬을 하나씩 내 캐릭터의 FunctionExecutor로 시전해서, 표의 틱 수만큼 실행되고 정상으로 끝나는지. 소환검이 필요한 스킬 앞에서는 소환검을 준비한다 (#220).<br/>
 /// 3. 맨손: 물리 검을 던져(없으면 TempSwordState를 잠깐 붙여) 맨손으로 만들고, 검 찌르기는 UnarmedError로 끝나고 검 돌아오기는 정상으로 끝나는지. 끝나면 되돌린다.
 /// </para>
 /// 자동으로 돌기 때문에 평소에는 꺼 둔다.
 /// </summary>
 public class SkillCastTest : MonoBehaviour
 {
+	// sword 파라미터(Sword*)를 받는 스킬 (#220)
+	static readonly HashSet<string> SwordPointerSkills = new HashSet<string>
+	{
+		PredefinedFunctionIds.SummonedThrust, PredefinedFunctionIds.SummonedThrow, PredefinedFunctionIds.FreeSword,
+	};
+
 	int failures;
 
 	IEnumerator Start()
@@ -24,6 +30,9 @@ public class SkillCastTest : MonoBehaviour
 			yield return null;
 			if (NetworkClient.localPlayer != null) executor = NetworkClient.localPlayer.GetComponent<FunctionExecutor>();
 		}
+		// 서버가 플레이어 데이터를 받으면 프로세스를 다시 시작해(RestartProcess) 실행 중인 작업이 끊긴다. 그 뒤에 시작한다 (#220)
+		yield return new WaitForSeconds(1.5f);
+		SummonedSwords swords = executor.GetComponent<SummonedSwords>();
 
 		SkillTable table = SkillTable.Instance;
 		if (table == null)
@@ -35,6 +44,8 @@ public class SkillCastTest : MonoBehaviour
 		CheckTable(table);
 		foreach (SkillData data in table.Skills)
 		{
+			// 소환검이 필요한 스킬은 사용 가능한 소환검을 하나 이상 준비한다. 앞 스킬이 던진 검은 되돌린다 (#220)
+			if (data.NeedsSummonedSword && swords != null) yield return PrepareSword(executor, swords);
 			yield return CastAndWait(executor, data.Id, FunctionTaskEndReason.Completed, null, data.TickCount);
 		}
 		yield return CheckUnarmed(executor);
@@ -60,6 +71,8 @@ public class SkillCastTest : MonoBehaviour
 
 			int expectedParams = data.Targeting == SkillTargeting.Single || data.Targeting == SkillTargeting.SingleMultiHit
 				|| data.Targeting == SkillTargeting.Pierce || data.Targeting == SkillTargeting.MultiSelect ? 1 : 0;
+			// 소환검 하나를 쓰는 스킬은 뒤에 sword(Sword*)가 하나 더 있다 (#220)
+			if (SwordPointerSkills.Contains(data.Id)) expectedParams++;
 			if (function.Parameters.Count != expectedParams) Fail($"{data.Id}: 파라미터 {function.Parameters.Count}개 ≠ {expectedParams}개 ({data.Targeting})");
 		}
 
@@ -94,6 +107,19 @@ public class SkillCastTest : MonoBehaviour
 		sword.SetUnarmed(false);
 
 		if (added) Destroy(sword);
+	}
+
+	// 던진 소환검을 모두 되돌리고, 사용 가능한 검이 없으면 하나 소환한다
+	IEnumerator PrepareSword(FunctionExecutor executor, SummonedSwords swords)
+	{
+		foreach (SummonedSword s in swords.Swords) swords.Recall(s);
+		float timeout = Time.time + 2f;
+		while (swords.ReadyCount < swords.Swords.Count && Time.time < timeout) yield return null;
+		if (swords.ReadyCount > 0) yield break;
+		if (!PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.SummonSword, out PredefinedFunction summon)) yield break;
+		FunctionTask task = executor.Cast(summon);
+		timeout = Time.time + 5f;
+		while (task != null && !task.IsEnded && Time.time < timeout) yield return null;
 	}
 
 	// expectedTicks가 0이면 실행 틱 수는 검사하지 않는다

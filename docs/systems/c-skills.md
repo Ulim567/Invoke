@@ -8,7 +8,7 @@
 - 시전할 때 필요 조건(맨손, 소환검)을 검사해서 못 쓰면 스킬 에러로 끝낸다.
 - 하지 않는 일
   - 효과(판정, 데미지, 상태 이상, 이동): 각 스킬 이슈(찌르기 1·2, 던지기, 휘두르기 1·2, 소환, 이동, 검 소환·해제, 패링, 급소공략)에서 채운다. 지금은 정해진 틱 동안 실행되고 로그만 남는다.
-  - heap 계산: 메모리 작업(이우림). 표에는 heap 사용량만 적어 둔다.
+  - heap 계산: 메모리 작업(이우림). 스킬은 표의 heap 사용량으로 `PredefinedFunction.Malloc`을 부른다 (검 소환만 `Sword` struct 크기, #220).
   - 맨손 상태 관리: `PhysicalSword` (physical-sword.md)
   - 소환검 관리: summoned-sword.md (#99)
 
@@ -35,7 +35,7 @@
 | `tickCount` | 동작 시간 (틱 수) |
 | `cooldownTicks` | 쿨타임 (틱 수). 동작이 끝난 뒤부터 흐른다 |
 | `localVariableCount` | stack 부담. 프레임 크기 = 1 + 파라미터 수 + 이 값 |
-| `heapSize` | heap 사용량 (칸). 검 소환, 검기, 패링, 이동 계열. 메모리 작업이 끝나면 실행기가 읽는다 |
+| `heapSize` | heap 사용량 (칸). 검기, 패링, 이동 계열이 `Malloc`할 때 쓴다. 검 소환은 이 값 대신 `PredefinedStructs`의 `Sword` 크기(임시 2칸)를 쓴다 (#220) |
 | `areaRadius` | 범위 스킬(`Area`)의 반경 (유닛, 임시 4). 플레이어 주변 이 거리 안의 몬스터가 대상 (slot-caster.md) |
 | `needsSummonedSword` | 쓸 수 있는 소환검이 있어야 쓸 수 있다 |
 | `usableUnarmed` | 맨손이어도 쓸 수 있다 |
@@ -48,10 +48,16 @@
 | `Single` 단일 | `Target` 1개 | 대부분 |
 | `SingleMultiHit` 단일 + 다단 히트 | `Target` 1개 | 검 다중베기 |
 | `Pierce` 관통 | `Target` 1개 (첫 대상) | 꼬챙이 |
-| `MultiSelect` 여러 명 선택 | `Target` list 1개 | 전장 휩쓸기 |
+| `MultiSelect` 여러 명 선택 | `Target` array 1개 (`VariableType.ArrayOf(Target)`, #191). 값은 `RuntimeValue.FromBugs`, 읽기는 `AsBugs()` | 전장 휩쓸기 |
 | `Area` 범위 | 없음 | 검 크게베기, 검무 |
 | `Path` 경로 | 없음 | 검 돌아오기 |
 | `None` 대상 없음 | 없음 | 검 소환, 해제, 패링, 이동 계열 |
+
+- 소환검 포인터 파라미터 (#220): 소환검 하나를 쓰는 스킬(소환검 찌르기, 소환검 던지기, 해제)은 위 파라미터 뒤에 `sword`(`Sword*`, `DataDrivenSkill.SwordPointerType()`)를 하나 더 받는다.
+  - 예: `Sword* s = SummonSword(); SummonedThrow(target, s); FreeSword(s);`
+  - 비워 두면 지금처럼 스킬이 고른다 (찌르기·던지기: 가장 먼저 소환한 사용 가능한 검, 해제: 마지막에 소환한 검). 슬롯에서 쓸 때는 늘 비워 둔다.
+  - 넘긴 검이 곁에 없으면(던짐, 찌르는 중, 누수) 아무것도 안 하고 끝난다. 해제·`NULL`·소환검이 아닌 포인터면 `InvalidPointerError`.
+  - 스킬 코드: `TakesSwordPointer`를 덮어쓰고 `TryPickSword` / `TryGetSwordArgument`로 꺼낸다.
 
 ### 필요 조건 검사 (`DataDrivenSkill`)
 - 첫 틱(`OnStart`)에 검사한다. 통과하지 못하면 `Fail`로 끝난다 (처리는 언어 규칙 표의 `SkillFailed`).
@@ -157,7 +163,10 @@
 - 소환검 휘두르기: 사용 가능한 소환검이 모두 제자리에서 각자 검기를 대상(없으면 바라보는 방향) 쪽으로 날린다. 검기는 검 휘두르기와 같다. 검기 하나당 heap 1칸을 따로 잡고 사라지면 따로 돌려준다 (`SwordWaveSkill.LaunchWave`). heap이 모자라면 거기까지만 날린다.
 - 상처 가르기: 검 휘두르기와 같은 검기. 맞은 적이 출혈 중이면 `StatusEffects.AmplifyBleed(DamageBonus.BleedWoundSlash)`로 그 출혈이 끝날 때까지 출혈 틱 데미지 +100%(2.0배). 검기 데미지는 기본.
 - 검 다중베기: 사용 가능한 소환검이 `CMultiSlash.StaggerTicks`(임시 2틱) 간격으로 차례로 대상에게 날아가 한 번씩 벤다 (`SummonedSwords.Stab`, 소환검 찌르기와 같은 움직임). 검마다 공격력 × 표 배율. 스킬이 끝날 때까지 못 닿은 검은 데미지 없이 돌아온다.
-- 전장 휩쓸기: 아직 안 함. 여러 대상 목록(list)을 스킬에 넘기는 실행기 기능(이우림, 블록 실행 3)이 생긴 뒤.
+- 전장 휩쓸기 (#220): 고른 몬스터(`targets`, Target array)마다 사용 가능한 소환검이 하나씩, 가장 먼저 소환한 검부터 `CBattlefieldSweep.StaggerTicks`(검 다중베기와 같은 2틱) 간격으로 날아가 벤다 (`SummonedSwords.Stab`). 검마다 공격력 × 표 배율.
+  - 대상이 소환검보다 많으면 남는 대상은 안 벤다. 소환검이 많으면 남는 검은 곁에 그대로.
+  - 같은 몬스터를 두 번 넣으면 한 번만. 보내기 전에 죽은 대상은 건너뜀. 배열 값 검사(`InvalidTarget`)는 실행기가 시작할 때 한다.
+  - 슬롯에서 여러 명 선택으로 시전하려면 `FunctionExecutorNetwork.RequestCast`가 대상 여러 개를 받아야 한다 (이우림에게 요청). 지금은 블록코딩·코드(`executor.Cast(sweep, RuntimeValue.FromBugs(...))`)에서만 된다.
 - 주의: 실행기는 스킬을 `MemberwiseClone`으로 복사해 실행한다. 스킬 안의 리스트 같은 참조 필드는 초기값으로 만들지 말고 `OnSkillStart`(또는 처음 쓸 때) 새로 만든다. 안 그러면 원본과 복사본이 같은 리스트를 쓴다.
 
 ### 휘두르기 1: 검 휘두르기·검 크게베기 (#163)
@@ -171,15 +180,18 @@
 - 검 크게베기: 바라보는 방향으로 날린다. 관통하며 판정 상자(1×4)에 걸린 몬스터를 한 번씩 벤다. 맞은 몬스터에 출혈(`StatusEffects.TryApply`). 사거리 6, 속도 25, 배율 0.5 (임시).
 - 그림: 임혜원 `_HW/Effects/SwordWave`, `SwordWave_Wide` (오른쪽을 보는 그림, 날아가는 방향으로 돌림).
 
-### 검 소환·해제 (#102)
+### 검 소환·해제 (#102, #220)
 - 검 소환 (`c.summon_sword`, malloc)
-  - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, heapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
+  - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, CSummonSword.SwordHeapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
+  - heap 크기는 `PredefinedStructs`의 `Sword` 크기(임시 2칸). 블록코딩의 `malloc(Sword)`와 같은 소환검이다 (#220).
+  - 반환: 만든 소환검의 `Sword*`. 못 만들면 `NULL` (#220).
   - 소환검이 이미 5개(`CountHeapObjects<SummonedSword>`, 누수 포함)거나 heap이 모자라면 만들지 않는다. C의 malloc처럼 에러로 끝내지 않는다.
   - 포인터는 이 작업의 것. 정상으로 끝나면 전역 포인터 목록으로 옮겨지고, 도중에 실행 중단·실패로 끝나면 그 소환검은 누수된다.
 - 해제 (`c.free_sword`, free)
-  - 마지막에 소환한 소환검부터 해제한다 (`GetGlobalPointers<SummonedSword>`의 마지막).
+  - `sword`(`Sword*`)를 넘기면 그 소환검을 해제한다 (`free(s)`와 같음, #220).
+  - 안 넘기면 마지막에 소환한 소환검부터 해제한다 (`GetGlobalPointers<SummonedSword>`의 마지막). 블록코딩 `malloc(Sword)`로 만든 검은 이 목록에 없으니 포인터를 넘기거나 `free`로 해제한다.
   - 날아가는 중·떨어진 소환검도 거리와 상관없이 해제한다. 물리 검, 누수된 소환검, 아직 진행 중인 검 소환의 소환검은 해제하지 않는다.
-  - 순서: `TryGetHeapObject` → `PredefinedFunction.Free` → `SummonedSwords.DespawnSword`. 쓸 수 없는 포인터면 `InvalidPointerError`로 그 작업만 끝난다.
+  - 순서: `TryGetHeapObject` → `PredefinedFunction.Free`. 오브젝트는 `SummonedSwords`가 `HeapStorage.ObjectFreed`를 받아 없앤다 (#191, #220). 쓸 수 없는 포인터면 `InvalidPointerError`로 그 작업만 끝난다.
   - 해제할 소환검이 없으면 `NoSummonedSwordError`.
 
 ## 다른 시스템이 쓰는 것
@@ -224,17 +236,19 @@
 | --- | --- |
 | `ThrustSkillSimTest` | Test_JW의 ThrustTest. 켜고 Play → Host, Game 창을 한 번 클릭 (Unity가 화면 맨 앞에 있어야 가짜 키가 들어감). 검 찌르기(사거리 밖 몬스터에게 돌진 후 맞음, 데미지 = 공격력 × 배율), 집중찌르기(출혈 1.5배), 꼬챙이(일직선 뒤 몬스터 모두), 맨손 실패, 슬롯 Q로 고른 대상에게 맞음, 연출 event 순서를 확인. 「[ThrustTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `VitalStrikeSimTest` | Test_JW의 VitalTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 10초). Q에 급소공략을 넣고(끝나면 되돌림) 눈 칸 → 3.0배 + 실명, 미니게임 중 대상 고정, 발목 칸 → 3.0배 + 이속 감소, 미니게임 안 함 → 기본 데미지, 칸 밖에서 멈춤 → 기본 데미지, 결과는 한 번 쓰면 지워짐을 확인. 「[VitalTest] 전체 통과」면 통과. 평소에는 꺼 둔다. 직접 해 보려면 `Restore Slot`을 끄고 한 번 돌리면 Q에 급소공략이 남는다. |
-| `Slash2SimTest` | Test_JW의 Slash2Test. 켜고 Play → Host (약 12초). 사용 가능한 소환검을 3개까지 소환한 뒤 소환검 휘두르기(소환검 수만큼 맞음, heap 원래대로, 검은 제자리), 상처 가르기(출혈 대상 배율 +100%, 다음 출혈 틱 2배, 출혈 풀리면 배율 없어짐, 출혈 아닌 대상은 배율 없음), 검 다중베기(소환검 수만큼 벰, 검 모두 돌아옴)를 확인. 「[Slash2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `Slash2SimTest` | Test_JW의 Slash2Test. 켜고 Play → Host (약 12초). 사용 가능한 소환검을 3개까지 소환한 뒤 소환검 휘두르기(날린 검기 수만큼 맞음. heap이 모자라면 소환검 수보다 적게 날림, heap 원래대로, 검은 제자리), 상처 가르기(출혈 대상 배율 +100%, 다음 출혈 틱 2배, 출혈 풀리면 배율 없어짐, 출혈 아닌 대상은 배율 없음), 검 다중베기(소환검 수만큼 벰, 검 모두 돌아옴)를 확인. 「[Slash2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SwordPointerSimTest` | Test_JW의 SwordPointerTest. 켜고 Play → Host (약 12초). 몬스터 2마리 이상. 블록코딩 `malloc(Sword)` → `free(s)`(진짜 소환검이 생겼다 사라짐, heap 원래대로), `Sword* s = SummonSword(); FreeSword(s);`, 소환검 던지기·찌르기에 두 번째 검 포인터를 넘기면 그 검을 씀, 해제에 포인터를 넘기면 그 검만 해제·같은 포인터로 또 해제하면 `InvalidPointerError`, 전장 휩쓸기 `[a, b, a]`(각 1번씩 맞음, 검 모두 돌아옴)를 확인. 「[SwordPointerTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기 두 번(먼저 던진 소환검부터·오는 길 몬스터에 데미지, 그다음 물리 검), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
-| `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지. 시작 전에 1.5초 기다리고, 소환검이 필요한 스킬 앞에서는 던진 검을 되돌리거나 하나 소환함, #220), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정함
   - 예시 `_UL/.../Examples/Thrust.cs`(검 찌르기)를 지우고, `c.thrust`는 `CThrust`(`_JW`)가 쓴다. 같은 ID가 둘이면 둘 다 등록되지 않기 때문
   - 고정 ID 24개는 `PredefinedFunctionIds`에 모은다
-  - heap 사용량은 표에 적어 두고, 메모리 작업(이우림)에서 실행기가 읽는다
+  - heap 사용량은 표에 적어 두고, 스킬이 `PredefinedFunction.Malloc`에 넘긴다. 검 소환은 `Sword` struct 크기 (#220)
+  - 소환검 = `Sword` struct. `malloc(Sword)` 블록과 검 소환 스킬이 같은 소환검을 만든다. `Sword` 크기는 임시 2칸 (#191, #220)
 - 정한 것
   - 대시는 스킬(`common.dash`)로 둔다. 왼쪽 Shift는 달리기(이동 속도 증가)로 바꾼다 (입력 키는 이우림이 반영)
 - 임혜원과 정함 (#152)

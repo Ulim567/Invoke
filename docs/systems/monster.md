@@ -8,7 +8,7 @@
 - 몬스터 몸에 닿은 플레이어에게 피해를 준다(`ContactDamage`). 몸은 서로 통과한다.
 - 땅을 걷는 몬스터의 순찰·추적 AI(`GroundChaseAI`)를 맡는다. 잡몹 1 Leak이 쓴다.
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
-- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)까지 있다.
+- 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128)과 페이즈 전환·기믹 1(기둥 파괴, `GatewayPhases`)까지 있다.
 - 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
@@ -81,7 +81,17 @@
   - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(2초) 뒤, 그다음엔 `Attack Interval`(3초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
   - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 0.58초 = Throw 모션 8번째 장면에 손을 떠남. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
   - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area`(38×12, 보스방 가로 40칸에 맞춤) 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
-  - 기절 중에는 공격을 고르지 않는다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+  - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+- 페이즈와 기믹 (`GatewayPhases`)
+  - 1페이즈 100~70%, 2페이즈 70% 이하, 3페이즈 40% 이하 (`Phase Thresholds`). 기믹은 **페이즈마다 한 번**만 나온다.
+  - 1페이즈 기믹: 플레이어를 처음 발견하고 `First Gimmick Delay`(15초) 뒤 기믹 1
+  - 2·3페이즈: 문턱을 넘는 순간 보스가 `Transition Pause`(1.5초) 멈췄다가(`GatewayAI.Pause`) 그 페이즈 기믹. 연출은 없다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다
+  - 기믹 1 기둥 파괴: 보스 기준 X -15, -8, +15의 땅에 기둥(`Pillar`, `Monster`, 체력 150) 3개를 세운다. 스킬로 부술 수 있다. 보스는 그동안 기본 공격을 계속한다
+    - `Pillar Time Limit`(15초) 안에 모두 부수면 성공: 보스에게 기절 `Groggy Duration`(6초) = 그로기. 연출 `GroggyEffectPlayed`
+    - 시간이 다 되면 실패: 남은 기둥이 터지고(체력 0), 같은 씬의 살아 있는 플레이어 모두에게 `Gateway_Overload`(체력 피해 40, 임시 전체 공격). 기믹 2가 생기면 그걸로 바꾼다
+    - 보스가 죽으면 남은 기둥도 터진다
+  - 기믹 2(전체 공격·안전지대), 기믹 3(진짜 찾기)은 다음 이슈. 지금은 로그만 남긴다
+  - 수치는 전부 임시
 - 낙하 (`FallingPacket`)
   - 땅 위 착지 지점에 그림자를 `Warn Time`(1초) 동안 보여 주고, 패킷이 `Drop Height`(8)에서 `Fall Time`(0.3초) 동안 떨어진다.
   - 착지 순간 그림자 위 `Hit Size`(2×3, 아래 변이 땅) 상자 안의 플레이어에게 한 번씩 `Packet_Drop`(체력 피해 20, 패링 불가)을 적용한다. 그림자 밖으로 피하면 맞지 않는다.
@@ -222,7 +232,20 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
 | `Target` | - | `PlayerHealth` | 지금 바라보는 가장 가까운 플레이어. 범위 안에 없으면 `null` |
 | `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
 | `SlamEffectPlayed` (event) | - | - | [연출] 패킷 낙하를 시작할 때. Slam 모션에 쓴다. 그림자는 `Slam Delay`초 뒤 |
+| `Pause(float seconds)` | 멈출 시간(초) | - | 그동안 공격을 멈춘다. 모으는 중인 낙하는 취소. `GatewayPhases`가 페이즈 전환 때 부른다 |
 | 던지기 연출 | - | - | 같은 오브젝트의 `ProjectileAttack.FireEffectPlayed`를 받는다 (Throw 모션) |
+
+### `GatewayPhases`
+
+Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께 붙인다. Inspector에서 `Pillar Prefab`(Pillar), `Fail Attack`(Gateway_Overload), `Ground Layers`(Ground·Platform)를 넣는다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Phase` | - | `int` | 지금 페이즈 (1, 2, 3) |
+| `PhaseChanged` (event) | `int` (새 페이즈) | - | [로직] 페이즈가 바뀐 순간 |
+| `GroggyEffectPlayed` (event) | `float` (그로기 시간) | - | [연출] 기둥을 모두 부숴 그로기에 들어갈 때. Groggy 모션에 쓴다 |
+
+기둥(`Pillar` 프리팹)은 `Monster`(체력 150, 보스 아님) + BoxCollider2D 2×4칸(Pivot 바닥) + `NetworkIdentity`. 연출은 잡몹처럼 `HitEffectPlayed`, `DeathEffectPlayed`, `Hp`/`MaxHp`를 읽으면 된다.
 
 ### `FallingPacket`
 
@@ -262,5 +285,7 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
   - Gateway 공격 타이밍: Throw 8번째 장면(0.58초)에 패킷이 손을 떠나고(`Fire Delay` 0.58), Slam 6번째 장면(0.42초)에 내려친다(`Slam Delay` 0.42). 두 모션 모두 9장면 0.75초
   - 패킷 공격 그림은 `_HW/Boss/Attack`(#146). `Packet_Throw` 2×2칸, `Packet_Fall` 1.5칸, `Packet_Shadow` 가로 2칸, 4장면 12fps 반복. 김도훈이 PacketThrow·FallingPacket 프리팹에 첫 장면과 컨트롤러를 붙였다(Scale 1). PacketThrow는 `ProjectileFacing`(임혜원)으로 왼쪽으로 날 때 flipX
 - 임혜원과 정해야 할 것
+  - 기둥 그림 2×4칸: 체력 50% 초과 멀쩡, 50% 이하 금 감, 사망(`DeathEffectPlayed`) 때 부서지는 모션 약 0.5초. 지금은 임시 그림
+  - Gateway Groggy 모션은 `GatewayPhases.GroggyEffectPlayed`(그로기 시간을 넘김)를 받는다
   - 보스 체력 바 그림: 테두리, 빨간 채움, 흰 채움(단색 사각형), 페이즈 구분선. 이름은 Galmuri 글자로 코드가 쓴다
   - Gateway 프리팹의 그림·Animator. Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`를 받는다

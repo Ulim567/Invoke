@@ -26,10 +26,18 @@ public class Monster : MonoBehaviour, IDamageable
 	[SerializeField, Tooltip("보스면 체크한다. 처형(체력 2% 이하 즉사) 같은 보스 제외 규칙이 이 값을 본다")]
 	bool isBoss;
 
+	[SerializeField, Tooltip("체크하면 맞아도 체력이 줄지 않고 죽지 않는다. Damaged·HitEffectPlayed는 그대로 불린다 (연습장 허수아비)")]
+	bool invulnerable;
+
 	/// <summary>
 	/// 보스면 true (Inspector 값). 처형처럼 보스를 빼야 하는 규칙에서 읽는다.
 	/// </summary>
 	public bool IsBoss => isBoss;
+
+	/// <summary>
+	/// 체력이 줄지 않는 몬스터면 true (Inspector 값). 연습장 허수아비처럼 맞기만 하고 죽지 않는다.
+	/// </summary>
+	public bool IsInvulnerable => invulnerable;
 
 	/// <summary>
 	/// 최대 체력.
@@ -47,7 +55,8 @@ public class Monster : MonoBehaviour, IDamageable
 	public bool IsDead => Hp <= 0;
 
 	/// <summary>
-	/// [로직] 데미지를 받아 체력이 줄었을 때 불린다. 받은 데미지를 넘긴다. 보스 페이즈 전환처럼 체력에 따라 바뀌는 로직에 쓴다.
+	/// [로직] 데미지를 받았을 때 불린다. 받은 데미지를 넘긴다. 보스 페이즈 전환처럼 체력에 따라 바뀌는 로직에 쓴다.
+	/// Invulnerable이면 체력은 그대로지만 똑같이 불린다.
 	/// </summary>
 	public event Action<int> Damaged;
 
@@ -73,12 +82,14 @@ public class Monster : MonoBehaviour, IDamageable
 
 	/// <summary>
 	/// damage만큼 체력을 줄인다. 0 이하이거나 이미 죽었으면 무시한다. 체력이 0이 되면 사망한다.
+	/// Invulnerable이면 체력은 그대로 두고 Damaged·HitEffectPlayed만 부른다.
 	/// </summary>
 	public void TakeDamage(int damage)
 	{
 		if (damage <= 0 || IsDead) return;
 
-		Hp = Mathf.Max(Hp - damage, 0);
+		// 허수아비는 체력을 그대로 두지만, 데미지 숫자를 띄울 수 있게 이벤트는 똑같이 부른다
+		if (!invulnerable) Hp = Mathf.Max(Hp - damage, 0);
 		Damaged?.Invoke(damage);
 		PlayHitEffect(damage);
 

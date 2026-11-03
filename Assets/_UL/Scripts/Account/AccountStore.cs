@@ -24,7 +24,7 @@ public enum CreateCharacterResult
 /// <summary>
 /// 계정과 캐릭터를 DB(SQLite)에 저장하고 읽는 곳. 서버에서만 쓴다.
 /// <para>
-/// DB를 읽고 쓰는 코드는 이 클래스에만 둔다. 나중에 MySQL 같은 다른 DB로 옮기면 이 클래스만 고친다.<br/>
+/// DB를 읽고 쓰는 코드는 이 클래스와 ProgressStore(진행도)에만 둔다. 나중에 MySQL 같은 다른 DB로 옮기면 두 클래스만 고친다.<br/>
 /// 입력 규칙(아이디 길이 등)은 검사하지 않는다. 규칙 검사는 클라이언트의 요청을 받는 쪽이 이 클래스를 부르기 전에 한다.<br/>
 /// DB 코드가 클라이언트 빌드에 들어가지 않도록, 계정 DB 관련 파일은 서버 빌드와 에디터에서만 컴파일한다.
 /// </para>
@@ -39,6 +39,9 @@ public class AccountStore : IDisposable
 	public const string FileName = "Accounts.db";
 
 	readonly SQLiteConnection db;
+
+	/// <summary>같은 DB 파일의 진행도 테이블을 다루는 곳. 이 클래스와 같은 SQLite 연결을 쓴다.</summary>
+	public ProgressStore Progress { get; }
 
 	// 계정 하나. DB의 계정 테이블(Accounts)의 한 줄.
 	// 비밀번호 해시가 들어 있으므로 이 클래스 밖으로 내보내지 않는다
@@ -76,6 +79,7 @@ public class AccountStore : IDisposable
 		db = new SQLiteConnection(path);
 		db.CreateTable<AccountRow>();
 		db.CreateTable<CharacterRecord>();
+		Progress = new ProgressStore(db);
 	}
 
 	/// <summary>
@@ -133,7 +137,7 @@ public class AccountStore : IDisposable
 	}
 
 	/// <summary>
-	/// 그 계정에 새 캐릭터를 저장한다. 성공하면 created에 새 캐릭터를 넣는다. 실패하면 null.<br/>
+	/// 그 계정에 새 캐릭터를 저장한다. 진행도 처음 값(ProgressStore.CreateInitial)도 함께 넣는다. 성공하면 created에 새 캐릭터를 넣는다. 실패하면 null.<br/>
 	/// 실패: 모르는 언어(UnknownLanguage), 그 계정에 이미 같은 언어 캐릭터가 있음(LanguageTaken).
 	/// </summary>
 	public CreateCharacterResult CreateCharacter(string accountKey, string language, out CharacterRecord created)
@@ -153,7 +157,12 @@ public class AccountStore : IDisposable
 			Language = language,
 			CreatedAt = DateTime.UtcNow,
 		};
-		db.Insert(record);
+		// 캐릭터는 있는데 진행도 row가 없는 상태가 생기지 않도록, 진행도 처음 row와 한 트랜잭션으로 넣는다
+		db.RunInTransaction(() =>
+		{
+			db.Insert(record);
+			Progress.CreateInitial(record.Key);
+		});
 
 		created = record;
 		return CreateCharacterResult.Success;

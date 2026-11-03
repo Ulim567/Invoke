@@ -109,12 +109,30 @@ public class AccountServer : IDisposable
 				conn.Send(new EnterGameResultMessage { failure = AccountFailure.CharacterNotFound });
 				return false;
 			}
-			session.Enter(character.Key);
+			session.Enter(character.Key, store.Progress.Load(character.Key));
 		}
 
 		conn.Send(new EnterGameResultMessage { failure = AccountFailure.None });
 		Debug.Log($"[AccountServer] 들어가기: {session.LoginId} → [{request.language}] {session.Nickname} (connId={conn.connectionId})");
 		return true;
+	}
+
+	/// <summary>
+	/// 「들어가기」 때 불러온 진행도를 막 만든 플레이어에 넣는다. InvokeNetworkManager가 플레이어를 만든 직후(AddPlayerForConnection 전) 부른다.<br/>
+	/// 레벨·경험치·돈·재료·해금은 PlayerProgress에, 슬롯·함수·전역 변수는 FunctionExecutorNetwork에 넣는다. 임시 계정은 아무것도 하지 않는다.
+	/// </summary>
+	public void ApplyProgress(NetworkConnectionToClient conn, GameObject player)
+	{
+		if (!(conn.authenticationData is AccountSession session) || session.LoadedProgress == null) return;
+
+		CharacterProgressData data = session.LoadedProgress;
+		if (player.TryGetComponent(out PlayerProgress progress)) progress.ApplyLoaded(data, store.Progress, session.CharacterKey);
+		else Debug.LogError($"[AccountServer] {player.name}에 PlayerProgress가 없어서 레벨·재료 등을 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
+
+		if (player.TryGetComponent(out FunctionExecutorNetwork network)) network.ApplyLoadedData(data);
+		else Debug.LogError($"[AccountServer] {player.name}에 FunctionExecutorNetwork가 없어서 슬롯·함수·전역 변수를 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
+
+		session.ClearLoadedProgress();
 	}
 
 #if UNITY_EDITOR

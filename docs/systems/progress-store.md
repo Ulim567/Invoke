@@ -152,6 +152,9 @@
 
 ### 진행도 컴포넌트 (`PlayerProgress`)
 - 플레이어 프리팹 루트에 붙음. 레벨, 경험치, 돈, 재료, 해금 목록을 가짐
+  - 지금 붙은 곳: `Player_UL` (Base 씬 NetworkManager의 Player Prefab). 공용 `Player.prefab`에는 실행기 컴포넌트가 없고, `Player_JW`·`Player_HW`가 실행기 컴포넌트를 따로 더해 두어 공용에 붙이면 중복됨 → 공용으로 합치기는 별도 이슈
+- `Changed`: 서버(호스트 포함)는 값을 바꾼 함수가, 클라이언트 전용은 동기화 콜백이 부름 (한 번만 불림)
+- 「노드 해금」(`TryUnlock`)은 아직 없음
 - 이 값들은 `PlayerProgress`만 바꿈 (레포 규칙 2). 다른 시스템은 아래 함수를 부름
 - 값을 바꾸는 함수는 서버에서만 동작. 값을 바꾼 직후 `ProgressStore`로 DB에 씀
 - 임시 계정은 DB에 쓰지 않음 (값은 메모리에만)
@@ -221,6 +224,9 @@
 
 ## 다른 시스템이 쓰는 것
 - 정할 것: 테이블 설계 뒤 저장·불러오기 함수와 서버가 클라이언트에게 보내는 데이터
+
+## 정할 것
+- 공용 `Player.prefab`에 실행기 컴포넌트(`FunctionExecutor`, `LanguageRule`, `ProcessMemory`, `SlotLoadout`, `FunctionExecutorNetwork`)와 `PlayerProgress`를 합치는 일: 박진우·임혜원의 Variant에서 중복 컴포넌트를 지우는 일과 함께 별도 이슈
 
 ## 맞춘 결과
 - 임혜원과 확인할 것

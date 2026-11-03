@@ -12,7 +12,11 @@ using UnityEngine;
 /// - 호스트와 네트워크를 켜지 않은 테스트에서는 지금처럼 실행한다.
 /// </para>
 /// <para>
-/// 함수 데이터 (내 화면 → 서버)<br/>
+/// 함수 데이터 - 실제 계정 (서버 DB → 서버, 내 화면)<br/>
+/// - 서버가 플레이어를 만들 때 DB에서 불러온 데이터를 넣는다(ApplyLoadedData). 내 화면은 파일을 보내지 않고 서버의 데이터를 받는다(PlayerDataReceived).
+/// </para>
+/// <para>
+/// 함수 데이터 - 임시 계정, 네트워크를 켜지 않은 테스트 (내 화면 → 서버)<br/>
 /// - 내 캐릭터가 생기면 슬롯 8칸, 이 컴퓨터에 저장한 함수 전부, 전역 변수 파일을 서버로 보낸다.<br/>
 /// - 슬롯 장착 내용이 바뀌면(SlotLoadout.Changed) 슬롯과 함수를 다시 보낸다. 전역 변수는 접속할 때만 보낸다.<br/>
 /// - 서버는 받은 데이터로 슬롯마다 원본 함수를 만든다(ApplyPlayerData). 처음 다 만들면 IsDataReady가 true가 되고 DataReady가 불린다. 로딩 화면은 이것을 기다린다.
@@ -63,6 +67,18 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// [서버] 전역 변수를 한 번이라도 받아 적용했는지. 슬롯·함수와 전역 변수를 모두 받아야 준비된 것으로 본다
 	bool globalsApplied;
 
+	// 서버 DB의 데이터를 쓰는 플레이어(실제 계정)면 true. 서버가 플레이어를 연결에 붙이기 전에 정한다(ApplyLoadedData)
+	// 실제 계정의 원본은 서버 DB이므로, 소유 클라이언트는 이 컴퓨터의 파일을 보내지 않고 서버가 보낸 데이터를 받는다
+	// 「로그인 건너뛰기」 임시 계정과 네트워크를 켜지 않은 테스트는 false이고 지금처럼 이 컴퓨터의 파일을 쓴다
+	[SyncVar] bool usesServerData;
+	// [서버] DB에서 불러온 데이터. 소유 클라이언트가 달라고 하면(CmdRequestPlayerData) 보낸다
+	SlotLoadout.Entry[] serverSlots;
+	List<FunctionData> serverFunctions;
+	GlobalVariablesData serverGlobals;
+	// [내 화면] 서버에서 받는 중인 함수와 전역 변수. 슬롯을 받으면 ReceivedXxx로 옮긴다
+	readonly List<FunctionData> receivingServerFunctions = new List<FunctionData>();
+	GlobalVariablesData receivingServerGlobals;
+
 	// [내 화면] 슬롯 장착이 바뀌어 다시 보내야 하는지
 	// 장착을 한 번 바꿀 때 Changed가 여러 번 불리므로(자리 바꾸기, 다른 슬롯에서 옮겨 오기), 모아 두었다가 다음 Update에서 한 번만 보낸다
 	bool resendRequested;
@@ -82,6 +98,26 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// 서버가 이 플레이어의 함수 데이터(슬롯, 함수, 전역 변수)를 처음 다 받아 시전할 준비가 되었으면 true. 로딩 화면이 기다린다.
 	/// </summary>
 	public bool IsDataReady => dataReady;
+
+	/// <summary>
+	/// 이 플레이어의 슬롯·함수·전역 변수 원본이 서버 DB이면 true(실제 계정). false면 이 컴퓨터의 파일이다(임시 계정, 네트워크를 켜지 않은 테스트).
+	/// </summary>
+	public bool UsesServerData => usesServerData;
+
+	/// <summary>[내 화면] 서버가 보낸 슬롯 8개. 받기 전이면 null.</summary>
+	public IReadOnlyList<SlotLoadout.Entry> ReceivedSlots { get; private set; }
+
+	/// <summary>[내 화면] 서버가 보낸 이 캐릭터의 함수 전부. 받기 전이면 null.</summary>
+	public IReadOnlyList<FunctionData> ReceivedFunctions { get; private set; }
+
+	/// <summary>[내 화면] 서버가 보낸 전역 변수 선언. 받기 전이면 null.</summary>
+	public GlobalVariablesData ReceivedGlobals { get; private set; }
+
+	/// <summary>
+	/// [표시] 서버가 보낸 슬롯·함수·전역 변수를 다 받았을 때. 실제 계정의 소유 클라이언트(호스트 포함)에서 불린다.<br/>
+	/// 편집 화면과 장착 화면은 이 컴퓨터의 파일 대신 ReceivedSlots, ReceivedFunctions, ReceivedGlobals로 그린다.
+	/// </summary>
+	public event Action PlayerDataReceived;
 
 	/// <summary>
 	/// [표시] IsDataReady가 true가 될 때 한 번 불린다. 클라이언트(호스트 포함)에서 불린다. 로딩 화면을 닫을 때 쓴다.
@@ -159,6 +195,14 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	public override void OnStartLocalPlayer()
 	{
 		base.OnStartLocalPlayer();
+
+		// 실제 계정은 서버가 DB에서 이미 적용했으므로 이 컴퓨터의 파일을 보내지 않고, 서버의 데이터를 받아 온다
+		// 장착을 바꿔도 다시 보내지 않는다. 장착·함수 저장을 서버에 요청하는 길은 아직 없다(#205 3단계)
+		if (usesServerData)
+		{
+			CmdRequestPlayerData();
+			return;
+		}
 
 		loadout.Changed += OnLoadoutChanged;
 		SendPlayerData(true);
@@ -246,15 +290,82 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	[Command]
 	void CmdReceiveSlots(SlotLoadout.Entry[] slots)
 	{
+		// 실제 계정은 서버 DB가 원본이다. 클라이언트가 보낸 파일로 덮어쓰지 않는다
+		if (usesServerData)
+		{
+			Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 서버 DB의 데이터를 쓰는 플레이어라 클라이언트가 보낸 슬롯·함수·전역 변수를 버립니다.", this);
+			receivingFunctions.Clear();
+			receivingGlobals = null;
+			return;
+		}
 		ApplyPlayerData(slots, receivingFunctions, receivingGlobals);
 		receivingFunctions.Clear();
 		receivingGlobals = null;
 	}
 
 	/// <summary>
+	/// [서버] DB에서 불러온 슬롯·함수·전역 변수를 넣는다. 플레이어를 만든 직후, 연결에 붙이기 전에 AccountServer가 부른다.<br/>
+	/// 이 플레이어는 서버 DB의 데이터를 쓰는 플레이어가 되어(UsesServerData), 클라이언트가 보낸 파일 데이터를 받지 않는다.
+	/// </summary>
+	[Server]
+	public void ApplyLoadedData(CharacterProgressData data)
+	{
+		// 연결에 붙이기 전에 켜야, 소유 클라이언트가 처음 받을 때부터 이 값이 true라서 파일을 보내지 않는다
+		usesServerData = true;
+		serverSlots = data.Slots;
+		serverFunctions = data.Functions;
+		serverGlobals = data.Globals;
+		ApplyPlayerData(serverSlots, serverFunctions, serverGlobals);
+	}
+
+	// [서버] 소유 클라이언트가 서버의 슬롯·함수·전역 변수를 달라고 한다. 소유 클라이언트에게만 보낸다
+	// 함수는 하나씩 따로, 슬롯은 마지막에 보낸다(SendPlayerData와 같은 이유)
+	[Command]
+	void CmdRequestPlayerData()
+	{
+		if (!usesServerData) return;
+
+		TargetReceiveServerGlobals(FunctionDataJson.ToJson(serverGlobals ?? new GlobalVariablesData()));
+		if (serverFunctions != null)
+		{
+			foreach (FunctionData function in serverFunctions)
+				TargetReceiveServerFunction(FunctionDataJson.ToJson(function));
+		}
+		TargetReceiveServerSlots(serverSlots ?? CharacterProgressData.NewEmptySlots());
+	}
+
+	[TargetRpc]
+	void TargetReceiveServerGlobals(string json)
+	{
+		receivingServerGlobals = FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) && globals != null
+			? globals
+			: new GlobalVariablesData();
+		receivingServerFunctions.Clear();
+	}
+
+	[TargetRpc]
+	void TargetReceiveServerFunction(string json)
+	{
+		if (FunctionDataJson.TryFromJson(json, out FunctionData function)) receivingServerFunctions.Add(function);
+		else Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 서버가 보낸 함수 데이터를 읽을 수 없어 버립니다.", this);
+	}
+
+	[TargetRpc]
+	void TargetReceiveServerSlots(SlotLoadout.Entry[] slots)
+	{
+		ReceivedSlots = slots;
+		ReceivedFunctions = new List<FunctionData>(receivingServerFunctions);
+		ReceivedGlobals = receivingServerGlobals ?? new GlobalVariablesData();
+		receivingServerFunctions.Clear();
+		receivingServerGlobals = null;
+		Debug.Log($"[FunctionExecutorNetwork] {name}: 서버의 데이터를 받음 (함수 {ReceivedFunctions.Count}개, 전역 변수 {ReceivedGlobals.Declarations.Count}개)", this);
+		PlayerDataReceived?.Invoke();
+	}
+
+	/// <summary>
 	/// [서버] 플레이어의 슬롯 장착 내용, 가진 함수 전부, 전역 변수 파일로 슬롯마다 시전할 원본을 만든다.<br/>
 	/// globals가 null이 아니면 그 파일로 전역 변수를 정하고 프로세스를 새로 시작한다(RestartProcess). null이면 전역 변수는 그대로 둔다.<br/>
-	/// 지금은 클라이언트가 보낸 데이터가 들어온다. 서버 DB가 생기면 서버가 캐릭터의 데이터를 DB에서 읽어 이 함수에 넣는다.
+	/// 실제 계정은 DB에서 불러온 데이터(ApplyLoadedData), 임시 계정은 클라이언트가 보낸 이 컴퓨터의 파일 데이터가 들어온다.
 	/// </summary>
 	// 플레이어 데이터가 들어오는 곳을 이 함수 하나로 모은다. 나중에 받은 데이터를 검사(보안)할 때 이 함수에만 넣으면 되게 하기 위함
 	[Server]

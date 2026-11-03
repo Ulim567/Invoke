@@ -78,6 +78,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7292254466572983065}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1666379084355394109}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &7041558310181405839 stripped
 GameObject:
@@ -167,6 +170,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f6329a09b17803641863fc50c5c5296e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorNetwork
+  syncDirection: 0
+  syncMode: 1
+  syncInterval: 0
+--- !u!114 &1666379084355394109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7041558310181405839}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7010811173a915469b5d6470a3b8329, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerProgress
   syncDirection: 0
   syncMode: 1
   syncInterval: 0

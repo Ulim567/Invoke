@@ -64,6 +64,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		// 캐릭터 요청은 로그인한 연결만 보낼 수 있다
 		NetworkServer.RegisterHandler<CreateCharacterRequest>(OnCreateCharacterRequest);
 		NetworkServer.RegisterHandler<EnterGameRequest>(OnEnterGameRequest);
+		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.ServerPlayerCreated += OnServerPlayerCreated;
 		Debug.Log($"[InvokeAuthenticator] 계정 DB를 열었습니다: {AccountStore.DefaultPath}");
 #else
 		Debug.LogError("[InvokeAuthenticator] 이 빌드에는 계정 DB 코드가 없어서 서버로 쓸 수 없습니다. Dedicated Server로 빌드한 서버를 쓰세요.");
@@ -76,6 +77,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkServer.UnregisterHandler<AccountAuthRequest>();
 		NetworkServer.UnregisterHandler<CreateCharacterRequest>();
 		NetworkServer.UnregisterHandler<EnterGameRequest>();
+		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.ServerPlayerCreated -= OnServerPlayerCreated;
 		accountServer?.Dispose();
 		accountServer = null;
 #endif
@@ -123,6 +125,12 @@ public class InvokeAuthenticator : NetworkAuthenticator
 
 		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.SpawnPlayer(conn);
 		else Debug.LogError("[InvokeAuthenticator] InvokeNetworkManager가 없어서 플레이어를 만들 수 없습니다.");
+	}
+
+	// 플레이어가 만들어진 직후 「들어가기」 때 불러온 진행도를 넣는다
+	void OnServerPlayerCreated(NetworkConnectionToClient conn, GameObject player)
+	{
+		accountServer?.ApplyProgress(conn, player);
 	}
 #endif
 

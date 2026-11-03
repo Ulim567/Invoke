@@ -109,12 +109,60 @@ public class AccountServer : IDisposable
 				conn.Send(new EnterGameResultMessage { failure = AccountFailure.CharacterNotFound });
 				return false;
 			}
-			session.Enter(character.Key);
+			session.Enter(character.Key, store.Progress.Load(character.Key));
 		}
 
 		conn.Send(new EnterGameResultMessage { failure = AccountFailure.None });
 		Debug.Log($"[AccountServer] 들어가기: {session.LoginId} → [{request.language}] {session.Nickname} (connId={conn.connectionId})");
 		return true;
+	}
+
+	/// <summary>
+	/// [테스트용] 그 언어 캐릭터의 진행도를 요청의 json으로 모두 바꾸고 결과를 conn에 보낸다.<br/>
+	/// allowed가 false(에디터가 아니고 서버 실행 인자도 없음), 임시 계정, 쫓겨난 연결, 이미 들어간 연결, 캐릭터가 없음, 읽을 수 없는 json이면 거부한다.
+	/// </summary>
+	// 들어가기 전에만 받는 이유: 서버가 DB만 바꾸면 되고, 이미 만든 플레이어의 값(실행 중인 함수, 슬롯 원본)을 다시 맞출 필요가 없기 때문
+	public void HandleProgressTestData(NetworkConnectionToClient conn, ProgressTestDataRequest request, bool allowed)
+	{
+		string reason = null;
+		CharacterRecord character = null;
+		CharacterProgressData data = null;
+
+		if (!allowed) reason = $"서버가 테스트용 진행도 넣기를 허용하지 않습니다 (서버 실행 인자 {InvokeAuthenticator.AllowTestProgressDataArg}).";
+		else if (!(conn.authenticationData is AccountSession session) || session.IsTemporary) reason = "로그인한 실제 계정만 쓸 수 있습니다 (로그인 건너뛰기 임시 계정은 DB가 없음).";
+		// 쫓겨나 곧 끊길 연결이 같은 계정의 새 연결이 불러온 DB를 덮어쓰지 않게 막는다
+		else if (session.IsKicked) reason = "다른 곳에서 같은 계정으로 로그인해 곧 끊길 연결입니다.";
+		else if (session.HasEntered) reason = "캐릭터 화면에서만 쓸 수 있습니다. 들어간 뒤에는 넣을 수 없습니다.";
+		else if ((character = store.GetCharacters(session.AccountKey).Find(c => c.Language == request.language)) == null) reason = $"[{request.language}] 캐릭터가 없습니다. 먼저 만듭니다.";
+		else if (!FunctionDataJson.TryProgressFromJson(request.json, out data)) reason = "진행도 JSON을 읽을 수 없습니다.";
+
+		if (reason != null)
+		{
+			conn.Send(new ProgressTestDataResult { success = false, reason = reason });
+			return;
+		}
+
+		store.Progress.ReplaceAll(character.Key, data);
+		conn.Send(new ProgressTestDataResult { success = true });
+		Debug.Log($"[AccountServer] 테스트용 진행도를 넣었습니다: [{request.language}] 캐릭터 {character.Key} (connId={conn.connectionId})");
+	}
+
+	/// <summary>
+	/// 「들어가기」 때 불러온 진행도를 막 만든 플레이어에 넣는다. InvokeNetworkManager가 플레이어를 만든 직후(AddPlayerForConnection 전) 부른다.<br/>
+	/// 레벨·경험치·돈·재료·해금은 PlayerProgress에, 슬롯·함수·전역 변수는 FunctionExecutorNetwork에 넣는다. 임시 계정은 아무것도 하지 않는다.
+	/// </summary>
+	public void ApplyProgress(NetworkConnectionToClient conn, GameObject player)
+	{
+		if (!(conn.authenticationData is AccountSession session) || session.LoadedProgress == null) return;
+
+		CharacterProgressData data = session.LoadedProgress;
+		if (player.TryGetComponent(out PlayerProgress progress)) progress.ApplyLoaded(data, store.Progress, session.CharacterKey);
+		else Debug.LogError($"[AccountServer] {player.name}에 PlayerProgress가 없어서 레벨·재료 등을 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
+
+		if (player.TryGetComponent(out FunctionExecutorNetwork network)) network.ApplyLoadedData(data, store.Progress, session.CharacterKey);
+		else Debug.LogError($"[AccountServer] {player.name}에 FunctionExecutorNetwork가 없어서 슬롯·함수·전역 변수를 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
+
+		session.ClearLoadedProgress();
 	}
 
 #if UNITY_EDITOR

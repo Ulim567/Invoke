@@ -40,6 +40,12 @@ public class InvokeNetworkManager : NetworkManager
 	// 장소 씬을 모두 불러왔으면 true. 씬을 다 불러오기 전에 접속한 플레이어는 이 값이 켜질 때까지 기다린다
 	bool scenesLoaded;
 
+	/// <summary>
+	/// [서버] SpawnPlayer가 플레이어 오브젝트를 만든 직후, 연결에 붙이기(AddPlayerForConnection) 전에 불린다 (연결, 플레이어).<br/>
+	/// InvokeAuthenticator가 받아서 DB에서 불러온 진행도를 넣는다.
+	/// </summary>
+	public event Action<NetworkConnectionToClient, GameObject> ServerPlayerCreated;
+
 	public override void Awake()
 	{
 		base.Awake();
@@ -229,6 +235,8 @@ public class InvokeNetworkManager : NetworkManager
 
 		// 씬을 불러오라는 알림이 플레이어 생성보다 먼저 가야, 클라이언트에 바닥이 생긴 뒤에 플레이어가 나타난다
 		PutPlayerInScene(conn, player, lobby);
+		// 진행도를 AddPlayerForConnection 전에 넣어야, 클라이언트가 플레이어를 처음 받을 때 DB의 값(레벨, 재료 등)도 함께 받는다
+		ServerPlayerCreated?.Invoke(conn, player);
 		NetworkServer.AddPlayerForConnection(conn, player);
 	}
 

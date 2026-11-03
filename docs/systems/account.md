@@ -12,7 +12,7 @@
 - 임시 화면: OnGUI 로그인·회원가입·캐릭터 화면 (`AccountScreen`, `AccountFlow`를 그리기만 함). `NetworkManagerHUD` 대체
 - 에디터 전용 로그인 건너뛰기
 - 하지 않는 일
-  - 진행도 저장: DB 이슈. 캐릭터 key(`AccountSession.CharacterKey`) 기준
+  - 진행도 저장: [progress-store.md](progress-store.md). 캐릭터 key(`AccountSession.CharacterKey`) 기준
   - 닉네임 머리 위 표시, 로그아웃·캐릭터 바꾸기, 비밀번호 찾기·변경, 계정 삭제
   - 조작한 요청 막기: 보안 작업 때
   - 캐릭터 언어에 따른 플레이어 프리팹 선택: Java 캐릭터가 생길 때. 지금은 모든 캐릭터가 `Base` NetworkManager의 Player Prefab
@@ -182,6 +182,7 @@
 | `RequestSignUp(string loginId, string password, string nickname)` | 아이디, 비밀번호, 닉네임 | `bool` | 회원가입 요청. 닉네임은 계정의 닉네임. 성공하면 바로 로그인. 그 밖은 `RequestLogin`과 같음 |
 | `RequestCreateCharacter(string language)` | 언어(`CharacterLanguages`) | `bool` | 캐릭터 만들기 요청. 로그인 전이면 경고 로그, 무시. 결과: `CreateCharacterResultReceived` |
 | `RequestEnter(string language)` | 언어(`CharacterLanguages`) | `bool` | 그 언어의 캐릭터로 들어가기 요청. 로그인 전이면 경고 로그, 무시. 결과: `EnterGameResultReceived` |
+| `RequestProgressTestData(string language, string json)` | 언어, 진행도 JSON | `bool` | [테스트용] 캐릭터 화면에서 그 언어 캐릭터의 진행도를 JSON으로 모두 바꾸기 요청. `ProgressTestData`가 부름. 결과: `ProgressTestDataResultReceived` (#205) |
 | `AuthResultReceived` | `AccountAuthResult` | - | event. 로그인·회원가입 결과. 성공이면 이 이벤트 다음에 인증 완료 |
 | `CreateCharacterResultReceived` | `CreateCharacterResultMessage` | - | event. 캐릭터 만들기 결과 |
 | `EnterGameResultReceived` | `EnterGameResultMessage` | - | event. 들어가기 결과. 성공이면 이어서 서버가 로비에 플레이어 생성 |
@@ -213,14 +214,15 @@
 | `IsTemporary` | `bool` | 에디터 로그인 건너뛰기의 임시 계정. DB에 없음 → 진행도 저장하지 않음 |
 | `IsKicked` | `bool` | 같은 계정이 다른 곳에서 로그인해 곧 끊길 연결. 플레이어는 이미 제거됨 |
 | `HasEntered` | `bool` | 들어가기 성공 여부 |
-| `CharacterKey` | `string` | 들어간 캐릭터의 key. 들어가기 전에는 `null`. 진행도 저장의 기준 (DB 이슈) |
+| `CharacterKey` | `string` | 들어간 캐릭터의 key. 들어가기 전에는 `null`. 진행도 저장의 기준 ([progress-store.md](progress-store.md)) |
+| `LoadedProgress` | `CharacterProgressData` | 들어가기 때 DB에서 불러온 진행도. 플레이어를 만든 직후 `AccountServer.ApplyProgress`가 넣고 비움. 임시 계정은 `null` (#205) |
 | `Nickname` | `string` | 계정의 닉네임. 로그인할 때부터 있음 |
 
 ## 맞춘 결과
 - 함수 시전 동기화와 확인함 (2026-11-02)
   - 시전 동기화는 `InvokeNetworkManager`를 고치지 않음
   - `FunctionExecutorNetwork`: 들어가기 뒤 생긴 내 캐릭터에서 함수 데이터 전송, 「데이터 준비됨」 알림 → 로딩 화면은 이 신호를 기다림
-  - 함수·슬롯·전역 변수 파일: 지금은 컴퓨터마다 하나 (캐릭터 구분 없음). DB 이슈에서 서버가 `CharacterKey`로 읽어 `FunctionExecutorNetwork`에 넣음
+  - 함수·슬롯·전역 변수: 실제 계정은 서버가 `CharacterKey`로 DB에서 읽어 `FunctionExecutorNetwork`에 넣음 (#205). 임시 계정은 컴퓨터마다 하나인 파일
 - 팀원에게 알릴 것
   - `NetworkManagerHUD` 없어짐. 에디터에서는 `Host (에디터)` 버튼으로 지금처럼 바로 들어감
   - EC2 서버 접속: 서버 주소 칸에 EC2 IP, 회원가입 뒤 캐릭터 만들기·들어가기

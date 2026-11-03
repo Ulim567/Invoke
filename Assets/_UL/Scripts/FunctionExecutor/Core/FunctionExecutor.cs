@@ -322,12 +322,21 @@ public class FunctionExecutor : MonoBehaviour
 	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
 	public bool TrySaveGlobalVariables(GlobalVariablesData file)
 	{
-		if (file == null) throw new ArgumentNullException(nameof(file));
-		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _)) return false;
+		if (!CanUseGlobalVariables(file)) return false;
 
 		GlobalVariablesStorage.Save(file);
 		RestartProcess();
 		return true;
+	}
+
+	/// <summary>
+	/// 전역 변수 파일이 검사(칸 부족, 대상 타입, 직접 입력한 값이 아닌 초기값 등)를 통과하면 true. 저장하거나 반영하지는 않는다.<br/>
+	/// 거부 이유는 콘솔 오류로 남는다. 서버가 전역 변수를 DB에 저장하기 전에 쓴다(FunctionExecutorNetwork).
+	/// </summary>
+	public bool CanUseGlobalVariables(GlobalVariablesData file)
+	{
+		if (file == null) throw new ArgumentNullException(nameof(file));
+		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _);
 	}
 
 	void Awake()

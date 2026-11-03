@@ -220,6 +220,7 @@
 | `TryFromJson(string, out FunctionData)` | JSON 글자열 | `bool` | 실패하면 오류를 던지지 않고 `false`, 함수 데이터는 null |
 | `ToJson(GlobalVariablesData)` | 전역 변수 파일 | `string` | (#139) |
 | `TryGlobalVariablesFromJson(string, out GlobalVariablesData)` | JSON 글자열 | `bool` | 실패하면 `false`, 전역 변수 파일은 null. `TryFromJson(json, out _)`와 구분되도록 이름을 나눔 (#139) |
+| `ToJson(CharacterProgressData)`, `TryProgressFromJson(string, out CharacterProgressData)` | 캐릭터 진행도 / JSON 글자열 | `string` / `bool` | 테스트용 진행도 넣기(`ProgressTestData`)에 씀 (#205) |
 
 ### `GlobalVariablesData` (전역 변수 파일, #139)
 - 캐릭터마다 하나. 실행 규칙(찾는 순서, memory, 초기화)은 [function-executor.md](function-executor.md)의 「전역 변수」

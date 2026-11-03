@@ -161,7 +161,15 @@ void CmdPickUp()
 | `InputRequested` (event) | `int` 작업 번호, `string` 입력 함수 ID, `int` 슬롯(비동기 작업 -1) | - | [로직] 이 플레이어의 작업이 입력을 기다림. 소유 클라이언트에만. 이 안에서 바로 `ProvideTarget`을 불러도 됨 |
 | `IsDataReady` | - | `bool` | 서버가 이 플레이어의 함수 데이터를 처음 다 받아 시전 준비가 됨. 로딩 화면이 기다림 |
 | `DataReady` (event) | - | - | [표시] `IsDataReady`가 true가 될 때 한 번. 소유 클라이언트(호스트 포함) |
-| `ApplyPlayerData(slots, functions, globals)` | 슬롯 8칸(`SlotLoadout.Entry`), 함수 데이터 목록, 전역 변수 파일(`null`이면 그대로) | - | [서버] 플레이어 데이터를 넣고 슬롯 원본 생성. 지금은 클라이언트가 보낸 데이터, 서버 DB가 생기면 DB에서 읽은 데이터 |
+| `ApplyPlayerData(slots, functions, globals)` | 슬롯 8칸(`SlotLoadout.Entry`), 함수 데이터 목록, 전역 변수 파일(`null`이면 그대로) | - | [서버] 플레이어 데이터를 넣고 슬롯 원본 생성. 실제 계정은 DB에서 읽은 데이터(`ApplyLoadedData`), 임시 계정은 클라이언트가 보낸 이 컴퓨터의 파일 데이터 |
+| `ApplyLoadedData(CharacterProgressData, ProgressStore, characterKey)` | DB에서 불러온 진행도, 저장할 DB, 캐릭터 key | - | [서버] 실제 계정의 슬롯·함수·전역 변수를 넣음. 플레이어를 연결에 붙이기 전에 `AccountServer`가 부름 (#205) |
+| `UsesServerData` | - | `bool` | 슬롯·함수·전역 변수의 원본이 서버 DB이면 true(실제 계정). 이때 클라이언트는 파일을 보내지 않음 (#205) |
+| `ReceivedSlots`, `ReceivedFunctions`, `ReceivedGlobals` | - | 슬롯 8개, 함수 목록, 전역 변수 선언 | [소유 클라이언트] 서버가 보낸 데이터. 받기 전이면 `null` (#205) |
+| `PlayerDataReceived` (event) | - | - | [표시] 서버가 보낸 슬롯·함수·전역 변수를 처음 다 받았을 때, 저장 요청이 성공해 바뀌었을 때. 실제 계정의 소유 클라이언트 (#205) |
+| `RequestSaveFunction(FunctionData)` | 함수 | - | [소유 클라이언트] 서버 DB에 함수 저장 요청. 결과는 `PlayerDataRequestAnswered` (#205, [progress-store.md](progress-store.md)) |
+| `RequestEquipFunction(slot, guid)`, `RequestEquipSkill(slot, id)`, `RequestUnequip(slot)`, `RequestSwap(a, b)` | 슬롯 번호, 함수 GUID / 스킬 ID | - | [소유 클라이언트] 서버 DB에 장착 변경 요청. 결과는 `PlayerDataRequestAnswered` (#205) |
+| `RequestSaveGlobals(GlobalVariablesData)` | 전역 변수 선언 | - | [소유 클라이언트] 서버 DB에 전역 변수 저장 요청. 결과는 `PlayerDataRequestAnswered` (#205) |
+| `PlayerDataRequestAnswered` (event) | `PlayerDataRequest`, `PlayerDataRequestResult` | - | [로직] 저장 요청의 결과. 소유 클라이언트 (#205) |
 
 ### 시험
 | 이름 | 설명 |

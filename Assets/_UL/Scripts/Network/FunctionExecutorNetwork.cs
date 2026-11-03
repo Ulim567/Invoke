@@ -12,7 +12,11 @@ using UnityEngine;
 /// - 호스트와 네트워크를 켜지 않은 테스트에서는 지금처럼 실행한다.
 /// </para>
 /// <para>
-/// 함수 데이터 (내 화면 → 서버)<br/>
+/// 함수 데이터 - 실제 계정 (서버 DB → 서버, 내 화면)<br/>
+/// - 서버가 플레이어를 만들 때 DB에서 불러온 데이터를 넣는다(ApplyLoadedData). 내 화면은 파일을 보내지 않고 서버의 데이터를 받는다(PlayerDataReceived).
+/// </para>
+/// <para>
+/// 함수 데이터 - 임시 계정, 네트워크를 켜지 않은 테스트 (내 화면 → 서버)<br/>
 /// - 내 캐릭터가 생기면 슬롯 8칸, 이 컴퓨터에 저장한 함수 전부, 전역 변수 파일을 서버로 보낸다.<br/>
 /// - 슬롯 장착 내용이 바뀌면(SlotLoadout.Changed) 슬롯과 함수를 다시 보낸다. 전역 변수는 접속할 때만 보낸다.<br/>
 /// - 서버는 받은 데이터로 슬롯마다 원본 함수를 만든다(ApplyPlayerData). 처음 다 만들면 IsDataReady가 true가 되고 DataReady가 불린다. 로딩 화면은 이것을 기다린다.
@@ -63,6 +67,26 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// [서버] 전역 변수를 한 번이라도 받아 적용했는지. 슬롯·함수와 전역 변수를 모두 받아야 준비된 것으로 본다
 	bool globalsApplied;
 
+	// 서버 DB의 데이터를 쓰는 플레이어(실제 계정)면 true. 서버가 플레이어를 연결에 붙이기 전에 정한다(ApplyLoadedData)
+	// 실제 계정의 원본은 서버 DB이므로, 소유 클라이언트는 이 컴퓨터의 파일을 보내지 않고 서버가 보낸 데이터를 받는다
+	// 「로그인 건너뛰기」 임시 계정과 네트워크를 켜지 않은 테스트는 false이고 지금처럼 이 컴퓨터의 파일을 쓴다
+	[SyncVar] bool usesServerData;
+	// [서버] DB에서 불러온 데이터. 소유 클라이언트가 달라고 하면(CmdRequestPlayerData) 보낸다
+	SlotLoadout.Entry[] serverSlots;
+	List<FunctionData> serverFunctions;
+	GlobalVariablesData serverGlobals;
+#if UNITY_SERVER || UNITY_EDITOR
+	// [서버] 소유 클라이언트의 저장 요청을 쓸 DB와 캐릭터 key. ApplyLoadedData가 정한다
+	ProgressStore store;
+	string characterKey;
+#endif
+	// [내 화면] 서버에서 받는 중인 함수와 전역 변수. 슬롯을 받으면 ReceivedXxx로 옮긴다
+	readonly List<FunctionData> receivingServerFunctions = new List<FunctionData>();
+	GlobalVariablesData receivingServerGlobals;
+	// [내 화면] 실제 계정에서 SlotLoadout으로 바뀐 슬롯 번호. 다음 Update에서 한 번에 서버로 보낸다(CmdSetSlots)
+	// 장착 화면이 RequestEquipXxx를 부르게 바뀌기 전까지, 장착 화면에서 바꾼 장착이 서버에 닿게 하기 위함
+	readonly HashSet<int> changedSlots = new HashSet<int>();
+
 	// [내 화면] 슬롯 장착이 바뀌어 다시 보내야 하는지
 	// 장착을 한 번 바꿀 때 Changed가 여러 번 불리므로(자리 바꾸기, 다른 슬롯에서 옮겨 오기), 모아 두었다가 다음 Update에서 한 번만 보낸다
 	bool resendRequested;
@@ -82,6 +106,32 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// 서버가 이 플레이어의 함수 데이터(슬롯, 함수, 전역 변수)를 처음 다 받아 시전할 준비가 되었으면 true. 로딩 화면이 기다린다.
 	/// </summary>
 	public bool IsDataReady => dataReady;
+
+	/// <summary>
+	/// 이 플레이어의 슬롯·함수·전역 변수 원본이 서버 DB이면 true(실제 계정). false면 이 컴퓨터의 파일이다(임시 계정, 네트워크를 켜지 않은 테스트).
+	/// </summary>
+	public bool UsesServerData => usesServerData;
+
+	/// <summary>[내 화면] 서버가 보낸 슬롯 8개. 받기 전이면 null.</summary>
+	public IReadOnlyList<SlotLoadout.Entry> ReceivedSlots { get; private set; }
+
+	/// <summary>[내 화면] 서버가 보낸 이 캐릭터의 함수 전부. 받기 전이면 null.</summary>
+	public IReadOnlyList<FunctionData> ReceivedFunctions { get; private set; }
+
+	/// <summary>[내 화면] 서버가 보낸 전역 변수 선언. 받기 전이면 null.</summary>
+	public GlobalVariablesData ReceivedGlobals { get; private set; }
+
+	/// <summary>
+	/// [표시] 서버가 보낸 슬롯·함수·전역 변수를 처음 다 받았을 때, 그리고 저장 요청이 성공해 그 값이 바뀌었을 때. 실제 계정의 소유 클라이언트(호스트 포함)에서 불린다.<br/>
+	/// 편집 화면과 장착 화면은 이 컴퓨터의 파일 대신 ReceivedSlots, ReceivedFunctions, ReceivedGlobals로 그린다.
+	/// </summary>
+	public event Action PlayerDataReceived;
+
+	/// <summary>
+	/// [로직] 내가 보낸 저장 요청(RequestSaveFunction, RequestEquipXxx, RequestUnequip, RequestSwap, RequestSaveGlobals)의 결과 (요청 종류, 결과). 소유 클라이언트에서 불린다.<br/>
+	/// 성공(Saved)이면 이 event보다 먼저 ReceivedXxx가 새 값으로 바뀌고 PlayerDataReceived가 불린다. 거부되면 ReceivedXxx는 그대로다.
+	/// </summary>
+	public event Action<PlayerDataRequest, PlayerDataRequestResult> PlayerDataRequestAnswered;
 
 	/// <summary>
 	/// [표시] IsDataReady가 true가 될 때 한 번 불린다. 클라이언트(호스트 포함)에서 불린다. 로딩 화면을 닫을 때 쓴다.
@@ -160,6 +210,15 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		base.OnStartLocalPlayer();
 
+		// 실제 계정은 서버가 DB에서 이미 적용했으므로 이 컴퓨터의 파일을 보내지 않고, 서버의 데이터를 받아 온다
+		// 장착 화면이 SlotLoadout으로 바꾼 슬롯은 바뀐 슬롯만 서버에 보내 DB에 쓴다(CmdSetSlots)
+		if (usesServerData)
+		{
+			loadout.Changed += OnLoadoutChangedForServer;
+			CmdRequestPlayerData();
+			return;
+		}
+
 		loadout.Changed += OnLoadoutChanged;
 		SendPlayerData(true);
 	}
@@ -169,15 +228,39 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		base.OnStopLocalPlayer();
 
 		loadout.Changed -= OnLoadoutChanged;
+		loadout.Changed -= OnLoadoutChangedForServer;
 		resendRequested = false;
+		changedSlots.Clear();
 	}
 
 	void OnLoadoutChanged(int slot) => resendRequested = true;
 
+	// -1(여러 슬롯)은 불러오기·함수 다시 읽기라서 장착 내용이 바뀐 것이 아니므로 보내지 않는다
+	void OnLoadoutChangedForServer(int slot)
+	{
+		if (slot >= 0 && slot < SlotLoadout.SlotCount) changedSlots.Add(slot);
+	}
+
 	void Update()
 	{
-		if (!isLocalPlayer || !resendRequested) return;
+		if (!isLocalPlayer) return;
 
+		if (changedSlots.Count > 0)
+		{
+			var slots = new int[changedSlots.Count];
+			var entries = new SlotLoadout.Entry[changedSlots.Count];
+			int i = 0;
+			foreach (int slot in changedSlots)
+			{
+				slots[i] = slot;
+				entries[i] = loadout.GetEntry(slot);
+				i++;
+			}
+			changedSlots.Clear();
+			CmdSetSlots(slots, entries);
+		}
+
+		if (!resendRequested) return;
 		resendRequested = false;
 		SendPlayerData(false);
 	}
@@ -246,15 +329,360 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	[Command]
 	void CmdReceiveSlots(SlotLoadout.Entry[] slots)
 	{
+		// 실제 계정은 서버 DB가 원본이다. 클라이언트가 보낸 파일로 덮어쓰지 않는다
+		if (usesServerData)
+		{
+			Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 서버 DB의 데이터를 쓰는 플레이어라 클라이언트가 보낸 슬롯·함수·전역 변수를 버립니다.", this);
+			receivingFunctions.Clear();
+			receivingGlobals = null;
+			return;
+		}
 		ApplyPlayerData(slots, receivingFunctions, receivingGlobals);
 		receivingFunctions.Clear();
 		receivingGlobals = null;
 	}
 
+#if UNITY_SERVER || UNITY_EDITOR
+	/// <summary>
+	/// [서버] DB에서 불러온 슬롯·함수·전역 변수를 넣는다. 플레이어를 만든 직후, 연결에 붙이기 전에 AccountServer가 부른다.<br/>
+	/// 이 플레이어는 서버 DB의 데이터를 쓰는 플레이어가 되어(UsesServerData), 클라이언트가 보낸 파일 데이터를 받지 않는다.<br/>
+	/// 이후 소유 클라이언트의 저장 요청은 progressStore의 characterKey 캐릭터에 쓴다.
+	/// </summary>
+	[Server]
+	public void ApplyLoadedData(CharacterProgressData data, ProgressStore progressStore, string characterKey)
+	{
+		// 연결에 붙이기 전에 켜야, 소유 클라이언트가 처음 받을 때부터 이 값이 true라서 파일을 보내지 않는다
+		usesServerData = true;
+		store = progressStore;
+		this.characterKey = characterKey;
+		serverSlots = data.Slots;
+		serverFunctions = data.Functions;
+		serverGlobals = data.Globals;
+		ApplyPlayerData(serverSlots, serverFunctions, serverGlobals);
+	}
+#endif
+
+	#region 저장 요청 (소유 클라이언트 → 서버 → DB)
+
+	/// <summary>
+	/// [소유 클라이언트] 함수 하나를 서버에 저장하라고 요청한다. 같은 GUID의 함수가 있으면 덮어쓴다. 결과는 PlayerDataRequestAnswered.<br/>
+	/// 새 함수인데 이미 ProgressRules.MaxFunctions개면 TooManyFunctions. 그 함수를 장착한 슬롯은 새 내용으로 시전된다.
+	/// </summary>
+	public void RequestSaveFunction(FunctionData function)
+	{
+		if (!CanRequest(PlayerDataRequest.SaveFunction)) return;
+		if (function == null)
+		{
+			PlayerDataRequestAnswered?.Invoke(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+		CmdSaveFunction(FunctionDataJson.ToJson(function));
+	}
+
+	/// <summary>[소유 클라이언트] 슬롯에 함수(GUID)를 넣으라고 요청한다. 같은 함수가 다른 슬롯에 있으면 그 슬롯은 빈다. 결과는 PlayerDataRequestAnswered.</summary>
+	public void RequestEquipFunction(int slot, string guid)
+	{
+		if (CanRequest(PlayerDataRequest.ChangeSlots)) CmdEquip(slot, SlotLoadout.Entry.Function(guid));
+	}
+
+	/// <summary>[소유 클라이언트] 슬롯에 스킬(사전 정의 함수 ID)을 넣으라고 요청한다. 같은 스킬이 다른 슬롯에 있으면 그 슬롯은 빈다. 결과는 PlayerDataRequestAnswered.</summary>
+	public void RequestEquipSkill(int slot, string skillId)
+	{
+		if (CanRequest(PlayerDataRequest.ChangeSlots)) CmdEquip(slot, SlotLoadout.Entry.Skill(skillId));
+	}
+
+	/// <summary>[소유 클라이언트] 슬롯을 비우라고 요청한다. 결과는 PlayerDataRequestAnswered.</summary>
+	public void RequestUnequip(int slot)
+	{
+		if (CanRequest(PlayerDataRequest.ChangeSlots)) CmdEquip(slot, SlotLoadout.Entry.Empty);
+	}
+
+	/// <summary>[소유 클라이언트] 두 슬롯의 내용을 맞바꾸라고 요청한다. 결과는 PlayerDataRequestAnswered.</summary>
+	public void RequestSwap(int a, int b)
+	{
+		if (CanRequest(PlayerDataRequest.ChangeSlots)) CmdSwap(a, b);
+	}
+
+	/// <summary>
+	/// [소유 클라이언트] 전역 변수 선언을 서버에 저장하라고 요청한다. 결과는 PlayerDataRequestAnswered.<br/>
+	/// 서버는 FunctionExecutor.TrySaveGlobalVariables와 같은 검사를 하고, 통과하면 DB에 쓰고 프로세스를 새로 시작한다(RestartProcess).
+	/// </summary>
+	public void RequestSaveGlobals(GlobalVariablesData globals)
+	{
+		if (!CanRequest(PlayerDataRequest.SaveGlobals)) return;
+		if (globals == null)
+		{
+			PlayerDataRequestAnswered?.Invoke(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+		CmdSaveGlobals(FunctionDataJson.ToJson(globals));
+	}
+
+	// 서버 DB를 쓰는 플레이어의 소유 클라이언트만 요청할 수 있다. 임시 계정과 네트워크를 켜지 않은 테스트는 지금처럼 이 컴퓨터의 파일에 저장한다
+	bool CanRequest(PlayerDataRequest request)
+	{
+		if (usesServerData && isLocalPlayer) return true;
+		PlayerDataRequestAnswered?.Invoke(request, PlayerDataRequestResult.NotAllowed);
+		return false;
+	}
+
+	[Command]
+	void CmdSaveFunction(string json)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.NotAllowed); return; }
+		if (!FunctionDataJson.TryFromJson(json, out FunctionData function) || function == null || string.IsNullOrEmpty(function.Guid))
+		{
+			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+
+		int index = serverFunctions.FindIndex(f => f.Guid == function.Guid);
+#if UNITY_SERVER || UNITY_EDITOR
+		// 개수는 DB의 row 수로 센다. 읽을 수 없어 불러오지 못한 함수도 자리를 차지하고 있기 때문
+		bool isNew = !store.HasFunction(characterKey, function.Guid);
+		if (isNew && store.CountFunctions(characterKey) >= ProgressRules.MaxFunctions)
+		{
+			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.TooManyFunctions);
+			return;
+		}
+		store.SaveFunction(characterKey, function.Guid, json);
+#endif
+		if (index < 0) serverFunctions.Add(function);
+		else serverFunctions[index] = function;
+		// 바뀐 함수를 쓰는 슬롯 원본을 다시 만든다. 전역 변수는 그대로 둔다(null)
+		ApplyPlayerData(serverSlots, serverFunctions, null);
+
+		TargetFunctionSaved(json);
+		TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.Saved);
+	}
+
+	[Command]
+	void CmdEquip(int slot, SlotLoadout.Entry entry)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.NotAllowed); return; }
+		if (slot < 0 || slot >= SlotLoadout.SlotCount) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidSlot); return; }
+		PlayerDataRequestResult check = CheckEntry(entry);
+		if (check != PlayerDataRequestResult.Saved) { TargetAnswer(PlayerDataRequest.ChangeSlots, check); return; }
+
+		// SlotLoadout과 같은 규칙: 같은 함수·스킬은 한 슬롯에만. 다른 슬롯에 있으면 그 슬롯은 빈다(옮겨짐)
+		var changed = new Dictionary<int, SlotLoadout.Entry>();
+		if (!entry.IsEmpty)
+		{
+			for (int i = 0; i < serverSlots.Length; i++)
+			{
+				if (i != slot && SameEntry(serverSlots[i], entry)) changed[i] = SlotLoadout.Entry.Empty;
+			}
+		}
+		changed[slot] = entry.IsEmpty ? SlotLoadout.Entry.Empty : entry;
+		ApplySlotChanges(changed);
+	}
+
+	[Command]
+	void CmdSwap(int a, int b)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.NotAllowed); return; }
+		if (a < 0 || a >= SlotLoadout.SlotCount || b < 0 || b >= SlotLoadout.SlotCount)
+		{
+			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidSlot);
+			return;
+		}
+		// 같은 슬롯끼리는 바꿀 것이 없다(SlotLoadout.Swap과 같음). 아래 Dictionary에 같은 key를 두 번 넣으면 예외가 나서 Mirror가 접속을 끊기 때문에 먼저 돌려보낸다
+		if (a == b)
+		{
+			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.Saved);
+			return;
+		}
+		ApplySlotChanges(new Dictionary<int, SlotLoadout.Entry> { { a, serverSlots[b] }, { b, serverSlots[a] } });
+	}
+
+	// [서버] 장착 화면(SlotLoadout)에서 바뀐 슬롯들을 그대로 맞춘다. 결과는 ChangeSlots 요청의 결과로 돌려보낸다
+	// 받은 슬롯 밖에 같은 함수·스킬이 있으면 그 슬롯은 비운다(SlotLoadout과 같은 규칙)
+	[Command]
+	void CmdSetSlots(int[] slots, SlotLoadout.Entry[] entries)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.NotAllowed); return; }
+		if (slots == null || entries == null || slots.Length != entries.Length || slots.Length == 0)
+		{
+			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+
+		var changed = new Dictionary<int, SlotLoadout.Entry>();
+		for (int i = 0; i < slots.Length; i++)
+		{
+			if (slots[i] < 0 || slots[i] >= SlotLoadout.SlotCount || changed.ContainsKey(slots[i]))
+			{
+				TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidSlot);
+				return;
+			}
+			PlayerDataRequestResult check = CheckEntry(entries[i]);
+			if (check != PlayerDataRequestResult.Saved) { TargetAnswer(PlayerDataRequest.ChangeSlots, check); return; }
+			changed[slots[i]] = entries[i].IsEmpty ? SlotLoadout.Entry.Empty : entries[i];
+		}
+
+		var given = new List<int>(changed.Keys);
+		foreach (int slot in given)
+		{
+			SlotLoadout.Entry entry = changed[slot];
+			if (entry.IsEmpty) continue;
+			for (int i = 0; i < serverSlots.Length; i++)
+			{
+				if (changed.ContainsKey(i) ? (i != slot && SameEntry(changed[i], entry)) : SameEntry(serverSlots[i], entry))
+				{
+					// 받은 슬롯끼리 같은 것이 둘이면 장착 화면의 규칙과 어긋난 데이터다
+					if (changed.ContainsKey(i)) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidData); return; }
+					changed[i] = SlotLoadout.Entry.Empty;
+				}
+			}
+		}
+		ApplySlotChanges(changed);
+	}
+
+	// [서버] 슬롯에 넣으려는 내용 하나를 검사한다. 넣을 수 있으면 Saved
+	// 종류만 있고 ID가 빈 내용은 IsEmpty로 읽혀 슬롯을 비워 버리므로, 빈 슬롯(Empty)이 아니면 ID가 있어야 한다
+	PlayerDataRequestResult CheckEntry(SlotLoadout.Entry entry)
+	{
+		if (!Enum.IsDefined(typeof(SlotLoadout.EntryKind), entry.Kind)) return PlayerDataRequestResult.InvalidData;
+		if (entry.Kind == SlotLoadout.EntryKind.Empty) return PlayerDataRequestResult.Saved;
+		if (string.IsNullOrEmpty(entry.Id)) return PlayerDataRequestResult.InvalidData;
+		if (entry.Kind == SlotLoadout.EntryKind.UserFunction && !serverFunctions.Exists(f => f.Guid == entry.Id))
+			return PlayerDataRequestResult.UnknownFunction;
+		if (entry.Kind == SlotLoadout.EntryKind.Skill && !SlotLoadout.IsEquippableSkill(entry.Id))
+			return PlayerDataRequestResult.NotEquippable;
+		return PlayerDataRequestResult.Saved;
+	}
+
+	[Command]
+	void CmdSaveGlobals(string json)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.NotAllowed); return; }
+		if (!FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) || globals == null)
+		{
+			TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+		if (!executor.CanUseGlobalVariables(globals))
+		{
+			TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.GlobalsRejected);
+			return;
+		}
+
+#if UNITY_SERVER || UNITY_EDITOR
+		store.SaveGlobals(characterKey, json);
+#endif
+		serverGlobals = globals;
+		// 전역 변수를 저장하면 프로세스를 새로 시작한다(TrySaveGlobalVariables와 같음)
+		ApplyPlayerData(serverSlots, serverFunctions, serverGlobals);
+
+		TargetGlobalsSaved(json);
+		TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.Saved);
+	}
+
+	// [서버] 바뀐 슬롯을 DB에 한 트랜잭션으로 쓰고, 슬롯 원본을 다시 만들고, 소유 클라이언트에 알린다
+	void ApplySlotChanges(Dictionary<int, SlotLoadout.Entry> changed)
+	{
+#if UNITY_SERVER || UNITY_EDITOR
+		store.SaveSlots(characterKey, changed);
+#endif
+		foreach (KeyValuePair<int, SlotLoadout.Entry> pair in changed) serverSlots[pair.Key] = pair.Value;
+		ApplyPlayerData(serverSlots, serverFunctions, null);
+
+		TargetSlotsChanged((SlotLoadout.Entry[])serverSlots.Clone());
+		TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.Saved);
+	}
+
+	static bool SameEntry(SlotLoadout.Entry a, SlotLoadout.Entry b)
+	{
+		if (a.IsEmpty || b.IsEmpty) return a.IsEmpty && b.IsEmpty;
+		return a.Kind == b.Kind && a.Id == b.Id;
+	}
+
+	[TargetRpc]
+	void TargetAnswer(PlayerDataRequest request, PlayerDataRequestResult result)
+	{
+		if (result != PlayerDataRequestResult.Saved)
+			Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 서버가 {request} 요청을 거부했습니다: {result}", this);
+		PlayerDataRequestAnswered?.Invoke(request, result);
+	}
+
+	// [소유 클라이언트] 저장이 성공한 값으로 ReceivedXxx를 바꾼다. 결과(TargetAnswer)보다 먼저 온다
+	[TargetRpc]
+	void TargetFunctionSaved(string json)
+	{
+		if (!FunctionDataJson.TryFromJson(json, out FunctionData function)) return;
+		var functions = ReceivedFunctions != null ? new List<FunctionData>(ReceivedFunctions) : new List<FunctionData>();
+		int index = functions.FindIndex(f => f.Guid == function.Guid);
+		if (index < 0) functions.Add(function);
+		else functions[index] = function;
+		ReceivedFunctions = functions;
+		PlayerDataReceived?.Invoke();
+	}
+
+	[TargetRpc]
+	void TargetSlotsChanged(SlotLoadout.Entry[] slots)
+	{
+		ReceivedSlots = slots;
+		PlayerDataReceived?.Invoke();
+	}
+
+	[TargetRpc]
+	void TargetGlobalsSaved(string json)
+	{
+		if (!FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) || globals == null) return;
+		ReceivedGlobals = globals;
+		PlayerDataReceived?.Invoke();
+	}
+
+	#endregion
+
+	// [서버] 소유 클라이언트가 서버의 슬롯·함수·전역 변수를 달라고 한다. 소유 클라이언트에게만 보낸다
+	// 함수는 하나씩 따로, 슬롯은 마지막에 보낸다(SendPlayerData와 같은 이유)
+	[Command]
+	void CmdRequestPlayerData()
+	{
+		if (!usesServerData) return;
+
+		TargetReceiveServerGlobals(FunctionDataJson.ToJson(serverGlobals ?? new GlobalVariablesData()));
+		if (serverFunctions != null)
+		{
+			foreach (FunctionData function in serverFunctions)
+				TargetReceiveServerFunction(FunctionDataJson.ToJson(function));
+		}
+		TargetReceiveServerSlots(serverSlots ?? CharacterProgressData.NewEmptySlots());
+	}
+
+	[TargetRpc]
+	void TargetReceiveServerGlobals(string json)
+	{
+		receivingServerGlobals = FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) && globals != null
+			? globals
+			: new GlobalVariablesData();
+		receivingServerFunctions.Clear();
+	}
+
+	[TargetRpc]
+	void TargetReceiveServerFunction(string json)
+	{
+		if (FunctionDataJson.TryFromJson(json, out FunctionData function)) receivingServerFunctions.Add(function);
+		else Debug.LogWarning($"[FunctionExecutorNetwork] {name}: 서버가 보낸 함수 데이터를 읽을 수 없어 버립니다.", this);
+	}
+
+	[TargetRpc]
+	void TargetReceiveServerSlots(SlotLoadout.Entry[] slots)
+	{
+		ReceivedSlots = slots;
+		ReceivedFunctions = new List<FunctionData>(receivingServerFunctions);
+		ReceivedGlobals = receivingServerGlobals ?? new GlobalVariablesData();
+		receivingServerFunctions.Clear();
+		receivingServerGlobals = null;
+		Debug.Log($"[FunctionExecutorNetwork] {name}: 서버의 데이터를 받음 (함수 {ReceivedFunctions.Count}개, 전역 변수 {ReceivedGlobals.Declarations.Count}개)", this);
+		PlayerDataReceived?.Invoke();
+	}
+
 	/// <summary>
 	/// [서버] 플레이어의 슬롯 장착 내용, 가진 함수 전부, 전역 변수 파일로 슬롯마다 시전할 원본을 만든다.<br/>
 	/// globals가 null이 아니면 그 파일로 전역 변수를 정하고 프로세스를 새로 시작한다(RestartProcess). null이면 전역 변수는 그대로 둔다.<br/>
-	/// 지금은 클라이언트가 보낸 데이터가 들어온다. 서버 DB가 생기면 서버가 캐릭터의 데이터를 DB에서 읽어 이 함수에 넣는다.
+	/// 실제 계정은 DB에서 불러온 데이터(ApplyLoadedData), 임시 계정은 클라이언트가 보낸 이 컴퓨터의 파일 데이터가 들어온다.
 	/// </summary>
 	// 플레이어 데이터가 들어오는 곳을 이 함수 하나로 모은다. 나중에 받은 데이터를 검사(보안)할 때 이 함수에만 넣으면 되게 하기 위함
 	[Server]

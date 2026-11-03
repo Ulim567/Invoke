@@ -37,6 +37,8 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 		SlotLoadout loadout = caster.GetComponent<SlotLoadout>();
 		loadout.EquipSkill(2, PredefinedFunctionIds.BattlefieldSweep);
 		loadout.EquipSkill(3, PredefinedFunctionIds.WideSlash);
+		// 장착이 바뀌면 FunctionExecutorNetwork가 다음 프레임에 서버로 보낸다. 서버가 받기 전에 누르면 예전 슬롯이 시전되므로 기다린다 (#212)
+		yield return new WaitForSeconds(0.3f);
 		caster.CastRequested += (slot, f, targets) => lastTargets = new List<GameObject>(targets);
 
 		// 여러 명 선택은 사용 가능한 소환검 수만큼 찍을 수 있으므로 2개 소환해 둔다

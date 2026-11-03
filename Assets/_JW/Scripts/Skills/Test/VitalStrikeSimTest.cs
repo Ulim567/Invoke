@@ -60,6 +60,8 @@ public class VitalStrikeSimTest : MonoBehaviour
 
 		SlotLoadout.Entry backup = loadout.GetEntry(0);
 		loadout.EquipSkill(0, PredefinedFunctionIds.VitalStrike);
+		// 장착이 바뀌면 FunctionExecutorNetwork가 다음 프레임에 서버로 보낸다. 서버가 받기 전에 누르면 예전 슬롯이 시전되므로 기다린다 (#212)
+		yield return new WaitForSeconds(0.3f);
 
 		yield return Round("눈", VitalStrikeResult.Eye, StatusType.Blind, true);
 		yield return Round("발목", VitalStrikeResult.Ankle, StatusType.Slow, false);

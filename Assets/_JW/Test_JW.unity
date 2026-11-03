@@ -1654,7 +1654,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1810310908}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &477589597
 GameObject:
@@ -1755,7 +1758,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1943402325}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &832843940
 GameObject:
@@ -1817,7 +1823,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &850079820
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1949,7 +1955,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1391551129}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &1036190583
 GameObject:
@@ -2133,6 +2142,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1391551121 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+  m_PrefabInstance: {fileID: 921934240}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1391551129
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1391551121}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 59487618
+  _assetId: 1669196886
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!1 &1398325081
 GameObject:
   m_ObjectHideFlags: 0
@@ -2468,6 +2499,50 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1810310900 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+  m_PrefabInstance: {fileID: 441903770}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1810310908
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1810310900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 595993158
+  _assetId: 1669196886
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
+--- !u!1 &1943402317 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+  m_PrefabInstance: {fileID: 786207468}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1943402325
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1943402317}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 1081536473
+  _assetId: 1669196886
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

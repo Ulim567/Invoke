@@ -153,6 +153,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: -7987982710828842246}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5038833624358172368}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -250,7 +253,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 512
   input: {fileID: 1965934584990814665}
-  executor: {fileID: 1518876502040340094}
+  net: {fileID: 0}
   loadout: {fileID: 0}
   minigame: {fileID: 0}
   health: {fileID: 877132152123956791}
@@ -475,6 +478,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SwordWaveLauncher
   wavePrefab: {fileID: 3197658186749315692, guid: 926c53268e34e47c08dff33ab76a5903, type: 3}
   wideWavePrefab: {fileID: 1217615006568858308, guid: a78f8a9ef39c24a8394d45cff4fdaa06, type: 3}
+--- !u!114 &5038833624358172368
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6329a09b17803641863fc50c5c5296e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorNetwork
+  syncDirection: 0
+  syncMode: 1
+  syncInterval: 0
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

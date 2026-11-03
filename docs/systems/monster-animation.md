@@ -4,6 +4,7 @@
 
 ## 하는 일
 - 몬스터 상태를 읽어서 잡몹 애니메이션(Leak, Loop)을 재생한다. 연출만 하고 값은 바꾸지 않는다.
+- 레이드 보스 Gateway와 분신의 애니메이션을 재생한다 (`GatewayAnimator`, #215).
 - 몬스터 투사체 그림이 날아가는 방향을 보게 한다 (`ProjectileFacing`).
 - 네트워크에서는 상태만 동기화하고, 애니메이션은 각 화면에서 이 컴포넌트가 상태를 보고 정한다.
 - 하지 않는 일
@@ -36,6 +37,22 @@
 - MonsterBullet: Sprite Renderer(`Loop_Bullet` 첫 장면), Animator(컨트롤러 `Loop_Bullet`), `ProjectileFacing`
   - 투사체 그림은 오른쪽으로 날아가는 모양(꼬리가 왼쪽). 왼쪽으로 날면 `ProjectileFacing`이 flipX로 뒤집는다
 
+### Gateway (`GatewayAnimator`, #215)
+- 스크립트: `Assets/_HW/Scripts/GatewayAnimator.cs`. 그림·클립·컨트롤러: `Assets/_HW/Boss/Gateway` (#126, 12fps, 168×168, Pivot 가운데)
+- 우선순위: 사망 > 그로기 > 모으기 > 공격(Throw·Slam) > 피격 > 대기. 보스는 자주 맞으므로 피격 모션은 다른 동작이 없을 때만
+
+| 애니메이션 | 읽는 것 | 클립 |
+| --- | --- | --- |
+| `Idle` | 늘 | 9 반복 (0.75초) |
+| `Throw` | `ProjectileAttack.FireEffectPlayed`(패킷 던지기), `GatewayAI.SummonEffectPlayed`(웜 소환)부터 0.75초. 7번째 장면(0.58초)에 던짐 | 9 |
+| `Slam` | `GatewayAI.SlamEffectPlayed`(패킷 낙하·때리기)부터 0.75초. 6번째 장면(0.42초) = `Slam Delay`·`Smash Delay` | 9 |
+| `Charge` | `GatewayPhases.ChargeEffectPlayed`(모으는 시간)부터 그 시간 동안. 클립이 끝나면 마지막 장면 유지 | 9 (0.75초) |
+| `Groggy` | `GatewayPhases.GroggyEffectPlayed`(그로기 시간)부터 그 시간 동안 | 7 반복 |
+| `Hit` | `Monster.HitEffectPlayed`부터 0.42초 | 5 |
+| `Death` | `Monster.DeathEffectPlayed`부터 끝까지. 마지막 빈 장면에서 멈춤 | 18 (1.5초) = `Despawn Delay` 1.5 |
+
+- 분신(`GatewayClone`): 같은 그림·Animator·`GatewayAnimator`를 붙인다. `GatewayAI`·`GatewayPhases`·`ProjectileAttack`이 없어서 Idle·Hit·Death만 나온다. 색 깜빡임(`CloneGlitch`)은 같은 SpriteRenderer의 색만 바꾸므로 함께 동작
+
 ## 다른 시스템이 쓰는 것
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
@@ -50,3 +67,7 @@
   - SpriteRenderer와 Animator는 프리팹 최상위에 붙인다 (AI가 최상위 flipX로 방향을 바꿈)
   - 프리팹에 그림·Animator·`MonsterAnimator`는 임혜원이 붙인다. 판정 크기는 김도훈이 맞춘다
   - Leak 대기 모션은 따로 없이 Move를 천천히. Loop 밀려나기는 `FlyingShooterAI`가 한다
+- 김도훈과 정한 것 (#215)
+  - Gateway: Throw는 `ProjectileAttack.FireEffectPlayed`, Slam은 `GatewayAI.SlamEffectPlayed`, 웜 소환은 `SummonEffectPlayed`(Throw 모션), Charge·Groggy는 `GatewayPhases`의 연출 event
+  - Gateway·분신 프리팹에 그림·Animator·`GatewayAnimator`는 임혜원이 붙인다 (김도훈 요청)
+  - 분신은 본체 그림 그대로. 구분 힌트는 `CloneGlitch`(김도훈)

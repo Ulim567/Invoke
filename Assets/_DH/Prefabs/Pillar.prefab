@@ -26,8 +26,8 @@ Transform:
   m_GameObject: {fileID: 1853711757243019980}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2, z: 0}
-  m_LocalScale: {x: 2, y: 4, z: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7702366671769008036}
@@ -77,12 +77,12 @@ SpriteRenderer:
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: -705119719
+  m_SortingLayer: 6
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 12cec5a26ac2ab44495bbc01c9b1a3f5, type: 3}
-  m_Color: {r: 1, g: 0.67668825, b: 0, a: 1}
+  m_Sprite: {fileID: 21300000, guid: 2e36e3752eb664bc8847bb570896262d, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -106,6 +106,7 @@ GameObject:
   - component: {fileID: 1833644907637921559}
   - component: {fileID: 6690848387844445683}
   - component: {fileID: 3592860967248318400}
+  - component: {fileID: 5622192208641966478}
   m_Layer: 9
   m_Name: Pillar
   m_TagString: Untagged
@@ -190,6 +191,7 @@ MonoBehaviour:
   maxHp: 150
   despawnDelay: 0.5
   isBoss: 0
+  invulnerable: 0
 --- !u!114 &1833644907637921559
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -230,7 +232,33 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
   sceneId: 0
-  _assetId: 0
+  _assetId: 215246063
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &5622192208641966478
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5026354700828327269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c7c37a87a6fa47b8ad6df1f7f6ea14d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PillarView
+  spriteRenderer: {fileID: 2172849578606553911}
+  intact: {fileID: 21300000, guid: 2e36e3752eb664bc8847bb570896262d, type: 3}
+  cracked: {fileID: 21300000, guid: 1c7ed226f9afa4661b5f7d3faeae4ad2, type: 3}
+  breakFrames:
+  - {fileID: -308940428414803, guid: 657d1d2356bbc46128ffe2b0a8e2a76e, type: 3}
+  - {fileID: -5472956948880477105, guid: 657d1d2356bbc46128ffe2b0a8e2a76e, type: 3}
+  - {fileID: -8726459636895757426, guid: 657d1d2356bbc46128ffe2b0a8e2a76e, type: 3}
+  - {fileID: -1877824814515579675, guid: 657d1d2356bbc46128ffe2b0a8e2a76e, type: 3}
+  - {fileID: 6958880709843767967, guid: 657d1d2356bbc46128ffe2b0a8e2a76e, type: 3}
+  - {fileID: -6367931697303560044, guid: 657d1d2356bbc46128ffe2b0a8e2a76e, type: 3}
+  crackedRatio: 0.5
+  breakFps: 12
+  hitFlashColor: {r: 1, g: 0.75, b: 0.9, a: 1}
+  hitFlashTime: 0.08

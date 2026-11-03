@@ -51,7 +51,7 @@ public class SkillData
 	[SerializeField, Min(0)] int cooldownTicks;
 	[Tooltip("stack 부담. 프레임 크기 = 1 + 파라미터 수 + 이 값")]
 	[SerializeField, Min(0)] int localVariableCount;
-	[Tooltip("heap 사용량 (칸). 검 소환, 검기, 패링, 이동 계열. 메모리 작업(이우림)이 끝나면 실행기가 읽는다")]
+	[Tooltip("heap 사용량 (칸). 검기, 패링, 이동 계열이 Malloc할 때 쓴다. 검 소환은 이 값 대신 Sword struct 크기(PredefinedStructs)를 쓴다 (#220)")]
 	[SerializeField, Min(0)] int heapSize;
 	[Tooltip("범위 스킬(Area)의 반경 (유닛). 캐릭터 주변 이 거리 안의 몬스터가 대상이 된다. 다른 방식은 쓰지 않는다")]
 	[SerializeField, Min(0f)] float areaRadius = 4f;

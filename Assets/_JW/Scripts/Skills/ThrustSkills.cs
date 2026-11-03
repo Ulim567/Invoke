@@ -254,12 +254,15 @@ public class CSkewer : ThrustSkill
 /// <para>
 /// - 소환검 움직임은 SummonedSwords.Stab. 찌르는 동안 그 검은 Stabbing 상태라 다른 스킬에 쓰이지 않는다.<br/>
 /// - 데미지: 검이 대상에 닿은 순간(StabHit) 공격력 × 표 배율. 스킬이 끝나기 전(20틱)에 닿지 못하면 데미지 없이 돌아온다.<br/>
-/// - 대상 값이 없으면 검을 보내지 않는다.
+/// - 대상 값이 없으면 검을 보내지 않는다.<br/>
+/// - sword(Sword*)를 넘기면 그 소환검을 쓴다 (#220). 그 검이 곁에 없으면(던짐, 찌르는 중, 누수) 아무것도 안 하고 끝난다. 잘못된 포인터면 InvalidPointerError.
 /// </para>
 /// </summary>
 public class CSummonedThrust : DataDrivenSkill
 {
 	public override string Id => PredefinedFunctionIds.SummonedThrust;
+
+	protected override bool TakesSwordPointer => true;
 
 	SummonedSwords swords;
 	SummonedSword sword;
@@ -270,8 +273,9 @@ public class CSummonedThrust : DataDrivenSkill
 		caster = task.Caster;
 		swords = caster.GetComponent<SummonedSwords>();
 		Monster target = TryGetArgument("target", out RuntimeValue value) ? value.AsBug() : null;
-		// 소환검이 없으면 DataDrivenSkill이 시작 전에 NoSummonedSwordError로 막는다
-		if (swords == null || target == null || !swords.TryGetFirstReady(out sword)) return;
+		// sword로 넘긴 검이 있으면 그 검, 없으면 가장 먼저 소환한 검 (#220). 소환검이 없으면 DataDrivenSkill이 시작 전에 NoSummonedSwordError로 막는다
+		sword = null;
+		if (swords == null || target == null || !TryPickSword(task, swords, out sword)) return;
 
 		swords.StabHit += OnStabHit;
 		Vector2 from = sword.transform.position;

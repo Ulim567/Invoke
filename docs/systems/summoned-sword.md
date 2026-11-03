@@ -7,7 +7,7 @@
 - 소환검 오브젝트(소환검 프리팹)를 만들고 없앤다.
 - C 스킬(소환검 필요 검사), 슬롯(여러 명 선택 최대 인원), HUD가 소환검 개수와 상태를 읽을 수 있게 한다.
 - 하지 않는 일
-  - heap에 올리고 내리기(malloc, free): 검 소환·해제 스킬이 `PredefinedFunction.Malloc` / `Free`로 한다 (c-skills.md). 이 컴포넌트는 오브젝트와 목록만 맡는다.
+  - heap에 올리고 내리기(malloc, free): 검 소환·해제 스킬(`PredefinedFunction.Malloc` / `Free`, c-skills.md)이나 플레이어의 `malloc(Sword)` / `free` 블록이 한다. 이 컴포넌트는 오브젝트와 목록만 맡는다.
   - 소환검으로 때리는 스킬의 데미지: 각 스킬 이슈 (`Hit` 이벤트를 받아서 처리)
   - 실제 HUD 그림: 임혜원 (지금은 OnGUI 임시 표시)
   - 네트워크 동기화: 「소환검·검기를 서버에서 생성하고 동기화하기」 이슈
@@ -16,7 +16,9 @@
 - 포인터
   - 소환검 하나 = heap 객체 하나. 포인터는 이우림 heap(`ProcessMemory.Heap`)의 포인터를 그대로 쓴다.
   - 검 소환 스킬 순서: `SpawnSword`(오브젝트) → `PredefinedFunction.Malloc`(heap) → `Register(sword, pointer)`(목록). malloc 실패면 `DespawnSword`.
-  - 해제 스킬 순서: `PredefinedFunction.Free`(heap) → `DespawnSword`(오브젝트, 목록에서 뺌).
+  - 블록코딩 `malloc(Sword)` (#191, #220): `Start`에서 `ProcessMemory.StructObjects.Register<SummonedSword>(PredefinedStructs.Sword, () => CanSummon ? SpawnSword() : null, Register)`로 등록. 실행기가 heap 확인 → `SpawnSword` → heap에 올림 → `Register` 순서로 부른다. 5개면 `NULL`.
+  - 해제 순서: `Free`(해제 스킬이든 `free` 블록이든, heap) → `HeapStorage.ObjectFreed` → 이 컴포넌트가 `DespawnSword`(오브젝트, 목록에서 뺌) (#220). 스킬은 `DespawnSword`를 부르지 않는다.
+  - heap 크기: 소환검 하나 = `Sword` struct 크기(`PredefinedStructs`, 임시 2칸).
   - 포인터는 소환한 순서대로 커진다. 목록(`Swords`)도 소환 순서.
 - 최대 5개
   - 누수된 소환검도 개수에 들어간다 (`HeapStorage.CountObjects`). 누수가 쌓이면 새로 소환할 수 있는 수가 줄어든다.
@@ -67,7 +69,7 @@
 | `ReadyCount` | - | `int` | 사용 가능한 소환검 수 |
 | `SpawnSword()` | - | `SummonedSword` | 소환검 오브젝트를 만든다 (목록·포인터 없음, `NetworkSpawner`). 검 소환 스킬이 Malloc 전에 부른다. 만들지 못하면 `null` |
 | `Register(SummonedSword, int pointer)` | 소환검, 포인터 | - | malloc에 성공한 소환검을 목록에 올린다 |
-| `DespawnSword(SummonedSword)` | 소환검 | - | 오브젝트를 없애고 목록에서 뺀다. heap은 건드리지 않음 (해제 스킬이 Free 다음에, 검 소환 스킬이 malloc 실패 때 부른다) |
+| `DespawnSword(SummonedSword)` | 소환검 | - | 오브젝트를 없애고 목록에서 뺀다. heap은 건드리지 않음 (heap에서 해제되면 `ObjectFreed`를 받아 이 컴포넌트가, 검 소환 스킬은 malloc 실패 때 부른다) |
 | `TryGetSword(int pointer, out SummonedSword)` | 포인터 | `bool` | 포인터로 찾기. 해제·누수면 `false` |
 | `TryGetFirstReady(out SummonedSword)` | - | `bool` | 가장 먼저 소환한 사용 가능한 검 |
 | `Throw(SummonedSword, GameObject target)` | 검, 대상 (없으면 빗나감) | `bool` | 사용 가능한 검만 던진다 |
@@ -93,7 +95,7 @@
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
-| `SummonedSwordSimTest` | Test_JW의 SummonTest. 켜고 Play → Host, Game 창을 한 번 클릭 (Unity가 화면 맨 앞에 있어야 가짜 키가 들어감). 실제 스킬(검 소환·해제)로 확인: 검 소환 5번(6번째 안 됨), 포인터 순서, 첫 번째 사용 가능한 검, 던지기·돌아오기, 줍기(가짜 Z 키), 해제(마지막 소환 검, heap 감소), 떨어진 검 해제, 검 소환 도중 실행 중단 → 누수(반투명, 개수에 남음, 해제 대상 아님), 소환검 없을 때 소환검 찌르기 실패, 해제할 검 없으면 `NoSummonedSwordError`, 영역 비우기. 「[SummonTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SummonedSwordSimTest` | Test_JW의 SummonTest. 켜고 Play → Host, Game 창을 한 번 클릭 (Unity가 화면 맨 앞에 있어야 가짜 키가 들어감). 실제 스킬(검 소환·해제)로 확인: 검 소환을 heap이 허락하는 만큼(최대 5개, 3개 이상이어야 함, 그다음은 안 됨), 포인터 순서, 첫 번째 사용 가능한 검, 던지기·돌아오기, 줍기(가짜 Z 키), 해제(마지막 소환 검, heap 감소), 떨어진 검 해제, 검 소환 도중 실행 중단 → 누수(반투명, 개수에 남음, 해제 대상 아님), 소환검 없을 때 소환검 찌르기 실패, 해제할 검 없으면 `NoSummonedSwordError`, 영역 비우기. 「[SummonTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 박진우 결정
@@ -106,4 +108,7 @@
   - 검 소환은 시작할 때 malloc (도중에 끊기면 누수)
 - 정해야 할 것
   - 소환검 그림, 누수 연출, HUD: 임혜원
-  - 소환검 heap 크기, 날아가는 속도: 기획
+  - 소환검 heap 크기(지금 `Sword` 임시 2칸, 기본 메모리 10칸이라 5개를 다 못 만듦), 날아가는 속도: 기획
+- 이우림과 정함 (#191, #220)
+  - 소환검 = `Sword` struct. `malloc(Sword)` 블록과 검 소환 스킬이 같은 소환검을 만든다. 플레이어가 `Sword*`를 직접 관리한다
+  - 해제한 소환검 오브젝트는 `ObjectFreed`를 받은 이 컴포넌트가 없앤다

@@ -90,7 +90,8 @@ public class CSwordThrow : ThrowSkillBase
 /// 소환검 던지기 (#167). 가장 먼저 소환한 사용 가능한 소환검을 대상 쪽으로 일직선으로 던진다 (단일, 소환검 필요).
 /// <para>
 /// - 대상이 HitRange(임시 8칸) 안이면 명중, 밖이면 빗나가 계속 날아가 벽·땅에 꽂힌다.<br/>
-/// - 맞으면 공격력 × 표 배율 (처형 없음). 소환검은 몬스터 몸에 꽂혀 따라다닌다.
+/// - 맞으면 공격력 × 표 배율 (처형 없음). 소환검은 몬스터 몸에 꽂혀 따라다닌다.<br/>
+/// - sword(Sword*)를 넘기면 그 소환검을 던진다 (#220). 그 검이 곁에 없으면 아무것도 안 하고 끝난다. 잘못된 포인터면 InvalidPointerError.
 /// </para>
 /// </summary>
 public class CSummonedThrow : ThrowSkillBase
@@ -100,6 +101,8 @@ public class CSummonedThrow : ThrowSkillBase
 
 	public override string Id => PredefinedFunctionIds.SummonedThrow;
 
+	protected override bool TakesSwordPointer => true;
+
 	SummonedSwords swords;
 	SummonedSword thrown;
 
@@ -108,8 +111,9 @@ public class CSummonedThrow : ThrowSkillBase
 		caster = task.Caster;
 		swords = caster.GetComponent<SummonedSwords>();
 		Monster target = Target();
-		// 소환검이 없으면 DataDrivenSkill이 시작 전에 NoSummonedSwordError로 막는다
-		if (swords == null || target == null || !swords.TryGetFirstReady(out thrown)) return;
+		// sword로 넘긴 검이 있으면 그 검, 없으면 가장 먼저 소환한 검 (#220). 소환검이 없으면 DataDrivenSkill이 시작 전에 NoSummonedSwordError로 막는다
+		thrown = null;
+		if (swords == null || target == null || !TryPickSword(task, swords, out thrown)) return;
 
 		bool hit = Vector2.Distance(Center(caster), Center(target.gameObject)) <= HitRange;
 		Vector2 from = thrown.transform.position;

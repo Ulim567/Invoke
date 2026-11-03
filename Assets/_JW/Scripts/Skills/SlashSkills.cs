@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // 휘두르기 계열 스킬. 수치는 SkillTable 표, 필요 조건 검사는 DataDrivenSkill이 맡는다.
-// 검 휘두르기·검 크게베기는 #163, 소환검 휘두르기·상처 가르기·검 다중베기는 #172에서 채웠다. 전장 휩쓸기는 대상 list가 생긴 뒤. 나머지 효과는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
+// 검 휘두르기·검 크게베기는 #163, 소환검 휘두르기·상처 가르기·검 다중베기는 #172, 전장 휩쓸기는 #220(대상 array, #191)에서 채웠다. 나머지 효과는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
 
 /// <summary>
 /// 검기를 날리는 스킬의 기반 (#163). 검 휘두르기, 검 크게베기가 상속한다.
@@ -322,8 +322,93 @@ public class CMultiSlash : DataDrivenSkill
 	}
 }
 
-/// <summary>전장 휩쓸기. 소환된 검들이 여러 적에게 각각 가서 벰 (여러 명 선택)</summary>
+/// <summary>
+/// 전장 휩쓸기 (#220). 여러 명을 골라 사용 가능한 소환검이 대상마다 하나씩 차례로(StaggerTicks 간격) 날아가 베고 돌아온다 (여러 명 선택, 소환검 필요).
+/// <para>
+/// - 대상은 targets(Target 배열, RuntimeValue.FromBugs). 고른 순서대로 가장 먼저 소환한 검부터 하나씩 맡는다.<br/>
+/// - 대상이 소환검보다 많으면 남는 대상은 베지 않는다. 소환검이 더 많으면 남는 검은 곁에 그대로 있다.<br/>
+/// - 움직임은 검 다중베기와 같다 (SummonedSwords.Stab). 검마다 닿은 순간 공격력 × 표 배율.<br/>
+/// - 보내기 전이나 닿았을 때 죽은 대상은 건너뛴다. 배열에 같은 몬스터가 두 번 있으면 한 번만 벤다.<br/>
+/// - 배열 값 검사(InvalidTarget)는 실행기가 시작할 때 한다. 스킬(20틱)이 끝날 때까지 닿지 못한 검은 데미지 없이 돌아온다.
+/// </para>
+/// </summary>
 public class CBattlefieldSweep : DataDrivenSkill
 {
+	/// <summary>검을 하나씩 보내는 간격 (틱, 임시). 검 다중베기와 같다</summary>
+	public const int StaggerTicks = CMultiSlash.StaggerTicks;
+
 	public override string Id => PredefinedFunctionIds.BattlefieldSweep;
+
+	// MemberwiseClone 복사본끼리 공유하지 않게 시작할 때 새로 만든다
+	List<(SummonedSword sword, Monster target)> queue;
+	Dictionary<SummonedSword, Monster> sent;
+	SummonedSwords swords;
+	GameObject caster;
+	int startTick = -1;
+
+	protected override void OnSkillStart(FunctionContext task)
+	{
+		caster = task.Caster;
+		swords = caster.GetComponent<SummonedSwords>();
+		queue = new List<(SummonedSword, Monster)>();
+		sent = new Dictionary<SummonedSword, Monster>();
+		startTick = -1;
+		if (swords == null || !TryGetArgument("targets", out RuntimeValue value)) return;
+
+		// 가장 먼저 소환한 사용 가능한 검부터 (SummonedSwords 목록 순서)
+		List<SummonedSword> ready = new List<SummonedSword>();
+		foreach (SummonedSword s in swords.Swords)
+		{
+			if (s != null && s.State == SummonedSwordState.Ready) ready.Add(s);
+		}
+		HashSet<Monster> picked = new HashSet<Monster>();
+		int next = 0;
+		foreach (Monster bug in value.AsBugs())
+		{
+			if (next >= ready.Count) break;
+			if (bug == null || bug.IsDead || !picked.Add(bug)) continue;
+			queue.Add((ready[next++], bug));
+		}
+		if (queue.Count > 0) swords.StabHit += OnStabHit;
+	}
+
+	protected override void OnTick(FunctionContext task, int tick)
+	{
+		if (swords == null || queue == null || queue.Count == 0) return;
+		if (startTick < 0) startTick = tick;
+		if ((tick - startTick) % StaggerTicks != 0) return;
+
+		(SummonedSword sword, Monster target) = queue[0];
+		queue.RemoveAt(0);
+		// 기다리는 사이 대상이 죽었거나 검이 다른 데 쓰였으면 건너뛴다
+		if (sword == null || target == null || target.IsDead || sword.State != SummonedSwordState.Ready) return;
+		Vector2 from = sword.transform.position;
+		if (swords.Stab(sword, target.gameObject))
+		{
+			sent[sword] = target;
+			Effects(task)?.RaiseFired(Id, from, (Vector2)target.transform.position - from);
+		}
+	}
+
+	protected override void OnSkillEnd(FunctionContext task) => Unsubscribe();
+	protected override void OnSkillCancel(FunctionContext task) => Unsubscribe();
+
+	void Unsubscribe()
+	{
+		if (swords != null) swords.StabHit -= OnStabHit;
+		queue?.Clear();
+	}
+
+	void OnStabHit(SummonedSword sword, GameObject hit)
+	{
+		if (sent == null || !sent.Remove(sword) || hit == null) return;
+		Monster monster = hit.GetComponentInParent<Monster>();
+		if (monster == null || monster.IsDead) return;
+		PlayerStats stats = caster.GetComponent<PlayerStats>();
+		int attackPower = stats != null ? stats.AttackPower : 0;
+		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
+		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, sword.transform.position, result);
+	}
 }

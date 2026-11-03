@@ -6,11 +6,12 @@ using UnityEngine;
 /// 플레이어의 소환검(malloc으로 만든 검)들의 목록, 포인터, 상태를 관리하는 컴포넌트. 플레이어 프리팹에 ProcessMemory와 함께 붙인다 (#99).
 /// <para>
 /// - 포인터는 이우림 heap(ProcessMemory.Heap)의 포인터를 그대로 쓴다. 소환검 하나 = heap 객체 하나.<br/>
-/// - heap에 올리고 내리는 일(malloc, free)은 검 소환·해제 스킬이 PredefinedFunction.Malloc / Free로 한다. 이 컴포넌트는 오브젝트와 목록만 맡는다.<br/>
+/// - heap에 올리고 내리는 일(malloc, free)은 검 소환·해제 스킬(PredefinedFunction.Malloc / Free)이나 플레이어의 malloc(Sword) / free 블록이 한다. 이 컴포넌트는 오브젝트와 목록만 맡는다.<br/>
+/// - malloc(Sword) 블록용 만들기 함수를 ProcessMemory.StructObjects에 등록하고, heap의 ObjectFreed를 받아 해제된 소환검을 없앤다 (#191, #220).<br/>
 /// - 최대 5개. 누수된 소환검도 개수에 들어간다 (HeapStorage.CountObjects).<br/>
 /// - 소환검 오브젝트는 SpawnSword / DespawnSword로만 만들고 없앤다 (코드 작성 규칙 3).<br/>
 /// - 던진 소환검은 회수해야 다시 쓴다: 검 돌아오기(Recall), 줍기(TryPickUpNearest), 해제 후 다시 소환.<br/>
-/// - 슬롯에서 바로 쓰는 스킬은 가장 먼저 소환한(포인터가 작은) 사용 가능한 검부터 쓴다 (TryGetFirstReady).<br/>
+/// - 슬롯에서 바로 쓰는 스킬은 가장 먼저 소환한(포인터가 작은) 사용 가능한 검부터 쓴다 (TryGetFirstReady). sword 파라미터(Sword*)로 넘기면 그 검을 쓴다 (#220).<br/>
 /// - 해제한 포인터는 heap에서 찾을 수 없다. 스킬이 TryGetHeapObject / Free로 쓰면 InvalidPointerError로 그 작업만 끝난다 (추가 페널티는 기획 결정 후).
 /// </para>
 /// </summary>
@@ -83,6 +84,9 @@ public class SummonedSwords : MonoBehaviour
 	{
 		memory.Heap.ObjectLeaked += OnObjectLeaked;
 		memory.Heap.ObjectCleared += OnObjectCleared;
+		memory.Heap.ObjectFreed += OnObjectFreed;
+		// 블록코딩의 malloc(Sword)도 진짜 소환검을 만들게 등록한다 (#191, #220). heap이 모자라면 실행기가 만들기 함수를 부르지 않는다
+		memory.StructObjects.Register<SummonedSword>(PredefinedStructs.Sword, () => CanSummon ? SpawnSword() : null, Register);
 	}
 
 	/// <summary>
@@ -109,7 +113,7 @@ public class SummonedSwords : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 소환검 오브젝트를 없애고 목록에서 뺀다. 해제 스킬이 PredefinedFunction.Free에 성공한 뒤, 또는 검 소환 스킬이 malloc에 실패했을 때 부른다.<br/>
+	/// 소환검 오브젝트를 없애고 목록에서 뺀다. heap에서 해제되면(ObjectFreed: 해제 스킬, free 블록) 이 컴포넌트가 직접 부르고, 검 소환 스킬은 malloc에 실패했을 때 부른다.<br/>
 	/// heap은 건드리지 않는다 (heap 해제는 스킬의 Free). 소환검은 이 함수로만 없앤다 (코드 작성 규칙 3).
 	/// </summary>
 	public void DespawnSword(SummonedSword sword)
@@ -291,6 +295,12 @@ public class SummonedSwords : MonoBehaviour
 		}
 	}
 
+	// heap에서 해제된 소환검(해제 스킬, 플레이어의 free 블록): 오브젝트를 없앤다 (#191, #220). 스킬 쪽에서는 지우지 않는다
+	void OnObjectFreed(object obj)
+	{
+		if (obj is SummonedSword sword && swords.Contains(sword)) DespawnSword(sword);
+	}
+
 	// 영역 비우기(재부팅 등)로 heap에서 지워진 소환검: 오브젝트도 없앤다
 	void OnObjectCleared(object obj)
 	{
@@ -304,7 +314,9 @@ public class SummonedSwords : MonoBehaviour
 		{
 			memory.Heap.ObjectLeaked -= OnObjectLeaked;
 			memory.Heap.ObjectCleared -= OnObjectCleared;
+			memory.Heap.ObjectFreed -= OnObjectFreed;
 		}
+		memory?.StructObjects?.Unregister(PredefinedStructs.Sword);
 		// 클라이언트에서는 서버가 없애므로 부르지 않는다 (NetworkSpawner는 서버에서만 부름)
 		// 캐릭터가 사라지는 중이라 Changed는 알리지 않아도 된다
 		if (!(Mirror.NetworkClient.active && !Mirror.NetworkServer.active))

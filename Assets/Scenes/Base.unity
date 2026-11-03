@@ -543,7 +543,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Mirror.Transports::Mirror.Transports.Encryption.EncryptionTransport
   Inner: {fileID: 3589625349336239779}
   ClientValidateServerPubKey: 1
-  ClientTrustedPubKeySignatures: []
+  ClientTrustedPubKeySignatures:
+  - e87b3265f8a7238a840f1d14fe7518a720e22a0d730b6b01fc21bdc1f2201980
   ServerLoadKeyPairFromFile: 0
   ServerKeypairPath: ./server-keys.json
 --- !u!114 &9053282931568076826

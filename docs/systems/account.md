@@ -110,6 +110,18 @@
   - 로그인·회원가입 사이 이동: 로그인 전에만
   - 서버 주소 칸: 접속 전에만 (`CanEditServerAddress`)
   - 에디터 전용 Host 버튼: `CanStartHost`일 때만
+- 캐릭터 화면 (#197)
+  - 언어 카드: `Languages` 순서 (C, Java, Python). 카드마다 상태 (`CharacterState`)
+    - 보유 중 (`Owned`): 캐릭터를 만들어 둔 언어
+    - 미보유 (`NotOwned`): 만들 수 있지만 아직 만들지 않은 언어
+    - 준비 중 (`Locked`): 서버가 만들 수 없는 언어 (`CharacterLanguages.Shown`에만 있고 `All`에 없음). 지금은 Java, Python. 카드 누를 수 없음
+  - 선택 (`SelectedLanguage`): 언제나 하나. 카드를 누르면 `Select`. 준비 중인 언어는 선택 불가
+    - 로그인했을 때: 화면 순서에서 보유한 첫 캐릭터, 없으면 C
+    - 응답을 기다리는 동안: 선택 바꾸기 무시
+  - 버튼 하나 (`ConfirmLabel`, `CanConfirm`, `Confirm()`): 선택한 언어의 상태에 따라
+    - 보유 중: 「들어가기」 → 들어가기 요청
+    - 미보유: 「만들기」 → 만들기 요청. 성공하면 같은 언어가 보유 중, 버튼은 「들어가기」
+  - 선택한 캐릭터의 컨셉 아트: 화면 전체 배경 (Canvas 화면 몫, `AccountScreen`은 그리지 않음). 준비 중인 언어의 컨셉 아트는 그 언어를 열 때까지 나오지 않음
 - 안내 문장 (`Message`, `MessageField`)
   - 서버 결과의 실패 이유: `AccountFailure.ToMessage()`, 강조할 칸은 실패 이유로 정함
   - 회원가입 먼저 검사: 가입하기를 누르면 아이디 → 닉네임 → 비밀번호 규칙(`AccountRules`) → 비밀번호 확인 순서로 검사. 실패하면 보내지 않음. 서버도 다시 검사
@@ -139,7 +151,11 @@
 | `Message` | - | `string` | 화면 아래 실패 이유. 없으면 빈 문자열 |
 | `MessageField` | - | `AccountField` | `Message`가 가리키는 칸 (강조할 칸): `None`, `ServerAddress`, `LoginId`, `Nickname`, `Password`, `PasswordConfirm` |
 | `Nickname` | - | `string` | 로그인한 계정의 닉네임. 캐릭터 화면에 표시 |
-| `HasCharacter(string language)` | 언어(`CharacterLanguages`) | `bool` | true → 들어가기 버튼, false → 만들기 버튼 |
+| `Languages` | - | `IReadOnlyList<string>` | 캐릭터 화면의 언어 카드 순서 (`CharacterLanguages.Shown`) |
+| `GetCharacterState(string language)` | 언어 | `CharacterState` | 그 카드의 상태: `Owned`(보유 중), `NotOwned`(미보유), `Locked`(준비 중, 카드 누를 수 없음) |
+| `SelectedLanguage` | - | `string` | 선택한 언어. 언제나 `Languages` 가운데 준비 중이 아닌 하나. 이 카드를 밝게, 배경에 이 캐릭터의 컨셉 아트 |
+| `ConfirmLabel` | - | `string` | 오른쪽 아래 버튼의 글자: 「들어가기」, 「만들기」 |
+| `CanConfirm` | - | `bool` | 버튼을 누를 수 있는지. 응답 기다리는 중이면 false |
 | `PopupMessage` | - | `string` | 팝업 문장. 팝업이 없으면 `null`. `IsVisible`과 상관없이 표시 |
 | `ServerAddress` | - | `string` (읽기·쓰기) | 서버 주소 칸의 값. 쓰면 다음 접속에 사용 |
 | `CanEditServerAddress` | - | `bool` | 서버 주소 칸을 보여 줄지 (접속 전에만 true) |
@@ -147,8 +163,8 @@
 | `ShowLogin()`, `ShowSignUp()` | - | - | 로그인·회원가입 화면 바꾸기 (링크). 로그인한 뒤에는 무시 |
 | `Login(string loginId, string password)` | 아이디, 비밀번호 | - | 로그인 버튼. 접속 전이면 먼저 접속. 성공하면 `Characters` |
 | `SignUp(string loginId, string password, string passwordConfirm, string nickname)` | 아이디, 비밀번호, 비밀번호 확인, 닉네임 | - | 가입하기 버튼. 먼저 검사 → 통과하면 전송. 성공하면 바로 로그인, `Characters` |
-| `CreateCharacter(string language)` | 언어 | - | 만들기 버튼 |
-| `Enter(string language)` | 언어 | - | 들어가기 버튼. 성공하면 `Hidden`, 서버가 로비에 플레이어 생성 |
+| `Select(string language)` | 언어 | - | 언어 카드. 그 언어 선택. 준비 중인 언어, 응답 기다리는 중이면 무시 |
+| `Confirm()` | - | - | 오른쪽 아래 버튼. 보유 중이면 들어가기(성공하면 `Hidden`, 서버가 로비에 플레이어 생성), 미보유면 만들기 |
 | `ClosePopup()` | - | - | 팝업의 확인 버튼 |
 | `StartHost()` | - | - | 에디터 전용 Host 버튼. `Skip Login In Editor`가 켜져 있으면 로그인을 건너뜀 |
 | `PasswordMismatchMessage` | - | `string` 상수 | 「비밀번호가 서로 다릅니다.」 |
@@ -184,7 +200,7 @@
 | `AccountFailure.ToMessage()` | - | 실패 이유의 한국어 문장 |
 | `AccountRules` | `LoginIdMinLength`(4), `LoginIdMaxLength`(16), `PasswordMinLength`(8), `PasswordMaxLength`(64), `NicknameMinLength`(2), `NicknameMaxLength`(10) | 입력칸 글자 수 제한에 사용 |
 | `AccountRules.CheckLoginId(string)`, `CheckPassword(string)`, `CheckNickname(string)` | 돌려주는 값: `AccountFailure` (통과하면 `None`) | 서버와 같은 규칙. 화면이 보내기 전에 먼저 검사할 때 사용 |
-| `CharacterLanguages` | `C`, `All` | 언어 이름 상수. 지금은 `"C"` 하나 |
+| `CharacterLanguages` | `C`, `Java`, `Python`, `All`, `Shown`, `IsKnown(string)` | 언어 이름 상수. `All`: 서버가 만들 수 있는 언어 (지금은 C 하나). `Shown`: 캐릭터 화면에 보여 줄 언어 (C, Java, Python) |
 
 ### `AccountSession` (서버)
 
@@ -211,7 +227,7 @@
   - 클라이언트 빌드를 나눠 줄 때: EC2 지문이 들어간 `Base`로 빌드
 - 임혜원에게 넘길 것 (별도 이슈)
   - Canvas 로그인·회원가입·캐릭터 화면: `AccountFlow`만 사용 (「다른 시스템이 쓰는 것」). 화면 구성과 상황별 안내 문장은 시안 페이지 (https://claude.ai/artifact/JQn9USgio8xZSojTWKYeMe, 이우림이 공유)
-    - 화면이 하는 일: `Changed`를 받으면 `Page`에 맞는 패널 보이기, `Message`·`MessageField`·`IsWaiting`·`PopupMessage`·`Nickname`·`HasCharacter` 그리기, 버튼에서 `AccountFlow` 함수 부르기
+    - 화면이 하는 일: `Changed`를 받으면 `Page`에 맞는 패널 보이기, `Message`·`MessageField`·`IsWaiting`·`PopupMessage`·`Nickname`·언어 카드(`Languages`, `GetCharacterState`, `SelectedLanguage`)·버튼(`ConfirmLabel`, `CanConfirm`) 그리기, 버튼에서 `AccountFlow` 함수 부르기
     - `AccountFlow`가 하는 일 (화면에서 할 필요 없음): 회원가입 먼저 검사, 비밀번호 확인, 끊김 감지와 팝업 문장, 실패 이유 → 강조할 칸
     - 참고 구현: `AccountScreen` (OnGUI)
   - 로딩 화면과 겹침: 로그인한 뒤 캐릭터를 고르는 동안, 그리고 접속을 시도하는 동안 로딩 화면(「Loading...」)이 로그인·캐릭터 화면 뒤에 깔림. 접속 직후 로딩 화면이 로컬 플레이어가 생길 때까지 덮기 때문 (`place-scenes.md`). Canvas 화면의 Sort Order와 로딩 화면을 언제 보일지 함께 정함

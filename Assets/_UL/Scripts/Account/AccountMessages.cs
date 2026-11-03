@@ -51,26 +51,28 @@ public struct AccountAuthRequest : NetworkMessage
 	public string password;
 	// true면 회원가입. 회원가입에 성공하면 바로 로그인된다
 	public bool isSignUp;
+	// 회원가입할 때만 쓴다. 계정의 닉네임이 되고, 그 계정의 모든 언어 캐릭터가 같이 쓴다
+	public string nickname;
 	// true면 에디터 전용 「로그인 건너뛰기」. 에디터에서 켠 서버만 받아들이고, 빌드한 서버는 일반 로그인처럼 검사해 거부한다
 	public bool skipLogin;
 }
 
 /// <summary>
 /// 캐릭터 화면에 보여 줄 캐릭터 하나. 캐릭터는 계정마다 언어별로 하나이므로, 내 화면은 언어로 캐릭터를 가리킨다.
-/// 캐릭터 key는 서버만 알고 내 화면에는 보내지 않는다.
+/// 캐릭터 key는 서버만 알고 내 화면에는 보내지 않는다. 닉네임은 계정에 하나라서 AccountAuthResult.nickname에 있다.
 /// </summary>
 public struct CharacterSummary
 {
 	public string language;
-	public string nickname;
 }
 
 /// <summary>
-/// 서버 → 내 화면: 로그인·회원가입 결과. 성공하면 그 계정의 캐릭터 목록이 들어 있다.
+/// 서버 → 내 화면: 로그인·회원가입 결과. 성공하면 계정의 닉네임과 캐릭터 목록이 들어 있다.
 /// </summary>
 public struct AccountAuthResult : NetworkMessage
 {
 	public AccountFailure failure;
+	public string nickname;
 	public CharacterSummary[] characters;
 
 	public bool Success => failure == AccountFailure.None;
@@ -82,7 +84,6 @@ public struct AccountAuthResult : NetworkMessage
 public struct CreateCharacterRequest : NetworkMessage
 {
 	public string language;
-	public string nickname;
 }
 
 /// <summary>

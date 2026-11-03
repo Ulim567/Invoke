@@ -14,8 +14,9 @@ public class AuthenticatorTest : MonoBehaviour
 {
 	[SerializeField] string loginId = "tester01";
 	[SerializeField] string password = "password123";
-	[SerializeField] string language = CharacterLanguages.C;
+	// 회원가입할 때만 쓴다
 	[SerializeField] string nickname = "BugHunter";
+	[SerializeField] string language = CharacterLanguages.C;
 
 	// 이벤트를 등록한 InvokeAuthenticator. 두 번 등록하지 않고, 사라질 때 해제하기 위해 기억한다
 	InvokeAuthenticator subscribed;
@@ -26,8 +27,8 @@ public class AuthenticatorTest : MonoBehaviour
 		InvokeAuthenticator authenticator = FindAuthenticator();
 		if (authenticator == null) return;
 
-		Debug.Log($"[AuthenticatorTest] 회원가입 요청: {loginId}");
-		authenticator.RequestSignUp(loginId, password);
+		Debug.Log($"[AuthenticatorTest] 회원가입 요청: {loginId} ({nickname})");
+		authenticator.RequestSignUp(loginId, password, nickname);
 	}
 
 	[ContextMenu("로그인 요청")]
@@ -46,8 +47,8 @@ public class AuthenticatorTest : MonoBehaviour
 		InvokeAuthenticator authenticator = FindAuthenticator();
 		if (authenticator == null) return;
 
-		Debug.Log($"[AuthenticatorTest] 캐릭터 만들기 요청: [{language}] {nickname}");
-		authenticator.RequestCreateCharacter(language, nickname);
+		Debug.Log($"[AuthenticatorTest] 캐릭터 만들기 요청: [{language}]");
+		authenticator.RequestCreateCharacter(language);
 	}
 
 	[ContextMenu("들어가기 요청")]
@@ -83,7 +84,7 @@ public class AuthenticatorTest : MonoBehaviour
 
 	void OnAuthResult(AccountAuthResult result)
 	{
-		if (result.Success) Debug.Log($"[AuthenticatorTest] 로그인 성공. 캐릭터: {Describe(result.characters)}");
+		if (result.Success) Debug.Log($"[AuthenticatorTest] 로그인 성공. 닉네임: {result.nickname}, 캐릭터: {Describe(result.characters)}");
 		else Debug.LogWarning($"[AuthenticatorTest] 로그인 실패: {result.failure} ({result.failure.ToMessage()})");
 	}
 
@@ -110,7 +111,7 @@ public class AuthenticatorTest : MonoBehaviour
 
 		string text = "";
 		foreach (CharacterSummary character in characters)
-			text += $"[{character.language}] {character.nickname} ";
+			text += $"[{character.language}] ";
 		return text;
 	}
 

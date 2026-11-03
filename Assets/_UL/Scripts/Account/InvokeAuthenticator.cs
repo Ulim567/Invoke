@@ -15,7 +15,7 @@ using UnityEngine;
 /// <para>
 /// 사용법<br/>
 /// - Base 씬의 NetworkManager 오브젝트에 붙이고, NetworkManager의 Authenticator 칸에 넣는다.<br/>
-/// - 화면은 InvokeAuthenticator.Current로 가져와 Request 함수들을 부르고, 이벤트로 결과를 받는다.<br/>
+/// - 화면은 이 컴포넌트를 직접 쓰지 않고 AccountFlow를 쓴다. AccountFlow가 Request 함수들을 부르고 이벤트로 결과를 받는다.<br/>
 /// - 에디터에서는 Skip Login In Editor가 켜져 있으면 로그인과 캐릭터 고르기를 건너뛰고 임시 계정의 C 캐릭터로 바로 들어간다.
 /// </para>
 /// </summary>
@@ -175,49 +175,55 @@ public class InvokeAuthenticator : NetworkAuthenticator
 #endif
 	}
 
-	/// <summary>[내 화면] 로그인을 요청한다. 서버에 접속하지 않았으면 먼저 접속한다. 결과는 AuthResultReceived로 온다.</summary>
-	public void RequestLogin(string loginId, string password)
+	/// <summary>[내 화면] 로그인을 요청한다. 서버에 접속하지 않았으면 먼저 접속한다. 결과는 AuthResultReceived로 온다. 보내지 못했으면(이미 로그인함) false.</summary>
+	public bool RequestLogin(string loginId, string password)
 	{
-		SendAuthRequest(new AccountAuthRequest { loginId = loginId, password = password, isSignUp = false });
+		return SendAuthRequest(new AccountAuthRequest { loginId = loginId, password = password, isSignUp = false });
 	}
 
-	/// <summary>[내 화면] 회원가입을 요청한다. 성공하면 바로 로그인된다. 서버에 접속하지 않았으면 먼저 접속한다. 결과는 AuthResultReceived로 온다.</summary>
-	public void RequestSignUp(string loginId, string password)
+	/// <summary>
+	/// [내 화면] 회원가입을 요청한다. nickname은 계정의 닉네임이 된다(그 계정의 모든 언어 캐릭터가 같이 씀).
+	/// 성공하면 바로 로그인된다. 서버에 접속하지 않았으면 먼저 접속한다. 결과는 AuthResultReceived로 온다. 보내지 못했으면(이미 로그인함) false.
+	/// </summary>
+	public bool RequestSignUp(string loginId, string password, string nickname)
 	{
-		SendAuthRequest(new AccountAuthRequest { loginId = loginId, password = password, isSignUp = true });
+		return SendAuthRequest(new AccountAuthRequest { loginId = loginId, password = password, nickname = nickname, isSignUp = true });
 	}
 
-	/// <summary>[내 화면] 로그인한 뒤, 그 언어(CharacterLanguages)의 캐릭터를 만들어 달라고 요청한다. 결과는 CreateCharacterResultReceived로 온다.</summary>
-	public void RequestCreateCharacter(string language, string nickname)
+	/// <summary>[내 화면] 로그인한 뒤, 그 언어(CharacterLanguages)의 캐릭터를 만들어 달라고 요청한다. 결과는 CreateCharacterResultReceived로 온다. 보내지 못했으면(로그인 전) false.</summary>
+	public bool RequestCreateCharacter(string language)
 	{
-		if (!IsLoggedIn()) return;
-		NetworkClient.Send(new CreateCharacterRequest { language = language, nickname = nickname });
+		if (!IsLoggedIn()) return false;
+		NetworkClient.Send(new CreateCharacterRequest { language = language });
+		return true;
 	}
 
-	/// <summary>[내 화면] 로그인한 뒤, 그 언어(CharacterLanguages)의 캐릭터로 게임에 들어가기를 요청한다. 결과는 EnterGameResultReceived로 온다.</summary>
-	public void RequestEnter(string language)
+	/// <summary>[내 화면] 로그인한 뒤, 그 언어(CharacterLanguages)의 캐릭터로 게임에 들어가기를 요청한다. 결과는 EnterGameResultReceived로 온다. 보내지 못했으면(로그인 전) false.</summary>
+	public bool RequestEnter(string language)
 	{
-		if (!IsLoggedIn()) return;
+		if (!IsLoggedIn()) return false;
 		NetworkClient.Send(new EnterGameRequest { language = language });
+		return true;
 	}
 
-	void SendAuthRequest(AccountAuthRequest request)
+	bool SendAuthRequest(AccountAuthRequest request)
 	{
 		if (NetworkClient.isConnected)
 		{
 			if (NetworkClient.connection.isAuthenticated)
 			{
 				Debug.LogWarning("[InvokeAuthenticator] 이미 로그인했습니다.");
-				return;
+				return false;
 			}
 			NetworkClient.Send(request);
-			return;
+			return true;
 		}
 
 		// 접속을 마치면 OnClientAuthenticate에서 보낸다
 		pendingRequest = request;
 		hasPendingRequest = true;
 		if (!NetworkClient.active) NetworkManager.singleton.StartClient();
+		return true;
 	}
 
 	bool IsLoggedIn()

@@ -358,11 +358,12 @@ GameObject:
   - component: {fileID: 1924799196249494994}
   - component: {fileID: 9053282931568076821}
   - component: {fileID: 9053282931568076823}
-  - component: {fileID: 9053282931568076824}
   - component: {fileID: 9053282931568076826}
   - component: {fileID: 3589625349336239779}
   - component: {fileID: 9053282931568076822}
   - component: {fileID: 9053282931568076825}
+  - component: {fileID: 9053282931568076827}
+  - component: {fileID: 9053282931568076824}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -559,6 +560,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b6cb2d71cb5c8dc48a3d5097cb93916c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EncryptionKeySetup
+--- !u!114 &9053282931568076827
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4138530712472164788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 296c912e888b9544583f6669f5ec0945, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AccountFlow
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

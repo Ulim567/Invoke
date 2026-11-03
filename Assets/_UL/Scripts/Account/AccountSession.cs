@@ -12,6 +12,9 @@ public class AccountSession
 	/// <summary>로그인할 때 입력한 아이디. 로그를 남길 때 쓴다.</summary>
 	public string LoginId { get; }
 
+	/// <summary>계정의 닉네임. 그 계정의 모든 언어 캐릭터가 같이 쓴다. 로그인할 때부터 있다.</summary>
+	public string Nickname { get; }
+
 	/// <summary>
 	/// 에디터의 「로그인 건너뛰기」로 들어온 임시 계정이면 true. DB에 없으므로 진행도를 저장하지 않는다.
 	/// </summary>
@@ -20,23 +23,20 @@ public class AccountSession
 	/// <summary>들어간 캐릭터의 key. 「들어가기」 전에는 null. 다음 이슈의 진행도는 이 값으로 저장한다.</summary>
 	public string CharacterKey { get; private set; }
 
-	/// <summary>들어간 캐릭터의 닉네임. 「들어가기」 전에는 null.</summary>
-	public string Nickname { get; private set; }
-
 	/// <summary>캐릭터를 골라 게임에 들어갔으면 true. 한 연결은 한 번만 들어갈 수 있다.</summary>
 	public bool HasEntered => CharacterKey != null;
 
-	public AccountSession(string accountKey, string loginId, bool isTemporary = false)
+	public AccountSession(string accountKey, string loginId, string nickname, bool isTemporary = false)
 	{
 		AccountKey = accountKey;
 		LoginId = loginId;
+		Nickname = nickname;
 		IsTemporary = isTemporary;
 	}
 
 	/// <summary>「들어가기」에 성공했을 때 AccountServer가 부른다.</summary>
-	public void Enter(string characterKey, string nickname)
+	public void Enter(string characterKey)
 	{
 		CharacterKey = characterKey;
-		Nickname = nickname;
 	}
 }

@@ -22,10 +22,7 @@ public class CharacterRecord
 	[Indexed(Name = "AccountLanguage", Order = 2, Unique = true)]
 	public string Language { get; set; }
 
-	/// <summary>다른 플레이어에게 보이는 이름. 서버 전체에서 겹치지 않는다(대소문자 무시).</summary>
-	[Unique, Collation("NOCASE")]
-	public string Nickname { get; set; }
-
+	// 닉네임은 캐릭터가 아니라 계정에 있다 (계정의 모든 언어 캐릭터가 같은 닉네임)
 	public DateTime CreatedAt { get; set; }
 }
 #endif

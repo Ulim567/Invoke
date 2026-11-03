@@ -29,36 +29,35 @@ public class AccountStoreTest : MonoBehaviour
 		using (var store = new AccountStore(path))
 		{
 			// 회원가입
-			Check("회원가입 성공", store.SignUp("TestUser", "password123", out firstKey) == SignUpResult.Success && firstKey != null);
-			Check("대소문자만 다른 아이디는 거부", store.SignUp("testuser", "other-password", out _) == SignUpResult.LoginIdTaken);
+			Check("회원가입 성공", store.SignUp("TestUser", "password123", "BugHunter", out firstKey) == SignUpResult.Success && firstKey != null);
+			Check("대소문자만 다른 아이디는 거부", store.SignUp("testuser", "other-password", "Other", out _) == SignUpResult.LoginIdTaken);
+			Check("대소문자만 다른 닉네임은 거부", store.SignUp("second", "password456", "bughunter", out _) == SignUpResult.NicknameTaken);
+			Check("한글 닉네임으로 회원가입", store.SignUp("second", "password456", "버그사냥꾼", out string secondKey) == SignUpResult.Success && secondKey != null);
 
 			// 로그인
 			var watch = Stopwatch.StartNew();
-			bool loggedIn = store.TryLogin("TESTUSER", "password123", out string loginKey);
+			bool loggedIn = store.TryLogin("TESTUSER", "password123", out string loginKey, out string loginNickname);
 			watch.Stop();
-			Check("맞는 비밀번호로 로그인 (아이디 대소문자 무시)", loggedIn && loginKey == firstKey);
+			Check("맞는 비밀번호로 로그인 (아이디 대소문자 무시), 닉네임은 입력한 그대로", loggedIn && loginKey == firstKey && loginNickname == "BugHunter");
 			Debug.Log($"[AccountStoreTest] 로그인 한 번 걸린 시간: {watch.ElapsedMilliseconds}ms (반복 {PasswordHasher.DefaultIterations}회)");
-			Check("틀린 비밀번호는 거부", !store.TryLogin("testuser", "wrong-password", out _));
-			Check("없는 아이디는 거부", !store.TryLogin("nobody", "password123", out _));
+			Check("틀린 비밀번호는 거부", !store.TryLogin("testuser", "wrong-password", out _, out _));
+			Check("없는 아이디는 거부", !store.TryLogin("nobody", "password123", out _, out _));
 
 			// 캐릭터
 			Check("처음에는 캐릭터 없음", store.GetCharacters(firstKey).Count == 0);
-			Check("C 캐릭터 만들기", store.CreateCharacter(firstKey, CharacterLanguages.C, "BugHunter", out CharacterRecord created) == CreateCharacterResult.Success && created != null);
-			Check("같은 계정에 C 캐릭터 하나 더는 거부", store.CreateCharacter(firstKey, CharacterLanguages.C, "Another", out _) == CreateCharacterResult.LanguageTaken);
-			Check("모르는 언어는 거부", store.CreateCharacter(firstKey, "Java", "JavaKing", out _) == CreateCharacterResult.UnknownLanguage);
-
-			store.SignUp("second", "password456", out string secondKey);
-			Check("다른 계정도 대소문자만 다른 닉네임은 거부", store.CreateCharacter(secondKey, CharacterLanguages.C, "bughunter", out _) == CreateCharacterResult.NicknameTaken);
-			Check("다른 계정의 한글 닉네임 캐릭터 만들기", store.CreateCharacter(secondKey, CharacterLanguages.C, "버그사냥꾼", out _) == CreateCharacterResult.Success);
+			Check("C 캐릭터 만들기", store.CreateCharacter(firstKey, CharacterLanguages.C, out CharacterRecord created) == CreateCharacterResult.Success && created != null);
+			Check("같은 계정에 C 캐릭터 하나 더는 거부", store.CreateCharacter(firstKey, CharacterLanguages.C, out _) == CreateCharacterResult.LanguageTaken);
+			Check("모르는 언어는 거부", store.CreateCharacter(firstKey, "Java", out _) == CreateCharacterResult.UnknownLanguage);
+			Check("다른 계정의 C 캐릭터 만들기", store.CreateCharacter(secondKey, CharacterLanguages.C, out _) == CreateCharacterResult.Success);
 		}
 
 		// DB를 닫았다가 다시 열어도 남아 있는지 (서버를 껐다 켠 경우)
 		using (var store = new AccountStore(path))
 		{
-			Check("다시 열어도 로그인", store.TryLogin("testuser", "password123", out string key) && key == firstKey);
+			Check("다시 열어도 로그인", store.TryLogin("testuser", "password123", out string key, out string nickname) && key == firstKey && nickname == "BugHunter");
 
 			var characters = store.GetCharacters(firstKey);
-			Check("다시 열어도 캐릭터가 남아 있음", characters.Count == 1 && characters[0].Nickname == "BugHunter" && characters[0].Language == CharacterLanguages.C);
+			Check("다시 열어도 캐릭터가 남아 있음", characters.Count == 1 && characters[0].Language == CharacterLanguages.C);
 		}
 
 		string summary = $"[AccountStoreTest] {passed}/{total} 통과\n파일: {path}";

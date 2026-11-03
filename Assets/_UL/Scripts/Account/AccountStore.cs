@@ -10,6 +10,7 @@ public enum SignUpResult
 {
 	Success,
 	LoginIdTaken,
+	NicknameTaken,
 }
 
 /// <summary>캐릭터 만들기 결과.</summary>
@@ -18,7 +19,6 @@ public enum CreateCharacterResult
 	Success,
 	UnknownLanguage,
 	LanguageTaken,
-	NicknameTaken,
 }
 
 /// <summary>
@@ -52,6 +52,11 @@ public class AccountStore : IDisposable
 		[Unique, Collation("NOCASE")]
 		public string LoginId { get; set; }
 
+		// 다른 플레이어에게 보이는 이름. 계정마다 하나이고, 그 계정의 모든 언어 캐릭터가 같이 쓴다.
+		// 입력한 그대로 저장하고, 겹치는지는 대소문자를 무시하고 본다
+		[Unique, Collation("NOCASE")]
+		public string Nickname { get; set; }
+
 		public byte[] PasswordHash { get; set; }
 		public byte[] PasswordSalt { get; set; }
 		// 계정마다 저장해 두어야, 나중에 PasswordHasher.DefaultIterations를 올려도 예전 계정이 로그인된다
@@ -74,21 +79,24 @@ public class AccountStore : IDisposable
 	}
 
 	/// <summary>
-	/// 새 계정을 저장한다. 같은 아이디(대소문자 무시)가 있으면 저장하지 않고 LoginIdTaken을 돌려준다.<br/>
-	/// 성공하면 accountKey에 새 계정의 key를 넣는다. 실패하면 null.
+	/// 새 계정을 저장한다. 성공하면 accountKey에 새 계정의 key를 넣는다. 실패하면 null.<br/>
+	/// 실패: 같은 아이디가 있음(LoginIdTaken), 서버 전체에 같은 닉네임이 있음(NicknameTaken). 둘 다 대소문자 무시.
 	/// </summary>
-	public SignUpResult SignUp(string loginId, string password, out string accountKey)
+	public SignUpResult SignUp(string loginId, string password, string nickname, out string accountKey)
 	{
 		accountKey = null;
 		string normalizedId = NormalizeLoginId(loginId);
 
+		// 아래 두 검사는 결과를 이름으로 알려 주기 위함이다. 겹치는 줄이 들어가지 않도록 막는 것은 테이블의 unique index다
 		if (FindAccount(normalizedId) != null) return SignUpResult.LoginIdTaken;
+		if (db.Table<AccountRow>().Where(a => a.Nickname == nickname).Count() > 0) return SignUpResult.NicknameTaken;
 
 		byte[] salt = PasswordHasher.CreateSalt();
 		var row = new AccountRow
 		{
 			Key = Guid.NewGuid().ToString(),
 			LoginId = normalizedId,
+			Nickname = nickname,
 			PasswordSalt = salt,
 			HashIterations = PasswordHasher.DefaultIterations,
 			PasswordHash = PasswordHasher.Hash(password, salt, PasswordHasher.DefaultIterations),
@@ -101,18 +109,20 @@ public class AccountStore : IDisposable
 	}
 
 	/// <summary>
-	/// 아이디와 비밀번호가 맞으면 true를 돌려주고 accountKey에 그 계정의 key를 넣는다.<br/>
+	/// 아이디와 비밀번호가 맞으면 true를 돌려주고 accountKey와 nickname에 그 계정의 key와 닉네임을 넣는다.<br/>
 	/// 아이디가 없을 때와 비밀번호가 틀렸을 때를 구분하지 않는다. 구분해서 알려 주면 남이 어떤 아이디가 있는지 알아낼 수 있기 때문이다.
 	/// </summary>
-	public bool TryLogin(string loginId, string password, out string accountKey)
+	public bool TryLogin(string loginId, string password, out string accountKey, out string nickname)
 	{
 		accountKey = null;
+		nickname = null;
 
 		AccountRow row = FindAccount(NormalizeLoginId(loginId));
 		if (row == null) return false;
 		if (!PasswordHasher.Verify(password, row.PasswordSalt, row.HashIterations, row.PasswordHash)) return false;
 
 		accountKey = row.Key;
+		nickname = row.Nickname;
 		return true;
 	}
 
@@ -124,26 +134,23 @@ public class AccountStore : IDisposable
 
 	/// <summary>
 	/// 그 계정에 새 캐릭터를 저장한다. 성공하면 created에 새 캐릭터를 넣는다. 실패하면 null.<br/>
-	/// 실패: 모르는 언어(UnknownLanguage), 그 계정에 이미 같은 언어 캐릭터가 있음(LanguageTaken), 서버 전체에 같은 닉네임이 있음(NicknameTaken, 대소문자 무시).
+	/// 실패: 모르는 언어(UnknownLanguage), 그 계정에 이미 같은 언어 캐릭터가 있음(LanguageTaken).
 	/// </summary>
-	public CreateCharacterResult CreateCharacter(string accountKey, string language, string nickname, out CharacterRecord created)
+	public CreateCharacterResult CreateCharacter(string accountKey, string language, out CharacterRecord created)
 	{
 		created = null;
 
 		if (!CharacterLanguages.IsKnown(language)) return CreateCharacterResult.UnknownLanguage;
 
-		// 아래 두 검사는 결과를 이름으로 알려 주기 위함이다. 겹치는 줄이 들어가지 않도록 막는 것은 테이블의 unique index다
+		// 결과를 이름으로 알려 주기 위한 검사다. 겹치는 줄이 들어가지 않도록 막는 것은 테이블의 unique index다
 		if (db.Table<CharacterRecord>().Where(c => c.AccountKey == accountKey && c.Language == language).Count() > 0)
 			return CreateCharacterResult.LanguageTaken;
-		if (db.Table<CharacterRecord>().Where(c => c.Nickname == nickname).Count() > 0)
-			return CreateCharacterResult.NicknameTaken;
 
 		var record = new CharacterRecord
 		{
 			Key = Guid.NewGuid().ToString(),
 			AccountKey = accountKey,
 			Language = language,
-			Nickname = nickname,
 			CreatedAt = DateTime.UtcNow,
 		};
 		db.Insert(record);

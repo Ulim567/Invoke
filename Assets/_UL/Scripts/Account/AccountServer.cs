@@ -37,9 +37,10 @@ public class AccountServer : IDisposable
 	public bool HandleAuthRequest(NetworkConnectionToClient conn, AccountAuthRequest request)
 	{
 		string accountKey;
+		string nickname;
 		AccountFailure failure = request.isSignUp
-			? TrySignUp(request.loginId, request.password, out accountKey)
-			: TryLogin(request.loginId, request.password, out accountKey);
+			? TrySignUp(request.loginId, request.password, request.nickname, out accountKey, out nickname)
+			: TryLogin(request.loginId, request.password, out accountKey, out nickname);
 
 		if (failure != AccountFailure.None)
 		{
@@ -49,10 +50,10 @@ public class AccountServer : IDisposable
 
 		KickOtherConnection(accountKey, conn);
 		onlineAccounts[accountKey] = conn;
-		conn.authenticationData = new AccountSession(accountKey, request.loginId);
+		conn.authenticationData = new AccountSession(accountKey, request.loginId, nickname);
 
-		conn.Send(new AccountAuthResult { failure = AccountFailure.None, characters = GetSummaries(accountKey) });
-		Debug.Log($"[AccountServer] {(request.isSignUp ? "회원가입" : "로그인")}: {request.loginId} (connId={conn.connectionId})");
+		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = GetSummaries(accountKey) });
+		Debug.Log($"[AccountServer] {(request.isSignUp ? "회원가입" : "로그인")}: {request.loginId} ({nickname}, connId={conn.connectionId})");
 		return true;
 	}
 
@@ -64,13 +65,11 @@ public class AccountServer : IDisposable
 	{
 		if (!(conn.authenticationData is AccountSession session) || session.HasEntered || session.IsTemporary) return;
 
-		AccountFailure failure = AccountRules.CheckNickname(request.nickname);
-		if (failure == AccountFailure.None)
-			failure = ToFailure(store.CreateCharacter(session.AccountKey, request.language, request.nickname, out _));
+		AccountFailure failure = ToFailure(store.CreateCharacter(session.AccountKey, request.language, out _));
 
 		conn.Send(new CreateCharacterResultMessage { failure = failure, characters = GetSummaries(session.AccountKey) });
 		if (failure == AccountFailure.None)
-			Debug.Log($"[AccountServer] 캐릭터 만들기: {session.LoginId} → [{request.language}] {request.nickname}");
+			Debug.Log($"[AccountServer] 캐릭터 만들기: {session.LoginId} → [{request.language}]");
 	}
 
 	/// <summary>
@@ -84,8 +83,8 @@ public class AccountServer : IDisposable
 
 		if (session.IsTemporary)
 		{
-			// 임시 계정은 DB에 캐릭터가 없으므로, 언어와 상관없이 연결 번호로 이름 붙인 임시 캐릭터로 들어간다
-			session.Enter(session.AccountKey, TemporaryNickname(conn));
+			// 임시 계정은 DB에 캐릭터가 없으므로, 언어와 상관없이 계정 key를 캐릭터 key로 삼아 들어간다
+			session.Enter(session.AccountKey);
 		}
 		else
 		{
@@ -95,11 +94,11 @@ public class AccountServer : IDisposable
 				conn.Send(new EnterGameResultMessage { failure = AccountFailure.CharacterNotFound });
 				return false;
 			}
-			session.Enter(character.Key, character.Nickname);
+			session.Enter(character.Key);
 		}
 
 		conn.Send(new EnterGameResultMessage { failure = AccountFailure.None });
-		Debug.Log($"[AccountServer] 들어가기: {session.LoginId} → {session.Nickname} (connId={conn.connectionId})");
+		Debug.Log($"[AccountServer] 들어가기: {session.LoginId} → [{request.language}] {session.Nickname} (connId={conn.connectionId})");
 		return true;
 	}
 
@@ -110,9 +109,10 @@ public class AccountServer : IDisposable
 	/// </summary>
 	public void AcceptTemporary(NetworkConnectionToClient conn)
 	{
-		conn.authenticationData = new AccountSession($"editor-{conn.connectionId}", "(로그인 건너뛰기)", isTemporary: true);
-		var characters = new[] { new CharacterSummary { language = CharacterLanguages.C, nickname = TemporaryNickname(conn) } };
-		conn.Send(new AccountAuthResult { failure = AccountFailure.None, characters = characters });
+		string nickname = TemporaryNickname(conn);
+		conn.authenticationData = new AccountSession($"editor-{conn.connectionId}", "(로그인 건너뛰기)", nickname, isTemporary: true);
+		var characters = new[] { new CharacterSummary { language = CharacterLanguages.C } };
+		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = characters });
 		Debug.Log($"[AccountServer] 로그인 건너뛰기: 임시 계정 (connId={conn.connectionId})");
 	}
 #endif
@@ -133,29 +133,36 @@ public class AccountServer : IDisposable
 		store.Dispose();
 	}
 
-	AccountFailure TrySignUp(string loginId, string password, out string accountKey)
+	AccountFailure TrySignUp(string loginId, string password, string nickname, out string accountKey, out string savedNickname)
 	{
 		accountKey = null;
+		savedNickname = null;
 
 		AccountFailure failure = AccountRules.CheckLoginId(loginId);
+		if (failure == AccountFailure.None) failure = AccountRules.CheckNickname(nickname);
 		if (failure == AccountFailure.None) failure = AccountRules.CheckPassword(password);
 		if (failure != AccountFailure.None) return failure;
 
-		if (store.SignUp(loginId, password, out accountKey) == SignUpResult.LoginIdTaken)
-			return AccountFailure.LoginIdTaken;
+		switch (store.SignUp(loginId, password, nickname, out accountKey))
+		{
+			case SignUpResult.LoginIdTaken: return AccountFailure.LoginIdTaken;
+			case SignUpResult.NicknameTaken: return AccountFailure.NicknameTaken;
+		}
+		savedNickname = nickname;
 		return AccountFailure.None;
 	}
 
-	AccountFailure TryLogin(string loginId, string password, out string accountKey)
+	AccountFailure TryLogin(string loginId, string password, out string accountKey, out string nickname)
 	{
 		accountKey = null;
+		nickname = null;
 
 		// 규칙에 맞지 않는 아이디·비밀번호로는 계정을 만들 수 없으므로, 해시를 계산하지 않고 바로 거부한다.
 		// 이유를 따로 알려 주지 않는 것은 TryLogin의 다른 실패와 같다
 		if (AccountRules.CheckLoginId(loginId) != AccountFailure.None || AccountRules.CheckPassword(password) != AccountFailure.None)
 			return AccountFailure.WrongLoginOrPassword;
 
-		if (!store.TryLogin(loginId, password, out accountKey))
+		if (!store.TryLogin(loginId, password, out accountKey, out nickname))
 			return AccountFailure.WrongLoginOrPassword;
 		return AccountFailure.None;
 	}
@@ -179,7 +186,6 @@ public class AccountServer : IDisposable
 		{
 			case CreateCharacterResult.UnknownLanguage: return AccountFailure.UnknownLanguage;
 			case CreateCharacterResult.LanguageTaken: return AccountFailure.LanguageTaken;
-			case CreateCharacterResult.NicknameTaken: return AccountFailure.NicknameTaken;
 			default: return AccountFailure.None;
 		}
 	}
@@ -191,7 +197,7 @@ public class AccountServer : IDisposable
 		List<CharacterRecord> characters = store.GetCharacters(accountKey);
 		var summaries = new CharacterSummary[characters.Count];
 		for (int i = 0; i < characters.Count; i++)
-			summaries[i] = new CharacterSummary { language = characters[i].Language, nickname = characters[i].Nickname };
+			summaries[i] = new CharacterSummary { language = characters[i].Language };
 		return summaries;
 	}
 }

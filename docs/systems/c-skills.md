@@ -177,6 +177,7 @@
 ### 휘두르기 1: 검 휘두르기·검 크게베기 (#163)
 - 공통(`SwordWaveSkill`): 검기(투사체)를 몸 가운데에서 날린다.
   - 검기는 플레이어의 `SwordWaveLauncher.SpawnWave` / `DespawnWave`로만 만들고 없앤다 (`NetworkSpawner`). 프리팹 `SwordWave`, `SwordWave_Wide`는 NetworkManager에 등록한다.
+  - 네트워크 (#229): 판정은 서버의 검기만 한다. `Launch`할 때 `[ClientRpc]`로 출발 위치·방향·속도·사거리를 보내고, 클라이언트는 같은 길로 그림만 날린다(판정 없음). 그래서 검기 프리팹에는 `NetworkTransform`을 붙이지 않는다.
   - heap: 날릴 때 검기를 heap에 올리고(`Malloc`, 표의 heap 크기 1), 검기가 끝나면(사거리 끝, 첫 대상에서 멈춤) 그 틱에 검기를 없애고 `Free`. 스킬이 끝날 때 아직 날고 있어도 같다. 플레이어가 해제할 필요 없음.
   - heap이 모자라면 검기를 날리지 않는다 (에러 아님). 끊기면(실행 중단, 취소) 검기는 없애고 heap은 누수.
   - 판정: 검기가 매 물리 프레임 판정 상자에 걸린 몬스터를 알리고(`SwordWave.MonsterHit`), 스킬이 데미지를 준다. 시전자 씬의 물리 세계.
@@ -247,6 +248,7 @@
 | `Slash2SimTest` | Test_JW의 Slash2Test. 켜고 Play → Host (약 12초). 사용 가능한 소환검을 3개까지 소환한 뒤 소환검 휘두르기(날린 검기 수만큼 맞음. heap이 모자라면 소환검 수보다 적게 날림, heap 원래대로, 검은 제자리), 상처 가르기(출혈 대상 배율 +100%, 다음 출혈 틱 2배, 출혈 풀리면 배율 없어짐, 출혈 아닌 대상은 배율 없음), 검 다중베기(소환검 수만큼 벰, 검 모두 돌아옴)를 확인. 「[Slash2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordPointerSimTest` | Test_JW의 SwordPointerTest. 켜고 Play → Host (약 12초). 몬스터 2마리 이상. 블록코딩 `malloc(Sword)` → `free(s)`(진짜 소환검이 생겼다 사라짐, heap 원래대로), `Sword* s = SummonSword(); FreeSword(s);`, 소환검 던지기·찌르기에 두 번째 검 포인터를 넘기면 그 검을 씀, 해제에 포인터를 넘기면 그 검만 해제·같은 포인터로 또 해제하면 `InvalidPointerError`, 전장 휩쓸기 `[a, b, a]`(각 1번씩 맞음, 검 모두 돌아옴)를 확인. 「[SwordPointerTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SkillSyncLogTest` | Test_JW의 SkillSyncLog (#223). 켜 두고 에디터 Play → Host, `Test_JW`만 넣은 빌드 → Client. 클라이언트 캐릭터로 스킬을 쓰면 Host 콘솔에 「[SkillSyncLog] [클라이언트 …] 스킬 발사: 방향 / 명중: 대상, 데미지, 실명·이속감소」가 남는다. 돌진·바라보는 방향·급소공략 결과가 서버에 왔는지 사람이 로그로 확인한다. 평소에는 꺼 둔다. |
+| `SwordSyncSlotsTest` | Test_JW의 SwordSyncSlots (#229). 켜 두면 내 캐릭터 슬롯에 Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기를 넣는다(에디터 Host·빌드 Client 각자). `Restore Slots`면 Play를 멈출 때 되돌린다. 소환검·검기·던진 검이 두 화면에서 같은 자리로 보이는지 사람이 확인한다. 평소에는 꺼 둔다. |
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기 두 번(먼저 던진 소환검부터·오는 길 몬스터에 데미지, 그다음 물리 검), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |

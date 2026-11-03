@@ -10,7 +10,7 @@
   - heap에 올리고 내리기(malloc, free): 검 소환·해제 스킬(`PredefinedFunction.Malloc` / `Free`, c-skills.md)이나 플레이어의 `malloc(Sword)` / `free` 블록이 한다. 이 컴포넌트는 오브젝트와 목록만 맡는다.
   - 소환검으로 때리는 스킬의 데미지: 각 스킬 이슈 (`Hit` 이벤트를 받아서 처리)
   - 실제 HUD 그림: 임혜원 (지금은 OnGUI 임시 표시)
-  - 네트워크 동기화: 「소환검·검기를 서버에서 생성하고 동기화하기」 이슈
+  - 네트워크 동기화: #229 (아래 「네트워크」)
 
 ## 규칙
 - 포인터
@@ -55,6 +55,14 @@
 | Follow Spacing | 0.45 |
 | Pick Up Range | 1.5 |
 | 소환검 Throw Speed / Max Flight Time | 22 / 1.2초 (프리팹) |
+
+## 네트워크 (#229)
+- 소환검 움직임(따라가기, 던지기, 찌르기, 돌아오기, 꽂힘)은 서버에서만 한다. 클라이언트의 `SummonedSword.Update`는 움직이지 않는다.
+- 위치·회전: 소환검 프리팹의 `NetworkTransform`(Sync Direction: Server To Client, 위치·회전)이 맞춘다.
+- 포인터, 상태, 주인 플레이어: `SummonedSword`의 `[SyncVar]`. 클라이언트에서도 `Pointer`, `State`가 맞고 `StateChanged`가 불린다 (누수 반투명).
+- 목록: 클라이언트에는 heap이 없어서, 소환검 오브젝트가 주인의 `SummonedSwords` 목록에 스스로 들어가고 나간다(포인터 순서). 그래서 클라이언트에서도 `Swords`, `Count`, `ReadyCount`, `Changed`를 그대로 읽는다 (HUD, 여러 명 선택 최대 인원).
+- 줍기: `SwordPickUpInput`이 Z를 `[Command]`로 서버에 요청한다 (network.md 경우 4).
+- 스킬이 부르는 함수(`Throw`, `Stab`, `Recall` 등)는 서버에서만 부른다. 클라이언트에서 부르면 클라이언트 목록만 보고 아무 일도 하지 않는다.
 
 ## 다른 시스템이 쓰는 것
 

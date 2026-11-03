@@ -40,6 +40,14 @@ public class InvokeNetworkManager : NetworkManager
 	// 장소 씬을 모두 불러왔으면 true. 씬을 다 불러오기 전에 접속한 플레이어는 이 값이 켜질 때까지 기다린다
 	bool scenesLoaded;
 
+	public override void Awake()
+	{
+		base.Awake();
+		// Mirror는 이 값이 켜져 있으면 로그인하자마자 플레이어를 만든다.
+		// 캐릭터를 고른 뒤에 만들어야 하므로 Inspector 값과 상관없이 끈다. 끄면 Mirror는 접속 뒤 준비(Ready)만 한다
+		autoCreatePlayer = false;
+	}
+
 	public override void OnStartServer()
 	{
 		base.OnStartServer();
@@ -173,8 +181,33 @@ public class InvokeNetworkManager : NetworkManager
 
 	public override void OnServerAddPlayer(NetworkConnectionToClient conn)
 	{
-		// Mirror 기본 코드는 플레이어를 기준 씬에 만들므로 부르지 않고, 로비에 만든다
+		// 플레이어는 캐릭터를 골라 「들어가기」에 성공했을 때만 SpawnPlayer로 만든다.
+		// autoCreatePlayer를 꺼 두었으므로 이 함수가 불리면 캐릭터를 고르지 않은 요청이다
+		Debug.LogWarning($"[InvokeNetworkManager] 캐릭터를 고르지 않은 플레이어 생성 요청을 무시합니다 (connId={conn.connectionId}).");
+	}
+
+	/// <summary>
+	/// 서버에서 그 연결의 플레이어를 로비 시작 위치에 만든다. 서버에서만 부른다.<br/>
+	/// InvokeAuthenticator가 「들어가기」에 성공한 연결에 대해 부른다. 이미 플레이어가 있는 연결이면 아무것도 하지 않는다.
+	/// </summary>
+	public void SpawnPlayer(NetworkConnectionToClient conn)
+	{
+		if (conn.identity != null) return;
 		StartCoroutine(SpawnPlayerInLobby(conn));
+	}
+
+	/// <summary>
+	/// 서버에서 그 연결의 플레이어를 접속은 둔 채 없앤다. 서버에서만 부른다.<br/>
+	/// 같은 계정이 다시 로그인해 먼저 접속한 연결을 끊기 전에 InvokeAuthenticator가 부른다. 끊김 알림이 도착하는 동안 같은 캐릭터가 둘이 되지 않게 하기 위함이다.
+	/// </summary>
+	public void DespawnPlayer(NetworkConnectionToClient conn)
+	{
+		if (conn.identity == null) return;
+
+		Scene scene = conn.identity.gameObject.scene;
+		NetworkServer.RemovePlayerForConnection(conn, RemovePlayerOptions.Destroy);
+		// 레이드 던전에는 플레이어 한 명만 들어가므로, 그 플레이어가 없어지면 던전이 빈다 (OnServerDisconnect와 같은 이유)
+		if (raidScenes.Contains(scene)) UnloadRaidDungeon(scene);
 	}
 
 	IEnumerator SpawnPlayerInLobby(NetworkConnectionToClient conn)
@@ -354,6 +387,8 @@ public class InvokeNetworkManager : NetworkManager
 	public override void OnServerDisconnect(NetworkConnectionToClient conn)
 	{
 		raidWaitingConnections.Remove(conn);
+		// 끊긴 계정을 접속 중 목록에서 지워야 그 계정이 다시 로그인할 때 이미 끊긴 연결을 또 끊으려 하지 않는다
+		if (authenticator is InvokeAuthenticator accountAuthenticator) accountAuthenticator.OnServerDisconnected(conn);
 
 		// base가 플레이어 오브젝트를 삭제하므로, 그 전에 플레이어가 있던 씬을 기억한다
 		Scene scene = conn.identity != null ? conn.identity.gameObject.scene : default;

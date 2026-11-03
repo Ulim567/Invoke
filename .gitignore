@@ -115,3 +115,9 @@ InitTestScene*.unity*
 
 # macOS Finder가 폴더마다 만드는 표시 설정 파일
 .DS_Store
+
+# 서버 암호화 키(EncryptionTransport). 공개되면 남이 우리 서버인 척할 수 있다
+server-keys.json
+
+# 계정 DB 등 SQLite 파일. 플레이어 계정이 들어 있으므로 레포에 올리지 않는다
+*.db

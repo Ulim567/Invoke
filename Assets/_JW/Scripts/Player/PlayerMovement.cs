@@ -14,7 +14,8 @@ using Mirror;
 /// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 움직이거나 점프하지 않는다.<br/>
 /// - 발판(Platform) 위에서 ↓ + Space(DropPressed)를 누르면 잠깐 그 발판과 부딪히지 않게 해서 아래로 내려간다. 내 캐릭터만 통과한다.<br/>
 /// - 발판을 아래에서 뚫고 오르는 것은 발판 타일맵의 Platform Effector 2D가 한다 (docs/systems/player-movement.md 「발판 설정」).<br/>
-/// - 입력은 PlayerInputReader에서만 읽는다.
+/// - 입력은 PlayerInputReader에서만 읽는다.<br/>
+/// - 움직임 잠그기(SetMovementLocked, #207): 장소 이동처럼 씬을 바꾸는 동안 그 자리에 멈춰 둔다. 잠근 동안 속도 0, 중력 없음, 입력·돌진 무시.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(PlayerStats), typeof(PlayerInputReader), typeof(Rigidbody2D))]
@@ -64,6 +65,9 @@ public class PlayerMovement : NetworkBehaviour
 
 	// 돌진 중이면 true. 이 동안은 좌우 입력 대신 lungeTargetX를 향해 움직인다
 	bool lunging;
+	// 움직임 잠그기 (#207). 잠그기 전 중력 배율을 기억했다가 풀 때 되돌린다
+	bool movementLocked;
+	float gravityScaleBeforeLock;
 	float lungeTargetX;
 	float lungeEndTime;
 
@@ -89,6 +93,32 @@ public class PlayerMovement : NetworkBehaviour
 	// TODO: 네트워크를 붙이면 [SyncVar]로 다른 플레이어 화면에도 맞춘다 (코드 작성 규칙 2)
 	public int Facing { get; private set; } = 1;
 
+	/// <summary>움직임이 잠겨 있으면 true (#207).</summary>
+	public bool IsMovementLocked => movementLocked;
+
+	/// <summary>
+	/// 움직임을 잠그거나 푼다 (#207). 장소 이동(PlaceTravelClient)이 씬을 바꾸는 동안 잠근다.<br/>
+	/// 잠근 동안: 속도 0, 중력 없음(그 자리에 떠 있음), 진행 중인 돌진·내려가기 중단, 좌우·점프·내려가기 입력과 StartLunge 무시.<br/>
+	/// 풀 때: 원래 중력으로 돌아가고 속도 0에서 시작한다. 이미 그 상태면 아무 일도 없다.
+	/// </summary>
+	public void SetMovementLocked(bool locked)
+	{
+		if (movementLocked == locked) return;
+		movementLocked = locked;
+		if (locked)
+		{
+			lunging = false;
+			EndDrop();
+			gravityScaleBeforeLock = body.gravityScale;
+			body.gravityScale = 0f;
+		}
+		else
+		{
+			body.gravityScale = gravityScaleBeforeLock;
+		}
+		body.linearVelocity = Vector2.zero;
+	}
+
 	/// <summary>돌진 중이면 true. 찌르기 스킬이 돌진이 끝났는지 읽는다.</summary>
 	public bool IsLunging => lunging;
 
@@ -98,6 +128,8 @@ public class PlayerMovement : NetworkBehaviour
 	/// </summary>
 	public void StartLunge(float targetX)
 	{
+		// 움직임이 잠겨 있으면 돌진하지 않는다 (#207)
+		if (movementLocked) return;
 		lunging = true;
 		lungeTargetX = targetX;
 		lungeEndTime = Time.time + lungeMaxTime;
@@ -161,12 +193,19 @@ public class PlayerMovement : NetworkBehaviour
 
 	void FixedUpdate()
 	{
-		if (!isLocalPlayer) return;
+		if (!isLocalPlayer || movementLocked) return;
 		ApplyFallGravity();
 	}
 
 	void Move()
 	{
+		// 잠근 동안은 그 자리에 멈춰 있는다 (#207)
+		if (movementLocked)
+		{
+			body.linearVelocity = Vector2.zero;
+			return;
+		}
+
 		// 경직·사망 중에는 좌우 입력을 받지 않고 멈춘다 (떨어지는 것은 그대로)
 		if (health != null && !health.CanAct)
 		{

@@ -6,7 +6,7 @@
 - 서버 하나에서 로비·사냥터·연습장·레이드 던전 씬 동시 운영
 - 씬마다 물리 세계 분리: 다른 씬의 오브젝트끼리 충돌·판정 없음
 - 같은 씬의 네트워크 오브젝트만 그 씬에 있는 클라이언트에 전송 (`SceneInterestManagement`)
-- 접속한 플레이어를 로비 시작 위치에 생성
+- 들어가기(로그인 뒤 캐릭터 고르기)에 성공한 플레이어를 로비 시작 위치에 생성 (`account.md`)
 - 게임 중에 생기고 사라지는 네트워크 오브젝트의 공용 생성·삭제 함수 (`NetworkSpawner`)
 - 장소 사이 이동 (#134): 로비 ↔ 사냥터, 로비 ↔ 연습장, 로비 ↔ 레이드 던전
   - 도착 위치: 로비로 돌아오면 들어갔던 입구 앞(`ArrivalPoint`), 그 밖의 장소는 `PlayerStartPosition`
@@ -19,7 +19,7 @@
 ## 동작 규칙
 
 ### 씬 구성
-- 기준 씬 `Base`: `NetworkManager`(`InvokeNetworkManager`), `Camera`, `EventSystem`, `PlaceTravel`(`PlaceTravelClient` + 로딩 화면 Canvas). Build Profiles 0번. 서버·클라이언트 모두 계속 열려 있음
+- 기준 씬 `Base`: `NetworkManager`(`InvokeNetworkManager`, 로그인·암호화 컴포넌트는 `account.md`), `Camera`, `EventSystem`, `PlaceTravel`(`PlaceTravelClient` + 로딩 화면 Canvas). 씬 목록 0번 (Windows·Linux Server 빌드 프로필 모두 전역 씬 목록). 서버·클라이언트 모두 계속 열려 있음
 - 내용 씬 `Lobby`, `HuntingGround`, `TrainingRoom`, `RaidDungeon`: `Grid`(Ground·Platform 타일맵), `PlayerStartPosition`(`NetworkStartPosition`)
   - 카메라, NetworkManager, EventSystem, 빛 없음 (기준 씬 위에 겹쳐 불러오므로 넣으면 여러 개가 됨)
   - `Lobby`: `ArrivalPoint` 3개 (`Arrival_HuntingGround`, `Arrival_TrainingRoom`, `Arrival_RaidDungeon`, 각 입구 앞)
@@ -65,6 +65,7 @@
   - `ArrivalPoint`가 있는데 맞는 것이 없으면 경고 로그 (`fromPlace` 오타)
 - 레이드 던전 단위: 플레이어 한 명마다 던전 하나. 그 플레이어가 나가거나 접속이 끊기면 언로드 (파티 이슈에서 파티 단위로 바뀜)
 - 접속 직후: 로딩 화면을 페이드 없이 덮음 → 로컬 플레이어의 `FunctionExecutorNetwork.IsDataReady`가 true가 되면 페이드 아웃
+  - 로컬 플레이어는 들어가기 성공 뒤에 생김 → 로그인·캐릭터 화면을 보는 동안에도 로딩 화면이 덮고 있음 (`account.md` 「맞춘 결과」)
   - `FunctionExecutorNetwork`가 없는 플레이어 프리팹(지금 `Base`의 공용 `Player.prefab`): 로컬 플레이어가 생기면 바로 걷힘
 - 접속이 끊기면: 로딩 화면 숨김. 액션 맵은 `PlayerInputReader.OnStopLocalPlayer`가 다시 활성화
 

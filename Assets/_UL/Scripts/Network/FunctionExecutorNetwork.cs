@@ -83,6 +83,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// [내 화면] 서버에서 받는 중인 함수와 전역 변수. 슬롯을 받으면 ReceivedXxx로 옮긴다
 	readonly List<FunctionData> receivingServerFunctions = new List<FunctionData>();
 	GlobalVariablesData receivingServerGlobals;
+	// [내 화면] 실제 계정에서 SlotLoadout으로 바뀐 슬롯 번호. 다음 Update에서 한 번에 서버로 보낸다(CmdSetSlots)
+	// 장착 화면이 RequestEquipXxx를 부르게 바뀌기 전까지, 장착 화면에서 바꾼 장착이 서버에 닿게 하기 위함
+	readonly HashSet<int> changedSlots = new HashSet<int>();
 
 	// [내 화면] 슬롯 장착이 바뀌어 다시 보내야 하는지
 	// 장착을 한 번 바꿀 때 Changed가 여러 번 불리므로(자리 바꾸기, 다른 슬롯에서 옮겨 오기), 모아 두었다가 다음 Update에서 한 번만 보낸다
@@ -208,9 +211,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		base.OnStartLocalPlayer();
 
 		// 실제 계정은 서버가 DB에서 이미 적용했으므로 이 컴퓨터의 파일을 보내지 않고, 서버의 데이터를 받아 온다
-		// 장착을 바꿔도 다시 보내지 않는다. 장착·함수 저장을 서버에 요청하는 길은 아직 없다(#205 3단계)
+		// 장착 화면이 SlotLoadout으로 바꾼 슬롯은 바뀐 슬롯만 서버에 보내 DB에 쓴다(CmdSetSlots)
 		if (usesServerData)
 		{
+			loadout.Changed += OnLoadoutChangedForServer;
 			CmdRequestPlayerData();
 			return;
 		}
@@ -224,15 +228,39 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		base.OnStopLocalPlayer();
 
 		loadout.Changed -= OnLoadoutChanged;
+		loadout.Changed -= OnLoadoutChangedForServer;
 		resendRequested = false;
+		changedSlots.Clear();
 	}
 
 	void OnLoadoutChanged(int slot) => resendRequested = true;
 
+	// -1(여러 슬롯)은 불러오기·함수 다시 읽기라서 장착 내용이 바뀐 것이 아니므로 보내지 않는다
+	void OnLoadoutChangedForServer(int slot)
+	{
+		if (slot >= 0 && slot < SlotLoadout.SlotCount) changedSlots.Add(slot);
+	}
+
 	void Update()
 	{
-		if (!isLocalPlayer || !resendRequested) return;
+		if (!isLocalPlayer) return;
 
+		if (changedSlots.Count > 0)
+		{
+			var slots = new int[changedSlots.Count];
+			var entries = new SlotLoadout.Entry[changedSlots.Count];
+			int i = 0;
+			foreach (int slot in changedSlots)
+			{
+				slots[i] = slot;
+				entries[i] = loadout.GetEntry(slot);
+				i++;
+			}
+			changedSlots.Clear();
+			CmdSetSlots(slots, entries);
+		}
+
+		if (!resendRequested) return;
 		resendRequested = false;
 		SendPlayerData(false);
 	}
@@ -433,16 +461,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		if (!usesServerData) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.NotAllowed); return; }
 		if (slot < 0 || slot >= SlotLoadout.SlotCount) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidSlot); return; }
-		if (!entry.IsEmpty && entry.Kind == SlotLoadout.EntryKind.UserFunction && !serverFunctions.Exists(f => f.Guid == entry.Id))
-		{
-			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.UnknownFunction);
-			return;
-		}
-		if (!entry.IsEmpty && entry.Kind == SlotLoadout.EntryKind.Skill && !SlotLoadout.IsEquippableSkill(entry.Id))
-		{
-			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.NotEquippable);
-			return;
-		}
+		PlayerDataRequestResult check = CheckEntry(entry);
+		if (check != PlayerDataRequestResult.Saved) { TargetAnswer(PlayerDataRequest.ChangeSlots, check); return; }
 
 		// SlotLoadout과 같은 규칙: 같은 함수·스킬은 한 슬롯에만. 다른 슬롯에 있으면 그 슬롯은 빈다(옮겨짐)
 		var changed = new Dictionary<int, SlotLoadout.Entry>();
@@ -466,7 +486,70 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidSlot);
 			return;
 		}
+		// 같은 슬롯끼리는 바꿀 것이 없다(SlotLoadout.Swap과 같음). 아래 Dictionary에 같은 key를 두 번 넣으면 예외가 나서 Mirror가 접속을 끊기 때문에 먼저 돌려보낸다
+		if (a == b)
+		{
+			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.Saved);
+			return;
+		}
 		ApplySlotChanges(new Dictionary<int, SlotLoadout.Entry> { { a, serverSlots[b] }, { b, serverSlots[a] } });
+	}
+
+	// [서버] 장착 화면(SlotLoadout)에서 바뀐 슬롯들을 그대로 맞춘다. 결과는 ChangeSlots 요청의 결과로 돌려보낸다
+	// 받은 슬롯 밖에 같은 함수·스킬이 있으면 그 슬롯은 비운다(SlotLoadout과 같은 규칙)
+	[Command]
+	void CmdSetSlots(int[] slots, SlotLoadout.Entry[] entries)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.NotAllowed); return; }
+		if (slots == null || entries == null || slots.Length != entries.Length || slots.Length == 0)
+		{
+			TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+
+		var changed = new Dictionary<int, SlotLoadout.Entry>();
+		for (int i = 0; i < slots.Length; i++)
+		{
+			if (slots[i] < 0 || slots[i] >= SlotLoadout.SlotCount || changed.ContainsKey(slots[i]))
+			{
+				TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidSlot);
+				return;
+			}
+			PlayerDataRequestResult check = CheckEntry(entries[i]);
+			if (check != PlayerDataRequestResult.Saved) { TargetAnswer(PlayerDataRequest.ChangeSlots, check); return; }
+			changed[slots[i]] = entries[i].IsEmpty ? SlotLoadout.Entry.Empty : entries[i];
+		}
+
+		var given = new List<int>(changed.Keys);
+		foreach (int slot in given)
+		{
+			SlotLoadout.Entry entry = changed[slot];
+			if (entry.IsEmpty) continue;
+			for (int i = 0; i < serverSlots.Length; i++)
+			{
+				if (changed.ContainsKey(i) ? (i != slot && SameEntry(changed[i], entry)) : SameEntry(serverSlots[i], entry))
+				{
+					// 받은 슬롯끼리 같은 것이 둘이면 장착 화면의 규칙과 어긋난 데이터다
+					if (changed.ContainsKey(i)) { TargetAnswer(PlayerDataRequest.ChangeSlots, PlayerDataRequestResult.InvalidData); return; }
+					changed[i] = SlotLoadout.Entry.Empty;
+				}
+			}
+		}
+		ApplySlotChanges(changed);
+	}
+
+	// [서버] 슬롯에 넣으려는 내용 하나를 검사한다. 넣을 수 있으면 Saved
+	// 종류만 있고 ID가 빈 내용은 IsEmpty로 읽혀 슬롯을 비워 버리므로, 빈 슬롯(Empty)이 아니면 ID가 있어야 한다
+	PlayerDataRequestResult CheckEntry(SlotLoadout.Entry entry)
+	{
+		if (!Enum.IsDefined(typeof(SlotLoadout.EntryKind), entry.Kind)) return PlayerDataRequestResult.InvalidData;
+		if (entry.Kind == SlotLoadout.EntryKind.Empty) return PlayerDataRequestResult.Saved;
+		if (string.IsNullOrEmpty(entry.Id)) return PlayerDataRequestResult.InvalidData;
+		if (entry.Kind == SlotLoadout.EntryKind.UserFunction && !serverFunctions.Exists(f => f.Guid == entry.Id))
+			return PlayerDataRequestResult.UnknownFunction;
+		if (entry.Kind == SlotLoadout.EntryKind.Skill && !SlotLoadout.IsEquippableSkill(entry.Id))
+			return PlayerDataRequestResult.NotEquippable;
+		return PlayerDataRequestResult.Saved;
 	}
 
 	[Command]

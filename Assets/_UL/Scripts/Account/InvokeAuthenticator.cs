@@ -27,8 +27,8 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	[Tooltip("에디터에서만 동작. 켜면 Host·Client로 시작할 때 로그인과 캐릭터 고르기를 건너뛰고, DB를 쓰지 않는 임시 계정의 C 캐릭터로 바로 들어간다. 로그인을 테스트할 때만 끈다.")]
 	[SerializeField] bool skipLoginInEditor = true;
 
-	[Tooltip("서버가 테스트용 진행도 넣기(ProgressTestData)를 받을지. 서버 DB를 자주 지우는 개발 중에만 켠다. 실제 서비스 서버에서는 끈다.")]
-	[SerializeField] bool allowTestProgressData = true;
+	/// <summary>서버를 이 인자와 함께 실행하면 테스트용 진행도 넣기(ProgressTestData)를 받는다. 예: ./Invoke.x86_64 -allowTestProgressData</summary>
+	public const string AllowTestProgressDataArg = "-allowTestProgressData";
 
 #if UNITY_SERVER || UNITY_EDITOR
 	AccountServer accountServer;
@@ -143,7 +143,14 @@ public class InvokeAuthenticator : NetworkAuthenticator
 
 	void OnProgressTestDataRequest(NetworkConnectionToClient conn, ProgressTestDataRequest request)
 	{
-		accountServer.HandleProgressTestData(conn, request, allowTestProgressData);
+		accountServer.HandleProgressTestData(conn, request, IsTestProgressDataAllowed());
+	}
+
+	// 에디터, 또는 실행 인자로 허용한 서버만 받는다
+	// 씬 설정으로 두지 않는 이유: 씬에 켜 둔 채 서비스 서버를 빌드하면, 조작한 클라이언트가 자기 진행도를 마음대로 바꿀 수 있기 때문
+	static bool IsTestProgressDataAllowed()
+	{
+		return Application.isEditor || Array.IndexOf(Environment.GetCommandLineArgs(), AllowTestProgressDataArg) >= 0;
 	}
 #endif
 

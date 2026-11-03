@@ -39,6 +39,7 @@ public class ProgressStoreTest : MonoBehaviour
 
 		string characterKey;
 		string oldCharacterKey;
+		string partialCharacterKey;
 		using (var store = new AccountStore(path))
 		{
 			store.SignUp("progress", "password123", "Tester", out string accountKey);
@@ -49,7 +50,15 @@ public class ProgressStoreTest : MonoBehaviour
 			store.CreateCharacter(oldAccountKey, CharacterLanguages.C, out CharacterRecord oldCharacter);
 			oldCharacterKey = oldCharacter.Key;
 
+			store.SignUp("partial", "password123", "Partial", out string partialAccountKey);
+			store.CreateCharacter(partialAccountKey, CharacterLanguages.C, out CharacterRecord partialCharacter);
+			partialCharacterKey = partialCharacter.Key;
+
 			ProgressStore progress = store.Progress;
+
+			// 진행도 row만 빠질 캐릭터: 함수와 장착을 먼저 저장해 둔다
+			progress.SaveFunction(partialCharacterKey, function.Guid, FunctionDataJson.ToJson(function));
+			progress.SaveSlots(partialCharacterKey, new Dictionary<int, SlotLoadout.Entry> { { 5, SlotLoadout.Entry.Function(function.Guid) } });
 
 			// 새 캐릭터의 처음 값
 			CharacterProgressData first = progress.Load(characterKey);
@@ -89,6 +98,7 @@ public class ProgressStoreTest : MonoBehaviour
 		{
 			foreach (string table in new[] { "CharacterProgress", "CharacterUnlocks", "CharacterSlots", "CharacterGlobals" })
 				raw.Execute($"DELETE FROM {table} WHERE CharacterKey = ?", oldCharacterKey);
+			raw.Execute("DELETE FROM CharacterProgress WHERE CharacterKey = ?", partialCharacterKey);
 		}
 
 		// DB를 닫았다가 다시 열어도 남아 있는지 (서버를 껐다 켠 경우)
@@ -108,6 +118,11 @@ public class ProgressStoreTest : MonoBehaviour
 
 			CharacterProgressData old = store.Progress.Load(oldCharacterKey);
 			Check("진행도 row가 없던 캐릭터는 처음 값으로 채움", old.Level == 1 && SlotsMatch(old.Slots, startingSkills) && old.Unlocked.Count == startingNodes.Count);
+
+			CharacterProgressData partial = store.Progress.Load(partialCharacterKey);
+			Check("진행도 row만 빠진 캐릭터: 예외 없이 레벨 1, 함수·장착·해금은 그대로",
+				partial.Level == 1 && partial.Functions.Count == 1 && SameEntry(partial.Slots[5], SlotLoadout.Entry.Function(function.Guid))
+				&& partial.Unlocked.Count == startingNodes.Count);
 
 			// 깨진 JSON은 건너뛴다 (경고 로그 2개가 나오는 것이 맞다)
 			store.Progress.SaveFunction(characterKey, "broken-guid", "{ not json");

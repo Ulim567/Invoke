@@ -119,7 +119,7 @@ public class AccountServer : IDisposable
 
 	/// <summary>
 	/// [테스트용] 그 언어 캐릭터의 진행도를 요청의 json으로 모두 바꾸고 결과를 conn에 보낸다.<br/>
-	/// allowed가 false(서버의 테스트 허용 설정이 꺼짐), 임시 계정, 이미 들어간 연결, 캐릭터가 없음, 읽을 수 없는 json이면 거부한다.
+	/// allowed가 false(에디터가 아니고 서버 실행 인자도 없음), 임시 계정, 쫓겨난 연결, 이미 들어간 연결, 캐릭터가 없음, 읽을 수 없는 json이면 거부한다.
 	/// </summary>
 	// 들어가기 전에만 받는 이유: 서버가 DB만 바꾸면 되고, 이미 만든 플레이어의 값(실행 중인 함수, 슬롯 원본)을 다시 맞출 필요가 없기 때문
 	public void HandleProgressTestData(NetworkConnectionToClient conn, ProgressTestDataRequest request, bool allowed)
@@ -128,8 +128,10 @@ public class AccountServer : IDisposable
 		CharacterRecord character = null;
 		CharacterProgressData data = null;
 
-		if (!allowed) reason = "서버가 테스트용 진행도 넣기를 허용하지 않습니다 (InvokeAuthenticator의 Allow Test Progress Data).";
+		if (!allowed) reason = $"서버가 테스트용 진행도 넣기를 허용하지 않습니다 (서버 실행 인자 {InvokeAuthenticator.AllowTestProgressDataArg}).";
 		else if (!(conn.authenticationData is AccountSession session) || session.IsTemporary) reason = "로그인한 실제 계정만 쓸 수 있습니다 (로그인 건너뛰기 임시 계정은 DB가 없음).";
+		// 쫓겨나 곧 끊길 연결이 같은 계정의 새 연결이 불러온 DB를 덮어쓰지 않게 막는다
+		else if (session.IsKicked) reason = "다른 곳에서 같은 계정으로 로그인해 곧 끊길 연결입니다.";
 		else if (session.HasEntered) reason = "캐릭터 화면에서만 쓸 수 있습니다. 들어간 뒤에는 넣을 수 없습니다.";
 		else if ((character = store.GetCharacters(session.AccountKey).Find(c => c.Language == request.language)) == null) reason = $"[{request.language}] 캐릭터가 없습니다. 먼저 만듭니다.";
 		else if (!FunctionDataJson.TryProgressFromJson(request.json, out data)) reason = "진행도 JSON을 읽을 수 없습니다.";

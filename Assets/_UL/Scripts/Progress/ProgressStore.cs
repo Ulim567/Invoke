@@ -108,8 +108,11 @@ public class ProgressStore
 
 	/// <summary>
 	/// 새 캐릭터의 처음 row를 넣는다. AccountStore.CreateCharacter가 Characters row와 같은 트랜잭션 안에서 부른다.<br/>
-	/// 레벨 1, 경험치·돈 0, 재료·함수 없음, 해금은 SkillTree의 처음 노드, 슬롯은 처음 해금한 스킬을 슬롯 0부터, 전역 변수 없음.
+	/// 레벨 1, 경험치·돈 0, 재료·함수 없음, 해금은 SkillTree의 처음 노드, 슬롯은 처음 해금한 스킬을 슬롯 0부터, 전역 변수 없음.<br/>
+	/// 이미 있는 row는 건드리지 않고 없는 row만 넣는다. Load가 진행도 row가 빠진 캐릭터를 채울 때도 쓰기 때문이다.
 	/// </summary>
+	// 남아 있는 row를 지우지 않는 이유: 진행도 row만 빠진 캐릭터의 함수·재료·장착을 잃지 않게 하기 위함
+	// 있는 row에 다시 넣으면 unique index 때문에 예외가 나고, 「들어가기」 요청을 처리하던 서버가 그 연결을 끊는다
 	public void CreateInitial(string characterKey)
 	{
 		List<string> unlocked = SkillTree.StartingNodes();
@@ -127,10 +130,26 @@ public class ProgressStore
 
 		db.RunInTransaction(() =>
 		{
-			db.Insert(new ProgressRow { CharacterKey = characterKey, Level = 1, Exp = 0, Money = 0 });
-			foreach (string id in unlocked) db.Insert(new UnlockRow { CharacterKey = characterKey, NodeId = id });
-			for (int i = 0; i < slots.Length; i++) db.Insert(ToSlotRow(characterKey, i, slots[i]));
-			db.Insert(new GlobalsRow { CharacterKey = characterKey, Json = FunctionDataJson.ToJson(new GlobalVariablesData()) });
+			if (db.Find<ProgressRow>(characterKey) == null)
+				db.Insert(new ProgressRow { CharacterKey = characterKey, Level = 1, Exp = 0, Money = 0 });
+
+			foreach (string id in unlocked)
+			{
+				if (db.Table<UnlockRow>().Where(r => r.CharacterKey == characterKey && r.NodeId == id).Count() == 0)
+					db.Insert(new UnlockRow { CharacterKey = characterKey, NodeId = id });
+			}
+
+			// 슬롯 row가 하나라도 있으면 그 캐릭터가 정한 장착이므로, 처음 슬롯으로 채우지 않고 빠진 슬롯만 빈 슬롯으로 넣는다
+			var existingSlots = new HashSet<int>();
+			foreach (SlotRow row in db.Table<SlotRow>().Where(r => r.CharacterKey == characterKey)) existingSlots.Add(row.SlotIndex);
+			for (int i = 0; i < slots.Length; i++)
+			{
+				if (existingSlots.Contains(i)) continue;
+				db.Insert(ToSlotRow(characterKey, i, existingSlots.Count == 0 ? slots[i] : SlotLoadout.Entry.Empty));
+			}
+
+			if (db.Find<GlobalsRow>(characterKey) == null)
+				db.Insert(new GlobalsRow { CharacterKey = characterKey, Json = FunctionDataJson.ToJson(new GlobalVariablesData()) });
 		});
 	}
 

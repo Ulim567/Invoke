@@ -140,6 +140,7 @@
 | `Globals` | `GlobalVariablesData` | 전역 변수 선언 |
 
 - 진행도 row가 없는 캐릭터(이 이슈 전에 만든 캐릭터): `Load`가 새 캐릭터와 같은 처음 row를 넣은 뒤 돌려줌
+  - `CreateInitial`은 없는 row만 넣음. 진행도 row만 빠진 캐릭터는 함수·재료·장착·해금을 그대로 두고 레벨 1부터
 
 ### 「들어가기」 흐름
 1. `AccountServer`: 캐릭터를 찾고 `session.Enter(캐릭터 key)` 뒤 `ProgressStore.Load(캐릭터 key)`. `CharacterProgressData`를 `AccountSession`에 넣어 둠
@@ -192,6 +193,8 @@
 
 - 결과: `PlayerDataRequestAnswered(요청 종류, 결과)`. 성공(`Saved`)이면 그보다 먼저 `ReceivedSlots`·`ReceivedFunctions`·`ReceivedGlobals`가 새 값으로 바뀌고 `PlayerDataReceived`가 불림
 - 거부되면 `ReceivedXxx`는 그대로. 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)의 요청은 `NotAllowed`
+- 빈 슬롯(`Empty`)이 아닌데 ID가 빈 장착 요청은 `InvalidData`. 같은 슬롯끼리 `RequestSwap`은 바꿀 것 없이 `Saved`
+- 장착 화면이 아직 `SlotLoadout`을 쓰는 동안: 실제 계정에서 `SlotLoadout.Changed`로 바뀐 슬롯을 `FunctionExecutorNetwork`가 서버에 보냄(`CmdSetSlots`). 서버는 받은 슬롯을 그대로 맞추고, 받은 슬롯 밖에 같은 함수·스킬이 있으면 비움. 장착 화면이 `RequestEquipXxx`를 부르게 바뀌면 이 길은 지움
 - 장착할 때 해금 여부는 아직 보지 않음 (정할 것)
 - 「로그인 건너뛰기」 임시 계정: 지금처럼 PC 파일
 - 함수 내용 검사(구조, 해금한 블록만 썼는지): 「만든 함수를 서버로 보내 검사·저장하기」. 이번 이슈는 JSON 읽기와 개수 제한까지
@@ -225,7 +228,9 @@
   - ⋮ → 「처음 값 JSON 채우기」: 새 캐릭터와 같은 빈 모양을 채움
   - Slots: 모자라면 빈 슬롯으로 8개를 채움. Kind는 `Empty`, `UserFunction`, `Skill`
   - Functions: `ProgressRules.MaxFunctions`개까지만
-- 서버의 테스트 허용 설정: `InvokeAuthenticator`의 Allow Test Progress Data (기본 켜짐). 서버는 요청이 에디터에서 왔는지 알 수 없으므로 서버에서 막음. 실제 서비스 서버에서는 끔
+- 서버가 받는 경우: 에디터, 또는 실행 인자 `-allowTestProgressData`로 켠 서버 (`InvokeAuthenticator.AllowTestProgressDataArg`). 씬 설정으로 두지 않아 서비스 서버 빌드에서는 기본으로 꺼짐
+  - EC2에서 쓸 때: `invoke-server` 서비스의 실행 명령 끝에 `-allowTestProgressData`를 붙임
+- 쫓겨나 곧 끊길 연결의 요청도 거부
 
 ## 다른 시스템이 쓰는 것
 - `PlayerProgress`: 위 「진행도 컴포넌트」 표 (레벨·경험치·돈·재료·해금 목록 읽기와 바꾸기)

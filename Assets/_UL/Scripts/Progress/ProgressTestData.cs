@@ -11,7 +11,7 @@ using UnityEngine;
 /// - 그 언어(Language)의 캐릭터가 먼저 있어야 한다. 서버가 그 캐릭터의 진행도 테이블 6개를 JSON으로 모두 바꾼다.<br/>
 /// - 상태별로 JSON이 다른 컴포넌트를 여러 개 붙여 두고 골라 쓸 수 있다.<br/>
 /// - 지금 진행도의 JSON 모양은 ⋮ → 「처음 값 JSON 채우기」로 볼 수 있다.<br/>
-/// - 서버의 InvokeAuthenticator에서 Allow Test Progress Data가 켜져 있어야 받는다.
+/// - 서버는 에디터이거나, 실행 인자 -allowTestProgressData로 켠 서버일 때만 받는다 (InvokeAuthenticator.AllowTestProgressDataArg).
 /// </para>
 /// </summary>
 public class ProgressTestData : MonoBehaviour

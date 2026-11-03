@@ -23,7 +23,7 @@ public enum PlayerDataRequestResult
 {
 	Saved,
 	NotAllowed,       // 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)
-	InvalidData,      // JSON을 읽을 수 없음, GUID가 없음
+	InvalidData,      // JSON을 읽을 수 없음, GUID·ID가 없음, 없는 슬롯 종류
 	TooManyFunctions, // 새 함수인데 이미 ProgressRules.MaxFunctions개
 	InvalidSlot,      // 슬롯 번호가 0~7이 아님
 	UnknownFunction,  // 이 캐릭터에 없는 함수를 장착하려 함

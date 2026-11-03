@@ -108,25 +108,16 @@ public class ProgressStore
 
 	/// <summary>
 	/// 새 캐릭터의 처음 row를 넣는다. AccountStore.CreateCharacter가 Characters row와 같은 트랜잭션 안에서 부른다.<br/>
-	/// 레벨 1, 경험치·돈 0, 재료·함수 없음, 해금은 SkillTree의 처음 노드, 슬롯은 처음 해금한 스킬을 슬롯 0부터, 전역 변수 없음.<br/>
+	/// 레벨 1, 경험치·돈 0, 재료·페이지 함수 없음, 해금은 SkillTree의 처음 노드, 전역 변수 없음.<br/>
+	/// 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)를 CharacterFunctions에 넣고, CharacterSlots 0~7에 그 GUID를 넣는다.<br/>
 	/// 이미 있는 row는 건드리지 않고 없는 row만 넣는다. Load가 진행도 row가 빠진 캐릭터를 채울 때도 쓰기 때문이다.
 	/// </summary>
-	// 남아 있는 row를 지우지 않는 이유: 진행도 row만 빠진 캐릭터의 함수·재료·장착을 잃지 않게 하기 위함
+	// 남아 있는 row를 지우지 않는 이유: 진행도 row만 빠진 캐릭터의 함수·재료·슬롯 함수를 잃지 않게 하기 위함
 	// 있는 row에 다시 넣으면 unique index 때문에 예외가 나고, 「들어가기」 요청을 처리하던 서버가 그 연결을 끊는다
 	public void CreateInitial(string characterKey)
 	{
 		List<string> unlocked = SkillTree.StartingNodes();
 		unlocked.AddRange(SkillTree.AutoUnlockedBy(unlocked));
-
-		// 처음 슬롯을 코드에 적지 않고 처음 해금 목록에서 만든다. 그래야 SkillTree 에셋에서 처음 스킬을 바꾸면 새 캐릭터의 슬롯도 따라 바뀐다
-		SlotLoadout.Entry[] slots = CharacterProgressData.NewEmptySlots();
-		int next = 0;
-		foreach (string id in unlocked)
-		{
-			if (next >= slots.Length) break;
-			if (SkillTree.TryGet(id, out SkillTreeNode node) && node.Kind == SkillTreeNodeKind.Skill)
-				slots[next++] = SlotLoadout.Entry.Skill(id);
-		}
 
 		db.RunInTransaction(() =>
 		{
@@ -139,13 +130,13 @@ public class ProgressStore
 					db.Insert(new UnlockRow { CharacterKey = characterKey, NodeId = id });
 			}
 
-			// 슬롯 row가 하나라도 있으면 그 캐릭터가 정한 장착이므로, 처음 슬롯으로 채우지 않고 빠진 슬롯만 빈 슬롯으로 넣는다
+			// 슬롯 row가 있는 슬롯은 그 슬롯 함수를 그대로 두고, 빠진 슬롯에만 새 슬롯 함수를 만든다
 			var existingSlots = new HashSet<int>();
 			foreach (SlotRow row in db.Table<SlotRow>().Where(r => r.CharacterKey == characterKey)) existingSlots.Add(row.SlotIndex);
-			for (int i = 0; i < slots.Length; i++)
+			for (int i = 0; i < SlotLoadout.SlotCount; i++)
 			{
 				if (existingSlots.Contains(i)) continue;
-				db.Insert(ToSlotRow(characterKey, i, existingSlots.Count == 0 ? slots[i] : SlotLoadout.Entry.Empty));
+				InsertSlotFunction(characterKey, i, CharacterProgressData.NewSlotFunction(i));
 			}
 
 			if (db.Find<GlobalsRow>(characterKey) == null)
@@ -208,7 +199,8 @@ public class ProgressStore
 
 	/// <summary>
 	/// [테스트용] 캐릭터의 진행도 테이블 6개를 data로 모두 바꾼다. 한 트랜잭션이므로 예전 값이 섞여 남지 않는다.<br/>
-	/// 슬롯은 8개에 맞춘다(모자라면 빈 슬롯). 함수는 ProgressRules.MaxFunctions개까지만 넣고, GUID가 없는 함수는 건너뛴다.
+	/// 슬롯은 8개에 맞춘다. 슬롯의 함수가 data.Functions에 없으면 새 캐릭터와 같은 슬롯 함수를 만든다.<br/>
+	/// 페이지 함수(슬롯에 걸리지 않은 함수)는 ProgressRules.MaxPageFunctions개까지만 넣고, GUID가 없는 함수는 건너뛴다.
 	/// </summary>
 	public void ReplaceAll(string characterKey, CharacterProgressData data)
 	{
@@ -237,21 +229,37 @@ public class ProgressStore
 				}
 			}
 
-			for (int i = 0; i < SlotLoadout.SlotCount; i++)
-			{
-				SlotLoadout.Entry entry = data.Slots != null && i < data.Slots.Length ? data.Slots[i] : SlotLoadout.Entry.Empty;
-				db.Insert(ToSlotRow(characterKey, i, entry));
-			}
-
-			var guids = new HashSet<string>();
+			var functions = new List<FunctionData>();
+			var functionsByGuid = new Dictionary<string, FunctionData>();
 			if (data.Functions != null)
 			{
 				foreach (FunctionData function in data.Functions)
 				{
-					if (function == null || string.IsNullOrEmpty(function.Guid) || !guids.Add(function.Guid)) continue;
-					if (guids.Count > ProgressRules.MaxFunctions) break;
-					db.Insert(new FunctionRow { CharacterKey = characterKey, FunctionGuid = function.Guid, Json = FunctionDataJson.ToJson(function) });
+					if (function == null || string.IsNullOrEmpty(function.Guid) || functionsByGuid.ContainsKey(function.Guid)) continue;
+					functions.Add(function);
+					functionsByGuid.Add(function.Guid, function);
 				}
+			}
+
+			// 슬롯의 함수가 data.Functions에 있으면 그대로 쓰고, 없으면(빠진 슬롯, 스킬·빈 슬롯, 없는 GUID, 다른 슬롯과 같은 GUID) 새 캐릭터와 같은 슬롯 함수를 만든다
+			// 실제 계정의 슬롯은 언제나 함수 하나이기 때문(빈 슬롯 없음)
+			var slotGuids = new HashSet<string>();
+			for (int i = 0; i < SlotLoadout.SlotCount; i++)
+			{
+				SlotLoadout.Entry entry = data.Slots != null && i < data.Slots.Length ? data.Slots[i] : SlotLoadout.Entry.Empty;
+				if (entry.Kind == SlotLoadout.EntryKind.UserFunction && functionsByGuid.TryGetValue(entry.Id ?? "", out FunctionData function) && slotGuids.Add(function.Guid))
+					InsertSlotFunction(characterKey, i, function);
+				else
+					InsertSlotFunction(characterKey, i, CharacterProgressData.NewSlotFunction(i));
+			}
+
+			// 슬롯에 걸리지 않은 함수는 페이지 함수다. ProgressRules.MaxPageFunctions개까지만 넣는다
+			int pageFunctions = 0;
+			foreach (FunctionData function in functions)
+			{
+				if (slotGuids.Contains(function.Guid)) continue;
+				if (++pageFunctions > ProgressRules.MaxPageFunctions) break;
+				db.Insert(new FunctionRow { CharacterKey = characterKey, FunctionGuid = function.Guid, Json = FunctionDataJson.ToJson(function) });
 			}
 
 			db.Insert(new GlobalsRow { CharacterKey = characterKey, Json = FunctionDataJson.ToJson(data.Globals ?? new GlobalVariablesData()) });
@@ -288,37 +296,21 @@ public class ProgressStore
 		});
 	}
 
-	/// <summary>
-	/// 바뀐 슬롯들을 한 트랜잭션으로 쓴다. changed: 슬롯 번호(0~7) → 새 내용.<br/>
-	/// Swap이나 옮기기처럼 두 슬롯이 함께 바뀌면 한 번에 넘긴다. 하나만 쓰이고 서버가 꺼져 같은 스킬이 두 슬롯에 남는 일을 막기 위함이다.
-	/// </summary>
-	public void SaveSlots(string characterKey, IReadOnlyDictionary<int, SlotLoadout.Entry> changed)
+	/// <summary>캐릭터의 페이지 함수(슬롯에 걸리지 않은 함수) 개수. 함수 개수 제한(ProgressRules.MaxPageFunctions)을 검사할 때 쓴다.</summary>
+	// 함수 row 수로 센다. 읽을 수 없어 불러오지 못한 함수도 자리를 차지하고 있기 때문
+	public int CountPageFunctions(string characterKey)
 	{
-		db.RunInTransaction(() =>
-		{
-			foreach (KeyValuePair<int, SlotLoadout.Entry> pair in changed)
-			{
-				if (pair.Key < 0 || pair.Key >= SlotLoadout.SlotCount) continue;
-				int slot = pair.Key;
-				SlotRow row = db.Table<SlotRow>().Where(r => r.CharacterKey == characterKey && r.SlotIndex == slot).FirstOrDefault();
-				SlotRow written = ToSlotRow(characterKey, slot, pair.Value);
-				if (row == null)
-				{
-					db.Insert(written);
-				}
-				else
-				{
-					written.Id = row.Id;
-					db.Update(written);
-				}
-			}
-		});
-	}
+		var slotGuids = new HashSet<string>();
+		string functionKind = SlotLoadout.EntryKind.UserFunction.ToString();
+		foreach (SlotRow row in db.Table<SlotRow>().Where(r => r.CharacterKey == characterKey && r.Kind == functionKind))
+			slotGuids.Add(row.EntryId);
 
-	/// <summary>캐릭터의 함수 개수. 함수 개수 제한을 검사할 때 쓴다.</summary>
-	public int CountFunctions(string characterKey)
-	{
-		return db.Table<FunctionRow>().Where(r => r.CharacterKey == characterKey).Count();
+		int count = 0;
+		foreach (FunctionRow row in db.Table<FunctionRow>().Where(r => r.CharacterKey == characterKey))
+		{
+			if (!slotGuids.Contains(row.FunctionGuid)) count++;
+		}
+		return count;
 	}
 
 	/// <summary>그 캐릭터에 이 GUID의 함수가 있으면 true. 새 함수인지(개수 제한 대상인지) 볼 때 쓴다.</summary>
@@ -369,6 +361,13 @@ public class ProgressStore
 			row.Count = count;
 			db.Update(row);
 		}
+	}
+
+	// 슬롯 함수 하나를 CharacterFunctions와 그 슬롯의 CharacterSlots row에 넣는다. 트랜잭션 안에서 부른다
+	void InsertSlotFunction(string characterKey, int slot, FunctionData function)
+	{
+		db.Insert(new FunctionRow { CharacterKey = characterKey, FunctionGuid = function.Guid, Json = FunctionDataJson.ToJson(function) });
+		db.Insert(ToSlotRow(characterKey, slot, SlotLoadout.Entry.Function(function.Guid)));
 	}
 
 	FunctionRow FindFunction(string characterKey, string functionGuid)

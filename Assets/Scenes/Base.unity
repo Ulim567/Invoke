@@ -364,6 +364,7 @@ GameObject:
   - component: {fileID: 9053282931568076825}
   - component: {fileID: 9053282931568076827}
   - component: {fileID: 9053282931568076824}
+  - component: {fileID: 9053282931568076828}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -516,6 +517,7 @@ MonoBehaviour:
       m_Calls: []
   kickDisconnectDelay: 0.5
   skipLoginInEditor: 1
+  allowTestProgressData: 1
 --- !u!114 &9053282931568076824
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -576,6 +578,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 296c912e888b9544583f6669f5ec0945, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AccountFlow
+--- !u!114 &9053282931568076828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4138530712472164788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aad4f5c30457dcf43a4049959ba0bf5a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProgressTestData
+  language: C
+  json: '{"Level":10,"Exp":0,"Money":1000,"Materials":{"bug_fragment":50,"field_boss_core":2,"boss_core":1},"Unlocked":["syntax.sequence","c.thrust","c.sword_throw"],"Slots":[{"Kind":"Skill","Id":"c.thrust"},{"Kind":"Skill","Id":"c.sword_throw"}],"Functions":[],"Globals":{"Declarations":[]}}'
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

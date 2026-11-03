@@ -27,6 +27,9 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	[Tooltip("에디터에서만 동작. 켜면 Host·Client로 시작할 때 로그인과 캐릭터 고르기를 건너뛰고, DB를 쓰지 않는 임시 계정의 C 캐릭터로 바로 들어간다. 로그인을 테스트할 때만 끈다.")]
 	[SerializeField] bool skipLoginInEditor = true;
 
+	[Tooltip("서버가 테스트용 진행도 넣기(ProgressTestData)를 받을지. 서버 DB를 자주 지우는 개발 중에만 켠다. 실제 서비스 서버에서는 끈다.")]
+	[SerializeField] bool allowTestProgressData = true;
+
 #if UNITY_SERVER || UNITY_EDITOR
 	AccountServer accountServer;
 #endif
@@ -49,6 +52,9 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	/// <summary>[내 화면] 서버가 곧 접속을 끊는다는 알림을 받았을 때. 받는 값은 이유 (예: LoggedInElsewhere).</summary>
 	public event Action<AccountFailure> Kicked;
 
+	/// <summary>[내 화면] 테스트용 진행도 넣기(RequestProgressTestData)의 결과를 받았을 때.</summary>
+	public event Action<ProgressTestDataResult> ProgressTestDataResultReceived;
+
 	/// <summary>Base 씬 NetworkManager에 붙은 InvokeAuthenticator. 없으면 null.</summary>
 	public static InvokeAuthenticator Current =>
 		NetworkManager.singleton != null ? NetworkManager.singleton.authenticator as InvokeAuthenticator : null;
@@ -64,6 +70,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		// 캐릭터 요청은 로그인한 연결만 보낼 수 있다
 		NetworkServer.RegisterHandler<CreateCharacterRequest>(OnCreateCharacterRequest);
 		NetworkServer.RegisterHandler<EnterGameRequest>(OnEnterGameRequest);
+		NetworkServer.RegisterHandler<ProgressTestDataRequest>(OnProgressTestDataRequest);
 		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.ServerPlayerCreated += OnServerPlayerCreated;
 		Debug.Log($"[InvokeAuthenticator] 계정 DB를 열었습니다: {AccountStore.DefaultPath}");
 #else
@@ -77,6 +84,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkServer.UnregisterHandler<AccountAuthRequest>();
 		NetworkServer.UnregisterHandler<CreateCharacterRequest>();
 		NetworkServer.UnregisterHandler<EnterGameRequest>();
+		NetworkServer.UnregisterHandler<ProgressTestDataRequest>();
 		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.ServerPlayerCreated -= OnServerPlayerCreated;
 		accountServer?.Dispose();
 		accountServer = null;
@@ -132,6 +140,11 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	{
 		accountServer?.ApplyProgress(conn, player);
 	}
+
+	void OnProgressTestDataRequest(NetworkConnectionToClient conn, ProgressTestDataRequest request)
+	{
+		accountServer.HandleProgressTestData(conn, request, allowTestProgressData);
+	}
 #endif
 
 	// 쫓겨난 연결: 같은 캐릭터가 둘이 되지 않도록 플레이어는 바로 없애고, 끊김 알림이 도착할 시간을 둔 뒤 끊는다
@@ -158,6 +171,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkClient.RegisterHandler<AccountKickedMessage>(OnKicked, false);
 		NetworkClient.RegisterHandler<CreateCharacterResultMessage>(OnCreateCharacterResult);
 		NetworkClient.RegisterHandler<EnterGameResultMessage>(OnEnterGameResult);
+		NetworkClient.RegisterHandler<ProgressTestDataResult>(OnProgressTestDataResult);
 	}
 
 	public override void OnStopClient()
@@ -166,6 +180,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkClient.UnregisterHandler<AccountKickedMessage>();
 		NetworkClient.UnregisterHandler<CreateCharacterResultMessage>();
 		NetworkClient.UnregisterHandler<EnterGameResultMessage>();
+		NetworkClient.UnregisterHandler<ProgressTestDataResult>();
 		hasPendingRequest = false;
 		skippingLogin = false;
 	}
@@ -221,6 +236,17 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		return true;
 	}
 
+	/// <summary>
+	/// [내 화면, 테스트용] 로그인한 뒤 캐릭터 화면에서, 그 언어 캐릭터의 진행도를 json(CharacterProgressData)으로 모두 바꿔 달라고 요청한다.<br/>
+	/// 결과는 ProgressTestDataResultReceived로 온다. 보내지 못했으면(로그인 전) false. ProgressTestData가 부른다.
+	/// </summary>
+	public bool RequestProgressTestData(string language, string json)
+	{
+		if (!IsLoggedIn()) return false;
+		NetworkClient.Send(new ProgressTestDataRequest { language = language, json = json });
+		return true;
+	}
+
 	bool SendAuthRequest(AccountAuthRequest request)
 	{
 		if (NetworkClient.isConnected)
@@ -267,6 +293,11 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	void OnEnterGameResult(EnterGameResultMessage result)
 	{
 		EnterGameResultReceived?.Invoke(result);
+	}
+
+	void OnProgressTestDataResult(ProgressTestDataResult result)
+	{
+		ProgressTestDataResultReceived?.Invoke(result);
 	}
 
 	void OnKicked(AccountKickedMessage message)

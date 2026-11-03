@@ -216,16 +216,21 @@
 
 ### 테스트용 데이터 넣기
 - 서버 DB는 개발 중 주기적으로 지움. 그래서 원하는 진행도(JSON)를 캐릭터의 DB에 한 번에 넣는 테스트용 기능을 둠
-- 구현은 마지막 단계
-- 컴포넌트: `ProgressTestData`. 진행도 JSON 칸과 언어 칸을 가짐. Base 씬의 오브젝트에 붙임
+- 컴포넌트: `ProgressTestData`. 진행도 JSON 칸(`Json`)과 언어 칸(`Language`, 기본 C)을 가짐. Base 씬의 오브젝트에 붙임
 - 사용: 에디터에서 로그인 → 캐릭터 화면에서 Inspector ⋮ → 「진행도 넣기」 → 「들어가기」
-  - 클라이언트가 JSON과 언어를 서버로 보냄 → 서버가 그 캐릭터의 진행도 테이블 6개를 한 트랜잭션으로 바꿈
-  - 캐릭터 화면에서만 받음. 들어간 뒤에는 거부
-- JSON 형식: `CharacterProgressData`와 같은 값 (레벨, 경험치, 돈, 재료, 해금 노드 ID, 슬롯 8개, 함수 목록, 전역 변수)
-- 서버의 테스트 허용 설정이 켜져 있을 때만 받음 (서버는 요청이 에디터에서 왔는지 알 수 없음)
+  - `InvokeAuthenticator.RequestProgressTestData(언어, JSON)` → `ProgressTestDataRequest` → `AccountServer.HandleProgressTestData` → `ProgressStore.ReplaceAll`
+  - 서버가 그 캐릭터의 진행도 테이블 6개를 한 트랜잭션으로 모두 바꿈. 결과는 `ProgressTestDataResult` (Console에 로그)
+  - 거부: 테스트 허용 설정이 꺼짐, 임시 계정, 이미 들어감, 그 언어 캐릭터가 없음, 읽을 수 없는 JSON
+- JSON 형식: `CharacterProgressData`를 `FunctionDataJson.ToJson`으로 바꾼 모양 (Level, Exp, Money, Materials, Unlocked, Slots, Functions, Globals)
+  - ⋮ → 「처음 값 JSON 채우기」: 새 캐릭터와 같은 빈 모양을 채움
+  - Slots: 모자라면 빈 슬롯으로 8개를 채움. Kind는 `Empty`, `UserFunction`, `Skill`
+  - Functions: `ProgressRules.MaxFunctions`개까지만
+- 서버의 테스트 허용 설정: `InvokeAuthenticator`의 Allow Test Progress Data (기본 켜짐). 서버는 요청이 에디터에서 왔는지 알 수 없으므로 서버에서 막음. 실제 서비스 서버에서는 끔
 
 ## 다른 시스템이 쓰는 것
-- 정할 것: 테이블 설계 뒤 저장·불러오기 함수와 서버가 클라이언트에게 보내는 데이터
+- `PlayerProgress`: 위 「진행도 컴포넌트」 표 (레벨·경험치·돈·재료·해금 목록 읽기와 바꾸기)
+- `FunctionExecutorNetwork`의 저장 요청 함수: 위 「함수·슬롯·전역 변수 주고받기」 표, [network.md](network.md)
+- `ProgressRules.MaxFunctions`: 함수 최대 개수. 편집 화면이 저장 전에 먼저 안내할 때 씀
 
 ## 정할 것
 - 장착할 때 해금한 스킬만 넣게 할지 (`PlayerProgress.Unlocked`로 서버가 검사)

@@ -187,6 +187,58 @@ public class ProgressStore
 		return data;
 	}
 
+	/// <summary>
+	/// [테스트용] 캐릭터의 진행도 테이블 6개를 data로 모두 바꾼다. 한 트랜잭션이므로 예전 값이 섞여 남지 않는다.<br/>
+	/// 슬롯은 8개에 맞춘다(모자라면 빈 슬롯). 함수는 ProgressRules.MaxFunctions개까지만 넣고, GUID가 없는 함수는 건너뛴다.
+	/// </summary>
+	public void ReplaceAll(string characterKey, CharacterProgressData data)
+	{
+		db.RunInTransaction(() =>
+		{
+			foreach (string table in new[] { "CharacterProgress", "CharacterMaterials", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals" })
+				db.Execute($"DELETE FROM {table} WHERE CharacterKey = ?", characterKey);
+
+			db.Insert(new ProgressRow { CharacterKey = characterKey, Level = Math.Max(1, data.Level), Exp = Math.Max(0, data.Exp), Money = Math.Max(0, data.Money) });
+
+			if (data.Materials != null)
+			{
+				foreach (KeyValuePair<string, int> pair in data.Materials)
+				{
+					if (!string.IsNullOrEmpty(pair.Key) && pair.Value > 0)
+						db.Insert(new MaterialRow { CharacterKey = characterKey, MaterialId = pair.Key, Count = pair.Value });
+				}
+			}
+
+			var unlocked = new HashSet<string>();
+			if (data.Unlocked != null)
+			{
+				foreach (string id in data.Unlocked)
+				{
+					if (!string.IsNullOrEmpty(id) && unlocked.Add(id)) db.Insert(new UnlockRow { CharacterKey = characterKey, NodeId = id });
+				}
+			}
+
+			for (int i = 0; i < SlotLoadout.SlotCount; i++)
+			{
+				SlotLoadout.Entry entry = data.Slots != null && i < data.Slots.Length ? data.Slots[i] : SlotLoadout.Entry.Empty;
+				db.Insert(ToSlotRow(characterKey, i, entry));
+			}
+
+			var guids = new HashSet<string>();
+			if (data.Functions != null)
+			{
+				foreach (FunctionData function in data.Functions)
+				{
+					if (function == null || string.IsNullOrEmpty(function.Guid) || !guids.Add(function.Guid)) continue;
+					if (guids.Count > ProgressRules.MaxFunctions) break;
+					db.Insert(new FunctionRow { CharacterKey = characterKey, FunctionGuid = function.Guid, Json = FunctionDataJson.ToJson(function) });
+				}
+			}
+
+			db.Insert(new GlobalsRow { CharacterKey = characterKey, Json = FunctionDataJson.ToJson(data.Globals ?? new GlobalVariablesData()) });
+		});
+	}
+
 	/// <summary>레벨, 현재 레벨 안의 경험치, 돈을 덮어쓴다.</summary>
 	public void SaveProgress(string characterKey, int level, int exp, int money)
 	{

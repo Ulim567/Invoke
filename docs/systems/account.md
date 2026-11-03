@@ -182,6 +182,7 @@
 | `RequestSignUp(string loginId, string password, string nickname)` | 아이디, 비밀번호, 닉네임 | `bool` | 회원가입 요청. 닉네임은 계정의 닉네임. 성공하면 바로 로그인. 그 밖은 `RequestLogin`과 같음 |
 | `RequestCreateCharacter(string language)` | 언어(`CharacterLanguages`) | `bool` | 캐릭터 만들기 요청. 로그인 전이면 경고 로그, 무시. 결과: `CreateCharacterResultReceived` |
 | `RequestEnter(string language)` | 언어(`CharacterLanguages`) | `bool` | 그 언어의 캐릭터로 들어가기 요청. 로그인 전이면 경고 로그, 무시. 결과: `EnterGameResultReceived` |
+| `RequestProgressTestData(string language, string json)` | 언어, 진행도 JSON | `bool` | [테스트용] 캐릭터 화면에서 그 언어 캐릭터의 진행도를 JSON으로 모두 바꾸기 요청. `ProgressTestData`가 부름. 결과: `ProgressTestDataResultReceived` (#205) |
 | `AuthResultReceived` | `AccountAuthResult` | - | event. 로그인·회원가입 결과. 성공이면 이 이벤트 다음에 인증 완료 |
 | `CreateCharacterResultReceived` | `CreateCharacterResultMessage` | - | event. 캐릭터 만들기 결과 |
 | `EnterGameResultReceived` | `EnterGameResultMessage` | - | event. 들어가기 결과. 성공이면 이어서 서버가 로비에 플레이어 생성 |

@@ -53,6 +53,16 @@ public static class FunctionDataJson
 	// TryFromJson과 이름을 나눈 이유: 같은 이름이면 TryFromJson(json, out _)처럼 부른 곳이 어느 쪽인지 정하지 못해 컴파일되지 않기 때문
 	public static bool TryGlobalVariablesFromJson(string json, out GlobalVariablesData globals) => TryDeserialize(json, out globals);
 
+	/// <summary>
+	/// 캐릭터 진행도 전체를 JSON 글자열로 바꾼다. 테스트용 진행도 넣기(ProgressTestData)에 쓴다.
+	/// </summary>
+	public static string ToJson(CharacterProgressData progress) => JsonConvert.SerializeObject(progress, Settings);
+
+	/// <summary>
+	/// JSON 글자열을 캐릭터 진행도로 되돌린다. 실패하면 false를 돌려주고 progress는 null이다.
+	/// </summary>
+	public static bool TryProgressFromJson(string json, out CharacterProgressData progress) => TryDeserialize(json, out progress);
+
 	static bool TryDeserialize<T>(string json, out T result) where T : class
 	{
 		result = null;

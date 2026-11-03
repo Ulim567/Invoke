@@ -160,8 +160,8 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
   - `SlotCaster.cs`의 대상 찾기(`Physics2D.OverlapCircleAll`): 서버에서 내용 씬의 대상을 찾지 못함. 자기 씬의 물리 세계에 질의 필요
   - `PlayerMovement.cs`의 바닥 판정·발판 내려가기: 내 캐릭터(클라이언트)에서만 실행하므로 전용 서버에서는 영향 없음. 호스트 모드에서는 바닥을 찾지 못함 (자기 씬의 물리 세계에 질의하면 해결)
   - 소환검 생성·삭제: `NetworkSpawner.Spawn` / `Despawn` 사용
-- 박진우에게 요청할 것 (#134)
-  - `PlayerMovement`에 움직임 잠그기 함수 (예: `SetMovementLocked(bool locked)`)
+- 박진우에게 요청할 것 (#134) → 박진우가 #207에서 만듦 (player-movement.md)
+  - `PlayerMovement`에 움직임 잠그기 함수 `SetMovementLocked(bool locked)`, `IsMovementLocked`
     - 잠근 동안: 속도 0, 중력 없음, 진행 중인 돌진 중단, 입력·스킬로 움직이지 않음
     - 풀 때: 속도 0에서 시작
     - 쓰는 곳: `PlaceTravelClient`가 요청을 보낼 때 잠그고 `TravelEndedMessage`를 받으면 풂 (위 「한계」 해결)

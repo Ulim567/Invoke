@@ -86,6 +86,8 @@
 | `IsRunning` | - | `bool` | 달리는 속도로 좌우로 움직이고 있으면 `true` (멈춰 있으면 `false`). 공중에서는 땅을 떠난 순간의 값을 유지. 달리기 애니메이션에서 읽는다. |
 | `RunSpeedMultiplier` | - | `float` | 달리기 속도 배율. 달릴 때 이동 속도 = `PlayerStats.MoveSpeed` × 이 값 |
 | `IsDropping` | - | `bool` | 발판 아래로 내려가는 중이면 `true`. 내려가는 애니메이션이 필요하면 읽는다. |
+| `SetMovementLocked(bool locked)` | 잠그기 / 풀기 | - | (#207) 잠근 동안 속도 0, 중력 없음(그 자리에 떠 있음), 진행 중인 돌진·내려가기 중단, 좌우·점프·내려가기 입력과 `StartLunge` 무시. 풀면 원래 중력으로 돌아가고 속도 0에서 시작. 장소 이동(`PlaceTravelClient`)이 씬을 바꾸는 동안 쓴다 |
+| `IsMovementLocked` | - | `bool` | (#207) 잠겨 있으면 `true` |
 | `StartLunge(float targetX)` | 돌진할 x 위치 | - | 그 x까지 좌우로 돌진한다 (`Lunge Speed` 30, 최대 `Lunge Max Time` 0.35초, 임시). 돌진하는 쪽을 바라본다. 돌진 중에는 좌우 입력을 무시하고, 닿거나 시간이 지나거나 경직·사망하면 멈춘다. 찌르기 스킬이 부른다 (#152) |
 | `StopLunge()` | - | - | 돌진을 멈춘다. 스킬이 끝나거나 끊길 때 부른다 |
 | `IsLunging` | - | `bool` | 돌진 중이면 `true`. 돌진 애니메이션(임혜원 `C_Lunge`)에서 읽는다 |
@@ -95,6 +97,7 @@
 | 이름 | 설명 |
 | --- | --- |
 | `PlayerRunSimTest` | Test_JW의 RunTest. 켜고 Play → Host, Game 창을 한 번 클릭. 가짜 키로 걷기·달리기 속도, 달리다 점프 후 공중에서 Shift 떼기(달리는 속도 유지), 걷다 점프 후 공중에서 Shift 누르기(걷는 속도 유지)를 확인. 「[RunTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `MovementLockSimTest` | (#207) Test_JW의 LockTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 4초). 공중에서 잠그면 안 떨어짐, 잠근 동안 → + Space·돌진으로 안 움직임, 돌진 중에 잠그면 돌진이 멈춤, 풀면 다시 떨어짐을 확인. 「[LockTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정한 것

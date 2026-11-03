@@ -132,6 +132,7 @@ void CmdPickUp()
 - 서버 처리: `TryGetTask` → `ProvideInput`. 기다리는 타입과 다른 값이면 `ProvideInput`이 던지는 `ArgumentException`을 받아 버림(`ProvideTarget`과 같음)
 
 ### 함수 데이터 전송 (#173)
+- 대상: 「로그인 건너뛰기」 임시 계정만. 실제 계정은 서버 DB가 원본(`ApplyLoadedData`)이고, 슬롯은 늘 슬롯 함수 8개라 장착을 바꾸는 요청이 없음 (#237, [progress-store.md](progress-store.md))
 - 보내는 것: 슬롯 8칸, 이 컴퓨터에 저장한 함수 전부(`FunctionStorage.LoadAll`), 전역 변수 파일(`GlobalVariablesStorage.Load`)
 - 보내는 때: 로컬 플레이어 오브젝트가 생길 때(`OnStartLocalPlayer`) 전부, `SlotLoadout.Changed` 때 슬롯과 함수(다음 `Update`에 한 번)
 - 함수: 하나씩 따로 보냄. 한 메시지 한도(KCP `ReliableMaxMessageSize`, `Base` 씬 설정 297,433바이트)
@@ -164,10 +165,9 @@ void CmdPickUp()
 | `ApplyPlayerData(slots, functions, globals)` | 슬롯 8칸(`SlotLoadout.Entry`), 함수 데이터 목록, 전역 변수 파일(`null`이면 그대로) | - | [서버] 플레이어 데이터를 넣고 슬롯 원본 생성. 실제 계정은 DB에서 읽은 데이터(`ApplyLoadedData`), 임시 계정은 클라이언트가 보낸 이 컴퓨터의 파일 데이터 |
 | `ApplyLoadedData(CharacterProgressData, ProgressStore, characterKey)` | DB에서 불러온 진행도, 저장할 DB, 캐릭터 key | - | [서버] 실제 계정의 슬롯·함수·전역 변수를 넣음. 플레이어를 연결에 붙이기 전에 `AccountServer`가 부름 (#205) |
 | `UsesServerData` | - | `bool` | 슬롯·함수·전역 변수의 원본이 서버 DB이면 true(실제 계정). 이때 클라이언트는 파일을 보내지 않음 (#205) |
-| `ReceivedSlots`, `ReceivedFunctions`, `ReceivedGlobals` | - | 슬롯 8개, 함수 목록, 전역 변수 선언 | [소유 클라이언트] 서버가 보낸 데이터. 받기 전이면 `null` (#205) |
+| `ReceivedSlots`, `ReceivedFunctions`, `ReceivedGlobals` | - | 슬롯 8개(슬롯 함수 GUID), 함수 목록(슬롯 함수 + 페이지 함수), 전역 변수 선언 | [소유 클라이언트] 서버가 보낸 데이터. 받기 전이면 `null` (#205, #237) |
 | `PlayerDataReceived` (event) | - | - | [표시] 서버가 보낸 슬롯·함수·전역 변수를 처음 다 받았을 때, 저장 요청이 성공해 바뀌었을 때. 실제 계정의 소유 클라이언트 (#205) |
-| `RequestSaveFunction(FunctionData)` | 함수 | - | [소유 클라이언트] 서버 DB에 함수 저장 요청. 결과는 `PlayerDataRequestAnswered` (#205, [progress-store.md](progress-store.md)) |
-| `RequestEquipFunction(slot, guid)`, `RequestEquipSkill(slot, id)`, `RequestUnequip(slot)`, `RequestSwap(a, b)` | 슬롯 번호, 함수 GUID / 스킬 ID | - | [소유 클라이언트] 서버 DB에 장착 변경 요청. 결과는 `PlayerDataRequestAnswered` (#205) |
+| `RequestSaveFunction(FunctionData)` | 함수 (슬롯 함수 또는 페이지 함수) | - | [소유 클라이언트] 서버 DB에 함수 저장 요청. 새 GUID는 페이지 함수로 셈. 결과는 `PlayerDataRequestAnswered` (#205, #237, [progress-store.md](progress-store.md)) |
 | `RequestSaveGlobals(GlobalVariablesData)` | 전역 변수 선언 | - | [소유 클라이언트] 서버 DB에 전역 변수 저장 요청. 결과는 `PlayerDataRequestAnswered` (#205) |
 | `PlayerDataRequestAnswered` (event) | `PlayerDataRequest`, `PlayerDataRequestResult` | - | [로직] 저장 요청의 결과. 소유 클라이언트 (#205) |
 

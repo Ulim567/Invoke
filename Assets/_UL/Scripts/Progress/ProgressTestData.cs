@@ -19,13 +19,12 @@ public class ProgressTestData : MonoBehaviour
 	[Tooltip("진행도를 바꿀 캐릭터의 언어 (CharacterLanguages). 예: C")]
 	[SerializeField] string language = CharacterLanguages.C;
 
-	[Tooltip("CharacterProgressData의 JSON. Level, Exp, Money, Materials, Unlocked, Slots(8개, Kind: Empty/UserFunction/Skill), Functions, Globals")]
+	[Tooltip("CharacterProgressData의 JSON. Level, Exp, Money, Materials, Unlocked, Slots(8개, Kind: UserFunction, Id: 슬롯 함수 GUID), Functions(슬롯 함수 + 페이지 함수), Globals. 슬롯의 함수가 Functions에 없으면 서버가 새 캐릭터와 같은 슬롯 함수를 만든다")]
 	[SerializeField, TextArea(6, 30)] string json =
 		"{\"Level\":10,\"Exp\":0,\"Money\":1000," +
 		"\"Materials\":{\"bug_fragment\":50,\"field_boss_core\":2,\"boss_core\":1}," +
 		"\"Unlocked\":[\"syntax.sequence\",\"c.thrust\",\"c.sword_throw\"]," +
-		"\"Slots\":[{\"Kind\":\"Skill\",\"Id\":\"c.thrust\"},{\"Kind\":\"Skill\",\"Id\":\"c.sword_throw\"}]," +
-		"\"Functions\":[],\"Globals\":{\"Declarations\":[]}}";
+		"\"Slots\":[],\"Functions\":[],\"Globals\":{\"Declarations\":[]}}";
 
 	void OnEnable()
 	{
@@ -51,11 +50,13 @@ public class ProgressTestData : MonoBehaviour
 		Debug.Log($"[ProgressTestData] {name}: [{language}] 캐릭터의 진행도 넣기를 요청했습니다.", this);
 	}
 
-	// JSON을 처음부터 쓰지 않아도 되도록, 새 캐릭터의 처음 값과 같은 모양을 채운다
+	// JSON을 처음부터 쓰지 않아도 되도록, 새 캐릭터의 처음 값과 같은 모양을 채운다(슬롯 함수 8개 포함)
 	[ContextMenu("처음 값 JSON 채우기")]
 	void FillWithEmptyProgress()
 	{
-		json = FunctionDataJson.ToJson(new CharacterProgressData());
+		var data = new CharacterProgressData();
+		data.FillInitialSlotFunctions();
+		json = FunctionDataJson.ToJson(data);
 	}
 
 	void OnResult(ProgressTestDataResult result)

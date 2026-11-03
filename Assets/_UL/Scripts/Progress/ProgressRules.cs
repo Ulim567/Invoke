@@ -6,15 +6,20 @@
 /// </summary>
 public static class ProgressRules
 {
-	/// <summary>캐릭터 하나가 가질 수 있는 사용자 정의 함수의 최대 개수 (임시).</summary>
-	public const int MaxFunctions = 5;
+	/// <summary>
+	/// 캐릭터 하나가 가질 수 있는 페이지 함수(슬롯에 걸리지 않은 함수)의 최대 개수 (임시).<br/>
+	/// 슬롯 함수 8개(slot1~slot8)는 서버가 캐릭터를 만들 때 함께 만들고, 이 개수에 들어가지 않는다.
+	/// </summary>
+	public const int MaxPageFunctions = 5;
+
+	/// <summary>슬롯 함수의 고정 이름. 슬롯 번호 0~7 → slot1~slot8.</summary>
+	public static string SlotFunctionName(int slot) => $"slot{slot + 1}";
 }
 
 /// <summary>소유 클라이언트가 서버에 보내는 플레이어 데이터 요청의 종류.</summary>
 public enum PlayerDataRequest
 {
 	SaveFunction,
-	ChangeSlots,
 	SaveGlobals,
 }
 
@@ -23,10 +28,8 @@ public enum PlayerDataRequestResult
 {
 	Saved,
 	NotAllowed,       // 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)
-	InvalidData,      // JSON을 읽을 수 없음, GUID·ID가 없음, 없는 슬롯 종류
-	TooManyFunctions, // 새 함수인데 이미 ProgressRules.MaxFunctions개
-	InvalidSlot,      // 슬롯 번호가 0~7이 아님
-	UnknownFunction,  // 이 캐릭터에 없는 함수를 장착하려 함
-	NotEquippable,    // 장착할 수 없는 스킬 (없는 ID, 입력 함수)
+	InvalidData,      // JSON을 읽을 수 없음, GUID가 없음
+	TooManyFunctions, // 새 함수(페이지 함수)인데 이미 ProgressRules.MaxPageFunctions개
+	SlotFunctionLocked, // 슬롯 함수의 이름(slot1~slot8)이나 파라미터(없음)를 바꾸려 함. 슬롯 함수는 function body만 바꿀 수 있음
 	GlobalsRejected,  // 전역 변수 검사에 걸림 (칸 부족 등. 이유는 서버 콘솔 오류)
 }

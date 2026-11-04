@@ -114,6 +114,9 @@ public static class RaidRooms
 	/// <summary>내 이름 (계정 닉네임). 서버에 접속하지 않았으면 "나"</summary>
 	public static string MyName => serverName ?? OfflineName;
 
+	/// <summary>서버에 접속해 요청을 서버로 보내는 중이면 true. false면 요청을 내 컴퓨터 안에서 바로 처리한다 (테스트 씬)</summary>
+	public static bool IsOnline => RequestSender != null;
+
 	/// <summary>방이 생기거나 없어지거나 방 인원이 바뀌었을 때. 방 목록 화면을 다시 그린다</summary>
 	public static event Action RoomsChanged;
 

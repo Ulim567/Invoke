@@ -45,10 +45,11 @@
   - 프리팹은 `_HW` 폴더에 만들고 Lobby 씬에 놓는다 (PR 「씬·프리팹 변경」에 적음)
   - 창이 열린 동안 Player·Attack 액션 맵을 둘 다 끈다
 - 이동 함수를 만든 뒤에도 입구는 이벤트(`TravelRequested`, `RaidEntryRequested`) 그대로. 이우림의 `PlaceTravelClient`가 받아 서버에 요청 (#134, [place-scenes.md](place-scenes.md))
-- 레이드 방 (#242, 이우림 제안, 임혜원 확인 전)
+- 레이드 방 (#242, 이우림 제안, 임혜원 확인 11/4)
   - 레이드 입구는 입구 창 없이 ↑에 `RaidEntryRequested(player)`. 레이드 방 화면이 입구 창 역할 (방 목록, 파티방, [raid.md](raid.md))
   - `RaidEntryRequested`는 `PlaceTravelClient`가 아니라 `RaidLobbyOpener`가 받음. 레이드 던전 이동은 파티장이 시작할 때 (다음 이슈)
-  - 임혜원에게 요청
+  - `LobbyEntrance.cs` 변경 (이우림, 임혜원 허락)
     - `LobbyEntrance.Interact`: 레이드 입구만 `panel.Open` 대신 `RaidEntryRequested?.Invoke(player)`
     - `RaidEntryRequested`: `Action` → `Action<PlayerInputReader>`
-    - `RequestEnter`의 레이드 입구 처리: 쓰이지 않음 (지우기)
+    - `RequestEnter`의 레이드 입구 처리, `Description`의 레이드 입구 글: 쓰이지 않아 지움
+  - 프리팹·씬: `_HW` 프리팹은 바꾸지 않음. 레이드 입구 프리팹의 `Panel` 칸은 쓰이지 않음

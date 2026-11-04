@@ -5,7 +5,7 @@ using UnityEngine;
 /// 클라이언트의 장소 이동. 입구·출구의 요청을 받아 서버에 보내고, 서버의 답이 올 때까지 로딩 화면을 띄운다.
 /// <para>
 /// 하는 일<br/>
-/// - 로비 입구의 이벤트(LobbyEntrance.TravelRequested, RaidEntryRequested)를 받아 서버에 TravelRequestMessage를 보낸다.<br/>
+/// - 로비 입구의 이벤트(LobbyEntrance.TravelRequested)를 받아 서버에 TravelRequestMessage를 보낸다. 레이드 입구는 이동이 아니라 레이드 방 화면을 연다(RaidLobbyOpener).<br/>
 /// - 요청을 보낸 뒤 서버의 답(TravelEndedMessage)이 올 때까지 로딩 화면을 보이고, 로컬 플레이어의 Player·Attack 액션 맵을 비활성화한다.<br/>
 /// - 같은 동안 로컬 플레이어의 움직임을 잠근다(PlayerMovement.SetMovementLocked). 이전 씬을 언로드한 뒤 밟을 땅이 없어 떨어지지 않게 하기 위함이다.<br/>
 /// - 접속 직후에도 서버가 로컬 플레이어의 함수 데이터를 다 받을 때까지(FunctionExecutorNetwork.IsDataReady) 같은 방법으로 막는다.
@@ -39,14 +39,12 @@ public class PlaceTravelClient : MonoBehaviour
 	{
 		Instance = this;
 		LobbyEntrance.TravelRequested += RequestTravel;
-		LobbyEntrance.RaidEntryRequested += RequestRaidDungeon;
 	}
 
 	void OnDisable()
 	{
 		if (Instance == this) Instance = null;
 		LobbyEntrance.TravelRequested -= RequestTravel;
-		LobbyEntrance.RaidEntryRequested -= RequestRaidDungeon;
 	}
 
 	/// <summary>
@@ -70,9 +68,6 @@ public class PlaceTravelClient : MonoBehaviour
 			if (NetworkClient.isConnected) NetworkClient.Send(new TravelRequestMessage { destination = destination });
 		});
 	}
-
-	// 레이드 던전 입구는 씬 이름을 넘기지 않으므로 여기서 채운다
-	void RequestRaidDungeon() => RequestTravel(PlaceScenes.RaidDungeon);
 
 	/// <summary>
 	/// 서버의 TravelEndedMessage를 받았을 때 InvokeNetworkManager가 부른다. 다른 스크립트는 부르지 않는다.<br/>

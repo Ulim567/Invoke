@@ -63,6 +63,7 @@
 | --- | --- | --- | --- |
 | `Rooms` | - | `IReadOnlyList<RaidRoom>` | 지금 있는 방 목록 (서버가 보낸 목록) |
 | `MyName` | - | `string` | 내 계정 닉네임. 서버에 접속하지 않았으면 `"나"` |
+| `IsOnline` | - | `bool` | 서버에 접속해 요청을 서버로 보내는 중이면 `true`. `false`면 내 컴퓨터 안에서 바로 처리 (테스트 씬) |
 | `FindRoomOf(memberName)` | 이름 | `RaidRoom` | 그 사람이 있는 방, 없으면 `null` |
 | `RequestCreate(name, password)` | 방 이름, 비밀번호 | - | 방 만들기 요청 |
 | `RequestJoin(room, password)` | 방, 비밀번호 | - | 방 들어가기 요청 |
@@ -93,8 +94,12 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `OpenFor(PlayerInputReader)` | ↑를 누른 내 캐릭터 | - | 레이드 화면 열기 (방 목록). 그 캐릭터의 Player·Attack 액션 맵 비활성화. `RaidLobbyOpener`가 부른다 |
-| `Close()` | - | - | 화면 닫기. 방에 있으면 방에서 나감 (`RequestLeave`). 액션 맵 다시 활성화 |
+| `OpenFor(PlayerInputReader)` | ↑를 누른 내 캐릭터 | - | 레이드 화면 열기 (방에 있으면 파티방, 아니면 방 목록). 그 캐릭터의 Player·Attack 액션 맵 비활성화. `RaidLobbyOpener`가 부른다. 테스트 씬은 `null` |
+| `Close()` | - | - | `InputBlockingPanel`의 닫기. 액션 맵 다시 활성화 |
+
+- 화면의 닫기 버튼: 방에 있으면 `RequestLeave` 뒤 닫기
+- 시작으로 내 방이 목록에서 사라지면 화면이 스스로 닫힘
+- 오브젝트 구조: `RaidLobbyUI`가 붙은 오브젝트는 늘 켜 둠. 네 창(방 목록, 파티방, 방 만들기 창, 비밀번호 창)은 `Panel Root` 아래
 
 ## 맞춘 결과
 - 이우림과 정한 것 (11/4)
@@ -105,14 +110,17 @@
     3. 레이드 씬 안의 내용 (맵, 보스·몬스터 배치, 보스 패턴·페이즈)
     4. 클리어·실패 판정 (끝나면 "레이드 끝 함수"를 부름)
   - "레이드 시작 함수"는 `RaidFlow.RequestStart`, 받는 쪽은 `RaidFlow.StartRequested`
-- 네트워크 붙이기 (#242, 이우림 제안, 김도훈 확인 전)
+- 네트워크 붙이기 (#242, 이우림 제안, 김도훈 확인 11/4)
   - 범위: 방까지. 시작하면 서버에서 `RaidFlow.StartRequested`까지. 파티 던전 열기·옮기기는 다음 이슈
   - 파티장 내보내기: 이번에 넣지 않음
-  - 김도훈에게 요청
+  - `_DH` 폴더 수정: 김도훈 허락. 이우림이 #242에서 `RaidLobbyUI.cs` 수정, `RaidLobbyUI` 프리팹 만들기, Lobby 씬 배치까지
+  - `RaidFlow.RequestStart` / `StartRequested`: 그대로 둠. 김도훈이 클리어·실패 판정 이슈에서 "레이드 끝"을 붙임
+  - #242에서 바꾸는 씬: Lobby, `RaidRoomTest`. Base·RaidDungeon은 바꾸지 않음 (김도훈의 보스 배치 작업과 겹치지 않음)
+  - `RaidLobbyUI` 변경 (이우림, 김도훈 허락)
     - `RaidLobbyUI`: `InputBlockingPanel` 물려받기. 네 창(방 목록, 파티방, 방 만들기 창, 비밀번호 창)을 한 부모 오브젝트 아래에 둠. 열기는 `OpenFor(player)`, 지금의 `Open()`·`Close()`는 지움
-    - `Close()`(닫기 버튼 포함): 방에 있으면 `RaidRooms.RequestLeave()`
+    - 닫기 버튼: 방에 있으면 `RaidRooms.RequestLeave()`
     - `TryCreate`·`TryJoin`·`SetReady`·`TryStart`·`Leave` 호출 → `Request…` 함수로 바꿈
     - 화면 전환: `RoomsChanged`·`RoomChanged`를 받으면 `FindRoomOf(MyName)`으로 판단. 내 방이 생기면 파티방, 「나가기」를 누르지 않았는데 내 방이 목록에서 사라지면(시작) 화면 닫기
     - `RequestFailed`를 받으면 안내 글자에 이유
     - `localName`(`"나"`) → `RaidRooms.MyName`
-    - 테스트 버튼: 서버에 접속했을 때(`NetworkClient.isConnected`) 숨기기
+    - 테스트 버튼: 서버에 접속했을 때(`RaidRooms.IsOnline`) 숨기기

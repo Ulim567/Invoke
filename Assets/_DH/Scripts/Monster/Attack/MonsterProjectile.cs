@@ -12,7 +12,8 @@ using UnityEngine;
 /// - Pierce를 켜면 맞은 플레이어마다 한 번씩 효과를 주고 사라지지 않고 계속 날아간다(보스의 큰 패킷 덩어리처럼 한 줄을 모두 맞히는 공격).
 /// </para>
 /// <para>
-/// 패링(박진우)은 Attack.Parryable로 잡을 수 있는지 확인한다. 잡은 투사체를 없애는 방법은 패링 이슈에서 정한다.
+/// 패링(박진우): 플레이어에 닿으면 효과를 주기 전에 그 플레이어의 ParryGuard.TryParry(this)를 묻는다.
+/// true면 패링 성공이라 효과 없이 사라진다(관통 투사체도 사라진다). Parryable·Misses·판정 시간은 ParryGuard가 본다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
@@ -81,11 +82,22 @@ public class MonsterProjectile : MonoBehaviour
 		{
 			// 빗나가는 투사체는 플레이어를 그냥 지나간다
 			if (Misses) return;
+
+			// 관통: 대상(Rigidbody가 있는 최상위)마다 한 번만 판정한다. 이미 맞힌 대상의 다른 Collider는 무시
+			GameObject owner = null;
 			if (pierce)
 			{
-				// 대상(Rigidbody가 있는 최상위)마다 한 번만 맞히고 계속 날아간다
-				GameObject owner = other.attachedRigidbody != null ? other.attachedRigidbody.gameObject : other.gameObject;
-				if (pierced.Add(owner)) MonsterAttackResolver.Apply(Attack, other);
+				owner = other.attachedRigidbody != null ? other.attachedRigidbody.gameObject : other.gameObject;
+				if (pierced.Contains(owner)) return;
+			}
+
+			// 효과를 주기 전에 패링부터 묻는다. 잡혔으면 효과 없이 사라진다
+			if (TryParried(other)) return;
+
+			if (pierce)
+			{
+				pierced.Add(owner);
+				MonsterAttackResolver.Apply(Attack, other);
 				return;
 			}
 			spent = true;
@@ -97,6 +109,17 @@ public class MonsterProjectile : MonoBehaviour
 			spent = true;
 			Despawn();
 		}
+	}
+
+	// 맞은 플레이어가 패링 중이면(ParryGuard, 박진우) 잡혀서 사라진다. 잡혔으면 true
+	bool TryParried(Collider2D other)
+	{
+		ParryGuard guard = other.GetComponentInParent<ParryGuard>();
+		if (guard == null || !guard.TryParry(this)) return false;
+
+		spent = true;
+		Despawn();
+		return true;
 	}
 
 	// 투사체를 없애는 곳은 여기 하나다. 네트워크를 붙이면 NetworkServer.Destroy로 바꾼다 (코드 작성 규칙 3)

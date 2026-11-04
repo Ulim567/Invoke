@@ -36,6 +36,7 @@
   - 효과는 `MonsterAttackData` 파일에 목록으로 담는다. 맞으면 위에서부터 차례로 적용한다.
   - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 나머지 효과는 받을 시스템이 아직 없어서 로그만 남긴다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
+  - 패링: Player에 맞으면 효과를 주기 전에 그 플레이어의 `ParryGuard.TryParry(투사체)`(박진우, `c-skills.md`)를 묻는다. `true`면 효과 없이 사라진다. 관통 투사체도 잡히면 사라진다. 관통은 이미 맞힌 대상에게는 다시 묻지 않는다.
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
 
 - 잡몹
@@ -259,7 +260,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `Attack` | - | `MonsterAttackData` | 이 투사체의 공격 데이터. 패링은 `Attack.Parryable`로 잡을 수 있는지 확인한다. |
+| `Attack` | - | `MonsterAttackData` | 이 투사체의 공격 데이터. 패링(`ParryGuard`)이 `Attack.Parryable`로 잡을 수 있는지 확인한다. |
 | `Misses` | - | `bool` | 쏜 몬스터가 실명 중이었으면 `true`. 플레이어를 통과한다. |
 
 Inspector `Pierce`를 켜면 관통한다(맞은 대상마다 한 번, 사라지지 않음).
@@ -337,8 +338,9 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
   - 배율을 곱한 데미지는 데미지 계산 쪽에서 반올림해 정수로 바꾼다. 계산 값이 양수면 최소 1, 0 이하면 0이고 `TakeDamage`가 0을 무시한다.
   - 몬스터 공격의 체력 피해도 데미지 계산을 거친다. `MonsterAttackResolver`가 `DamageCalculator.Calculate(DamageRequest.Flat(effect.Amount))`를 부른다. 몬스터는 공격력 능력치가 없어서 `Amount`를 그대로 넘기고, 몬스터 공격은 처형하지 않으므로 대상 정보는 넘기지 않는다.
   - 처형(체력 2% 이하, 보스 제외)은 `DamageTarget.FromMonster`로 `Monster.IsBoss`, `Hp`, `MaxHp`를 읽는다 (#42).
+  - 패링 (#245): `MonsterProjectile`이 플레이어에 닿으면 `Misses` 확인 다음, 효과 적용 전에 `ParryGuard.TryParry(this)`를 묻는다. `true`면 효과 없이 투사체를 없앤다(관통도). `Parryable`·`Misses`·판정 시간은 `ParryGuard`가 보고, 반격 검기는 박진우 스킬이 투사체 속도 반대 방향으로 쏘므로 투사체에 쏜 몬스터 정보는 넣지 않는다. 판정은 서버에서만 (`[ServerCallback]` 그대로)
 - 박진우와 정해야 할 것
-  - 패링이 `MonsterProjectile`을 잡았을 때 투사체를 없애는 방법, 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지 (패링 이슈에서 정함)
+  - 공격 "성질"(폭탄, 불 등)을 `MonsterAttackData`에 어떻게 담을지
 - 임혜원과 정한 것
   - 연습장 허수아비는 `Monster`를 쓰고 Inspector `Invulnerable`을 켠다. 체력은 그대로, `Damaged`·`HitEffectPlayed`(받은 데미지)는 그대로 불려서 데미지 숫자에 쓴다
   - Leak·Loop 그림과 애니메이션은 `_HW/Monsters`(#101). 오른쪽을 보고 그리고, 왼쪽은 최상위 SpriteRenderer의 `flipX`

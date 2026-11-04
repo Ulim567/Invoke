@@ -5,6 +5,7 @@
 ## 하는 일
 - 로비의 입구(사냥터, 연습장, 레이드 던전)와 스킬 트리 해금 장소. 가까이 가서 ↑(상호작용)를 누르면 창을 연다.
 - 입구 창에서 「들어가기」를 누르면 이동 요청을 이벤트로 알리고 로그를 남긴다.
+- 레이드 던전 입구는 입구 창 없이, ↑를 누르면 바로 이벤트로 알린다 (#242).
 - 창이 열린 동안 내 캐릭터의 Player·Attack 액션 맵을 끄고, 닫으면 다시 켠다.
 - 하지 않는 일
   - 장소 사이 이동, 서버 요청, 도착 위치: 「장소 사이 이동하기」 (이우림)
@@ -22,18 +23,18 @@
 - 로비 밖에서도 같은 방식을 쓴다 (#225): `PanelStation`(LobbyInteractable)이 ↑에 `InputBlockingPanel.OpenFor(player)`를 부른다. 연습장의 편집 터미널(`BlockEditorPanel`), 장착대(`SlotEquipPanel`)
 - 창(`LobbyEntrancePanel`, `SkillTreePanel`)은 Lobby 씬에 하나씩 두고, 입구들이 같이 쓴다
 
-| 입구 | `Destination` | 「들어가기」를 누르면 |
-| --- | --- | --- |
-| 사냥터 | `HuntingGround` | `TravelRequested("HuntingGround")`, 로그 |
-| 연습장 | `TrainingRoom` | `TravelRequested("TrainingRoom")`, 로그 |
-| 레이드 던전 | `RaidDungeon` | `RaidEntryRequested()`, 로그 "레이드 던전으로 가려고 함" |
+| 입구 | `Destination` | 알리는 때 | 알리는 것 |
+| --- | --- | --- | --- |
+| 사냥터 | `HuntingGround` | 입구 창의 「들어가기」 | `TravelRequested("HuntingGround")`, 로그 |
+| 연습장 | `TrainingRoom` | 입구 창의 「들어가기」 | `TravelRequested("TrainingRoom")`, 로그 |
+| 레이드 던전 | `RaidDungeon` | ↑ (입구 창 없음) | `RaidEntryRequested(player)`, 로그 "레이드 던전으로 가려고 함" |
 
 ## 다른 시스템이 쓰는 것
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `LobbyEntrance.TravelRequested` | `string` 갈 씬 이름 (`PlaceScenes`) | - | static 이벤트. 사냥터·연습장 입구에서 「들어가기」를 눌렀을 때. 내 화면에서만 불린다 |
-| `LobbyEntrance.RaidEntryRequested` | - | - | static 이벤트. 레이드 던전 입구에서 「들어가기」를 눌렀을 때. 내 화면에서만 불린다 |
+| `LobbyEntrance.RaidEntryRequested` | `PlayerInputReader` ↑를 누른 내 캐릭터 | - | static 이벤트. 레이드 던전 입구에서 ↑를 눌렀을 때 (입구 창 없음). 내 화면에서만 불린다. 이우림의 `RaidLobbyOpener`가 받아 레이드 방 화면(`RaidLobbyUI.OpenFor`, `raid.md`)을 연다 |
 
 - 받는 쪽(이우림)은 `LobbyEntrance.TravelRequested += 함수;`로 등록하고, 사라질 때 `-=`로 해제한다.
 
@@ -44,3 +45,10 @@
   - 프리팹은 `_HW` 폴더에 만들고 Lobby 씬에 놓는다 (PR 「씬·프리팹 변경」에 적음)
   - 창이 열린 동안 Player·Attack 액션 맵을 둘 다 끈다
 - 이동 함수를 만든 뒤에도 입구는 이벤트(`TravelRequested`, `RaidEntryRequested`) 그대로. 이우림의 `PlaceTravelClient`가 받아 서버에 요청 (#134, [place-scenes.md](place-scenes.md))
+- 레이드 방 (#242, 이우림 제안, 임혜원 확인 전)
+  - 레이드 입구는 입구 창 없이 ↑에 `RaidEntryRequested(player)`. 레이드 방 화면이 입구 창 역할 (방 목록, 파티방, [raid.md](raid.md))
+  - `RaidEntryRequested`는 `PlaceTravelClient`가 아니라 `RaidLobbyOpener`가 받음. 레이드 던전 이동은 파티장이 시작할 때 (다음 이슈)
+  - 임혜원에게 요청
+    - `LobbyEntrance.Interact`: 레이드 입구만 `panel.Open` 대신 `RaidEntryRequested?.Invoke(player)`
+    - `RaidEntryRequested`: `Action` → `Action<PlayerInputReader>`
+    - `RequestEnter`의 레이드 입구 처리: 쓰이지 않음 (지우기)

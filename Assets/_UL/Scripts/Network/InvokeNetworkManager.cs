@@ -64,6 +64,7 @@ public class InvokeNetworkManager : NetworkManager
 		base.OnStartServer();
 		// Mirror는 서버를 끌 때 등록한 처리 함수를 모두 지우므로, 서버를 켤 때마다 등록한다
 		NetworkServer.RegisterHandler<TravelRequestMessage>(OnTravelRequest);
+		RaidRoomsNetwork.StartServer();
 		StartCoroutine(LoadPlaceScenes());
 	}
 
@@ -72,6 +73,7 @@ public class InvokeNetworkManager : NetworkManager
 		base.OnStartClient();
 		// Mirror는 클라이언트를 끌 때 등록한 처리 함수를 모두 지우므로, 접속할 때마다 등록한다
 		NetworkClient.RegisterHandler<TravelEndedMessage>(_ => PlaceTravelClient.Instance?.HandleTravelEnded());
+		RaidRoomsNetwork.StartClient();
 	}
 
 	IEnumerator LoadPlaceScenes()
@@ -213,6 +215,8 @@ public class InvokeNetworkManager : NetworkManager
 	/// </summary>
 	public void DespawnPlayer(NetworkConnectionToClient conn)
 	{
+		// 플레이어를 만들기 전(장소 씬을 기다리는 중)이어도 방에는 들어가 있을 수 있으므로, 플레이어가 있는지 보기 전에 뺀다
+		RaidRoomsNetwork.OnPlayerDespawned(conn);
 		if (conn.identity == null) return;
 
 		Scene scene = conn.identity.gameObject.scene;
@@ -245,6 +249,7 @@ public class InvokeNetworkManager : NetworkManager
 		// 진행도를 AddPlayerForConnection 전에 넣어야, 클라이언트가 플레이어를 처음 받을 때 DB의 값(레벨, 재료 등)도 함께 받는다
 		ServerPlayerCreated?.Invoke(conn, player);
 		NetworkServer.AddPlayerForConnection(conn, player);
+		RaidRoomsNetwork.SendList(conn);
 	}
 
 	/// <summary>
@@ -426,6 +431,7 @@ public class InvokeNetworkManager : NetworkManager
 		raidWaitingConnections.Remove(conn);
 		// 끊긴 계정을 접속 중 목록에서 지워야 그 계정이 다시 로그인할 때 이미 끊긴 연결을 또 끊으려 하지 않는다
 		if (authenticator is InvokeAuthenticator accountAuthenticator) accountAuthenticator.OnServerDisconnected(conn);
+		RaidRoomsNetwork.OnServerDisconnect(conn);
 
 		// base가 플레이어 오브젝트를 삭제하므로, 그 전에 플레이어가 있던 씬을 기억한다
 		Scene scene = conn.identity != null ? conn.identity.gameObject.scene : default;
@@ -443,6 +449,7 @@ public class InvokeNetworkManager : NetworkManager
 		// 처리하지 못한 레이드 던전 요청은 버린다
 		raidLoadRequests.Clear();
 		raidWaitingConnections.Clear();
+		RaidRoomsNetwork.StopServer();
 
 		// 에디터에서 서버를 껐다 켤 때 같은 씬이 두 번 불러와지지 않도록 내린다
 		// 오브젝트가 꺼진 채로 불리면 코루틴을 시작할 수 없으므로 확인한다
@@ -465,6 +472,7 @@ public class InvokeNetworkManager : NetworkManager
 	public override void OnStopClient()
 	{
 		base.OnStopClient();
+		RaidRoomsNetwork.StopClient();
 
 		// 호스트면 서버와 씬을 같이 쓰므로, 서버가 OnStopServer에서 내린다
 		if (NetworkServer.active) return;

@@ -33,7 +33,8 @@
 
 ### 장소 사이 이동 (#134)
 - 요청: 로컬 플레이어의 클라이언트 → 서버 `TravelRequestMessage { destination }` (갈 씬 이름)
-  - 로비 입구: `LobbyEntrance.TravelRequested` / `RaidEntryRequested` → `PlaceTravelClient.RequestTravel`
+  - 로비 입구: `LobbyEntrance.TravelRequested` → `PlaceTravelClient.RequestTravel`
+  - 레이드 입구(`RaidEntryRequested`)는 이동 요청이 아님. `RaidLobbyOpener`가 레이드 방 화면을 엶 (#242, [raid.md](raid.md))
   - 출구: `PlaceExit` 앞에서 ↑ → `PlaceTravelClient.RequestTravel(PlaceScenes.Lobby)`
 - 클라이언트의 요청 순서: Player·Attack 액션 맵 비활성화 → 로딩 화면 페이드 인 → 화면을 다 덮은 뒤 요청 전송
   - 다 덮은 뒤 보내는 이유: 먼저 보내면 이전 장소가 사라지는 모습이 페이드 사이로 보임

@@ -9,7 +9,7 @@
   - 시작·끝 접점: `RaidFlow`
 - 레이드 던전 안: 보스 만들기(`RaidBossSpawner`), 클리어·실패 판정과 관전(`RaidJudge`), "레이드 끝" 알림(`RaidFlow.ReportEnd`). 보스 패턴·페이즈는 `monster.md`의 `GatewayAI`, `GatewayPhases`
 - 방 목록의 원본은 서버에 있다 (#242). 클라이언트는 서버가 보낸 방 목록으로 화면을 그리고, 방을 바꾸는 일은 서버에 요청한다
-- 레이드 던전 씬(`RaidDungeon`)에 `RaidBossSpawner`·`RaidJudge`를 놓고, `Base`에 Gateway 등록·`BossHealthBar`를 두는 일은 이우림의 공용 씬 작업이 끝난 뒤 따로 한다. 지금은 `Test_DH`에서 시험한다
+- 레이드 던전 씬(`RaidDungeon`) 가운데에 `RaidBossSpawner`·`RaidJudge` 오브젝트를 두고, `Base`에 Gateway 등록·`BossHealthBar`를 둔다. `Test_DH`에도 같은 오브젝트가 있어 혼자 시험할 수 있다
 - 하지 않는 일
   - 레이드 던전 씬을 파티마다 불러오고 내리기, 파티원 옮기기, 레이드가 끝난 뒤 로비로 돌려보내기: 이우림 (`place-scenes.md`). `RaidFlow.Ended`를 받아서 한다
   - 네트워크(요청 보내기, 방 목록 보내기), `RaidRooms`의 요청 함수 안쪽: 이우림
@@ -52,7 +52,7 @@
 - 레이드 던전 씬이 불러와지면 서버(Host 포함)에서 한 번 보스를 만든다. 파티마다 던전 씬을 따로 불러오므로 던전마다 보스가 한 마리씩 생긴다. 보스가 죽어도 다시 만들지 않는다
 - 위치: 스포너에서 아래로 땅(`Ground Layers`)을 찾아, 보스 판정(BoxCollider2D) 바닥이 땅에서 `Hover Height`만큼 뜨게 둔다. 땅을 못 찾으면 스포너 위치에 만들고 경고를 남긴다
 - 보스는 `NetworkSpawner.Spawn`(이우림)으로 스포너가 있는 씬에 만든다. 네트워크를 켜지 않은 테스트에서도 만든다
-- `RaidDungeon` 배치 (예정): 위치 (0, 0), Boss Prefab `Gateway`, Ground Layers `Ground`, Hover Height 0 (맵 가운데, 임혜원과 정함)
+- `RaidDungeon` 배치: 오브젝트 `RaidBoss`(`RaidBossSpawner` + `RaidJudge`), 위치 (0, 0), Boss Prefab `Gateway`, Ground Layers `Ground`, Hover Height 0 (맵 가운데, 임혜원과 정함)
 - 보스 체력 바: `BossHealthBar`(`monster.md`)는 `Base` 씬에 하나 둔다. 레이드 던전 씬에 두지 않는다 (Host는 던전 씬을 여러 개 겹쳐 열어서 바가 여러 개 생긴다)
 
 ### 클리어·실패 판정 (`RaidJudge`)
@@ -153,7 +153,7 @@ Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
     4. 클리어·실패 판정 (끝나면 "레이드 끝 함수"를 부름)
   - "레이드 시작 함수"는 `RaidFlow.RequestStart`, 받는 쪽은 `RaidFlow.StartRequested`
   - "레이드 끝 함수"는 `RaidFlow.ReportEnd(던전 씬, 클리어 여부)`, 받는 쪽은 `RaidFlow.Ended`. 로비로 돌려보내고 던전을 내리는 일은 이우림
-  - 보스를 만들 수 있도록 김도훈이 `Gateway`를 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록하고 `Base`에 `BossHealthBar`를 둔다 (이우림의 공용 씬 작업 뒤)
+  - 보스를 만들 수 있도록 김도훈이 `Gateway`를 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록하고 `Base`에 `BossHealthBar`를 둔다 (이우림 허락)
 - 네트워크 붙이기 (#242, 이우림 제안, 김도훈 확인 11/4)
   - 범위: 방까지. 시작하면 서버에서 `RaidFlow.StartRequested`까지. 파티 던전 열기·옮기기는 다음 이슈
   - 파티장 내보내기: 이번에 넣지 않음

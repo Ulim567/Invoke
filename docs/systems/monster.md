@@ -10,12 +10,14 @@
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
 - 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128), 공격 2(웜 소환·때리기, #203)와 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격)·기믹 3(진짜 찾기, `GatewayPhases`)까지 있다.
 - 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
+- 레이드 던전에 보스를 만드는 일(`RaidBossSpawner`)과 클리어·실패 판정(`RaidJudge`)은 `raid.md`에 적는다.
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
+- 몬스터가 죽으면 근처 플레이어에게 경험치·돈·재료(드롭)를 준다(`MonsterReward`).
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.
 - 하지 않는 일
   - 데미지 계산(공격력 × 배율, 치명타, 처형)은 하지 않는다. 계산이 끝난 정수 데미지를 받기만 한다.
   - 연출(이펙트, 소리, 애니메이션)을 하지 않는다. 연출은 `HitEffectPlayed`, `DeathEffectPlayed` event를 받은 쪽이 한다.
-  - 드롭은 아직 다루지 않는다. 이후 이슈에서 추가한다.
+  - 경험치·돈·재료 값을 직접 바꾸지 않는다. `PlayerProgress`(이우림)의 함수를 부른다. 레벨업 규칙은 레벨 시스템 이슈에서 한다.
   - 공격 구조(`MonsterAttackData`, `ProjectileAttack`)는 언제, 어느 방향으로 공격할지 정하지 않는다. 몬스터 AI(`GroundChaseAI`, `FlyingShooterAI` 등)가 정한다.
 
 ## 동작 규칙
@@ -132,6 +134,23 @@
   - 기절(`IsStunned`): 행동 불가. `GroundChaseAI`, `FlyingShooterAI`가 그 자리에 멈추고 탐지도 하지 않는다. `ContactDamage`는 피해를 주지 않고, `ProjectileAttack.Fire`는 쏘지 않는다. 발사를 모으는 중에 기절하면 투사체는 나가지 않는다.
   - 이속 감소(`MoveSpeedMultiplier`): `GroundChaseAI`의 순찰·추적 속도, `FlyingShooterAI`의 순찰 속도에 곱한다.
   - 실명(`IsBlinded`): 공격이 빗나간다. `ContactDamage`는 피해를 주지 않는다. 실명 중에 쏜 투사체는 `Misses`가 켜져 플레이어를 통과한다(날아가는 중에 실명이 풀려도 빗나감). 땅·발판에는 그대로 막힌다.
+
+- 처치 보상 (`MonsterReward`)
+  - 몬스터가 죽으면(`Died`) 죽은 자리에서 `Reward Range`(잡몹 20칸) 안의 살아 있는 플레이어 모두에게 경험치·돈·재료를 준다. 때린 사람은 따로 세지 않는다 (`TakeDamage`에 때린 사람 정보가 없어서, 알파에서는 근처 모두에게 준다).
+  - `Whole Scene`을 켜면(레이드 보스) 거리·생사와 상관없이 같은 씬의 플레이어 모두가 받는다. 죽어서 관전 중인 파티원도 받는다.
+  - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴려서 받는 플레이어 모두에게 같은 것을 준다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다.
+  - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
+  - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다.
+  - 재료 ID: `bug_fragment`(버그 조각), `boss_core`(보스 코어). 이름표는 `SkillTreeDefaults`(임혜원)와 같다.
+  - 몬스터별 보상 (임시)
+
+    | 몬스터 | 경험치 | 돈 | 재료 | 받는 플레이어 |
+    | --- | --- | --- | --- | --- |
+    | Leak | 10 | 5 | 버그 조각 1개 (50%) | 20칸 안, 살아 있는 플레이어 |
+    | Loop | 15 | 8 | 버그 조각 1개 (60%) | 20칸 안, 살아 있는 플레이어 |
+    | Gateway | 200 | 100 | 보스 코어 1개 (100%), 버그 조각 5개 (100%) | 같은 씬 모두 (`Whole Scene`) |
+
+  - 기둥·분신·웜·허수아비에는 `MonsterReward`를 붙이지 않는다 (보상 없음).
 
 ## 다른 시스템이 쓰는 것
 
@@ -277,6 +296,22 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 기둥(`Pillar` 프리팹)은 `Monster`(체력 150, 보스 아님) + BoxCollider2D 2×4칸(Pivot 바닥) + `NetworkIdentity`. 연출은 잡몹처럼 `HitEffectPlayed`, `DeathEffectPlayed`, `Hp`/`MaxHp`를 읽으면 된다.
 
+### `MonsterReward`
+
+보상을 줄 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다. Inspector에서 `Player Layers`는 Player로 둔다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 한 플레이어가 보상을 받았을 때. "+경험치" 글자 등에 쓴다. 재료 목록은 이벤트 안에서만 읽는다 |
+
+| Inspector 값 | 설명 |
+| --- | --- |
+| `Exp`, `Money` | 받는 플레이어마다 주는 경험치, 돈 |
+| `Drops` | 재료 드롭 목록 (`Material Id`, `Count`, `Chance`) |
+| `Reward Range` | 죽은 자리에서 이 거리 안의 살아 있는 플레이어가 받는다. 몬스터를 선택하면 노란 원으로 보인다 |
+| `Player Layers` | Player |
+| `Whole Scene` | 켜면 같은 씬의 플레이어 모두 (레이드 보스) |
+
 ### `FallingPacket`
 
 `GatewayAI`가 만든다. 자식 `Shadow`(그림자), `Packet`(떨어지는 그림)을 Inspector에 넣는다. Collider는 필요 없다.
@@ -288,6 +323,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 ## 맞춘 결과
 - 이우림과 정한 것
+  - 처치 보상은 `PlayerProgress.AddExp`(몬스터 처치), `AddMoney`, `AddMaterial`(드롭)로 준다 (`progress-store.md`). 레벨업 규칙은 김도훈의 레벨 시스템 이슈
   - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌을 껐다(#81). 그래서 몬스터 프리팹 콜라이더의 Exclude Layers에 `Monster`를 넣지 않아도 몬스터끼리 통과한다.
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
   - 스포너가 몬스터를 만들 수 있도록 김도훈이 Leak에 `NetworkIdentity`를 붙이고 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록한다(#86, 이우림 허락).

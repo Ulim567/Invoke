@@ -20,6 +20,7 @@ GameObject:
   - component: {fileID: 262886314703350384}
   - component: {fileID: 5951959493276847512}
   - component: {fileID: 2112755686134651121}
+  - component: {fileID: 6581969725081761724}
   m_Layer: 9
   m_Name: Leak
   m_TagString: Untagged
@@ -190,6 +191,7 @@ MonoBehaviour:
   maxHp: 40
   despawnDelay: 1
   isBoss: 0
+  invulnerable: 0
 --- !u!114 &3724148789813507843
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -329,3 +331,26 @@ MonoBehaviour:
   iconPrefab: {fileID: 0}
   heightAboveTop: 0.6
   spacing: 1.1
+--- !u!114 &6581969725081761724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4308786132074449698}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a0a3091a750d46479b7c78e23994ba5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterReward
+  exp: 10
+  money: 5
+  drops:
+  - materialId: bug_fragment
+    count: 1
+    chance: 0.5
+  rewardRange: 20
+  playerLayers:
+    serializedVersion: 2
+    m_Bits: 256
+  wholeScene: 0

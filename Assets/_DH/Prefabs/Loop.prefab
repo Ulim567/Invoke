@@ -21,6 +21,7 @@ GameObject:
   - component: {fileID: -5998150243559993913}
   - component: {fileID: -8882788714917605207}
   - component: {fileID: -4527870653899485198}
+  - component: {fileID: 3637307629106896013}
   m_Layer: 9
   m_Name: Loop
   m_TagString: Untagged
@@ -181,6 +182,7 @@ MonoBehaviour:
   maxHp: 30
   despawnDelay: 0.75
   isBoss: 0
+  invulnerable: 0
 --- !u!114 &8707404824260945093
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -340,3 +342,26 @@ MonoBehaviour:
   iconPrefab: {fileID: 0}
   heightAboveTop: 0.6
   spacing: 1.1
+--- !u!114 &3637307629106896013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a0a3091a750d46479b7c78e23994ba5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterReward
+  exp: 15
+  money: 8
+  drops:
+  - materialId: bug_fragment
+    count: 1
+    chance: 0.6
+  rewardRange: 20
+  playerLayers:
+    serializedVersion: 2
+    m_Bits: 256
+  wholeScene: 0

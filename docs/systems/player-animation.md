@@ -16,7 +16,7 @@
 | 애니메이션 | 읽는 것 | 담당 |
 | --- | --- | --- |
 | Run | Rigidbody2D 가로 속도가 `Run Threshold`(0.1)보다 크면 | - |
-| Jump | `PlayerMovement.IsGrounded`가 false면. PlayerMovement가 없으면 Ground·Platform에 닿아 있는지로 임시 판단. 클립의 25% 지점(웅크림 다음)부터 튼다 | 박진우 |
+| Jump | `PlayerMovement.IsGrounded`가 false면. PlayerMovement가 없으면 Ground·Platform에 닿아 있는지로 임시 판단. 클립의 25% 지점(웅크림 다음)부터 튼다. 더블점프(`PlayerMovement.AirJumped`, #256)면 처음부터 다시 튼다 | 박진우 |
 | Cast | `FunctionExecutorNetwork.TaskStarted`부터 `Cast Duration`(0.5초) 동안. `FunctionExecutorNetwork`가 없는 시험용 플레이어는 `FunctionExecutor.TaskStarted` | 이우림 |
 | Hit | `PlayerHealth.HitEffectPlayed`부터 `HitStunTime`(0.3초) 동안 | 김도훈 |
 | Death | `PlayerHealth.DeathEffectPlayed`부터 `RespawnEffectPlayed`까지 | 김도훈 |

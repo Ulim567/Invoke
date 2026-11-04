@@ -7,7 +7,7 @@
 - 저장하는 것: 레벨, 경험치, 돈, 재료, 스킬 트리 해금 목록, 슬롯 8개, 사용자 정의 함수, 전역 변수
 - 클라이언트는 DB에 직접 접근하지 않는다. 클라이언트가 필요한 값은 서버가 보낸다.
 - 하지 않는 일
-  - 레벨업 규칙, 경험치 표: 레벨 시스템 이슈
+  - 레벨업 규칙, 경험치 표: `LevelRules`(김도훈, `player-stats.md`). `AddExp`가 이 규칙으로 레벨을 올린다
   - 노드 해금, 재료 빼기: 「재료 써서 스킬 트리 해금하기」
   - 함수 내용 검사: 「만든 함수를 서버로 보내 검사·저장하기」
 
@@ -175,13 +175,14 @@
 | 함수 | 하는 일 | 부를 시스템 |
 | --- | --- | --- |
 | `ApplyLoaded(CharacterProgressData)` | 불러온 값을 넣음. DB에 쓰지 않음 | 서버 (`EnterGameRequest` 처리) |
-| `AddExp(int)` | 경험치 더함 | 몬스터 처치 (김도훈) |
+| `AddExp(int)` | 경험치 더함. 다음 레벨 경험치(`LevelRules.ExpToNext`)를 채우면 레벨을 올리고 남은 경험치를 넘김. 최대 레벨에서는 무시 | 몬스터 처치 (김도훈) |
+| `LeveledUp` (event) | [로직] 레벨이 오른 순간 (새 레벨). 서버에서만. 여러 레벨이 오르면 레벨마다 | 레벨업 연출·알림 |
 | `AddMoney(int)`, `TrySpendMoney(int)` | 돈 더하기, 빼기. 모자라면 빼지 않고 `false` | 드롭 (김도훈), 상점 |
 | `AddMaterial(string, int)` | 재료 더함 | 드롭 (김도훈) |
 | `TryUnlock(string 노드 ID)` | 선행 조건·재료 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가를 한 트랜잭션으로 | 스킬 트리 해금 (임혜원, 「재료 써서 스킬 트리 해금하기」) |
 | `Level`, `Exp`, `Money`, `GetMaterialCount(string)`, `Unlocked` | 값 읽기 | 화면, 스킬 트리 |
 
-- 레벨업 규칙(`AddExp` 안에서 레벨을 올리는 일): 레벨 시스템 이슈. 이번 이슈는 경험치만 더함
+- 레벨업 (김도훈, 이우림 허락): `AddExp` 안에서 `LevelRules`(경험치 표, 최대 레벨)로 레벨을 올린다. 레벨에 따른 능력치는 `PlayerLevelStats`(김도훈)가 `PlayerStats.AddBonus`로 준다
 - `TryUnlock`의 검사·화면 연결: 「재료 써서 스킬 트리 해금하기」. 이번 이슈는 `ProgressStore`에 재료와 해금을 한 트랜잭션으로 쓰는 함수까지
 
 ### 클라이언트에 진행도 보내기 (`PlayerProgress`)

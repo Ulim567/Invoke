@@ -25,6 +25,11 @@
 - 쿨타임 감소는 쿨타임에 (1 - 쿨타임 감소)를 곱한다.
 - 정수 능력치(최대 체력, 공격력, 메모리 크기)는 추가 값을 반올림해서 더한다.
 - 하한: 최대 체력 1, 공격력 0, 공격 속도 0.1, 메모리 크기 0, 쿨타임 감소 0~1, 이동 속도 0
+- 레벨 (임시 값)
+  - 경험치 표(`LevelRules`): 다음 레벨까지 필요한 경험치 = 100 × 지금 레벨 (1→2: 100, 2→3: 200). 최대 레벨 30, 최대 레벨에서는 경험치가 쌓이지 않는다
+  - 레벨을 올리는 일은 `PlayerProgress.AddExp`(이우림)가 `LevelRules`로 한다. 남은 경험치는 다음 레벨로 넘어가고, 한 번에 여러 레벨이 오를 수 있다
+  - 레벨 능력치(`PlayerLevelStats`): 레벨 1보다 높은 만큼 레벨당 최대 체력 +10, 공격력 +2를 `AddBonus`로 더한다. 접속할 때 불러온 레벨에도 같은 값을 맞춘다
+  - `PlayerProgress`가 없는 플레이어(테스트용 프리팹)는 레벨 능력치가 없다
 
 ## 다른 시스템이 쓰는 것
 
@@ -45,6 +50,16 @@
 | `AddBonus(StatType type, float amount)` | 능력치 종류, 더할 값 | - | 능력치를 올린다(음수면 내린다). 레벨업, 강화, 버프에서 쓴다. |
 | `Changed` (event) | `StatType` | - | 능력치가 바뀌었을 때 불린다. 값을 미리 저장해 둔 시스템은 이때 다시 읽는다. |
 
+### `LevelRules` (static)
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `MaxLevel` | - | `int` | 최대 레벨 (30) |
+| `ExpToNext(int level)` | 지금 레벨 | `int` | 다음 레벨까지 필요한 경험치. 최대 레벨이면 0. 경험치 바 화면에 쓴다 |
+
+### `PlayerLevelStats`
+플레이어 프리팹 최상위(`PlayerStats`, `PlayerProgress`와 같은 곳)에 붙어 있다. 지금은 `Player_UL`(Base 씬 NetworkManager의 Player Prefab, `PlayerProgress`가 붙은 곳, 이우림 허락). 다른 스크립트가 부르는 함수는 없다. Inspector `Max Hp Per Level`(10), `Attack Power Per Level`(2).
+
 ### `StatType`
 `MaxHp`, `AttackPower`, `AttackSpeed`, `MemorySize`, `CooldownReduction`, `MoveSpeed`
 
@@ -56,6 +71,7 @@
   - `PlayerMove`가 `PlayerStats.MoveSpeed`를 이동 속도로 읽는다 (#25)
   - `ProcessMemory`가 `PlayerStats.MemorySize`를 메모리 전체 칸 수로 읽는다 (#35)
   - `FunctionExecutor`가 쿨타임이 시작될 때 `ApplyCooldownReduction`을 한 번 적용하고, tick 수로 반올림한다 (#38)
+  - 레벨업은 `PlayerProgress.AddExp`에 김도훈이 `LevelRules`로 레벨을 올리는 코드와 `LeveledUp` 이벤트를 넣는다 (이우림 허락)
 - 이우림과 정해야 할 것
   - 함수 실행기가 `PredefinedFunction.TickCount`에 `ApplyAttackSpeed`를 적용하는지
 - 박진우와 정한 것

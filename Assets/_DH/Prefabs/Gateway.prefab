@@ -21,6 +21,7 @@ GameObject:
   - component: {fileID: 4748086394308731933}
   - component: {fileID: 9842434472985214}
   - component: {fileID: 1167359288675763029}
+  - component: {fileID: 4180287494335954390}
   m_Layer: 9
   m_Name: Gateway
   m_TagString: Untagged
@@ -358,3 +359,29 @@ MonoBehaviour:
   throwDuration: 0.75
   slamDuration: 0.75
   hitDuration: 0.42
+--- !u!114 &4180287494335954390
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1495201610127570355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a0a3091a750d46479b7c78e23994ba5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterReward
+  exp: 200
+  money: 100
+  drops:
+  - materialId: bug_fragment
+    count: 5
+    chance: 1
+  - materialId: boss_core
+    count: 1
+    chance: 1
+  rewardRange: 20
+  playerLayers:
+    serializedVersion: 2
+    m_Bits: 256
+  wholeScene: 1

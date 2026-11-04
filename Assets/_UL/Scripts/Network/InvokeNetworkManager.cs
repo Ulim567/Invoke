@@ -40,6 +40,11 @@ public class InvokeNetworkManager : NetworkManager
 	// 장소 씬을 모두 불러왔으면 true. 씬을 다 불러오기 전에 접속한 플레이어는 이 값이 켜질 때까지 기다린다
 	bool scenesLoaded;
 
+	// 시작 위치·도착 위치에서 아래로 땅을 찾는 거리. 표시를 땅보다 조금 높게 둔 경우만 맞추면 되므로 넉넉히 잡는다
+	const float GroundSearchDistance = 10f;
+	// PlaceOnGround의 레이캐스트 결과. 가장 가까운 땅 하나만 쓴다
+	static readonly RaycastHit2D[] groundHits = new RaycastHit2D[1];
+
 	/// <summary>
 	/// [서버] SpawnPlayer가 플레이어 오브젝트를 만든 직후, 연결에 붙이기(AddPlayerForConnection) 전에 불린다 (연결, 플레이어).<br/>
 	/// InvokeAuthenticator가 받아서 DB에서 불러온 진행도를 넣는다.
@@ -230,6 +235,8 @@ public class InvokeNetworkManager : NetworkManager
 		// 플레이어를 만드는 곳은 여기 하나다 (코드 작성 규칙 3)
 		Scene lobby = placeScenes[PlaceScenes.Lobby];
 		GameObject player = Instantiate(playerPrefab, FindStartPosition(lobby), Quaternion.identity);
+		// 플레이어 콜라이더의 크기를 알아야 땅 위의 높이를 정할 수 있으므로, 만든 뒤에 땅 위로 옮긴다
+		player.transform.position = PlaceOnGround(lobby, player.transform.position, player);
 		// 여러 플레이어를 Hierarchy에서 구분하기 위해 연결 번호를 붙인다
 		player.name = $"{playerPrefab.name} [connId={conn.connectionId}]";
 
@@ -344,9 +351,8 @@ public class InvokeNetworkManager : NetworkManager
 		// Player는 클라이언트가 위치를 정하므로(Client To Server) 서버에서 위치만 바꾸면 클라이언트가 덮어쓴다
 		// ServerTeleport는 서버 쪽 위치를 바꾸고 클라이언트에도 순간이동(RpcTeleport)을 보낸다
 		// 씬 메시지 뒤에 보내는 이유: 클라이언트는 새 씬을 다 로드한 뒤에 teleport를 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아온다
-		// 한계: 로드하는 동안 클라이언트의 플레이어는 밟을 땅이 없어 떨어지고, 그 위치가 서버로 전송된다.
-		// 플레이어 움직임을 잠그는 함수를 박진우에게 요청함 (place-scenes.md 「맞춘 결과」). 함수가 생기면 이동하는 동안 잠근다
-		Vector3 position = FindArrivalPosition(target, previous.name);
+		// 로드하는 동안 클라이언트의 플레이어가 밟을 땅이 없어 떨어지지 않도록, PlaceTravelClient가 이동하는 동안 움직임을 잠근다 (#216)
+		Vector3 position = PlaceOnGround(target, FindArrivalPosition(target, previous.name), player);
 		player.GetComponent<NetworkTransformBase>().ServerTeleport(position, player.transform.rotation);
 
 		// 클라이언트는 받은 메시지를 보낸 순서대로 처리하므로, 이 메시지를 받으면 새 씬 로드와 teleport까지 끝난 것이다
@@ -390,6 +396,29 @@ public class InvokeNetworkManager : NetworkManager
 
 		Debug.LogWarning($"[InvokeNetworkManager] {scene.name} 씬에 NetworkStartPosition이 없어서 (0, 0)에 만듭니다.");
 		return Vector3.zero;
+	}
+
+	// 표시(시작 위치·도착 위치) 바로 아래의 땅을 찾아, 플레이어 콜라이더의 아래쪽이 땅 윗면에 닿는 위치를 돌려준다.
+	// 표시를 땅보다 높게 두면 플레이어가 생기자마자 떨어지므로, 표시를 땅에 딱 맞게 두지 않아도 되게 하기 위함
+	// 아래 GroundSearchDistance 안에 땅이 없으면 표시 위치를 그대로 쓴다
+	static Vector3 PlaceOnGround(Scene scene, Vector3 point, GameObject player)
+	{
+		if (!player.TryGetComponent(out Collider2D body)) return point;
+
+		// 소환검·애니메이션과 같은 기준으로 Ground·Platform만 땅으로 본다. 다른 플레이어나 몬스터 위에 세우지 않기 위함
+		var filter = new ContactFilter2D { useTriggers = false };
+		filter.SetLayerMask(LayerMask.GetMask("Ground", "Platform"));
+
+		// 장소 씬은 물리 세계가 따로 있으므로 그 씬의 물리 세계에 묻는다
+		int count = scene.GetPhysicsScene2D().Raycast(point, Vector2.down, GroundSearchDistance, filter, groundHits);
+		if (count == 0)
+		{
+			Debug.LogWarning($"[InvokeNetworkManager] {scene.name} 씬의 {point} 아래 {GroundSearchDistance} 안에 땅이 없어서 그 위치에 그대로 둡니다.");
+			return point;
+		}
+
+		float footOffset = player.transform.position.y - body.bounds.min.y;
+		return new Vector3(point.x, groundHits[0].point.y + footOffset, point.z);
 	}
 
 	public override void OnServerDisconnect(NetworkConnectionToClient conn)

@@ -62,7 +62,10 @@
 - 다른 플레이어 보이기: 플레이어의 씬이 바뀌면 `SceneInterestManagement`가 observer 목록을 다시 만듦 → 같은 씬의 플레이어만 보임
 - 도착 위치
   - 도착하는 씬에서 `fromPlace`가 떠나온 씬 이름과 같은 `ArrivalPoint` → 없으면 `PlayerStartPosition`
-  - 높이: 땅 + 1 (`PlayerStartPosition`과 같은 기준)
+  - 높이: 서버가 표시 아래 10 안의 땅(Ground·Platform 레이어, 트리거 제외)을 찾아 플레이어 콜라이더의 아래쪽을 땅 윗면에 맞춤 (`PlaceOnGround`, #216)
+    - 로그인 직후 로비 `PlayerStartPosition`에 생성할 때도 같음
+    - 이유: 표시를 땅보다 높게 두면 플레이어가 생기자마자 떨어짐
+    - 땅이 없으면: 표시 위치 그대로, 경고 로그
   - `ArrivalPoint`가 있는데 맞는 것이 없으면 경고 로그 (`fromPlace` 오타)
 - 레이드 던전 단위: 플레이어 한 명마다 던전 하나. 그 플레이어가 나가거나 접속이 끊기면 언로드 (파티 이슈에서 파티 단위로 바뀜)
 - 접속 직후: 로딩 화면을 페이드 없이 덮음 → 로컬 플레이어의 `FunctionExecutorNetwork.IsDataReady`가 true가 되면 페이드 아웃
@@ -149,7 +152,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 
 | 이름 | 붙이는 곳 | 꼭 필요한 설정 | 자유롭게 바꿔도 되는 것 | 설명 |
 | --- | --- | --- | --- | --- |
-| `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). 높이: 땅 + 1 | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
+| `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). 높이: 땅 위 10 안 (서버가 땅에 맞춰 세움) | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
 | `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 장소 씬 세 곳에 하나씩, `PlayerStartPosition`과 겹치지 않게 | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청 |
 | `LoadingScreen` | 로딩 화면 Canvas | `panelRoot`: 화면을 덮는 UI의 부모. `canvasGroup`: `panelRoot`에 붙인 `Canvas Group`. 배경 Image의 Raycast Target 체크. Canvas Sort Order는 로비 UI(0)보다 크게. `Base`에 놓고 `PlaceTravel`의 `loadingScreen` 칸에 연결 | 배경, 글자, 글꼴, 애니메이션, `fadeSeconds`(페이드 시간, 기본 0.25초) | `PlaceTravelClient`만 `Show`·`ShowImmediate`·`Hide`를 부름. 이동하는 동안과 접속 직후에 화면을 덮음 |
 

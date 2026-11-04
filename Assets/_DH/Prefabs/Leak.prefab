@@ -174,7 +174,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 2.4, y: 1.2}
+  m_Size: {x: 2.4, y: 0.6}
   m_EdgeRadius: 0
 --- !u!114 &8526818006109154282
 MonoBehaviour:
@@ -206,7 +206,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ContactDamage
   damage: 10
   hitInterval: 1
-  boxSize: {x: 2.4, y: 1.2}
+  boxSize: {x: 2.4, y: 0.6}
   boxOffset: {x: 0, y: 0.6}
   targetLayers:
     serializedVersion: 2

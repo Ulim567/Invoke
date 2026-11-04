@@ -34,7 +34,7 @@
 - 판정(접촉 피해 상자, 플레이어 탐지, 낭떠러지·장애물 검사)은 `Physics2D`가 아니라 몬스터가 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 한다. 서버는 장소 씬마다 물리 세계가 따로 있어서, `Physics2D`로 검사하면 사냥터 등에 있는 플레이어와 땅을 찾지 못한다(`place-scenes.md`). 물리 세계는 저장하지 않고 검사할 때마다 가져온다.
 - 몬스터 공격 = 공격 형태 + 효과
   - 효과는 `MonsterAttackData` 파일에 목록으로 담는다. 맞으면 위에서부터 차례로 적용한다.
-  - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 나머지 효과는 받을 시스템이 아직 없어서 로그만 남긴다.
+  - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 실행 중단은 맞은 대상의 `FunctionExecutor.InterruptAll()`(이우림)로 실행 중인 함수를 모두 끊는다(실행기가 없으면 무시). 메모리 효과(점유·탈취·회수 방해)는 받는 방식을 정하기 전까지 로그만 남긴다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
   - 패링: Player에 맞으면 효과를 주기 전에 그 플레이어의 `ParryGuard.TryParry(투사체)`(박진우, `c-skills.md`)를 묻는다. `true`면 효과 없이 사라진다. 관통 투사체도 잡히면 사라진다. 관통은 이미 맞힌 대상에게는 다시 묻지 않는다.
   - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
@@ -86,7 +86,7 @@
   - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 0.58초 = Throw 모션 8번째 장면에 손을 떠남. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
   - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area`(38×12, 보스방 가로 40칸에 맞춤) 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
   - 웜 소환(`Summon`, #203): 연출 `SummonEffectPlayed`(Throw 모션) 뒤 `Summon Delay`(0.58초)에 보스 양옆 `Worm Spawn Distance`(4.5칸) 아래 땅 위에 웜 2마리를 만든다. 살아 있는 웜이 `Max Worms`(4) 이상이면 고르지 않는다
-  - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 실행 중단은 함수 실행기 연결 전까지 로그만 남는다
+  - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 맞은 플레이어가 실행 중이던 함수가 모두 끊긴다
   - 공격 고르기: 목록(던지기, 낙하, 소환, 때리기)에서 랜덤. 직전 공격과 지금 쓸 수 없는 공격(가까운 플레이어 없는 때리기, 웜이 가득 찬 소환)은 뺀다
   - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 모으던 낙하·소환·때리기는 취소된다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
 - 페이즈와 기믹 (`GatewayPhases`)
@@ -324,6 +324,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 ## 맞춘 결과
 - 이우림과 정한 것
+  - 실행 중단 효과(`Interrupt`): `MonsterAttackResolver`가 맞은 대상에서 `GetComponentInParent<FunctionExecutor>()`를 찾아 `InterruptAll()`을 부른다. 없으면 아무것도 하지 않는다 (#143 제안대로). 판정은 서버에서만이라 서버의 실행기가 끊는다
   - 처치 보상은 `PlayerProgress.AddExp`(몬스터 처치), `AddMoney`, `AddMaterial`(드롭)로 준다 (`progress-store.md`). 레벨업 규칙은 김도훈의 레벨 시스템 이슈
   - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌을 껐다(#81). 그래서 몬스터 프리팹 콜라이더의 Exclude Layers에 `Monster`를 넣지 않아도 몬스터끼리 통과한다.
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).

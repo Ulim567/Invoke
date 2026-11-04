@@ -26,8 +26,8 @@ Transform:
   m_GameObject: {fileID: 1656751423186444197}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.5, z: 0}
-  m_LocalScale: {x: 4, y: 5, z: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5159665016301098290}
@@ -81,8 +81,8 @@ SpriteRenderer:
   m_SortingLayer: 5
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 12cec5a26ac2ab44495bbc01c9b1a3f5, type: 3}
-  m_Color: {r: 0.39066333, g: 1, b: 0, a: 0.19607843}
+  m_Sprite: {fileID: 21300000, guid: 0fed67f379c1488fb727a213fc70fb6f, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -118,8 +118,8 @@ Transform:
   m_GameObject: {fileID: 3544227290060995256}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.15, z: 0}
-  m_LocalScale: {x: 4, y: 0.3, z: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5159665016301098290}
@@ -171,10 +171,10 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: -507476227
   m_SortingLayer: 5
-  m_SortingOrder: 0
+  m_SortingOrder: 1
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 12cec5a26ac2ab44495bbc01c9b1a3f5, type: 3}
-  m_Color: {r: 0.39066333, g: 1, b: 0, a: 0.627451}
+  m_Sprite: {fileID: 21300000, guid: 42ea456cadf94ff19910bf3ed487bd0b, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -195,6 +195,7 @@ GameObject:
   - component: {fileID: 5159665016301098290}
   - component: {fileID: 8694663767195707958}
   - component: {fileID: 6078795521957735790}
+  - component: {fileID: 5135415419038356022}
   m_Layer: 0
   m_Name: SafeZone
   m_TagString: Untagged
@@ -250,3 +251,26 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &5135415419038356022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5043653999279413117}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83a9d4e7718a44d3da8f36f910f4c6dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SafeZoneView
+  glow: {fileID: 7786158146730232839}
+  glowFrames:
+  - {fileID: 21300000, guid: 0fed67f379c1488fb727a213fc70fb6f, type: 3}
+  - {fileID: 21300000, guid: d615a7c320b446368e578b770b1829fc, type: 3}
+  - {fileID: 21300000, guid: c3f0bd4a55154ac386801c9266726d91, type: 3}
+  - {fileID: 21300000, guid: 439ac70752a7415fa9109c2eec8f4833, type: 3}
+  fps: 8
+  floor: {fileID: 8844642262750695379}
+  pulseSpeed: 4
+  pulseDepth: 0.35
+  fadeIn: 0.3

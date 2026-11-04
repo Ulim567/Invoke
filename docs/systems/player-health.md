@@ -34,7 +34,7 @@
 
 ## 다른 시스템이 쓰는 것
 
-플레이어 프리팹 최상위 오브젝트에 `PlayerHealth`, `PlayerHealthEffects`가 붙는다. `PlayerHealth`는 `IDamageable`을 구현하므로 몬스터 공격(`ContactDamage`, `MonsterAttackResolver`)은 따로 고치지 않아도 플레이어에게 피해를 준다.
+공용 플레이어 프리팹(`Assets/Prefabs/Player.prefab`) 최상위 오브젝트에 `PlayerHealth`, `PlayerHealthEffects`가 붙는다. 변형 프리팹(`Player_UL`, `Player_DH` 등)은 물려받는다. `PlayerHealth`는 `IDamageable`을 구현하므로 몬스터 공격(`ContactDamage`, `MonsterAttackResolver`)은 따로 고치지 않아도 플레이어에게 피해를 준다.
 
 ### `PlayerHealth`
 
@@ -73,8 +73,11 @@
   - `PlayerAnimator`가 `HitEffectPlayed`, `DeathEffectPlayed`, `RespawnEffectPlayed`를 받아 피격·사망 모션을 재생한다 (#49)
 - 다른 시스템이 쓰는 곳
   - 몬스터 AI(`GroundChaseAI`)가 `IsDead`를 읽어 죽은 플레이어는 쫓지 않는다.
+- 공용 Player 합치기 (#268, 박진우 정리)
+  - 김도훈이 공용 `Player.prefab`에 `PlayerHealth`, `PlayerHealthEffects`를 붙인다. 값은 기본값(경직 0.3초, 무적 1초, 숨김 1초, 부활 3초)
+  - 변형 프리팹에 따로 붙어 있던 것은 각 담당자가 지운다 (`Player_DH`: 김도훈, `Player_JW`: 박진우, `Player_HW`: 임혜원)
+  - 체력은 아직 네트워크로 동기화하지 않는다. 판정은 서버에서만 하고, 다른 플레이어 화면의 체력·사망 연출은 「플레이어 상태를 네트워크로 동기화하기」에서 맞춘다
 - 이우림과 정해야 할 것
-  - `PlayerHealth`, `PlayerHealthEffects`를 공용 Player.prefab에 붙이는 것 (지금은 Player_DH에만 있다)
   - 씬 이동이 생기면 `LobbyReturnRequested`를 받아 로비로 옮기는지
 - 박진우와 정해야 할 것
   - 관전 카메라가 `HideEffectPlayed`에 다른 파티원으로, `RespawnEffectPlayed`에 내 캐릭터로 돌아오는지

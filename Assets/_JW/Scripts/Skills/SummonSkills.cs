@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // 소환 계열 스킬. 수치는 SkillTable 표, 필요 조건 검사는 DataDrivenSkill이 맡는다.
-// 검 소환·해제는 #102에서 채웠고, Sword* 반환·파라미터는 #220에서 더했다. 나머지 효과(판정, 데미지, 상태 이상)는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
+// 검 소환·해제는 #102에서 채웠고, Sword* 반환·파라미터는 #220, 표식 남기기·검무는 #243에서 더했다. 패링은 다음 이슈. 나머지 효과(판정, 데미지, 상태 이상)는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
 
 /// <summary>
 /// 검 소환 (malloc). 대상 없음, 누르면 바로 발동 (#102, #220에서 Sword* 반환)
@@ -101,14 +101,188 @@ public class CParry : DataDrivenSkill
 	public override string Id => PredefinedFunctionIds.Parry;
 }
 
-/// <summary>표식 남기기. 검이 적 좌우로 찔러 표식 + 1.0초 기절 (단일)</summary>
+/// <summary>
+/// 표식 남기기 (#243). 소환검 2개가 대상 왼쪽·오른쪽에서 찔러 약한 데미지를 주고, 둘 다 찌르면 표식 + 기절을 건다 (단일, 소환검 2개 필요).
+/// <para>
+/// - 사용 가능한 소환검이 2개 미만이면 시작 전에 NoSummonedSwordError로 끝난다.<br/>
+/// - 가장 먼저 소환한 사용 가능한 검 2개를 쓴다. 하나는 왼쪽, 하나는 오른쪽 옆으로 간 뒤 안쪽으로 찌르고 돌아온다 (SummonedSwords.Stab의 side).<br/>
+/// - 데미지: 검마다 닿은 순간 공격력 × 표 배율 (약하게, 임시 0.5).<br/>
+/// - 두 검이 모두 닿으면 표식(StatusType.Mark, 기본 5초)과 기절(Stun, 기본 1.0초)을 건다. 표식은 그 다음 공격부터 데미지 2배 (이번 찌르기에는 안 붙음).<br/>
+/// - 스킬(20틱)이 끝날 때까지 둘 다 닿지 못하면(대상이 죽는 등) 표식·기절은 걸지 않는다. 대상 값이 없으면 아무것도 안 한다.
+/// </para>
+/// </summary>
 public class CMark : DataDrivenSkill
 {
+	/// <summary>필요한 사용 가능한 소환검 수</summary>
+	public const int RequiredSwords = 2;
+
 	public override string Id => PredefinedFunctionIds.Mark;
+
+	// MemberwiseClone 복사본끼리 공유하지 않게 시작할 때 새로 만든다
+	HashSet<SummonedSword> sent;
+	SummonedSwords swords;
+	Monster target;
+	GameObject caster;
+	int hits;
+
+	// 2개 미만이면 0으로 알려 NoSummonedSwordError로 끝나게 한다
+	protected override int CountUsableSummonedSwords(FunctionContext task)
+	{
+		int usable = base.CountUsableSummonedSwords(task);
+		return usable >= RequiredSwords ? usable : 0;
+	}
+
+	protected override void OnSkillStart(FunctionContext task)
+	{
+		caster = task.Caster;
+		swords = caster.GetComponent<SummonedSwords>();
+		target = TryGetArgument("target", out RuntimeValue value) ? value.AsBug() : null;
+		sent = new HashSet<SummonedSword>();
+		hits = 0;
+		if (swords == null || target == null) return;
+
+		List<SummonedSword> picked = new List<SummonedSword>();
+		foreach (SummonedSword s in swords.Swords)
+		{
+			if (s != null && s.State == SummonedSwordState.Ready) picked.Add(s);
+			if (picked.Count == RequiredSwords) break;
+		}
+		if (picked.Count < RequiredSwords) return;
+
+		swords.StabHit += OnStabHit;
+		int side = -1;
+		foreach (SummonedSword s in picked)
+		{
+			Vector2 from = s.transform.position;
+			if (swords.Stab(s, target.gameObject, side))
+			{
+				sent.Add(s);
+				Effects(task)?.RaiseFired(Id, from, (Vector2)target.transform.position - from);
+			}
+			side = -side;
+		}
+	}
+
+	protected override void OnSkillEnd(FunctionContext task) => Unsubscribe();
+	protected override void OnSkillCancel(FunctionContext task) => Unsubscribe();
+
+	void Unsubscribe()
+	{
+		if (swords != null) swords.StabHit -= OnStabHit;
+	}
+
+	void OnStabHit(SummonedSword sword, GameObject hit)
+	{
+		if (sent == null || !sent.Contains(sword) || hit == null) return;
+		Monster monster = hit.GetComponentInParent<Monster>();
+		if (monster == null || monster.IsDead) return;
+		hits++;
+		SummonDamage.Deal(Id, Data, caster, monster, sword.transform.position, 0f);
+		// 두 검이 모두 찔렀을 때 표식과 기절
+		if (hits < sent.Count) return;
+		Unsubscribe();
+		StatusEffects.TryApply(monster.gameObject, StatusType.Mark);
+		StatusEffects.TryApply(monster.gameObject, StatusType.Stun);
+	}
 }
 
-/// <summary>검무. 검 개수만큼 적 근처에 두고 휘두름, 데미지는 낮지만 출혈 부여 (범위)</summary>
+/// <summary>
+/// 검무 (#243). 사용 가능한 소환검이 모두 대상 둘레를 돌며 일정 간격으로 벤다. 데미지는 낮지만 맞을 때마다 출혈 (단일, 소환검 필요).
+/// <para>
+/// - 검은 대상 둘레에 고르게 나뉘어 돈다 (SummonedSwords.Dance). 도는 동안은 Dancing 상태라 다른 스킬에 쓰이지 않는다.<br/>
+/// - HitIntervalTicks(임시 6틱)마다 대상 가까이 있는 검마다 한 번씩 공격력 × 표 배율(0.5) 데미지, 맞으면 출혈(StatusEffects.TryApply).<br/>
+/// - 스킬(20틱)이 끝나거나 끊기면 검은 곁으로 돌아온다. 대상이 죽으면 더 베지 않는다. 대상 값이 없으면 아무것도 안 한다.
+/// </para>
+/// </summary>
 public class CSwordDance : DataDrivenSkill
 {
+	/// <summary>베는 간격 (틱, 임시)</summary>
+	public const int HitIntervalTicks = 6;
+
+	// 대상 가운데에서 이 거리 안의 검만 벤다 (아직 날아가는 중인 검은 안 벰)
+	const float HitReach = 2.5f;
+
 	public override string Id => PredefinedFunctionIds.SwordDance;
+
+	// MemberwiseClone 복사본끼리 공유하지 않게 시작할 때 새로 만든다
+	List<SummonedSword> dancing;
+	SummonedSwords swords;
+	Monster target;
+	GameObject caster;
+	int startTick = -1;
+
+	protected override void OnSkillStart(FunctionContext task)
+	{
+		caster = task.Caster;
+		swords = caster.GetComponent<SummonedSwords>();
+		target = TryGetArgument("target", out RuntimeValue value) ? value.AsBug() : null;
+		dancing = new List<SummonedSword>();
+		startTick = -1;
+		if (swords == null || target == null) return;
+
+		List<SummonedSword> ready = new List<SummonedSword>();
+		foreach (SummonedSword s in swords.Swords)
+		{
+			if (s != null && s.State == SummonedSwordState.Ready) ready.Add(s);
+		}
+		for (int i = 0; i < ready.Count; i++)
+		{
+			if (swords.Dance(ready[i], target.gameObject, 360f * i / ready.Count)) dancing.Add(ready[i]);
+		}
+	}
+
+	protected override void OnTick(FunctionContext task, int tick)
+	{
+		if (target == null || dancing == null || dancing.Count == 0) return;
+		if (startTick < 0) startTick = tick;
+		if ((tick - startTick) % HitIntervalTicks != HitIntervalTicks - 1 || target.IsDead) return;
+
+		Vector2 center = BodyCenter(target.gameObject);
+		bool fired = false;
+		foreach (SummonedSword s in dancing)
+		{
+			if (s == null || s.State != SummonedSwordState.Dancing) continue;
+			if (Vector2.Distance(s.transform.position, center) > HitReach) continue;
+			if (!fired)
+			{
+				fired = true;
+				Effects(task)?.RaiseFired(Id, center, Vector2.zero);
+			}
+			SummonDamage.Deal(Id, Data, caster, target, s.transform.position, 0f);
+			StatusEffects.TryApply(target.gameObject, StatusType.Bleed);
+			if (target.IsDead) break;
+		}
+	}
+
+	protected override void OnSkillEnd(FunctionContext task) => EndDance();
+	protected override void OnSkillCancel(FunctionContext task) => EndDance();
+
+	void EndDance()
+	{
+		if (swords == null || dancing == null) return;
+		foreach (SummonedSword s in dancing) swords.EndDance(s);
+		dancing.Clear();
+	}
+
+	static Vector2 BodyCenter(GameObject obj)
+	{
+		Collider2D col = obj.GetComponentInChildren<Collider2D>();
+		return col != null ? (Vector2)col.bounds.center : (Vector2)obj.transform.position;
+	}
+}
+
+/// <summary>소환 계열 스킬이 함께 쓰는 데미지 주기 (#243). 공격력 × 표 배율 → TakeDamage → SkillEffectEvents.Hit</summary>
+static class SummonDamage
+{
+	public static void Deal(string skillId, SkillData data, GameObject caster, Monster monster, Vector2 point, float bonusRate)
+	{
+		if (caster == null || monster == null || monster.IsDead) return;
+		PlayerStats stats = caster.GetComponent<PlayerStats>();
+		int attackPower = stats != null ? stats.AttackPower : 0;
+		float multiplier = data != null ? data.DamageMultiplier : 1f;
+		DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = bonusRate };
+		DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(skillId, monster.gameObject, point, result);
+	}
 }

@@ -17,7 +17,6 @@
 - 취소 키(C)로 가장 최근에 슬롯으로 시전한 작업을 끊는다 (#159).
 - 지금 고른 대상과 찍은 대상을 알려 준다 (대상 표시 연출용).
 - 하지 않는 일
-  - 여러 명 선택의 대상 목록을 Target list 파라미터에 넣지 않는다. 실행기에 list 값이 아직 없어서 `CastRequested` 이벤트와 로그까지만 한다 (블록 실행 3 이슈).
   - 장착 화면(UI): 임혜원. 이 문서의 `SlotLoadout` API를 부른다.
   - 코드 영역 크기 한도 검사: 크기만 알려 주고(`SlotLoadout.CodeSize`) 막지 않는다. 한도는 메모리 작업에서 정한다.
   - 관통(꼬챙이), 다단 히트(검 다중베기)의 맞는 방식: 입력은 단일과 같고, 맞는 방식은 각 스킬 이슈.
@@ -28,10 +27,11 @@
 - 대상 찾기(가까운 몬스터, 범위 안 몬스터)는 플레이어가 속한 장소 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D().OverlapCircle`)에 묻는다. `Physics2D`로 바로 찾으면 서버에서 장소 씬의 몬스터를 못 찾는다 (place-scenes.md, #125).
 - 입력 방식 (`CastMode`)
   - 스킬 표(c-skills.md)의 대상 지정 방식이 `Area`이면 범위.
-  - 그 밖에는 함수의 `Parameters`로 정한다: `Target` 1개면 단일(관통·다단 히트 포함), `Target` list면 여러 명, 없으면 대상 없음 (predefined-function.md 「대상 지정 방식」).
+  - 그 밖에는 함수의 `Parameters`로 정한다: `Target` 1개면 단일(관통·다단 히트 포함), `Target` array면 여러 명, 없으면 대상 없음 (predefined-function.md 「대상 지정 방식」).
 - 여러 명 선택
   - 슬롯을 누른 채 Space(`PlayerInputReader.MarkPressed`)로 지금 고른 대상을 찍는다. 이미 찍은 대상을 다시 찍으면 뺀다.
   - 떼면 찍은 대상 모두로 시전을 요청한다 (찍은 순서). **아무도 찍지 않고 떼면 지금 고른 대상 한 명**으로 요청한다.
+  - 서버에는 `FunctionExecutorNetwork.RequestCast(슬롯, 대상 배열)`로 보낸다 (#238, #243). 서버가 `RuntimeValue.FromBugs`로 바꿔 스킬의 `targets`에 넣는다. 로그와 `CastRequested`는 다른 시전처럼 `CastAccepted`를 받은 뒤에 한다.
   - 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수. `SummonedSwords.ReadyCount`를 읽는다 (summoned-sword.md). 없으면 `TempSwordState.SummonedSwordCount`, 그것도 없으면 제한 없음.
   - 고르는 동안 Player 맵이 꺼져 있어 Space가 점프로 들어가지 않는다.
 - 범위
@@ -88,7 +88,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `CastRequested` (event) | `int` 슬롯 번호(0~7), `FunctionBlock` 함수 (스킬은 `PredefinedFunction`, 블록 함수는 `UserFunction`, #159), `IReadOnlyList<GameObject>` 대상 목록 | - | [로직] 시전을 요청했을 때 불린다. 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안 몬스터 모두, 대상 없음은 빈 목록. 범위·대상 없음·블록 함수는 이미 `Cast`된 상태다 (블록 함수는 빈 목록). 단일은 고른 대상을 `target`으로 넘겨 이미 `Cast`된 상태다 (#152). 여러 명은 아직 `Cast`되지 않았다 (list 값이 생기면 같은 방식으로). 시전이 거부되면 불리지 않는다. 네트워크 동기화는 이 이벤트에서 시작하면 된다. |
+| `CastRequested` (event) | `int` 슬롯 번호(0~7), `FunctionBlock` 함수 (스킬은 `PredefinedFunction`, 블록 함수는 `UserFunction`, #159), `IReadOnlyList<GameObject>` 대상 목록 | - | [로직] 시전을 요청했을 때 불린다. 단일은 1명, 여러 명은 찍은 대상(없으면 고른 1명), 범위는 범위 안 몬스터 모두, 대상 없음은 빈 목록. 범위·대상 없음·블록 함수는 이미 `Cast`된 상태다 (블록 함수는 빈 목록). 단일은 고른 대상을 `target`으로 넘겨 이미 `Cast`된 상태다 (#152). 여러 명은 찍은 대상 배열로 `Cast`된 상태다 (#243). 시전이 거부되면 불리지 않는다. 네트워크 동기화는 이 이벤트에서 시작하면 된다. |
 | `TargetChanged` (event) | `GameObject` 대상 | - | [표시] 선택된 대상이 바뀌었을 때 불린다 (고르기 시작, ← →, 끝). 끝나면 `null`. 대상 표시 연출에 쓴다. |
 | `MarkedChanged` (event) | `IReadOnlyList<GameObject>` 찍은 대상 | - | [표시] 여러 명 선택에서 찍은 대상이 바뀌었을 때 (찍기, 빼기, 끝). 끝나면 빈 목록. |
 | `CurrentTarget` | - | `GameObject` | 지금 선택된 대상. 고르는 중이 아니면 `null` |
@@ -144,7 +144,7 @@ sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
 - 이우림 요청 반영 (#173 → #212)
   - 시전·취소·입력을 `FunctionExecutorNetwork`로. 클라이언트로만 접속한 플레이어도 슬롯으로 시전된다
   - 찌르기 돌진·바라보는 방향·급소공략 미니게임 결과·스킬 이펙트 서버 동기화: #223 (player-movement.md, c-skills.md)
-  - 아직 남은 것: 검 줍기 서버 동기화(「소환검·검기를 서버에서 생성하고 동기화하기」), 여러 명 선택 대상 배열(`RequestCast` 대상 여러 개, 이우림)
+  - 검 줍기 서버 동기화: #229. 여러 명 선택 대상 배열: 이우림 #238(`RequestCast` 대상 여러 개) → #243에서 연결
   - 스킬 캔슬: C 키를 누르면 가장 최근에 슬롯으로 시전한 작업 하나를 `FunctionExecutor.Cancel`로 끊는다. 슬롯 키는 시전만 한다(연타해도 안 끊김). C 키 입력은 이우림이 추가(#157), 캔슬은 #159에서 함
 - 임혜원과 정할 것 (#159)
   - 장착 화면은 `SlotLoadout` API로 만든다. 코드 영역 크기는 `CodeSize`로 표시

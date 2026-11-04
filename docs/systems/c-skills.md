@@ -49,7 +49,7 @@
 | `SingleMultiHit` 단일 + 다단 히트 | `Target` 1개 | 검 다중베기 |
 | `Pierce` 관통 | `Target` 1개 (첫 대상) | 꼬챙이 |
 | `MultiSelect` 여러 명 선택 | `Target` array 1개 (`VariableType.ArrayOf(Target)`, #191). 값은 `RuntimeValue.FromBugs`, 읽기는 `AsBugs()` | 전장 휩쓸기 |
-| `Area` 범위 | 없음 | 검 크게베기, 검무 |
+| `Area` 범위 | 없음 | 검 크게베기 |
 | `Path` 경로 | 없음 | 검 돌아오기 |
 | `None` 대상 없음 | 없음 | 검 소환, 해제, 패링, 이동 계열 |
 
@@ -92,14 +92,14 @@
 | 소환 | 해제 | `c.free_sword` | 없음 | O | O | |
 | 소환 | 패링 | `c.parry` | 없음 | | | O |
 | 소환 | 표식 남기기 | `c.mark` | 단일 | O | | |
-| 소환 | 검무 | `c.sword_dance` | 범위 | O | | |
+| 소환 | 검무 | `c.sword_dance` | 단일 | O | | |
 | 이동 | 대시 | `common.dash` | 없음 | | O | O |
 | 이동 | 더블점프 | `common.double_jump` | 없음 | | O | O |
 | 이동 | 검 타기 | `c.sword_ride` | 없음 | O | O | O |
 
 - 기획 문서에 없어서 가정한 것 (기획 확인 필요)
   - 패링: 맨손 불가
-  - 표식 남기기: 소환검 필요 (「검이 적 좌우로 찔러」)
+  - 표식 남기기: 사용 가능한 소환검 2개 필요 (#243에서 정함)
   - 해제: 소환검이 있어야 쓸 수 있음
 
 ### 찌르기 1: 검 찌르기·집중찌르기·꼬챙이 (#152)
@@ -172,7 +172,7 @@
 - 전장 휩쓸기 (#220): 고른 몬스터(`targets`, Target array)마다 사용 가능한 소환검이 하나씩, 가장 먼저 소환한 검부터 `CBattlefieldSweep.StaggerTicks`(검 다중베기와 같은 2틱) 간격으로 날아가 벤다 (`SummonedSwords.Stab`). 검마다 공격력 × 표 배율.
   - 대상이 소환검보다 많으면 남는 대상은 안 벤다. 소환검이 많으면 남는 검은 곁에 그대로.
   - 같은 몬스터를 두 번 넣으면 한 번만. 보내기 전에 죽은 대상은 건너뜀. 배열 값 검사(`InvalidTarget`)는 실행기가 시작할 때 한다.
-  - 슬롯에서 여러 명 선택으로 시전하려면 `FunctionExecutorNetwork.RequestCast`가 대상 여러 개를 받아야 한다 (이우림에게 요청). 지금은 블록코딩·코드(`executor.Cast(sweep, RuntimeValue.FromBugs(...))`)에서만 된다.
+  - 슬롯에서 여러 명 선택으로 찍어서 쓴다. `FunctionExecutorNetwork.RequestCast(슬롯, 대상 배열)` (이우림 #238, #243에서 연결).
 - 주의: 실행기는 스킬을 `MemberwiseClone`으로 복사해 실행한다. 스킬 안의 리스트 같은 참조 필드는 초기값으로 만들지 말고 `OnSkillStart`(또는 처음 쓸 때) 새로 만든다. 안 그러면 원본과 복사본이 같은 리스트를 쓴다.
 
 ### 휘두르기 1: 검 휘두르기·검 크게베기 (#163)
@@ -186,6 +186,19 @@
 - 검 휘두르기: 고른 대상(`target`)의 몸 가운데 쪽으로 날린다 (값이 없으면 바라보는 방향). 처음 닿은 몬스터 한 명에서 멈춘다. 검기 1×2, 사거리 8, 속도 25 (임시).
 - 검 크게베기: 바라보는 방향으로 날린다. 관통하며 판정 상자(1×4)에 걸린 몬스터를 한 번씩 벤다. 맞은 몬스터에 출혈(`StatusEffects.TryApply`). 사거리 6, 속도 25, 배율 0.5 (임시).
 - 그림: 임혜원 `_HW/Effects/SwordWave`, `SwordWave_Wide` (오른쪽을 보는 그림, 날아가는 방향으로 돌림).
+
+### 소환 2: 표식 남기기·검무 (#243)
+- 표식 남기기 (`CMark`, 단일)
+  - 사용 가능한 소환검이 2개(`CMark.RequiredSwords`) 미만이면 시작 전에 `NoSummonedSwordError` (`CountUsableSummonedSwords`를 덮어씀).
+  - 가장 먼저 소환한 사용 가능한 검 2개가 대상 왼쪽·오른쪽 옆으로 간 뒤 안쪽으로 찌르고 돌아온다 (`SummonedSwords.Stab(검, 대상, side)`).
+  - 검마다 닿은 순간 공격력 × 표 배율 (약하게, 임시 0.5). 두 검이 모두 닿으면 표식(`Mark`, 5초) + 기절(`Stun`, 1.0초). 표식은 다음 공격부터 2배라 이번 찌르기에는 안 붙는다.
+  - 스킬이 끝날 때까지 둘 다 닿지 못하면 표식·기절은 없다.
+- 검무 (`CSwordDance`, 단일. #243에서 범위 → 단일로 바꿈)
+  - 사용 가능한 소환검이 모두 대상 둘레에 고르게 나뉘어 돈다 (`SummonedSwords.Dance`, `Dancing` 상태).
+  - `CSwordDance.HitIntervalTicks`(임시 6틱)마다, 대상 가운데에서 2.5칸 안의 검마다 한 번씩 공격력 × 표 배율(0.5) + 출혈(`StatusEffects.TryApply(Bleed)`). 20틱이면 검 하나당 대략 3번.
+  - 스킬이 끝나거나 끊기면 `EndDance`로 검이 곁으로 돌아온다. 대상이 죽으면 더 베지 않는다.
+- 소환 계열 데미지는 `SummonDamage.Deal`(공격력 × 표 배율 → `TakeDamage` → `SkillEffectEvents.Hit`)을 함께 쓴다.
+- 슬롯에서 전장 휩쓸기: 여러 명 선택으로 찍은 대상을 `RequestCast(슬롯, 대상 배열)`로 서버에 보내 시전한다 (slot-caster.md, #238).
 
 ### 검 소환·해제 (#102, #220)
 - 검 소환 (`c.summon_sword`, malloc)
@@ -250,10 +263,11 @@
 | `SwordPointerSimTest` | Test_JW의 SwordPointerTest. 켜고 Play → Host (약 12초). 몬스터 2마리 이상. 블록코딩 `malloc(Sword)` → `free(s)`(진짜 소환검이 생겼다 사라짐, heap 원래대로), `Sword* s = SummonSword(); FreeSword(s);`, 소환검 던지기·찌르기에 두 번째 검 포인터를 넘기면 그 검을 씀, 해제에 포인터를 넘기면 그 검만 해제·같은 포인터로 또 해제하면 `InvalidPointerError`, 전장 휩쓸기 `[a, b, a]`(각 1번씩 맞음, 검 모두 돌아옴)를 확인. 「[SwordPointerTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SkillSyncLogTest` | Test_JW의 SkillSyncLog (#223). 켜 두고 에디터 Play → Host, `Test_JW`만 넣은 빌드 → Client. 클라이언트 캐릭터로 스킬을 쓰면 Host 콘솔에 「[SkillSyncLog] [클라이언트 …] 스킬 발사: 방향 / 명중: 대상, 데미지, 실명·이속감소」가 남는다. 돌진·바라보는 방향·급소공략 결과가 서버에 왔는지 사람이 로그로 확인한다. 평소에는 꺼 둔다. |
 | `SwordSyncSlotsTest` | Test_JW의 SwordSyncSlots (#229). 켜 두면 내 캐릭터 슬롯에 Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기를 넣는다(에디터 Host·빌드 Client 각자). `Restore Slots`면 Play를 멈출 때 되돌린다. 소환검·검기·던진 검이 두 화면에서 같은 자리로 보이는지 사람이 확인한다. 평소에는 꺼 둔다. |
+| `MarkDanceSimTest` | Test_JW의 MarkDanceTest (#243). 켜고 Play → Host (약 8초). 소환검 1개로 표식 남기기 → `NoSummonedSwordError`, 2개로 표식 남기기 → 검 2개가 각각 데미지·표식·기절·검 돌아옴, 검무 → 소환검 수 이상 맞음·출혈·검무 중 상태·끝나면 돌아옴을 확인. 「[MarkDanceTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기(소환검이 곁으로 오고 오는 길 몬스터에 데미지, 물리 검은 땅에 그대로. 한 번 더 써도 물리 검은 안 옴, #232), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
-| `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지. 시작 전에 1.5초 기다리고, 소환검이 필요한 스킬 앞에서는 던진 검을 되돌리거나 하나 소환함, #220. 던진 물리 검은 매번 손으로 되돌림, #232), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지. 시작 전에 1.5초 기다리고, 소환검이 필요한 스킬 앞에서는 던진 검을 되돌리거나 모자란 만큼 소환함(표식 남기기는 2개), #220, #243. 던진 물리 검은 매번 손으로 되돌림, #232), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정함

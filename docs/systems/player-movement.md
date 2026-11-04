@@ -57,6 +57,9 @@
   - 다른 컴퓨터의 플레이어면 서버의 `IsLunging`은 늘 `false`다 (돌진은 소유 클라이언트에서 함).
   - 한계: 방향을 바꾼 거의 같은 순간에 시전하면 서버가 바뀌기 전 방향을 읽을 수 있다 (network.md).
 - 경직·사망 중(`PlayerHealth.CanAct`가 false)에는 좌우로 움직이지 않고 점프하지 않는다. 떨어지는 것은 그대로다. `PlayerHealth`가 없는 플레이어는 검사하지 않는다.
+- 붙는 곳 (#268): 공용 `Assets/Prefabs/Player.prefab` 최상위. 공용 PlayerMove(`_UL`) 자리를 대신한다. `Player_JW` 등 변형 프리팹은 물려받는다.
+  - 박진우 컴포넌트와 실행기 묶음이 함께 붙어 있다: `PlayerMovement`, `PlayerFacingView`, `SwordRideTimerView` / `FunctionExecutor`, `ProcessMemory`, `LanguageRule`, `FunctionExecutorLogger`, `SlotLoadout`, `FunctionExecutorNetwork` / `SlotCaster`, `SlotTargetMarker` / `PhysicalSword`, `SwordPickUpInput`, `SummonedSwords`, `SummonedSwordHud`, `SwordWaveLauncher` / `SkillEffectEvents`, `ThrustEffectView`, `VitalStrikeMinigame`, `VitalStrikeMinigameView`, `ParryGuard`
+  - 이어서 붙일 것: `PlayerHealth`·`PlayerHealthEffects`(김도훈), `PlayerProgress`·`PlayerLevelStats`(이우림). 각 변형 프리팹의 중복 컴포넌트는 각 담당자가 지운다.
 - 카메라 추적(`PlayerCameraFollow`)
   - 내 캐릭터(`isLocalPlayer`)에서만 메인 카메라(MainCamera 태그)를 움직인다. 다른 플레이어가 접속해도 카메라를 빼앗지 않는다.
   - 붙는 곳: 공용 `Assets/Prefabs/Player` (#185). `Player_JW` 등 변형 프리팹은 물려받는다. Base 씬 Host 캐릭터도 카메라가 따라온다.
@@ -66,7 +69,7 @@
   - 공용 카메라 프리팹은 고치지 않는다.
 - 벽 마찰: 플레이어 콜라이더에 마찰 0 재질(`PlayerNoFriction`, Friction Combine = Minimum)을 쓴다. 공중에서 벽 쪽으로 키를 눌러도 벽에 붙지 않는다.
 
-### 지금 값 (Player_JW)
+### 지금 값 (공용 Player, #268)
 
 | 항목 | 값 | 위치 |
 | --- | --- | --- |
@@ -124,7 +127,8 @@
 
 ## 맞춘 결과
 - 이우림과 정한 것
-  - 공용 PlayerMove(`_UL`)를 복사해 `PlayerMovement`로 만든다. 같은 클래스 이름은 컴파일 에러가 나서 임시로 이름을 바꿨다. 공용 Player 프리팹 반영과 원본 PlayerMove 정리는 후속 작업으로 한다.
+  - 공용 PlayerMove(`_UL`)를 복사해 `PlayerMovement`로 만든다. 같은 클래스 이름은 컴파일 에러가 나서 임시로 이름을 바꿨다.
+  - #268: 공용 Player 프리팹에서 PlayerMove를 빼고 `PlayerMovement`로 바꿈. PlayerMove 스크립트와 문서(player-stats.md, player-health.md의 PlayerMove) 정리는 이우림
 - 정한 것
   - 점프 횟수: 땅에 닿으면 1회 충전. 더블점프 해금 시 땅에 닿기 전까지 2회 연속 가능 (#256에서 함. 더블점프는 슬롯에 넣지 않는 패시브)
 - 김도훈과 정한 것

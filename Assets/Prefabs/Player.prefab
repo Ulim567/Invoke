@@ -14,12 +14,32 @@ GameObject:
   - component: {fileID: 7679958723639315811}
   - component: {fileID: 1304864832004228049}
   - component: {fileID: 6317378190948175376}
-  - component: {fileID: -416637184089795524}
   - component: {fileID: 3376740816470663825}
   - component: {fileID: 8827871125244465063}
+  - component: {fileID: 9058111638273282288}
+  - component: {fileID: 3296467261330944177}
   - component: {fileID: 4794675060571810236}
+  - component: {fileID: 2342103625340212518}
+  - component: {fileID: 4077358799134688539}
+  - component: {fileID: 1210551639577649294}
+  - component: {fileID: 4696210639705928058}
+  - component: {fileID: 5525880356177457718}
   - component: {fileID: 1598455907839974460}
   - component: {fileID: 7574371112174244603}
+  - component: {fileID: 6456502398718284672}
+  - component: {fileID: 4021862485252956600}
+  - component: {fileID: 5165889841206390109}
+  - component: {fileID: 873190046994748258}
+  - component: {fileID: 6690701171801099636}
+  - component: {fileID: 482365706407519612}
+  - component: {fileID: 8753741767301125166}
+  - component: {fileID: 1360294273205492275}
+  - component: {fileID: 8104641542966871432}
+  - component: {fileID: 246762439436471133}
+  - component: {fileID: 5067464145541161224}
+  - component: {fileID: 2643627262021628322}
+  - component: {fileID: 7315738941134308525}
+  - component: {fileID: 5743095526360772754}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -163,7 +183,7 @@ BoxCollider2D:
   m_Enabled: 1
   serializedVersion: 3
   m_Density: 1
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 6200000, guid: fc0f5bc1135fe485f90e7c50a1d2f111, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -214,7 +234,7 @@ Rigidbody2D:
   m_Mass: 1
   m_LinearDamping: 0
   m_AngularDamping: 0.05
-  m_GravityScale: 1
+  m_GravityScale: 3
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -226,25 +246,6 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
---- !u!114 &-416637184089795524
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4136478383384515981}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 240b7ac0c654e7c4b947b6929438a610, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerMove
-  syncDirection: 0
-  syncMode: 0
-  syncInterval: 0
-  jumpForce: 10
-  rigidbody: {fileID: 6317378190948175376}
-  input: {fileID: 3376740816470663825}
-  stats: {fileID: 8827871125244465063}
 --- !u!114 &3376740816470663825
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -273,6 +274,57 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStats
   baseStats: {fileID: 11400000, guid: d92434892daa2904999290b2f7b57ab8, type: 2}
+--- !u!114 &9058111638273282288
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a230c00bc95a44998183ee21d300d90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
+  syncDirection: 1
+  syncMode: 0
+  syncInterval: 0
+  jumpHeight: 4
+  fallGravityMultiplier: 1.5
+  runSpeedMultiplier: 1.5
+  lungeSpeed: 30
+  lungeMaxTime: 0.35
+  dashDistance: 4
+  dashDuration: 0.15
+  allowDoubleJumpWithoutProgress: 1
+  rideSpeed: 9
+  rideSeconds: 30
+  body: {fileID: 6317378190948175376}
+  bodyCollider: {fileID: 1304864832004228049}
+  input: {fileID: 3376740816470663825}
+  stats: {fileID: 8827871125244465063}
+  health: {fileID: 0}
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 192
+  groundCheckWidthRatio: 0.9
+  groundCheckHeight: 0.1
+  platformLayers:
+    serializedVersion: 2
+    m_Bits: 128
+  dropDuration: 0.3
+--- !u!114 &3296467261330944177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82ce100927077f3479822e99cca0cfdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProcessMemory
 --- !u!114 &4794675060571810236
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -290,6 +342,83 @@ MonoBehaviour:
   syncInterval: 0
   offset: {x: 0, y: 6}
   cameraZ: -10
+--- !u!114 &2342103625340212518
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4dddf199f0d1b54f98d366873df1567, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutor
+  fixedUpdatesPerTick: 1
+--- !u!114 &4077358799134688539
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 006d30cf0fcfe4fa8b23915437ef5abc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SlotCaster
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  targetRange: 8
+  targetLayers:
+    serializedVersion: 2
+    m_Bits: 512
+  input: {fileID: 3376740816470663825}
+  net: {fileID: 0}
+  loadout: {fileID: 0}
+  minigame: {fileID: 0}
+  health: {fileID: 0}
+--- !u!114 &1210551639577649294
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c76b6abe1e824fbb8cdec3695979ca6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SlotTargetMarker
+  color: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  markedColor: {r: 0, g: 1, b: 1, a: 1}
+--- !u!114 &4696210639705928058
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26cf859405427446a87580d7f6a0706c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerFacingView
+  movement: {fileID: 9058111638273282288}
+  spriteRenderer: {fileID: 5603014008515254406}
+--- !u!114 &5525880356177457718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 134b623e91090ef4e9bbd8a052475ec0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorLogger
 --- !u!95 &1598455907839974460
 Animator:
   serializedVersion: 7
@@ -332,3 +461,238 @@ MonoBehaviour:
   fallbackGroundLayers:
     serializedVersion: 2
     m_Bits: 0
+--- !u!114 &6456502398718284672
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ad473b5f35677914a9b9e2e3d0dd1fb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LanguageRule
+  ruleData: {fileID: 11400000, guid: a79aabd9154a0af46a3e72e9a33751cf, type: 2}
+--- !u!114 &4021862485252956600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c70ce9c820be42bf9f5435ece0a1bd1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PhysicalSword
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  droppedSwordPrefab: {fileID: 303251163777015487, guid: 07eab261d866d4288ba224ae65c58d70, type: 3}
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 192
+  handOffset: {x: 0.5, y: 2}
+  throwSpeed: 20
+  maxFlightTime: 1
+  pickUpRange: 1.5
+--- !u!114 &5165889841206390109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bae528607b44d4dec943501fceb75bc6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SwordPickUpInput
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  input: {fileID: 3376740816470663825}
+  sword: {fileID: 4021862485252956600}
+  summoned: {fileID: 873190046994748258}
+--- !u!114 &873190046994748258
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e215f3c80a9324f948147377472d0ee3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SummonedSwords
+  swordPrefab: {fileID: 4252824113598437922, guid: 65dc4f6495f694e03bccdd9d99dce6a0, type: 3}
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 192
+  followOffset: {x: 0.6, y: 3.2}
+  followSpacing: 0.45
+  rideOffset: {x: 0, y: -0.15}
+  pickUpRange: 1.5
+--- !u!114 &6690701171801099636
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df0633b94e76c44858a2c48f5c270cb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SummonedSwordHud
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+--- !u!114 &482365706407519612
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29668a13660fc4201836f2846ea54de9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SlotLoadout
+  defaultSkillIds:
+  - c.thrust
+  - test.function_a
+  - c.battlefield_sweep
+  - c.wide_slash
+  - 
+  - 
+  - 
+  - 
+--- !u!114 &8753741767301125166
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63a73a21aa6414c48a749778acb50eb3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillEffectEvents
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+--- !u!114 &1360294273205492275
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bea19b4366f6419ea1ebee99a6f7bd9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThrustEffectView
+  thrustFlashPrefab: {fileID: 2279675309158623242, guid: af7511bd27e694c31ab0ca57e94c26ba, type: 3}
+  skewerFlashPrefab: {fileID: 8271863875450660268, guid: 06d74674d1e5c422f897809c135d892c, type: 3}
+--- !u!114 &8104641542966871432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6329a09b17803641863fc50c5c5296e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorNetwork
+  syncDirection: 0
+  syncMode: 1
+  syncInterval: 0
+--- !u!114 &246762439436471133
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c7b621ca3dcf40edb3ace083f70cc57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VitalStrikeMinigame
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  revolutionSeconds: 1.2
+  zoneDegrees: 30
+  zoneMinStartDegrees: 70
+--- !u!114 &5067464145541161224
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b62268ebeb3534723a79118f1c02afb2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VitalStrikeMinigameView
+  radius: 48
+  worldOffset: {x: 0, y: 3.2, z: 0}
+  resultSeconds: 0.6
+--- !u!114 &2643627262021628322
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68f21b567d35144648ba4911b7e53dd3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SwordWaveLauncher
+  wavePrefab: {fileID: 3197658186749315692, guid: 926c53268e34e47c08dff33ab76a5903, type: 3}
+  wideWavePrefab: {fileID: 1217615006568858308, guid: a78f8a9ef39c24a8394d45cff4fdaa06, type: 3}
+--- !u!114 &7315738941134308525
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f17d1182f614c4f898297d3bb55f6685, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ParryGuard
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+--- !u!114 &5743095526360772754
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48208ebbdd0e24deb9b071488e6b73ed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SwordRideTimerView
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  headGap: 0.35
+  barSize: {x: 28, y: 2.5}
+  fillColor: {r: 0.55, g: 0.85, b: 1, a: 0.95}
+  backColor: {r: 0, g: 0, b: 0, a: 0.55}

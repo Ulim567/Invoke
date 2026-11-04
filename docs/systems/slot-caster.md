@@ -174,6 +174,6 @@ sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
     - 해결(#59): 이우림이 `PlayerInputReader`에 액션 맵 활성화·비활성화 함수(`SetPlayerMapEnabled`, `SetAttackMapEnabled`)를 추가했다(#60). `SlotCaster`가 대상을 고르는 동안 Player 액션 맵을 비활성화한다. `SlotTargetInputSimTest`로 확인.
     - 처음 제안한 방법(`PlayerInputReader`에서 `move`만 끄고 켜기)은 쓰지 않았다. UI 등 다른 이유로 맵을 끄는 코드와 같은 상태를 따로 바꾸게 되기 때문이다.
   - 고른 대상을 함수의 Target 파라미터에 넣어 `Cast`하는 방법과, Target 값의 C# 타입 (지금은 `GameObject`로 넘긴다). 「함수 실행 중 대상 입력 기다리기」 이슈와 같은 방법을 쓴다.
-  - function-executor.md에는 「Player 프리팹에 `FunctionExecutor`, `ProcessMemory`가 붙어 있다」고 되어 있지만 공용 `Player.prefab`에는 아직 없다. 지금은 `Player_JW`에만 붙여서 쓴다.
+  - function-executor.md에는 「Player 프리팹에 `FunctionExecutor`, `ProcessMemory`가 붙어 있다」고 되어 있지만 #268에서 공용 `Player.prefab`에 실행기 묶음(`FunctionExecutor`, `ProcessMemory`, `LanguageRule`, `FunctionExecutorLogger`, `SlotLoadout`, `FunctionExecutorNetwork`)과 `SlotCaster`를 붙였다.
 - 임혜원과 정해야 할 것
   - 대상 표시 연출을 `TargetChanged`, `MarkedChanged`로 붙이는지

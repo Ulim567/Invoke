@@ -45,7 +45,7 @@
   - 만들지 못하면(프리팹 설정 오류, 클라이언트에서 부름) `SpawnSword`가 `null`을 돌려주고 검 소환은 아무것도 만들지 않는다
 - 떨어질 땅 찾기는 소환검이 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다 (place-scenes.md, #125).
 
-### 지금 값 (Player_JW)
+### 지금 값 (공용 Player, #268)
 
 | 항목 | 값 |
 | --- | --- |

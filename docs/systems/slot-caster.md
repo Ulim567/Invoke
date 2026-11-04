@@ -55,7 +55,18 @@
 - 넣을 수 있는 블록 함수: `FunctionStorage`에 저장된 함수.
 - 같은 함수·스킬은 한 슬롯에만. 다른 슬롯에 넣으면 원래 슬롯은 빈다(옮겨짐).
 - 시전할 원본: 같은 슬롯은 같은 원본 객체를 계속 쓴다. 그래야 쿨타임, 실행 중 검사, 캔슬이 이어진다 (function-executor.md). 블록 함수는 장착할 때(또는 `ReloadFunctions`) `FunctionDataConverter`로 한 번 바꿔 둔다. 실행할 수 없는 함수면 변환기가 콘솔 오류를 내고 그 슬롯은 눌러도 시전되지 않는다.
-- 저장: 이 컴퓨터 파일 `persistentDataPath/SlotLoadout.json`. 장착을 바꿀 때마다 저장하고, 켤 때 불러온다. 파일이 없으면(처음) Inspector의 `Default Skill Ids`로 채운다. 서버 저장이 생기면 바꾼다.
+- 저장: 이 컴퓨터 파일 `persistentDataPath/SlotLoadout.json`. 장착을 바꿀 때마다 저장하고, 켤 때 불러온다. 파일이 없으면(처음) Inspector의 `Default Skill Ids`로 채운다. 임시 계정(로그인 건너뛰기)과 오프라인 테스트만 이 방식이다.
+
+### 실제 계정 슬롯 (`SetEntries`, #263)
+- 실제 계정(로그인한 계정)은 슬롯·함수의 원본이 서버 DB다 (progress-store.md). 슬롯 8칸은 늘 그 캐릭터의 슬롯 함수(slot1 ~ slot8)이고 장착을 바꾸지 않는다 (이우림 #239).
+- `FunctionExecutorNetwork`(이우림)가 `PlayerDataReceived` 때(처음 받을 때, 함수를 저장해 값이 바뀔 때) `SetEntries(ReceivedSlots, ReceivedFunctions)`를 부른다. 실제 계정(`UsesServerData`)의 소유 클라이언트에서만.
+- `SetEntries` 뒤로는
+  - 슬롯 원본, `CodeSize`, `ReloadFunctions`가 이 컴퓨터의 함수 파일(`FunctionStorage`) 대신 받은 함수 목록을 쓴다.
+  - `SlotLoadout.json`을 읽거나 쓰지 않는다. 켤 때 파일로 다시 덮어쓰지도 않는다.
+  - 장착을 바꾸는 함수(`EquipFunction`, `EquipSkill`, `Unequip`, `Swap`)는 경고만 남기고 거부한다. 장착 화면(`SlotEquipPanel`)은 `UsesServerData`면 숨기거나 막는다.
+- 편집 화면이 저장 뒤 `ReloadFunctions()`를 부르면 지금 받아 둔 목록으로 원본을 다시 만들고, 서버 저장이 끝나 `PlayerDataReceived`가 오면 `SetEntries`가 새 목록으로 다시 채운다.
+- 시전: 실제 계정 슬롯은 모두 블록 함수라 `SlotCaster`는 늘 「누르는 순간 시전, 대상은 함수 안의 `GetBug`가 받음」으로 간다. C 스킬 대상 고르기·급소공략 슬롯 미니게임은 `GetBug` 입력 흐름으로만 동작한다 (이우림 확인 요청에 답함).
+- `EntryKind.Skill`, `EntryKind.Empty`, `EquipSkill`, `Unequip`, `Default Skill Ids`는 임시 계정·오프라인 테스트용으로 남긴다.
 
 ### GetBug 입력 (#159)
 - 슬롯으로 시전한 작업이 `GetBug`로 대상을 기다리면(`FunctionExecutorNetwork.InputRequested(작업 번호, 입력 함수 ID, 슬롯)`, #212)
@@ -112,6 +123,9 @@
 | `TryGetFunction(int slot, out FunctionBlock function)` | 슬롯 번호 | `bool` | 시전할 원본. `SlotCaster`가 쓴다 |
 | `IsEquippableSkill(string skillId)` (static) | 고정 ID | `bool` | 슬롯에 넣을 수 있는 스킬인지. 장착 화면의 스킬 목록을 거를 때 |
 | `Changed` (event) | `int` 슬롯 번호 | - | [표시] 슬롯 내용이 바뀌었을 때. 여러 슬롯이 한꺼번에 바뀌면 -1. 장착 화면을 다시 그린다 |
+| `SetEntries(IReadOnlyList<Entry> slots, IReadOnlyList<FunctionData> functions)` | 슬롯 8칸, 이 캐릭터의 함수 전부 | - | (#263) [실제 계정] 서버가 보낸 슬롯·함수로 채운다. `Changed(-1)`. 위 「실제 계정 슬롯」. `FunctionExecutorNetwork`가 부른다 |
+| `UsesServerData` | - | `bool` | (#263) `SetEntries`로 서버 데이터를 쓰고 있으면 `true`. 장착 화면이 장착을 막을 때 본다 |
+| `UseLocalFiles()` | - | - | (#263) 서버 데이터를 버리고 이 컴퓨터 파일로 돌아간다. 테스트 정리, 로그아웃해 임시 계정으로 바뀔 때 |
 
 ```csharp
 // 예시: 장착 화면에서 함수 목록의 함수를 W 슬롯에 끌어 놓음
@@ -135,6 +149,7 @@ sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
 | `SlotTargetMarker` | 고른 대상 위에 노란 V, 찍은 대상 위에 하늘색 V를 OnGUI로 그리는 임시 표시. 실제 대상 표시 연출(임혜원)이 생기면 바꾼다. |
 | `SlotMultiAreaSimTest` | Test_JW의 MultiTest. Play → Host, Game 창을 한 번 클릭. 슬롯 3(E)=전장 휩쓸기, 슬롯 4(R)=검 크게베기로 두 명 찍기, 안 찍고 떼기, 다시 찍어 빼기, 소환검 1개 제한, 범위를 확인. 시작할 때 검 소환을 2번 시전해 소환검 2개를 만들고(찍을 수 있는 인원 = 사용 가능한 소환검 수), 해제로 1개·0개로 줄인다. 「[MultiTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SlotLoadoutSimTest` | Test_JW의 LoadoutTest. 켜고 Play → Host (약 8초, 가짜 키 입력). 장착·거부·옮기기·자리 바꾸기·해제·코드 영역 크기, 저장 파일 다시 불러오기, W에 넣은 `Thrust(GetBug())`를 누른 채 고르고 떼면 고른 몬스터가 찔림, 슬롯 밖 시전은 가장 가까운 몬스터, E로 시전한 `while (true) { }`가 C로 `Cancelled`를 확인. 끝나면 원래 장착 내용으로 되돌리고 테스트 함수 파일을 지운다. 「[LoadoutTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `SlotServerDataSimTest` | (#263) Test_JW의 ServerSlotTest. 켜고 Play → Host (약 3초). 서버가 보낸 것처럼 새 GUID 슬롯 함수 8개를 `SetEntries`로 넣고, 받은 GUID·`Changed(-1)`·파일로 덮어쓰지 않음, 받은 목록으로 원본 만들기·시전 `Completed`·`CodeSize`, 장착 바꾸기 거부·`SlotLoadout.json` 안 씀, `ReloadFunctions`·다시 `SetEntries` 뒤 새 원본, `UseLocalFiles`로 원래 장착 복귀를 확인. 「[ServerSlotTest] 전체 통과」면 통과. 테스트 씬은 임시 계정이라 `FunctionExecutorNetwork`가 가짜 슬롯을 서버로 다시 보내 「슬롯 N의 함수를 받지 못했습니다」 경고 8줄, 장착 거부 경고 4줄이 뜨는 것은 정상. 평소에는 꺼 둔다. |
 | `SlotTargetInputSimTest` | Play → Host 2초 뒤 가짜 키 입력(Q, Q+→, Q+→, Q+←, 뗌)을 넣어 대상 넘기기를 확인한다. `TargetChanged` 5번이면 통과. 자동으로 돌기 때문에 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
@@ -144,6 +159,7 @@ sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
 - 이우림 요청 반영 (#173 → #212)
   - 시전·취소·입력을 `FunctionExecutorNetwork`로. 클라이언트로만 접속한 플레이어도 슬롯으로 시전된다
   - 찌르기 돌진·바라보는 방향·급소공략 미니게임 결과·스킬 이펙트 서버 동기화: #223 (player-movement.md, c-skills.md)
+  - 실제 계정 슬롯을 서버 데이터로 채우기: #263 `SetEntries` (#226 코멘트 요청). 부르는 일은 이우림 `FunctionExecutorNetwork`
   - 검 줍기 서버 동기화: #229. 여러 명 선택 대상 배열: 이우림 #238(`RequestCast` 대상 여러 개) → #243에서 연결
   - 스킬 캔슬: C 키를 누르면 가장 최근에 슬롯으로 시전한 작업 하나를 `FunctionExecutor.Cancel`로 끊는다. 슬롯 키는 시전만 한다(연타해도 안 끊김). C 키 입력은 이우림이 추가(#157), 캔슬은 #159에서 함
 - 임혜원과 정할 것 (#159)

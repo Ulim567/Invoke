@@ -13,7 +13,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 「로그인 건너뛰기」 임시 계정과 네트워크를 켜지 않은 테스트는 DB에 쓰지 않고 값을 메모리에만 둔다.<br/>
-/// 레벨업 규칙과 노드 해금(재료 빼기)은 이 컴포넌트에 아직 없다. 레벨 시스템 이슈와 「재료 써서 스킬 트리 해금하기」에서 더한다.
+/// 레벨업: AddExp가 LevelRules(김도훈)의 경험치 표로 레벨을 올린다. 노드 해금(재료 빼기)은 「재료 써서 스킬 트리 해금하기」에서 더한다.
 /// </para>
 /// </summary>
 public class PlayerProgress : NetworkBehaviour
@@ -47,6 +47,11 @@ public class PlayerProgress : NetworkBehaviour
 	/// [표시] 레벨, 경험치, 돈, 재료, 해금 목록 중 하나라도 바뀌었을 때. 값을 가진 곳(서버, 호스트, 소유 클라이언트)에서 불린다.
 	/// </summary>
 	public event Action Changed;
+
+	/// <summary>
+	/// [로직] 레벨이 오른 순간 (새 레벨). 서버에서 AddExp가 부른다. 한 번에 여러 레벨이 오르면 오른 레벨마다 불린다.
+	/// </summary>
+	public event Action<int> LeveledUp;
 
 	/// <summary>그 재료의 개수. 없으면 0.</summary>
 	public int GetMaterialCount(string materialId)
@@ -103,12 +108,23 @@ public class PlayerProgress : NetworkBehaviour
 	}
 #endif
 
-	/// <summary>[서버] 경험치를 더한다. 0 이하는 무시한다. 레벨업은 아직 하지 않는다(레벨 시스템 이슈).</summary>
+	/// <summary>[서버] 경험치를 더한다. 0 이하는 무시한다. 다음 레벨 경험치(LevelRules.ExpToNext)를 채우면 레벨을 올리고 남은 경험치를 넘긴다. 최대 레벨에서는 쌓이지 않는다.</summary>
 	public void AddExp(int amount)
 	{
-		if (amount <= 0 || !CanChange(nameof(AddExp))) return;
+		if (amount <= 0 || level >= LevelRules.MaxLevel || !CanChange(nameof(AddExp))) return;
 		exp += amount;
+
+		// 레벨업 (규칙: LevelRules, 김도훈). 한 번에 여러 레벨이 오를 수 있다
+		int startLevel = level;
+		while (level < LevelRules.MaxLevel && exp >= LevelRules.ExpToNext(level))
+		{
+			exp -= LevelRules.ExpToNext(level);
+			level++;
+		}
+		if (level >= LevelRules.MaxLevel) exp = 0;
+
 		SaveProgress();
+		for (int l = startLevel + 1; l <= level; l++) LeveledUp?.Invoke(l);
 		Changed?.Invoke();
 	}
 

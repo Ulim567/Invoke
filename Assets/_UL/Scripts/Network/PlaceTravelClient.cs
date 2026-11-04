@@ -7,6 +7,7 @@ using UnityEngine;
 /// 하는 일<br/>
 /// - 로비 입구의 이벤트(LobbyEntrance.TravelRequested, RaidEntryRequested)를 받아 서버에 TravelRequestMessage를 보낸다.<br/>
 /// - 요청을 보낸 뒤 서버의 답(TravelEndedMessage)이 올 때까지 로딩 화면을 보이고, 로컬 플레이어의 Player·Attack 액션 맵을 비활성화한다.<br/>
+/// - 같은 동안 로컬 플레이어의 움직임을 잠근다(PlayerMovement.SetMovementLocked). 이전 씬을 언로드한 뒤 밟을 땅이 없어 떨어지지 않게 하기 위함이다.<br/>
 /// - 접속 직후에도 서버가 로컬 플레이어의 함수 데이터를 다 받을 때까지(FunctionExecutorNetwork.IsDataReady) 같은 방법으로 막는다.
 /// </para>
 /// <para>
@@ -61,6 +62,7 @@ public class PlaceTravelClient : MonoBehaviour
 		traveling = true;
 		// 입구 창(LobbyEntrancePanel)은 「들어가기」를 누르면 창을 닫으며 액션 맵을 다시 활성화하므로, 이동하는 동안 다시 비활성화한다
 		SetInputBlocked(true);
+		SetMovementLocked(true);
 		// 로딩 화면이 화면을 다 덮은 뒤에 요청을 보낸다. 먼저 보내면 이전 장소가 사라지는 모습이 페이드 사이로 보인다
 		loadingScreen.Show(() =>
 		{
@@ -80,6 +82,8 @@ public class PlaceTravelClient : MonoBehaviour
 	{
 		if (!traveling) return;
 		traveling = false;
+		// teleport까지 마쳤거나 서버가 거절했으므로, 접속 직후의 로딩과 상관없이 움직임을 푼다
+		SetMovementLocked(false);
 
 		// 접속 직후의 로딩이 아직 끝나지 않았으면 그쪽이 로딩 화면을 닫는다
 		if (waitingForData) return;
@@ -92,7 +96,7 @@ public class PlaceTravelClient : MonoBehaviour
 		if (!NetworkClient.active)
 		{
 			// 접속하지 않았거나 접속이 끊겼으면 원래대로 돌린다
-			// 로컬 플레이어 오브젝트는 삭제되고, 액션 맵은 PlayerInputReader.OnStopLocalPlayer가 다시 활성화한다
+			// 로컬 플레이어 오브젝트는 삭제되고(움직임 잠금도 함께 사라짐), 액션 맵은 PlayerInputReader.OnStopLocalPlayer가 다시 활성화한다
 			if (traveling || waitingForData) loadingScreen.Hide();
 			traveling = false;
 			waitingForData = false;
@@ -138,5 +142,13 @@ public class PlaceTravelClient : MonoBehaviour
 		inputBlocked = blocked;
 		input.SetPlayerMapEnabled(!blocked);
 		input.SetAttackMapEnabled(!blocked);
+	}
+
+	// 로컬 플레이어의 움직임을 잠그거나 푼다
+	// 속도·중력은 PlayerMovement가 매 FixedUpdate에 쓰므로 Rigidbody2D를 직접 바꾸지 않고 PlayerMovement에 맡긴다 (코드 작성 규칙 2)
+	void SetMovementLocked(bool locked)
+	{
+		if (NetworkClient.localPlayer == null || !NetworkClient.localPlayer.TryGetComponent(out PlayerMovement movement)) return;
+		movement.SetMovementLocked(locked);
 	}
 }

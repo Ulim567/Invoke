@@ -43,6 +43,22 @@ public class PlayerMovement : NetworkBehaviour
 	[Tooltip("돌진 최대 시간(초). 벽 등에 막혀 못 닿아도 이 시간이 지나면 멈춘다")]
 	[SerializeField, Min(0.05f)] private float lungeMaxTime = 0.35f;
 
+	[Header("대시 (이동 스킬, #256)")]
+	[Tooltip("대시로 가는 거리 (유닛, 임시)")]
+	[SerializeField, Min(0.1f)] private float dashDistance = 4f;
+	[Tooltip("대시에 걸리는 시간 (초, 임시)")]
+	[SerializeField, Min(0.02f)] private float dashDuration = 0.15f;
+
+	[Header("더블점프 (#256)")]
+	[Tooltip("PlayerProgress(해금 목록)가 없는 테스트 씬에서 더블점프를 쓸 수 있게 할지. 실제 게임은 스킬 트리 해금으로 정한다")]
+	[SerializeField] private bool allowDoubleJumpWithoutProgress = true;
+
+	[Header("검 타기 (#256)")]
+	[Tooltip("검을 타고 좌우로 나는 속도 (유닛/초, 임시)")]
+	[SerializeField, Min(0.1f)] private float rideSpeed = 9f;
+	[Tooltip("검을 타고 나는 시간 (초, 임시). 스킬이 끝나도 이 시간 동안 계속 난다")]
+	[SerializeField, Min(0.1f)] private float rideSeconds = 30f;
+
 	[Header("연결")]
 	[SerializeField] private Rigidbody2D body;
 	[SerializeField] private Collider2D bodyCollider;
@@ -80,6 +96,17 @@ public class PlayerMovement : NetworkBehaviour
 	// 달리는 속도로 움직이는지. 땅에 있을 때만 Shift 상태로 바꾸고, 공중에서는 땅을 떠난 순간의 값을 유지한다
 	bool runMode;
 
+	// 이동 스킬 (#256). 대시·검 타기 동안은 중력을 끄고, 끝나면 처음 중력(normalGravityScale)으로 되돌린다
+	float normalGravityScale = -1f;
+	bool dashing;
+	int dashDirection;
+	float dashEndTime;
+	bool riding;
+	float rideEndTime;
+	// 공중 점프(더블점프)를 이번 공중에서 이미 썼는지. 땅에 닿으면 다시 쓸 수 있다
+	bool airJumpUsed;
+	PlayerProgress progress;
+
 	/// <summary>
 	/// 달리는 속도로 좌우로 움직이고 있으면 true (멈춰 있으면 false). 달리기 애니메이션에서 읽는다.<br/>
 	/// 공중에서는 땅을 떠난 순간의 달리기 여부를 유지한다.
@@ -113,6 +140,12 @@ public class PlayerMovement : NetworkBehaviour
 	public void SetMovementLocked(bool locked)
 	{
 		if (movementLocked == locked) return;
+		// 대시·검 타기 중이면 먼저 끝내서 중력을 되돌린 뒤 잠근다 (잠글 때 저장하는 중력이 0이 되지 않게)
+		if (locked)
+		{
+			EndDashLocal();
+			EndRideLocal();
+		}
 		movementLocked = locked;
 		if (locked)
 		{
@@ -171,6 +204,164 @@ public class PlayerMovement : NetworkBehaviour
 		SetFacingTowards(x);
 		// 방향은 소유 클라이언트가 정하므로, 다른 컴퓨터의 플레이어면 거기에도 알린다 (#223). 서버의 값은 위에서 먼저 바꿔 둬서 같은 틱의 스킬이 바로 읽는다
 		if (OwnedByRemoteClient) TargetFaceTowards(x);
+	}
+
+	/// <summary>
+	/// [연출] 더블점프(공중 점프)를 한 순간 (#256). 점프 모션을 처음부터 다시 틀 때 쓴다 (PlayerAnimator, 임혜원).<br/>
+	/// 첫 점프는 공중 상태로 바뀌는 것으로 알 수 있지만, 더블점프는 이미 공중이라 따로 알린다. 내 화면(소유 클라이언트)에서 불린다.
+	/// </summary>
+	public event System.Action AirJumped;
+
+	/// <summary>대시 중이면 true (#256). 다른 컴퓨터의 플레이어면 서버에서는 늘 false (대시는 소유 클라이언트가 함)</summary>
+	public bool IsDashing => dashing;
+
+	/// <summary>검을 타고 나는 중이면 true (#256). 다른 컴퓨터의 플레이어면 서버에서는 늘 false</summary>
+	public bool IsRiding => riding;
+
+	/// <summary>검을 타고 나는 시간 (초, Inspector Ride Seconds). 검 타기 스킬이 소환검을 붙여 둘 시간으로도 쓴다 (#256)</summary>
+	public float RideSeconds => rideSeconds;
+
+	/// <summary>검 타기 남은 시간 (초). 타는 중이 아니면 0. 타이머 표시(SwordRideTimerView)가 읽는다 (#256)</summary>
+	public float RideRemaining => riding ? Mathf.Max(0f, rideEndTime - Time.time) : 0f;
+
+	/// <summary>
+	/// 이번 공중에서 더블점프를 이미 썼으면 true (#256). 땅에 닿으면 false로 돌아온다.
+	/// </summary>
+	public bool AirJumpUsed => airJumpUsed;
+
+	/// <summary>
+	/// 더블점프를 쓸 수 있으면 true (#256): 스킬 트리에서 common.double_jump를 해금했는지 (PlayerProgress.Unlocked).<br/>
+	/// PlayerProgress가 없는 테스트 씬에서는 Allow Double Jump Without Progress를 따른다.
+	/// </summary>
+	public bool DoubleJumpUnlocked
+	{
+		get
+		{
+			if (progress == null) progress = GetComponent<PlayerProgress>();
+			if (progress == null) return allowDoubleJumpWithoutProgress;
+			foreach (string id in progress.Unlocked) if (id == PredefinedFunctionIds.DoubleJump) return true;
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// 대시 (#256): direction(1 오른쪽, -1 왼쪽) 쪽으로 Dash Distance(임시 4칸)를 Dash Duration(0.15초)에 간다. 그쪽을 바라본다.<br/>
+	/// 공중에서도 된다. 대시 중에는 중력·좌우 입력·점프가 없고, 벽에 막히면 거기서 멈춘다. 이동 스킬 대시가 부른다.<br/>
+	/// 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다 (#223과 같은 방식). 잠겨 있거나 경직·사망 중이면 하지 않는다.
+	/// </summary>
+	public void StartDash(int direction)
+	{
+		int dir = direction >= 0 ? 1 : -1;
+		if (OwnedByRemoteClient)
+		{
+			facing = dir;
+			TargetStartDash(dir);
+			return;
+		}
+		if (movementLocked || (health != null && !health.CanAct)) return;
+		lunging = false;
+		EndRideLocal();
+		facing = dir;
+		dashDirection = dir;
+		dashEndTime = Time.time + dashDuration;
+		dashing = true;
+		SuspendGravity();
+		body.linearVelocity = new Vector2(dir * dashDistance / dashDuration, 0f);
+	}
+
+	/// <summary>
+	/// 공중 점프 (#256): 공중이고 이번 공중에서 아직 안 썼으면 한 번 더 뛴다. 블록코딩의 더블점프(common.double_jump)가 부른다.<br/>
+	/// 플레이어가 Space로 하는 더블점프는 이 컴포넌트가 해금 여부(DoubleJumpUnlocked)를 보고 스스로 한다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
+	/// </summary>
+	public void RequestAirJump()
+	{
+		if (OwnedByRemoteClient)
+		{
+			TargetAirJump();
+			return;
+		}
+		TryAirJump();
+	}
+
+	/// <summary>
+	/// 검 타기 시작 (#256): 중력 없이 그 높이에 떠서 ←→로 Ride Speed(임시 9)로 Ride Seconds(임시 30초) 동안 난다. 시간이 다 되거나 StopRide를 부르면 내려온다. 검 타기 스킬이 부른다.<br/>
+	/// 위아래 조작은 입력(MoveY)이 생기면 붙인다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
+	/// </summary>
+	public void StartRide()
+	{
+		if (OwnedByRemoteClient)
+		{
+			TargetStartRide();
+			return;
+		}
+		if (movementLocked || riding) return;
+		lunging = false;
+		EndDashLocal();
+		riding = true;
+		rideEndTime = Time.time + rideSeconds;
+		SuspendGravity();
+		body.linearVelocity = Vector2.zero;
+	}
+
+	/// <summary>검 타기를 끝낸다 (#256). 중력이 돌아와 떨어진다. 검 타기 스킬이 끝나거나 끊길 때 부른다.</summary>
+	public void StopRide()
+	{
+		if (OwnedByRemoteClient)
+		{
+			TargetStopRide();
+			return;
+		}
+		EndRideLocal();
+	}
+
+	// [소유 클라이언트] 서버의 이동 스킬이 요청한 대시·공중 점프·검 타기 (#256)
+	[TargetRpc]
+	void TargetStartDash(int direction) => StartDash(direction);
+
+	[TargetRpc]
+	void TargetAirJump() => TryAirJump();
+
+	[TargetRpc]
+	void TargetStartRide() => StartRide();
+
+	[TargetRpc]
+	void TargetStopRide() => StopRide();
+
+	bool TryAirJump()
+	{
+		if (movementLocked || dashing || riding || airJumpUsed || IsGrounded) return false;
+		if (health != null && !health.CanAct) return false;
+		airJumpUsed = true;
+		Jump();
+		AirJumped?.Invoke();
+		return true;
+	}
+
+	// 대시·검 타기 동안 중력을 끈다. 처음 중력은 한 번만 기억한다
+	void SuspendGravity()
+	{
+		if (normalGravityScale < 0f) normalGravityScale = body.gravityScale;
+		body.gravityScale = 0f;
+	}
+
+	void RestoreGravity()
+	{
+		if (normalGravityScale >= 0f && !dashing && !riding) body.gravityScale = normalGravityScale;
+	}
+
+	void EndDashLocal()
+	{
+		if (!dashing) return;
+		dashing = false;
+		body.linearVelocity = new Vector2(0f, 0f);
+		RestoreGravity();
+	}
+
+	void EndRideLocal()
+	{
+		if (!riding) return;
+		riding = false;
+		RestoreGravity();
 	}
 
 	// 서버에서 불렸고, 이 플레이어를 다른 컴퓨터(원격 클라이언트)가 움직이면 true. Host의 내 캐릭터, 네트워크 없는 테스트는 false
@@ -261,7 +452,27 @@ public class PlayerMovement : NetworkBehaviour
 			return;
 		}
 
+		// 대시 중: 정한 속도로 가다가 시간이 되면 멈춘다 (#256)
+		if (dashing)
+		{
+			if (Time.time >= dashEndTime) EndDashLocal();
+			else body.linearVelocity = new Vector2(dashDirection * dashDistance / dashDuration, 0f);
+			return;
+		}
+
+		// 검 타기 중: 그 높이에서 ←→로 난다 (#256). 위아래는 입력(MoveY)이 생기면 붙인다
+		if (riding && Time.time >= rideEndTime) EndRideLocal();
+		if (riding)
+		{
+			float rideX = input.MoveX;
+			body.linearVelocity = new Vector2(rideX * rideSpeed, 0f);
+			UpdateFacing(rideX);
+			return;
+		}
+
 		bool grounded = IsGrounded;
+		// 땅에 닿으면 더블점프를 다시 쓸 수 있다 (#256)
+		if (grounded) airJumpUsed = false;
 		// 땅에 있을 때만 Shift를 읽는다. 공중에서는 땅을 떠난 순간(점프, 내려가기, 낭떠러지)의 값을 그대로 쓴다
 		if (grounded) runMode = input.RunHeld;
 
@@ -278,6 +489,11 @@ public class PlayerMovement : NetworkBehaviour
 		else if (input.JumpPressed && grounded)
 		{
 			Jump();
+		}
+		// 공중에서 Space: 더블점프를 해금했으면 한 번 더 (#256)
+		else if (input.JumpPressed && !grounded && DoubleJumpUnlocked)
+		{
+			TryAirJump();
 		}
 	}
 

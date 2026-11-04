@@ -5,7 +5,7 @@ using UnityEngine;
 /// <summary>
 /// 소환검·검기 동기화 확인용 슬롯 넣기 (#229). Test_JW의 SwordSyncSlots. 켜 두면 내 캐릭터의 슬롯 Q W E R에 검 스킬을 넣는다.
 /// <para>
-/// - Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기. 검 휘두르기(검기)는 A에 넣는다.<br/>
+/// - Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기. 검 휘두르기(검기)는 A, 대시는 S, 검 타기는 D에 넣는다 (#256).<br/>
 /// - 에디터 Host와 빌드 Client 모두 각자 자기 캐릭터에 넣는다. 슬롯 저장 파일은 컴퓨터마다 하나라 둘이 같은 슬롯을 쓴다.<br/>
 /// - Restore Slots가 켜져 있으면 Play를 멈출 때(오브젝트가 사라질 때) 원래 슬롯으로 되돌린다.<br/>
 /// - 판정은 사람이 두 화면을 보고 한다. 평소에는 꺼 둔다.
@@ -18,7 +18,7 @@ public class SwordSyncSlotsTest : MonoBehaviour
 	static readonly string[] Skills =
 	{
 		PredefinedFunctionIds.SummonSword, PredefinedFunctionIds.SummonedThrow, PredefinedFunctionIds.SwordThrow, PredefinedFunctionIds.SwordReturn,
-		PredefinedFunctionIds.SwordSlash,
+		PredefinedFunctionIds.SwordSlash, PredefinedFunctionIds.Dash, PredefinedFunctionIds.SwordRide,
 	};
 
 	[Tooltip("Play를 멈출 때 원래 슬롯으로 되돌린다")]
@@ -44,7 +44,7 @@ public class SwordSyncSlotsTest : MonoBehaviour
 			backup[i] = loadout.GetEntry(i);
 			if (!loadout.EquipSkill(i, Skills[i])) Debug.LogError($"{Tag} 슬롯 {i + 1}에 {Skills[i]}를 넣지 못함");
 		}
-		Debug.Log($"{Tag} Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기를 넣음");
+		Debug.Log($"{Tag} Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기, S 대시, D 검 타기를 넣음");
 	}
 
 	void OnDestroy()

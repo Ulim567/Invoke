@@ -98,7 +98,7 @@
 | 이동 | 검 타기 | `c.sword_ride` | 없음 | O | O | O |
 
 - 기획 문서에 없어서 가정한 것 (기획 확인 필요)
-  - 패링: 맨손 불가
+  - 패링: 맨손 불가 (#245에서도 유지)
   - 표식 남기기: 사용 가능한 소환검 2개 필요 (#243에서 정함)
   - 해제: 소환검이 있어야 쓸 수 있음
 
@@ -200,6 +200,23 @@
 - 소환 계열 데미지는 `SummonDamage.Deal`(공격력 × 표 배율 → `TakeDamage` → `SkillEffectEvents.Hit`)을 함께 쓴다.
 - 슬롯에서 전장 휩쓸기: 여러 명 선택으로 찍은 대상을 `RequestCast(슬롯, 대상 배열)`로 서버에 보내 시전한다 (slot-caster.md, #238).
 
+### 패링 (#245)
+- 누른 순간부터 `CParry.WindowSeconds`(임시 0.3초) 동안 패링 가능한 몬스터 투사체(`MonsterAttackData.Parryable`)를 잡는다. 몸통 박치기, 낙하 공격은 못 잡는다. 맨손 불가.
+- 판정은 플레이어의 `ParryGuard`(아래 표)가 한다. 몬스터 투사체(`MonsterProjectile`, 김도훈)가 플레이어에 공격 효과를 주기 전에 `ParryGuard.TryParry(this)`를 부르고, `true`면 효과 없이 투사체를 없앤다 (관통 투사체도 잡히면 없앰).
+- 한 번 잡으면 판정이 닫힌다 (1회).
+- 반격: 잡은 다음 틱에 몸 가운데에서 투사체가 날아온 쪽(투사체 속도의 반대)으로 검기를 날린다 (`SwordWaveSkill`, 검 휘두르기와 같은 1×2, 사거리 14, 속도 30, 임시). 처음 닿은 몬스터에게 공격력 × 표 배율. heap은 표의 1칸, 검기가 끝나면 돌려준다.
+- 판정·반격은 서버에서 한다. 잡은 순간 `ParryGuard.ParryEffectPlayed`가 모든 화면에서 불린다 (연출용).
+
+#### `ParryGuard` (플레이어 프리팹 최상위)
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `TryParry(MonsterProjectile projectile)` | 닿은 투사체 | `bool` | 몬스터 투사체가 플레이어에 닿을 때 김도훈 코드가 부른다. 판정 시간이고, `Attack.Parryable`이고, `Misses`가 아니면 잡고 `true` (공격 효과를 주지 말고 투사체를 없앤다). 아니면 `false` |
+| `IsOpen` | - | `bool` | 패링 판정 시간이면 `true` |
+| `Open(float seconds)`, `Close()` | 초 | - | 판정 시간을 열고 닫는다. 패링 스킬이 부른다 |
+| `Parried` (event) | `Vector2` 잡은 위치, `Vector2` 되돌려 보낼 방향 | - | [로직] 잡았을 때. 패링 스킬이 반격한다. 서버에서만 |
+| `ParryEffectPlayed` (event) | `Vector2` 잡은 위치 | - | [연출] 잡았을 때. 모든 화면에서. 패링 이펙트·소리 (임혜원) |
+
 ### 검 소환·해제 (#102, #220)
 - 검 소환 (`c.summon_sword`, malloc)
   - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, CSummonSword.SwordHeapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
@@ -264,6 +281,7 @@
 | `SkillSyncLogTest` | Test_JW의 SkillSyncLog (#223). 켜 두고 에디터 Play → Host, `Test_JW`만 넣은 빌드 → Client. 클라이언트 캐릭터로 스킬을 쓰면 Host 콘솔에 「[SkillSyncLog] [클라이언트 …] 스킬 발사: 방향 / 명중: 대상, 데미지, 실명·이속감소」가 남는다. 돌진·바라보는 방향·급소공략 결과가 서버에 왔는지 사람이 로그로 확인한다. 평소에는 꺼 둔다. |
 | `SwordSyncSlotsTest` | Test_JW의 SwordSyncSlots (#229). 켜 두면 내 캐릭터 슬롯에 Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기를 넣는다(에디터 Host·빌드 Client 각자). `Restore Slots`면 Play를 멈출 때 되돌린다. 소환검·검기·던진 검이 두 화면에서 같은 자리로 보이는지 사람이 확인한다. 평소에는 꺼 둔다. |
 | `MarkDanceSimTest` | Test_JW의 MarkDanceTest (#243). 켜고 Play → Host (약 8초). 소환검 1개로 표식 남기기 → `NoSummonedSwordError`, 2개로 표식 남기기 → 검 2개가 각각 데미지·표식·기절·검 돌아옴, 검무 → 소환검 수 이상 맞음·출혈·검무 중 상태·끝나면 돌아옴을 확인. 「[MarkDanceTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `ParrySimTest` | Test_JW의 ParryTest (#245). Inspector에 Bullet Prefab(`MonsterBullet`), Parryable Attack(`Loop_Shot`), Unparryable Attack(`Packet_Drop`)을 넣고 켜서 Play → Host (약 4초). `ParryGuard.TryParry`를 직접 불러 패링 안 했을 때·패링 불가 공격은 못 잡음, 패링 가능 공격은 잡고 한 번에 닫힘, 날아온 쪽 몬스터에게 반격 검기가 맞음·heap 원래대로, 0.3초 뒤엔 못 잡음을 확인. 「[ParryTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기(소환검이 곁으로 오고 오는 길 몬스터에 데미지, 물리 검은 땅에 그대로. 한 번 더 써도 물리 검은 안 옴, #232), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |

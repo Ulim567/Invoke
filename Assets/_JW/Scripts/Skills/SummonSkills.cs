@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // 소환 계열 스킬. 수치는 SkillTable 표, 필요 조건 검사는 DataDrivenSkill이 맡는다.
-// 검 소환·해제는 #102에서 채웠고, Sword* 반환·파라미터는 #220, 표식 남기기·검무는 #243에서 더했다. 패링은 다음 이슈. 나머지 효과(판정, 데미지, 상태 이상)는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
+// 검 소환·해제는 #102에서 채웠고, Sword* 반환·파라미터는 #220, 표식 남기기·검무는 #243, 패링은 #245에서 더했다. 나머지 효과(판정, 데미지, 상태 이상)는 각 스킬 이슈에서 채운다. 그 전까지는 정해진 틱 동안 실행되고 로그만 남긴다.
 
 /// <summary>
 /// 검 소환 (malloc). 대상 없음, 누르면 바로 발동 (#102, #220에서 Sword* 반환)
@@ -95,10 +95,84 @@ public class CFreeSword : DataDrivenSkill
 	}
 }
 
-/// <summary>패링. 성공 시 적 공격을 검 이펙트로 1회 되돌려줌 (대상 없음)</summary>
-public class CParry : DataDrivenSkill
+/// <summary>
+/// 패링 (#245). 누른 순간부터 WindowSeconds(임시 0.3초) 동안 패링 가능한 몬스터 투사체를 잡고, 잡으면 날아온 쪽으로 검기를 한 번 날려 반격한다 (대상 없음, 맨손 불가).
+/// <para>
+/// - 판정은 플레이어의 ParryGuard가 한다. 몬스터 투사체(MonsterProjectile, 김도훈)가 닿을 때 ParryGuard.TryParry로 물어보고, 잡히면 데미지 없이 사라진다.<br/>
+/// - 잡을 수 있는 것: MonsterAttackData.Parryable이 켜진 투사체만. 몸통 박치기·낙하 공격은 못 잡는다.<br/>
+/// - 반격: 잡은 다음 틱에 몸 가운데에서 투사체가 날아온 쪽으로 검기(SwordWave)를 날린다. 처음 닿은 몬스터에게 공격력 × 표 배율. 검기는 heap(표의 heapSize, 1칸)을 쓰고 끝나면 돌려준다.<br/>
+/// - 한 번 잡으면 판정이 닫힌다 (1회). 판정 시간 안에 못 잡으면 아무 일도 없이 끝난다.
+/// </para>
+/// </summary>
+public class CParry : SwordWaveSkill
 {
+	/// <summary>패링 판정 시간 (초, 임시)</summary>
+	public const float WindowSeconds = 0.3f;
+
 	public override string Id => PredefinedFunctionIds.Parry;
+
+	// 반격 검기: 검 휘두르기와 같은 크기, 쏜 몬스터까지 닿게 사거리를 길게 (임시)
+	protected override bool Wide => false;
+	protected override float Speed => 30f;
+	protected override float Range => 14f;
+	protected override Vector2 HitSize => new Vector2(1f, 2f);
+	protected override bool Pierce => false;
+
+	ParryGuard guard;
+	bool counterPending;
+	Vector2 counterDirection;
+
+	// 시작할 때 검기를 날리지 않고 판정 시간만 연다
+	protected override void OnSkillStart(FunctionContext task)
+	{
+		caster = task.Caster;
+		counterPending = false;
+		guard = caster.GetComponent<ParryGuard>();
+		if (guard == null)
+		{
+			Debug.LogError($"{Name}: {caster.name}에 ParryGuard가 없습니다.");
+			return;
+		}
+		guard.Parried += OnParried;
+		guard.Open(WindowSeconds);
+	}
+
+	// 투사체 충돌(물리 단계)에서 불리므로 바로 날리지 않고 다음 틱에 날린다 (heap은 틱 안에서 다룬다)
+	void OnParried(Vector2 point, Vector2 back)
+	{
+		Unsubscribe();
+		counterPending = true;
+		counterDirection = back;
+	}
+
+	protected override void OnTick(FunctionContext task, int tick)
+	{
+		if (counterPending)
+		{
+			counterPending = false;
+			LaunchWave(task, BodyCenter(task.Caster), counterDirection);
+		}
+		base.OnTick(task, tick);
+	}
+
+	protected override void OnSkillEnd(FunctionContext task)
+	{
+		Unsubscribe();
+		guard?.Close();
+		base.OnSkillEnd(task);
+	}
+
+	protected override void OnSkillCancel(FunctionContext task)
+	{
+		Unsubscribe();
+		guard?.Close();
+		base.OnSkillCancel(task);
+	}
+
+	void Unsubscribe()
+	{
+		if (guard != null) guard.Parried -= OnParried;
+	}
 }
 
 /// <summary>

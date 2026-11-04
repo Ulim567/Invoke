@@ -31,7 +31,7 @@
 - 떨어질 땅 찾기는 떨어진 검이 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다 (#125).
 - 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다. 못 주우면 근처에 떨어진 소환검을 줍는다 (`SummonedSwords.TryPickUpNearest`).
 
-### 지금 값 (Player_JW)
+### 지금 값 (공용 Player, #268)
 
 | 항목 | 값 |
 | --- | --- |

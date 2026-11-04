@@ -83,6 +83,9 @@
 | `Throw(SummonedSword, GameObject target)` | 검, 대상 (없으면 빗나감) | `bool` | 사용 가능한 검만 던진다 |
 | `Recall(SummonedSword)` / `RecallFirstThrown()` | 검 | `bool` | 던진 검을 되돌린다 |
 | `Stab(SummonedSword, GameObject target)` | 검, 대상 | `bool` | (#165) 사용 가능한 검을 대상에게 보내 찌르고 돌아오게 한다. 닿으면 `StabHit`, 돌아오면 다시 `Ready`. 대상이 사라지거나 1.2초 안에 못 닿으면 그냥 돌아온다. 소환검 찌르기가 쓴다 |
+| `Stab(SummonedSword, GameObject target, int side)` | 검, 대상, 옆(-1 왼쪽, 1 오른쪽, 0 바로) | `bool` | (#243) `Stab`과 같고, 먼저 대상의 그쪽 옆(`Stab Side Distance`, 임시 1.5)으로 간 뒤 안쪽으로 찌른다. 표식 남기기가 쓴다 |
+| `Dance(SummonedSword, GameObject target, float startAngle)` | 검, 대상, 시작 각도(도) | `bool` | (#243) 사용 가능한 검을 대상 둘레로 보내 돌게 한다 (`Dance Radius` 1.2, `Dance Degrees Per Second` 540, 임시). `Dancing` 상태. 데미지는 스킬이 준다. 검무가 쓴다 |
+| `EndDance(SummonedSword)` | 검 | - | (#243) 검무를 끝낸다. 도는 중인 검만 `Ready`로 바뀌고 곁의 자리로 날아온다 |
 | `Throw(SummonedSword, GameObject target, Vector2 direction)` | 검, 대상(빗나가면 `null`), 방향 | `bool` | (#167) 일직선으로 던진다. 대상에 닿으면 `Hit`을 알리고 몬스터 몸에 꽂혀 따라다닌다(몬스터가 죽으면 떨어짐). 대상이 `null`이면 안 맞고 날아가 벽·땅(Ground)에 꽂히거나 14칸에서 떨어진다. 한쪽 방향 발판(Platform)은 통과한다. 소환검 던지기가 쓴다 |
 | `StartReturn(SummonedSword)` | 검 | `bool` | (#167) 던진(날아가는 중, 떨어짐·꽂힘) 검을 곁으로 날아오게 한다. 지나가는 몬스터는 `ReturnHit`, 닿으면 `Ready`. 검 돌아오기가 쓴다 |
 | `ReturnHit` (event) | `SummonedSword`, `GameObject` | - | [로직] (#167) 돌아오는 검이 몬스터를 지나갔을 때. 몬스터마다 한 번 |
@@ -91,9 +94,10 @@
 | `Changed` (event) | - | - | [표시] 목록·상태가 바뀔 때 |
 | `Hit` (event) | `SummonedSword`, `GameObject` | - | [로직] 던진 소환검이 대상에 닿았을 때 |
 
-`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked` / `Stabbing` / `Returning`), `StateChanged`(event, [표시]), `ThrowOrder`(던진 순서, #167), `StuckTo`(꽂힌 몬스터, #167).
+`SummonedSword`(소환검 하나): `Pointer`, `State`(`Ready` / `Flying` / `Dropped` / `Leaked` / `Stabbing` / `Returning` / `Dancing`), `StateChanged`(event, [표시]), `ThrowOrder`(던진 순서, #167), `StuckTo`(꽂힌 몬스터, #167).
 - `Throw(검, 대상)`(대상만 넘김)도 #167부터 대상 쪽 일직선으로 날아간다 (예전: 대상을 따라가는 유도). 대상이 `null`이면 바로 떨어지는 건 그대로.
 - `Returning`(#167): 검 돌아오기로 곁으로 날아오는 중. 사용 가능 개수에 안 들어간다. 꽂혀 있는 검은 `Dropped` 상태라 Z로 주울 수도 있다.
+- `Dancing`(#243): 검무로 대상 둘레를 도는 중. 칼끝이 대상을 본다. 사용 가능 개수에 안 들어간다. 대상이 사라지면 그 자리에 떠 있다가 스킬이 끝나면 곁으로 돌아온다.
 - `Stabbing`(#165): 소환검 찌르기로 날아가 찌르고 돌아오는 중. 사용 가능 개수(`ReadyCount`)에 안 들어가서 다른 스킬에 쓰이지 않는다. 속도 `Stab Speed`(프리팹, 임시 35).
 
 ### 임시 표시

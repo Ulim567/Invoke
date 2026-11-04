@@ -12,6 +12,7 @@ public enum SummonedSwordState
 	Leaked,  // 누수: 포인터를 잃어 그 자리에 멈춤. 힙과 개수는 계속 차지
 	Stabbing, // 소환검 찌르기: 대상에게 날아가 찌르고 돌아오는 중 (#165)
 	Returning, // 검 돌아오기: 곁으로 날아오는 중 (#167)
+	Dancing,  // 검무: 대상 주위를 도는 중 (#243)
 }
 
 /// <summary>
@@ -49,6 +50,12 @@ public class SummonedSword : NetworkBehaviour
 	[SerializeField, Min(0.1f)] float maxThrowDistance = 14f;
 	[Tooltip("검 돌아오기에서 곁으로 날아오는 속도 (유닛/초, 임시)")]
 	[SerializeField, Min(0.1f)] float returnSpeed = 30f;
+	[Tooltip("표식 남기기에서 대상 옆 이 거리 지점까지 간 뒤 안쪽으로 찌른다 (유닛, 임시)")]
+	[SerializeField, Min(0.1f)] float stabSideDistance = 1.5f;
+	[Tooltip("검무에서 대상 주위를 도는 반지름 (유닛, 임시)")]
+	[SerializeField, Min(0.1f)] float danceRadius = 1.2f;
+	[Tooltip("검무에서 도는 빠르기 (도/초, 임시)")]
+	[SerializeField] float danceDegreesPerSecond = 540f;
 	[Tooltip("돌아오는 동안 몬스터를 베는 판정 반지름 (유닛, 임시)")]
 	[SerializeField, Min(0.05f)] float returnHitRadius = 0.6f;
 
@@ -64,6 +71,11 @@ public class SummonedSword : NetworkBehaviour
 	float travelled;
 	Monster stuckTo;
 	Vector2 stuckOffset;
+	// 표식 남기기 (#243): 찌르기 전에 들를 옆쪽(-1 왼쪽, 1 오른쪽, 0 바로 찌름)과 들렀는지
+	int stabSide;
+	bool sideReached;
+	// 검무 (#243): 대상 둘레의 지금 각도 (도)
+	float danceAngle;
 	readonly HashSet<Monster> returnHits = new HashSet<Monster>();
 
 	/// <summary>힙 포인터 (번호표). 해제되면 더 이상 쓸 수 없다. 클라이언트에서는 서버가 보낸 값이다 (#229).</summary>
@@ -143,14 +155,26 @@ public class SummonedSword : NetworkBehaviour
 		SetState(SummonedSwordState.Returning);
 	}
 
-	internal void LaunchStab(GameObject target)
+	internal void LaunchStab(GameObject target, int side = 0)
 	{
 		stuckTo = null;
 		this.target = target;
+		stabSide = side;
+		sideReached = side == 0;
 		flightEndTime = Time.time + maxFlightTime;
 		returning = false;
 		falling = false;
 		SetState(SummonedSwordState.Stabbing);
+	}
+
+	// 검무 (#243): 대상 둘레를 startAngle부터 돈다. 끝내는 일은 SummonedSwords.EndDance(SetReady)
+	internal void LaunchDance(GameObject target, float startAngle)
+	{
+		stuckTo = null;
+		falling = false;
+		this.target = target;
+		danceAngle = startAngle;
+		SetState(SummonedSwordState.Dancing);
 	}
 
 	internal void SetDropped()
@@ -242,6 +266,9 @@ public class SummonedSword : NetworkBehaviour
 				break;
 			case SummonedSwordState.Stabbing:
 				Stab();
+				break;
+			case SummonedSwordState.Dancing:
+				Dance();
 				break;
 		}
 	}
@@ -340,11 +367,18 @@ public class SummonedSword : NetworkBehaviour
 		if (!returning && (target == null || !target.activeInHierarchy || Time.time >= flightEndTime)) returning = true;
 
 		Vector2 aim;
+		bool toSide = false;
 		if (returning) aim = FollowPoint;
 		else
 		{
 			Collider2D col = target.GetComponentInChildren<Collider2D>();
 			aim = col != null ? (Vector2)col.bounds.center : (Vector2)target.transform.position;
+			// 표식 남기기: 먼저 대상 옆으로 가서 안쪽으로 찌른다 (#243)
+			if (!sideReached)
+			{
+				aim += new Vector2(stabSide * stabSideDistance, 0f);
+				toSide = true;
+			}
 		}
 
 		Vector2 next = Vector2.MoveTowards(transform.position, aim, stabSpeed * Time.deltaTime);
@@ -353,6 +387,11 @@ public class SummonedSword : NetworkBehaviour
 		transform.position = next;
 
 		if (Vector2.Distance(next, aim) > hitDistance) return;
+		if (toSide)
+		{
+			sideReached = true;
+			return;
+		}
 		if (!returning)
 		{
 			returning = true;
@@ -363,6 +402,20 @@ public class SummonedSword : NetworkBehaviour
 			// 상태는 SummonedSwords가 바꾼다
 			owner?.NotifyStabReturned(this);
 		}
+	}
+
+	// 검무 (#243): 대상 둘레를 돌며 칼끝이 대상 쪽을 본다. 대상이 사라지면 그 자리에 떠 있다 (스킬이 끝나면 곁으로)
+	void Dance()
+	{
+		if (target == null || !target.activeInHierarchy) return;
+		Collider2D col = target.GetComponentInChildren<Collider2D>();
+		Vector2 center = col != null ? (Vector2)col.bounds.center : (Vector2)target.transform.position;
+		danceAngle += danceDegreesPerSecond * Time.deltaTime;
+		float rad = danceAngle * Mathf.Deg2Rad;
+		Vector2 point = center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * danceRadius;
+		transform.position = Vector2.MoveTowards(transform.position, point, stabSpeed * Time.deltaTime);
+		Vector2 toCenter = center - (Vector2)transform.position;
+		if (toCenter.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(toCenter.y, toCenter.x) * Mathf.Rad2Deg);
 	}
 
 	void StartFalling()

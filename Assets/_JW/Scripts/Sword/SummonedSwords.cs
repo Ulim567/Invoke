@@ -181,12 +181,37 @@ public class SummonedSwords : MonoBehaviour
 	/// 소환검을 대상에게 보내 찌르게 한다 (소환검 찌르기, #165). 사용 가능한 검만 보낼 수 있다.<br/>
 	/// 닿으면 StabHit을 알리고 곁으로 돌아와 다시 사용 가능해진다. 대상이 사라지거나 시간 안에 못 닿으면 그냥 돌아온다.
 	/// </summary>
-	public bool Stab(SummonedSword sword, GameObject target)
+	public bool Stab(SummonedSword sword, GameObject target) => Stab(sword, target, 0);
+
+	/// <summary>
+	/// Stab과 같고, side(-1 왼쪽, 1 오른쪽)면 먼저 대상의 그쪽 옆으로 간 뒤 안쪽으로 찌른다 (표식 남기기, #243). 0이면 바로 찌른다.
+	/// </summary>
+	public bool Stab(SummonedSword sword, GameObject target, int side)
 	{
 		if (sword == null || target == null || !swords.Contains(sword) || sword.State != SummonedSwordState.Ready) return false;
-		sword.LaunchStab(target);
+		sword.LaunchStab(target, Mathf.Clamp(side, -1, 1));
 		NotifyChanged();
 		return true;
+	}
+
+	/// <summary>
+	/// 검무 (#243): 사용 가능한 검을 대상 둘레로 보내 startAngle(도)부터 돌게 한다. 데미지는 스킬이 준다.<br/>
+	/// 도는 동안은 Dancing 상태라 다른 스킬에 쓰이지 않는다. EndDance로 끝내면 곁으로 돌아온다.
+	/// </summary>
+	public bool Dance(SummonedSword sword, GameObject target, float startAngle)
+	{
+		if (sword == null || target == null || !swords.Contains(sword) || sword.State != SummonedSwordState.Ready) return false;
+		sword.LaunchDance(target, startAngle);
+		NotifyChanged();
+		return true;
+	}
+
+	/// <summary>검무를 끝낸다 (#243). 도는 중인 검만 다시 사용 가능으로 바뀌고 곁의 자리로 날아온다.</summary>
+	public void EndDance(SummonedSword sword)
+	{
+		if (sword == null || !swords.Contains(sword) || sword.State != SummonedSwordState.Dancing) return;
+		sword.SetReady();
+		NotifyChanged();
 	}
 
 	/// <summary>

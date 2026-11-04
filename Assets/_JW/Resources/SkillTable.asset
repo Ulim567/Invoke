@@ -264,7 +264,7 @@ MonoBehaviour:
     displayName: "\uD45C\uC2DD \uB0A8\uAE30\uAE30"
     family: 3
     targeting: 0
-    damageMultiplier: 1
+    damageMultiplier: 0.5
     tickCount: 20
     cooldownTicks: 0
     localVariableCount: 0
@@ -276,7 +276,7 @@ MonoBehaviour:
   - id: c.sword_dance
     displayName: "\uAC80\uBB34"
     family: 3
-    targeting: 4
+    targeting: 0
     damageMultiplier: 0.5
     tickCount: 20
     cooldownTicks: 0

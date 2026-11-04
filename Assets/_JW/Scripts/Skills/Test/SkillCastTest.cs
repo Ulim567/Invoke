@@ -46,7 +46,9 @@ public class SkillCastTest : MonoBehaviour
 		foreach (SkillData data in table.Skills)
 		{
 			// 소환검이 필요한 스킬은 사용 가능한 소환검을 하나 이상 준비한다. 앞 스킬이 던진 검은 되돌린다 (#220)
-			if (data.NeedsSummonedSword && swords != null) yield return PrepareSword(executor, swords);
+			// 표식 남기기는 2개가 필요하다 (#243)
+			int need = data.Id == PredefinedFunctionIds.Mark ? CMark.RequiredSwords : 1;
+			if (data.NeedsSummonedSword && swords != null) yield return PrepareSword(executor, swords, need);
 			// 앞에서 던진 물리 검은 손으로 되돌린다. 검 돌아오기는 물리 검을 돌려받지 않으므로 (#232) 그대로 두면 뒤의 공격 스킬이 맨손으로 실패한다
 			if (physical != null && physical.IsUnarmed) physical.Recall();
 			yield return CastAndWait(executor, data.Id, FunctionTaskEndReason.Completed, null, data.TickCount);
@@ -113,16 +115,20 @@ public class SkillCastTest : MonoBehaviour
 	}
 
 	// 던진 소환검을 모두 되돌리고, 사용 가능한 검이 없으면 하나 소환한다
-	IEnumerator PrepareSword(FunctionExecutor executor, SummonedSwords swords)
+	IEnumerator PrepareSword(FunctionExecutor executor, SummonedSwords swords, int need)
 	{
 		foreach (SummonedSword s in swords.Swords) swords.Recall(s);
 		float timeout = Time.time + 2f;
 		while (swords.ReadyCount < swords.Swords.Count && Time.time < timeout) yield return null;
-		if (swords.ReadyCount > 0) yield break;
 		if (!PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.SummonSword, out PredefinedFunction summon)) yield break;
-		FunctionTask task = executor.Cast(summon);
-		timeout = Time.time + 5f;
-		while (task != null && !task.IsEnded && Time.time < timeout) yield return null;
+		// 사용 가능한 검이 need개가 될 때까지 소환한다 (5개거나 heap이 모자라면 거기까지)
+		int guard = need + 2;
+		while (swords.ReadyCount < need && swords.CanSummon && guard-- > 0)
+		{
+			FunctionTask task = executor.Cast(summon);
+			timeout = Time.time + 5f;
+			while (task != null && !task.IsEnded && Time.time < timeout) yield return null;
+		}
 	}
 
 	// expectedTicks가 0이면 실행 틱 수는 검사하지 않는다

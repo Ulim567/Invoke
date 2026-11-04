@@ -11,6 +11,7 @@ using UnityEngine.InputSystem.LowLevel;
 /// <para>
 /// 시작할 때 검 소환(c.summon_sword)을 2번 시전해 소환검 2개를 만들고, 끝나면 해제(c.free_sword)로 지운다.<br/>
 /// 시작할 때 슬롯 3(E)에 여러 명 선택 스킬(c.battlefield_sweep), 슬롯 4(R)에 범위 스킬(c.wide_slash)을 넣는다 (SlotLoadout). 주변에 몬스터가 2마리 이상 있어야 한다.<br/>
+/// 여러 명 선택은 서버에 대상 배열로 실제 시전된다 (#243). 시전 결과(CastRequested)는 서버가 받아 준 뒤에 오고, 소환검이 돌아올 때까지 기다린 뒤 다음 단계로 간다.<br/>
 /// 1. 두 명 찍고 떼기 → 찍은 두 명<br/>
 /// 2. 아무도 안 찍고 떼기 → 지금 고른 한 명<br/>
 /// 3. 찍었다가 다시 찍으면 빠짐<br/>
@@ -26,6 +27,7 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 	int failures;
 	List<GameObject> lastTargets;
 	FunctionExecutor executor;
+	SummonedSwords swords;
 
 	IEnumerator Start()
 	{
@@ -34,6 +36,7 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 
 		SlotCaster caster = NetworkClient.localPlayer.GetComponent<SlotCaster>();
 		executor = caster.GetComponent<FunctionExecutor>();
+		swords = caster.GetComponent<SummonedSwords>();
 		SlotLoadout loadout = caster.GetComponent<SlotLoadout>();
 		loadout.EquipSkill(2, PredefinedFunctionIds.BattlefieldSweep);
 		loadout.EquipSkill(3, PredefinedFunctionIds.WideSlash);
@@ -58,16 +61,20 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 		yield return Press(Key.E);
 		Check("두 명 찍음", caster.MarkedTargets.Count == 2);
 		yield return Press();
+		yield return WaitCast();
 		Check("두 명 찍고 떼면 찍은 두 명에게 발동", lastTargets != null && lastTargets.Count == 2
 			&& lastTargets.Contains(first) && lastTargets.Contains(second) && first != second);
 		Check("끝나면 찍은 목록 비움", caster.MarkedTargets.Count == 0);
+		yield return WaitSwordsBack();
 
 		// 2. 아무도 안 찍고 떼기
 		lastTargets = null;
 		yield return Press(Key.E);
 		GameObject current = caster.CurrentTarget;
 		yield return Press();
+		yield return WaitCast();
 		Check("안 찍고 떼면 지금 고른 한 명", lastTargets != null && lastTargets.Count == 1 && lastTargets[0] == current);
+		yield return WaitSwordsBack();
 
 		// 3. 다시 찍으면 빠짐
 		yield return Press(Key.E);
@@ -77,6 +84,7 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 		yield return Press(Key.E);
 		Check("같은 대상을 다시 찍으면 빠짐", caster.MarkedTargets.Count == 0);
 		yield return Press();
+		yield return WaitSwordsBack();
 
 		// 4. 소환검 1개면 한 명까지만
 		yield return Cast(PredefinedFunctionIds.FreeSword);
@@ -90,7 +98,9 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 		yield return Press(Key.E);
 		Check("소환검 1개면 한 명까지만 찍힘", caster.MarkedTargets.Count == 1);
 		yield return Press();
+		yield return WaitCast();
 		Check("소환검 1개: 한 명에게 발동", lastTargets != null && lastTargets.Count == 1);
+		yield return WaitSwordsBack();
 		yield return Cast(PredefinedFunctionIds.FreeSword);
 
 		// 5. 범위
@@ -118,6 +128,20 @@ public class SlotMultiAreaSimTest : MonoBehaviour
 	{
 		InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState(keys));
 		yield return new WaitForSeconds(stepDelay);
+	}
+
+	// 슬롯 시전은 서버가 받아 준 뒤(CastAccepted) CastRequested가 오므로 잠깐 기다린다 (#212)
+	IEnumerator WaitCast()
+	{
+		float end = Time.time + 1f;
+		while (lastTargets == null && Time.time < end) yield return null;
+	}
+
+	// 전장 휩쓸기로 보낸 소환검이 모두 곁으로 돌아올 때까지 기다린다 (#243). 그래야 다음 단계에서 찍을 수 있는 인원이 맞다
+	IEnumerator WaitSwordsBack()
+	{
+		float end = Time.time + 3f;
+		while (swords != null && swords.ReadyCount < swords.Swords.Count && Time.time < end) yield return null;
 	}
 
 	// 스킬을 시전하고 끝날 때까지 기다린다

@@ -330,19 +330,18 @@ public class SlotCaster : NetworkBehaviour
 		}
 
 		// 단일: 고른 몬스터를 대상으로 서버에 시전을 부탁한다. 죽었거나 없어진 대상은 서버의 실행기가 InvalidTarget으로 막는다
-		// 여러 명: 대상 배열을 넘기는 방법이 아직 없어 부탁하지 않고 CastRequested까지만 한다 (소환검·전장 휩쓸기 이슈)
+		// 여러 명: 찍은 순서대로 대상 배열로 부탁한다 (RequestCast(슬롯, 대상 배열), #238, #243)
 		string names = string.Join(", ", targets.ConvertAll(t => t.name));
 		if (mode == CastMode.Single)
 		{
 			RequestCast(slot, function, targets[0], targets, $"→ {names} 시전");
 			return;
 		}
-		Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: {function.Name} → {names} 시전 요청 (여러 명, 아직 시전 안 함)");
-		CastRequested?.Invoke(slot, function, targets);
+		RequestCast(slot, function, null, targets, $"→ {names} 시전 (여러 명)", sendTargetArray: true);
 	}
 
 	// 서버에 시전을 부탁한다 (#212). 로그, CastRequested, 취소용 기록은 답(CastAccepted)이 온 뒤에 한다
-	void RequestCast(int slot, FunctionBlock function, GameObject target, List<GameObject> targets, string note)
+	void RequestCast(int slot, FunctionBlock function, GameObject target, List<GameObject> targets, string note, bool sendTargetArray = false)
 	{
 		if (net == null)
 		{
@@ -350,7 +349,9 @@ public class SlotCaster : NetworkBehaviour
 			return;
 		}
 		pending[slot] = new PendingCast { Function = function, Targets = targets, Note = note };
-		net.RequestCast(slot, target);
+		// 여러 명 선택은 대상 배열로, 나머지(단일, 범위, 대상 없음)는 대상 하나로 보낸다. 범위의 targets는 표시용이라 보내지 않는다
+		if (sendTargetArray) net.RequestCast(slot, targets.ToArray());
+		else net.RequestCast(slot, target);
 	}
 
 	// [내 화면] 서버가 시전을 받아 줌

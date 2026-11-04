@@ -40,6 +40,8 @@ GameObject:
   - component: {fileID: 2643627262021628322}
   - component: {fileID: 7315738941134308525}
   - component: {fileID: 5743095526360772754}
+  - component: {fileID: 7930981262655194856}
+  - component: {fileID: 5499647203975102261}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -696,3 +698,33 @@ MonoBehaviour:
   barSize: {x: 28, y: 2.5}
   fillColor: {r: 0.55, g: 0.85, b: 1, a: 0.95}
   backColor: {r: 0, g: 0, b: 0, a: 0.55}
+--- !u!114 &7930981262655194856
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c6fab3c7c6687a43a66a28de95b5e68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  hitStunTime: 0.3
+  invincibleTime: 1
+  hideDelay: 1
+  respawnDelay: 3
+--- !u!114 &5499647203975102261
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a1978bc7de2a3da4c90fae5122600487, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealthEffects
+  spriteRenderer: {fileID: 0}
+  blinkInterval: 0.1

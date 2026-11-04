@@ -5,7 +5,8 @@ using UnityEngine;
 /// <para>
 /// - 체력 피해는 데미지 계산(박진우, DamageCalculator)을 거쳐 나온 정수로 맞은 대상의 IDamageable.TakeDamage를 부른다.<br/>
 ///   몬스터는 공격력 능력치가 없으므로 Amount를 그대로 넘기고(DamageRequest.Flat), 몬스터 공격은 처형하지 않으므로 대상 정보는 넘기지 않는다.<br/>
-/// - 메모리 점유·탈취, 회수 방해, 실행 중단은 받을 시스템이 아직 없어서 로그만 남긴다. 시스템이 생기면 여기만 바꾼다.
+/// - 실행 중단은 맞은 대상의 FunctionExecutor(이우림).InterruptAll()로 실행 중인 함수를 모두 끊는다. 실행기가 없으면(플레이어가 아님) 아무것도 하지 않는다.<br/>
+/// - 메모리 점유·탈취, 회수 방해는 받는 방식을 아직 정하지 않아서 로그만 남긴다. 정하면 여기만 바꾼다.
 /// </para>
 /// <para>
 /// 네트워크를 붙이면 이 함수는 서버에서만 부른다 (공격 판정은 서버 한 곳에서, 코드 작성 규칙 1·2).
@@ -36,8 +37,14 @@ public static class MonsterAttackResolver
 				target.TakeDamage(DamageCalculator.Calculate(DamageRequest.Flat(effect.Amount)).Damage);
 				break;
 
+			case AttackEffectType.Interrupt:
+				// 맞은 플레이어가 실행 중인 함수를 모두 끊는다 (끊긴 작업은 EndReason Interrupted)
+				FunctionExecutor executor = hit.GetComponentInParent<FunctionExecutor>();
+				if (executor != null) executor.InterruptAll();
+				break;
+
 			default:
-				// 받을 시스템(메모리, 함수 실행기)이 생기기 전까지는 로그로 확인한다
+				// 메모리 효과는 받는 방식을 정하기 전까지 로그로 확인한다
 				Debug.Log($"[몬스터 공격] {hit.transform.root.name}: {effect.Type} {effect.Amount} ({effect.Duration}초) — 받는 시스템이 아직 없음");
 				break;
 		}

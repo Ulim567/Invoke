@@ -655,8 +655,9 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
 - 정할 것 (#132)
   - 실행 중 실패한 블록을 편집 화면에 표시: 별도 이슈. 실행기가 실패한 `BlockData`와 함수 GUID를 작업에 담고, 편집 화면은 같은 `BlockData`를 든 블록 UI를 칠함
   - 범위 밖 index에서 C처럼 이웃 변수를 덮어쓰는 연출: 하려면 별도 이슈(프레임 안의 변수 위치 규칙이 새로 필요)
-- 김도훈과 정할 것 (#143)
-  - 실행 중단 효과(`AttackEffectType.Interrupt`)를 받는 곳: `MonsterAttackResolver`가 맞은 대상에서 `GetComponentInParent<FunctionExecutor>()`를 찾아 `InterruptAll()` 호출 (제안). 없으면(플레이어가 아님) 아무것도 하지 않음- 박진우와 정할 것 (#143)
+- 김도훈과 정한 것 (#143)
+  - 실행 중단 효과(`AttackEffectType.Interrupt`)를 받는 곳: `MonsterAttackResolver`가 맞은 대상에서 `GetComponentInParent<FunctionExecutor>()`를 찾아 `InterruptAll()` 호출. 없으면(플레이어가 아님) 아무것도 하지 않음 (김도훈이 연결함, Gateway 때리기 `Gateway_Smash`)
+- 박진우와 정할 것 (#143)
   - `SlotCaster`에서 `Cancel`을 부르는 때: 실행 중인 슬롯을 다시 누름(제안). 스킬 슬롯에도 넣을지, 연타로 자기 작업을 끊지 않게 하는 방법(사용자 정의 함수 슬롯만, 길게 누르기, 시전 직후 잠깐 무시 등)
   - `Cancel`이 `false`일 때(그 슬롯에서 시전한 작업이 없음): 지금처럼 `Cast`
   - 그 전까지: 플레이어가 자기 작업을 끊을 방법이 없음. 끝나지 않는 작업은 실행 중단 공격·재시작으로만 끝남

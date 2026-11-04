@@ -50,11 +50,12 @@
      - 씬 메시지 뒤에 보내는 이유: 클라이언트가 새 씬을 다 로드한 뒤에 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아옴
   5. `TravelEndedMessage`
   6. 이전 씬이 레이드 던전이면 그 던전 언로드
-- 클라이언트의 처리 순서: 이전 씬 언로드 → 새 씬 로드 → teleport → `TravelEndedMessage`(로딩 화면 페이드 아웃, 액션 맵 활성화)
-- 한계: 씬을 바꾸는 동안 플레이어 움직임을 잠그지 않음
-  - 클라이언트: 이전 씬을 언로드한 뒤 밟을 땅이 없어 떨어지고, teleport 뒤에도 떨어지던 속도가 남음
-  - 서버: 그동안 클라이언트가 보낸 위치(떨어지는 이전 위치)로 서버의 플레이어가 새 씬에 놓여 몬스터와 판정될 수 있음
-  - 로드가 빠르면(로컬 테스트) 드러나지 않음. 박진우에게 요청한 움직임 잠그기 함수가 생기면 이동하는 동안 잠금
+- 클라이언트의 처리 순서: 요청(움직임 잠금) → 이전 씬 언로드 → 새 씬 로드 → teleport → `TravelEndedMessage`(움직임 잠금 해제, 로딩 화면 페이드 아웃, 액션 맵 활성화)
+- 이동하는 동안 움직임 잠금 (#216): `PlaceTravelClient`가 `RequestTravel`에서 로컬 플레이어의 `PlayerMovement.SetMovementLocked(true)`, `TravelEndedMessage`를 받으면 `SetMovementLocked(false)` 호출
+  - 이유(클라이언트): 이전 씬을 언로드한 뒤 밟을 땅이 없어 떨어지고, teleport 뒤에도 떨어지던 속도가 남음
+  - 이유(서버): 그동안 클라이언트가 보낸 위치(떨어지는 이전 위치)로 서버의 플레이어가 새 씬에 놓여 몬스터와 판정될 수 있음
+  - 서버가 거절했을 때도 `TravelEndedMessage`가 오므로 잠금 해제
+  - 접속이 끊기면 로컬 플레이어 오브젝트가 삭제되어 잠금도 함께 사라짐
 - 출구와 호스트: 호스트에서는 떠난 장소의 씬이 서버에 남고, 다른 씬의 물리 세계로 옮겨진 플레이어에는 `OnTriggerExit2D`가 불리지 않음 → `PlaceExit`는 로컬 플레이어의 물리 세계(`scene.GetPhysicsScene2D()`)가 자기와 다르면 놓아줌
   - 씬이 아니라 물리 세계로 비교: 클라이언트에서는 Mirror가 플레이어를 `Base`에 만들어 씬이 늘 다름. 장소 씬과 `Base`는 같은 기본 물리 세계
   - 순서 보장: 씬 로드·언로드 중에는 Mirror가 다음 메시지 처리를 미룸(`NetworkClient.isLoadingScene`)
@@ -140,7 +141,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Instance` | - | `PlaceTravelClient` | `Base` 씬의 `PlaceTravelClient`. 장소 씬의 오브젝트는 Inspector로 다른 씬의 오브젝트를 연결할 수 없으므로 이것으로 찾음 |
-| `RequestTravel(string destination)` | 갈 씬 이름 (`PlaceScenes`) | - | 서버에 이동 요청. 접속 안 함, 로컬 플레이어 없음, 이전 요청의 답을 기다리는 중이면 무시 |
+| `RequestTravel(string destination)` | 갈 씬 이름 (`PlaceScenes`) | - | 서버에 이동 요청. 접속 안 함, 로컬 플레이어 없음, 이전 요청의 답을 기다리는 중이면 무시. 답(`TravelEndedMessage`)이 올 때까지 로컬 플레이어의 Player·Attack 액션 맵 비활성화, 움직임 잠금 |
 
 ### 씬에 놓는 컴포넌트
 
@@ -164,7 +165,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
   - `PlayerMovement`에 움직임 잠그기 함수 `SetMovementLocked(bool locked)`, `IsMovementLocked`
     - 잠근 동안: 속도 0, 중력 없음, 진행 중인 돌진 중단, 입력·스킬로 움직이지 않음
     - 풀 때: 속도 0에서 시작
-    - 쓰는 곳: `PlaceTravelClient`가 요청을 보낼 때 잠그고 `TravelEndedMessage`를 받으면 풂 (위 「한계」 해결)
+    - 쓰는 곳: `PlaceTravelClient`가 요청을 보낼 때 잠그고 `TravelEndedMessage`를 받으면 풂 (위 「이동하는 동안 움직임 잠금」, #216)
     - `Rigidbody2D`를 `PlaceTravelClient`가 직접 다루지 않는 이유: 속도는 `PlayerMovement`가 매 `FixedUpdate`에 씀. 두 곳에서 바꾸면 돌진 상태 등과 어긋남 (코드 작성 규칙 2)
 - 임혜원에게 알릴 것 (#134)
   - `LobbyInteractable`도 호스트에서 같은 문제: 호스트가 로비를 떠나도 로비 씬이 서버에 남고 `OnTriggerExit2D`가 불리지 않아, 입구가 로컬 플레이어를 계속 붙잡음 → 다른 장소에서 ↑를 누르면 로비 입구 창이 열림. `PlaceExit`처럼 `Update`에서 로컬 플레이어의 물리 세계(`scene.GetPhysicsScene2D()`)가 자기와 다르면 놓아주면 해결 (씬으로 비교하면 클라이언트에서 늘 달라 상호작용이 안 됨)

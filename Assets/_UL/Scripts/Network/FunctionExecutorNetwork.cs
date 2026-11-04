@@ -342,7 +342,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// [소유 클라이언트] 함수 하나를 서버에 저장하라고 요청한다. 같은 GUID의 함수가 있으면 덮어쓴다. 결과는 PlayerDataRequestAnswered.<br/>
 	/// 슬롯 함수(ReceivedSlots의 GUID)와 페이지 함수 모두 이 요청으로 저장한다. 슬롯 함수를 저장하면 그 슬롯은 새 내용으로 시전된다.<br/>
 	/// 새 GUID는 페이지 함수로 세고, 이미 ProgressRules.MaxPageFunctions개면 TooManyFunctions.<br/>
-	/// 슬롯 함수의 이름(slot1~slot8)이나 파라미터(없음)가 바뀌어 있으면 SlotFunctionLocked.
+	/// 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 바뀌어 있으면 SlotFunctionLocked.
 	/// </summary>
 	public void RequestSaveFunction(FunctionData function)
 	{
@@ -388,9 +388,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return;
 		}
 
-		// 슬롯 함수는 function body만 바꿀 수 있다. 이름(slot1~slot8)과 파라미터(없음)가 다르면 거부한다
+		// 슬롯 함수는 function body만 바꿀 수 있다. 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 다르면 거부한다
 		int slot = Array.FindIndex(serverSlots, e => e.Kind == SlotLoadout.EntryKind.UserFunction && e.Id == function.Guid);
-		if (slot >= 0 && (function.Name != ProgressRules.SlotFunctionName(slot) || (function.Parameters != null && function.Parameters.Count > 0)))
+		if (slot >= 0 && !KeepsSlotFrame(function, slot))
 		{
 			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.SlotFunctionLocked);
 			return;
@@ -414,6 +414,16 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 		TargetFunctionSaved(json);
 		TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.Saved);
+	}
+
+	// 슬롯 함수의 틀(이름·파라미터·반환 타입·비동기 여부)이 서버가 만든 그대로인지 본다.
+	// 반환 타입이 비어 있으면 FunctionDataConverter처럼 Void로 본다
+	static bool KeepsSlotFrame(FunctionData function, int slot)
+	{
+		if (function.Name != ProgressRules.SlotFunctionName(slot)) return false;
+		if (function.Parameters != null && function.Parameters.Count > 0) return false;
+		if (function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void) return false;
+		return !function.IsAsync;
 	}
 
 	[Command]

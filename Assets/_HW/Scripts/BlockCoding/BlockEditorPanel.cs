@@ -8,4 +8,15 @@
 /// </summary>
 public class BlockEditorPanel : InputBlockingPanel
 {
+	BlockEditor editor;
+
+	/// <summary>
+	/// 편집 화면을 열고, 내 캐릭터가 실제 계정이면 서버의 슬롯 함수·페이지 함수 목록으로 다시 그린다.
+	/// </summary>
+	public override void OpenFor(PlayerInputReader player)
+	{
+		base.OpenFor(player);
+		if (editor == null) editor = GetComponentInChildren<BlockEditor>(true);
+		if (editor != null) editor.Refresh();
+	}
 }

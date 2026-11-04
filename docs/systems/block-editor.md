@@ -5,13 +5,13 @@
 ## 하는 일
 - 블럭코딩 편집 화면. 블록 목록(팔레트)에서 블록을 끌어 편집 영역에 놓고, 위아래로 이어 붙이고, 조건문·for·while 안에 넣는다. (#72)
 - 블록의 칸을 채운다. 값 칸에 값·변수를 적거나 값 블록을 끼우고, 이름·타입·연산자를 고친다. (#77)
-- 만든 함수를 저장하고 다시 불러온다. 지금은 이 컴퓨터의 파일에 저장한다. (#77)
+- 만든 함수를 저장하고 다시 불러온다. 실제 계정이면 서버 DB, 아니면 이 컴퓨터의 파일에 저장한다. (#77, 서버 저장은 이우림 #226 #239)
 - 편집 중인 함수는 `FunctionData` 하나다. 블록 UI(`BlockView`)가 `BlockData`를 직접 들고 있어서, 화면에서 블록을 옮기거나 칸을 고치면 함수 데이터가 바로 바뀐다. 데이터 형식은 function-data.md를 따른다.
 - 하지 않는 일
   - 해금은 아직 보지 않는다. 블록을 모두 보여 준다. 스킬 트리가 생기면 해금된 블록만 보여 준다.
   - 함수 실행은 하지 않는다. `FunctionExecutor`(이우림)가 한다.
   - 구조 검사(빈 칸, 선언하지 않은 변수, 짝 없는 else 등)는 하지 않는다. 「만든 함수를 서버로 보내 검사·저장하기」(이우림)에서 한다.
-  - 서버 저장은 하지 않는다. 위 이슈에서 `FunctionStorage`를 바꾸거나 대신한다.
+  - 함수의 구조 검사·저장 판정은 서버가 한다 (`FunctionExecutorNetwork.RequestSaveFunction`, network.md).
 
 ## 동작 규칙
 ### 연습장에서 열기 (#225)
@@ -63,7 +63,40 @@
 - 연산자 버튼: 누를 때마다 `BlockOptions`의 enum 순서대로. 데이터에는 enum 이름(`"Add"`)
 - if·else if·else는 블록 목록에서 따로 고르고, 놓은 뒤에는 바꾸지 않는다.
 
-### 저장·불러오기
+### 화면 배치 (이우림 「블록 견본」 기준)
+- 위: 제목줄(편집 터미널, 닫기), 함수 이름 칸과 금색 저장 버튼(`Save Button Prefab`)
+- 왼쪽 함수 목록(`Function List`): `Global Variables` → 머리글 「슬롯」 → 슬롯 1~8 → 머리글 「페이지 n / 5 +」 → 페이지 함수. 임시 계정은 `Global Variables` → 「함수 n개 +」 → 저장한 함수
+  - 줄은 `ListItemView`(번호, 이름, 오른쪽 글자, 고른 줄 모양), 머리글은 `ListHeaderView`(글자, + 버튼). 지금 연 줄은 고른 모양, 열고 나서 고쳤으면 이름 뒤 `*`
+- 가운데 편집 영역(점 격자 바탕), 아래 상태 줄: 왼쪽 저장 상태(`Message Label`: 「슬롯 1 · 저장하지 않은 변경 있음」, 「저장됨」, 오류는 빨강), 오른쪽 블록 수·코드 크기(`Info Label`)
+- 오른쪽 블록 목록: 분류 머리글(제어, 변수, 값, 함수, 메모리, 기타) 아래에 견본 블록
+- 그림: `Assets/_HW/UI/Frame/`의 9-slice 스프라이트(창, 제목줄, 패널, 머리글, 버튼, 목록 줄, 슬롯 카드, 키 배지, 격자)
+- 블록 모양(`Assets/_HW/UI/BlockCoding/Shapes`): 문장 블록은 위 왼쪽 홈(`blk_stmt`), 값 블록은 알약(`blk_value`), 조건문·반복문은 왼쪽 기둥과 아래 막대로 안쪽을 감쌈(`blk_inner`), 값 칸은 어두운 알약(`blk_slot`), 이름 칸은 밑줄, 변수 칸은 점선 상자, 드롭다운은 밝은 네모 + ▾
+- 블록 목록은 칩(짧은 이름: If, For, Declare, Array Get, thrust…)을 분류별로 줄줄이 놓는다 (`FlowLayoutGroup`). 칩을 끌면 칸이 다 있는 블록이 나온다
+- 타입·연산자 칸은 드롭다운(`DropdownPopup` 프리팹): 타입 int/float/bool/char/string, 연산 + - * / %, 비교 > < == != >= <=, 논리 && ||
+- 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set), 내가 만든 함수 부르기(`CallUserFunction`, 「함수」 분류 끝)가 있다. malloc은 불러온 함수에서만 보인다
+- 값 칸에 `NULL`을 적으면 `SlotData.FromNull()`과 같은 값으로 넣는다 (function-data.md #120)
+- 위쪽 줄의 「동기 / 비동기」 버튼: `FunctionData.IsAsync`를 고른다 (#132). 슬롯 함수와 전역 변수는 바꿀 수 없음
+- 끄는 동안: 블록이 반투명, 들어갈 자리에 보라색 줄(`InsertMarker`), 끼울 수 있는 값 칸은 보라색. 놓인 블록을 끌면 블록 목록 위에 빨간 휴지통 「여기에 놓으면 블록을 지워요」
+- 컴파일(`FunctionChecker`, 저장하지 않음): 반복문 밖의 break·continue, return이 없는 길, 비어 있는 값 칸. 오류가 있으면 오른쪽 오류 창으로 바뀌고, 비어 있는 값 칸과 반복문 밖의 break·continue 블록을 빨갛게 표시. 고치면 표시를 지운다
+- 오류가 있는 저장한 함수는 함수 목록에서 이름이 빨간 밑줄. 장착 화면에서는 「오류」로 흐리게 보이고 넣을 수 없다
+- 아직 없음: 키워드 굵은 글씨(굵은 Galmuri 글꼴 파일), 파라미터·반환 타입 고르기
+
+### 전역 변수 (Global Variables)
+- 함수 목록의 `Global Variables`를 누르면 전역 변수 선언(`GlobalVariablesData.Declarations`)을 같은 편집 영역에서 고친다. 함수 이름 칸은 끈다
+- 불러오기: 실제 계정은 `ReceivedGlobals`의 복사본, 임시 계정은 `GlobalVariablesStorage.Load()`
+- 저장: 실제 계정은 `RequestSaveGlobals`(결과 `PlayerDataRequestAnswered`의 `SaveGlobals`), 임시 계정은 내 캐릭터의 `FunctionExecutor.TrySaveGlobalVariables`(검사 → 저장 → 초기화). 검사에 걸리면 상태 줄에 빨갛게 알린다
+- 선언 블록(`int x = 3;`)만 넣는다. 다른 블록이 있으면 저장 검사에서 거부된다 (function-executor.md 「전역 변수」)
+
+### 실제 계정 (서버 저장)
+- 내 캐릭터(`NetworkClient.localPlayer`)의 `FunctionExecutorNetwork.UsesServerData`가 true면 서버 모드다. 편집 화면을 열 때마다(`BlockEditorPanel.OpenFor` → `BlockEditor.Refresh`) 다시 확인한다.
+- 함수 목록: 슬롯 1~8(`ReceivedSlots[i].Id`의 GUID인 함수, 없으면 「비어 있음」), 그 뒤에 페이지 함수(나머지 `ReceivedFunctions`). 처음 열면 slot1을 연다.
+- 슬롯 함수는 이름을 바꿀 수 없다 (이름 칸을 끈다). 페이지 함수는 `ProgressRules.MaxPageFunctions`개까지 더할 수 있다 (넘으면 「새 함수」·저장을 막고 안내).
+- 저장: `RequestSaveFunction(Function)`을 부르고 「저장하는 중...」을 보인다. 결과는 `PlayerDataRequestAnswered`(저장됨, 개수 초과, 슬롯 함수 잠김, 데이터 오류)로 위쪽 줄에 보이고, 성공하면 `PlayerDataReceived`에서 목록을 다시 그린다.
+- 함수 버튼을 누르면 서버가 보낸 함수의 복사본(JSON 왕복)을 연다. 저장하지 않은 고친 내용이 목록에 섞이지 않게 한다.
+- 장착대(`SlotEquipPanel`)는 실제 계정이면 슬롯이 고정이므로 slot1~slot8 이름과 안내만 보이고 장착 목록을 만들지 않는다.
+- 장착 화면 배치: 위 슬롯 카드 8개(`SlotCardView`: 키 배지, 이름, 고른 칸은 금색 테두리), 아래 왼쪽 「내 함수」, 오른쪽 「C 스킬」(3열, 색 띠로 C 스킬·공통 이동 구분), 맨 아래 줄(고른 칸, 코드 영역, 안내, 「칸 비우기」)
+
+### 저장·불러오기 (임시 계정, 이 컴퓨터 파일)
 - 저장: `FunctionDataJson.ToJson`을 그대로 `Application.persistentDataPath/Functions/{GUID}.json`에 쓴다. 같은 GUID면 덮어씀
 - 불러오기: 위쪽 줄의 함수 버튼을 누르면 파일에서 새로 읽어 연다 (저장하지 않은 고친 내용은 버린다). `function.Blocks`, `InnerBlocks`, `Slots[칸 번호].Block`을 따라가며 블록 UI를 만든다.
 - 위쪽 줄 표시: 블록 수(`FunctionData.CountBlocks`), 코드 영역 크기(`CodeSizeCalculator.Calculate`, 저장한 함수 + 지금 함수)
@@ -100,7 +133,8 @@
 | --- | --- | --- | --- |
 | `BlockEditor.Function` | - | `FunctionData` | 지금 편집 중인 함수. 읽기만 한다 |
 | `BlockEditor.Open(function)` | `FunctionData` | - | 함수 하나를 편집 영역에 연다. 블록이 이미 있으면 그대로 화면에 만든다 |
-| `BlockEditor.SaveFunction()` | - | - | 지금 함수를 저장한다 |
+| `BlockEditor.SaveFunction()` | - | - | 지금 함수를 저장한다 (실제 계정이면 서버에 요청) |
+| `BlockEditor.Refresh()` | - | - | 실제 계정인지 다시 보고 함수 목록을 새로 그린다. 편집 화면을 열 때 `BlockEditorPanel`이 부른다 |
 | `FunctionStorage.LoadAll()` | - | `List<FunctionData>` | 저장한 함수 모두 (이름 순서). 슬롯 장착 화면 등에서 쓸 수 있다. 서버 저장이 생기면 바뀐다 |
 | `FunctionStorage.Load(guid)` | GUID | `FunctionData` | 저장한 함수 하나. 없으면 null |
 
@@ -110,5 +144,5 @@
   - 조건문·for·while 안쪽 블록은 `InnerBlocks`, 값 칸에 들어가는 블록은 `SlotData.Block`에 넣는다.
   - 해금은 일단 보지 않는다.
 - 이우림에게 알릴 것 (#77)
-  - 저장은 임시로 이 컴퓨터 파일(`FunctionStorage`)에 한다. 서버 저장 이슈에서 바꾼다.
+  - 실제 계정은 서버 DB, 임시 계정(서버 데이터를 쓰지 않는 캐릭터)은 이 컴퓨터 파일(`FunctionStorage`)에 저장한다.
   - 잘못 적은 값은 저장하지 않고 빈 칸으로 둔다. 빈 칸, 선언하지 않은 변수는 편집 화면에서 막지 않는다 (구조 검사에서).

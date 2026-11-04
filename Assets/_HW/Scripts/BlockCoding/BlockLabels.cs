@@ -23,7 +23,8 @@ public static class BlockLabels
 	{
 		BlockKind.Conditional or BlockKind.For or BlockKind.While
 			or BlockKind.Break or BlockKind.Continue => ControlColor,
-		BlockKind.Declare or BlockKind.Assign or BlockKind.ArrayDeclare => VariableColor,
+		BlockKind.Declare or BlockKind.Assign or BlockKind.ArrayDeclare
+			or BlockKind.ArrayGet or BlockKind.ArraySet => VariableColor,
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not => ValueColor,
 		BlockKind.Function => FunctionColor,
 		BlockKind.Malloc or BlockKind.Free => MemoryColor,
@@ -62,6 +63,10 @@ public static class BlockLabels
 				return "continue;";
 			case BlockKind.ArrayDeclare:
 				return $"{TypeName(Slot(block, 0)?.Type)} {Slot(block, 1)?.Name}[{Value(Slot(block, 2))}];";
+			case BlockKind.ArrayGet:
+				return $"{Slot(block, 0)?.VariableName}[{Value(Slot(block, 1))}]";
+			case BlockKind.ArraySet:
+				return $"{Slot(block, 0)?.VariableName}[{Value(Slot(block, 1))}] = {Value(Slot(block, 2))};";
 			case BlockKind.Malloc:
 				return $"malloc({TypeName(Slot(block, 0)?.Type)})";
 			case BlockKind.Free:

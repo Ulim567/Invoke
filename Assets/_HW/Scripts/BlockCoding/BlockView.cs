@@ -26,6 +26,40 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	[SerializeField, Tooltip("조건문·for·while 안쪽에 블록을 쌓는 자리 (자식 오브젝트)")]
 	BlockList innerBlocks;
 
+	[Header("모양 (이우림 「블록 견본」)")]
+	[SerializeField, Tooltip("문장 블록: 위 왼쪽에 홈이 있는 네모 (blk_stmt)")]
+	Sprite statementSprite;
+
+	[SerializeField, Tooltip("값 블록: 양 끝이 둥근 알약 (blk_value)")]
+	Sprite valueSprite;
+
+	[SerializeField, Tooltip("블록 목록의 칩: 홈 없는 네모 (blk_chip)")]
+	Sprite chipSprite;
+
+	[SerializeField, Tooltip("조건문·반복문의 안쪽: 왼쪽 기둥만 블록 색이 보이는 그림 (blk_inner)")]
+	Sprite innerSprite;
+
+	[SerializeField, Tooltip("안쪽 바탕 색 (편집 영역 바탕과 같게)")]
+	Color innerColor = new Color32(0x14, 0x18, 0x23, 0xFF);
+
+	[SerializeField, Tooltip("이름 칸 밑줄 (blk_underline)")]
+	Sprite nameFieldSprite;
+
+	[SerializeField, Tooltip("변수 칸 점선 상자 (blk_dashed)")]
+	Sprite variableFieldSprite;
+
+	[SerializeField, Tooltip("이름 칸·변수 칸 선 색")]
+	Color fieldLineColor = new Color(1, 1, 1, 0.75f);
+
+	[SerializeField, Tooltip("조건문·반복문 아래 막대 높이")]
+	int containerBottom = 7;
+
+	[SerializeField, Tooltip("컴파일 오류가 난 블록 색 (반복문 밖의 break 등)")]
+	Color errorColor = new Color32(0xC8, 0x48, 0x58, 0xFF);
+
+	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
+	float dragAlpha = 0.75f;
+
 	// 고르기 버튼에서 차례로 바꿔 가며 고르는 타입
 	static readonly VariableTypeKind[] DeclareTypes =
 	{
@@ -70,6 +104,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 		bool hasInner = data.InnerBlocks != null;
 		innerBlocks.gameObject.SetActive(hasInner);
+		ApplyShape(IsValueBlock(data) ? valueSprite : statementSprite, IsValueBlock(data), hasInner);
 		BuildRow();
 		if (hasInner) innerBlocks.Bind(data.InnerBlocks, editor);
 	}
@@ -84,8 +119,48 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		Data = factory();
 		background.color = BlockLabels.ColorOf(Data);
 		innerBlocks.gameObject.SetActive(false);
-		AddText(() => editor.LabelOf(Data));
+		bool value = IsValueBlock(Data);
+		ApplyShape(value ? valueSprite : chipSprite, value, false, true);
+		AddText(() => editor.PaletteNameOf(Data));
 		RefreshTexts();
+	}
+
+	// 값 칸에 끼우는 블록 (알약 모양)
+	static bool IsValueBlock(BlockData data) =>
+		data.Kind is BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not or BlockKind.ArrayGet or BlockKind.Malloc;
+
+	/// <summary>
+	/// 컴파일 오류 표시 (블록을 빨갛게). BlockEditor가 컴파일할 때 부르고, 고치면 끈다.
+	/// </summary>
+	public void SetError(bool on) => background.color = on ? errorColor : BlockLabels.ColorOf(Data);
+
+	// 블록 모양: 바탕 그림, 한 줄의 여백, 조건문·반복문의 안쪽과 아래 막대
+	void ApplyShape(Sprite sprite, bool value, bool hasInner, bool chip = false)
+	{
+		if (sprite != null)
+		{
+			background.sprite = sprite;
+			background.type = Image.Type.Sliced;
+		}
+
+		if (row.TryGetComponent(out HorizontalLayoutGroup rowLayout))
+		{
+			// 문장 블록은 위의 홈(3픽셀)만큼 위 여백을 더 둔다
+			rowLayout.padding = chip ? new RectOffset(5, 5, 2, 3)
+				: value ? new RectOffset(6, 6, 2, 2)
+				: new RectOffset(5, 6, 5, 3);
+			rowLayout.childAlignment = chip ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
+		}
+
+		if (TryGetComponent(out VerticalLayoutGroup layout))
+			layout.padding = new RectOffset(0, 0, 0, hasInner ? containerBottom : 0);
+
+		if (hasInner && innerBlocks.TryGetComponent(out Image innerImage) && innerSprite != null)
+		{
+			innerImage.sprite = innerSprite;
+			innerImage.type = Image.Type.Sliced;
+			innerImage.color = innerColor;
+		}
 	}
 
 	/// <summary>
@@ -174,8 +249,24 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 				AddValue(2);
 				AddText("];");
 				break;
+			case BlockKind.ArrayGet:
+				AddVariableField(0);
+				AddText("[");
+				AddValue(1);
+				AddText("]");
+				break;
+			case BlockKind.ArraySet:
+				AddVariableField(0);
+				AddText("[");
+				AddValue(1);
+				AddText("] =");
+				AddValue(2);
+				AddText(";");
+				break;
 			case BlockKind.Malloc:
-				AddText(() => $"malloc({BlockLabels.TypeName(Data.Slots[0].Type)})");
+				AddText("malloc(");
+				AddStructOption(0);
+				AddText(")");
 				break;
 			case BlockKind.Free:
 				AddText("free(");
@@ -224,6 +315,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		SlotData slot = Data.Slots[index];
 		BlockField field = editor.CreateField(row);
+		field.SetBackground(nameFieldSprite, fieldLineColor);
 		field.Text = slot.Name;
 		field.Edited += text =>
 		{
@@ -240,6 +332,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		SlotData slot = Data.Slots[index];
 		BlockField field = editor.CreateField(row);
+		field.SetBackground(variableFieldSprite, fieldLineColor);
 		field.Text = slot.VariableName;
 		field.Edited += text =>
 		{
@@ -250,39 +343,49 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		};
 	}
 
-	// 연산자 고르기. 누를 때마다 다음 연산자로 바뀐다. 데이터에는 enum 이름("Add")을 넣는다
+	// 연산자 고르기 (드롭다운). 데이터에는 enum 이름("Add")을 넣는다
 	void AddOperatorOption(int index, string[] options)
 	{
 		SlotData slot = Data.Slots[index];
-		TMP_Text label = AddOptionButton(() =>
-		{
-			int current = Array.IndexOf(options, slot.Option);
-			slot.Option = options[(current + 1) % options.Length];
-		});
+		string[] labels = Array.ConvertAll(options, BlockLabels.OperatorText);
+		TMP_Text label = AddDropdown(labels, () => Array.IndexOf(options, slot.Option), picked => slot.Option = options[picked]);
 		dynamicTexts.Add((label, () => BlockLabels.OperatorText(slot.Option)));
 	}
 
-	// 타입 고르기. 누를 때마다 int → float → bool → char → string 순서로 바뀐다
+	// 타입 고르기 (드롭다운): int, float, bool, char, string
 	void AddTypeOption(int index)
 	{
 		SlotData slot = Data.Slots[index];
-		TMP_Text label = AddOptionButton(() =>
-		{
-			int current = slot.Type == null ? -1 : Array.IndexOf(DeclareTypes, slot.Type.Kind);
-			slot.Type = new VariableType(DeclareTypes[(current + 1) % DeclareTypes.Length]);
-		});
+		string[] labels = Array.ConvertAll(DeclareTypes, kind => BlockLabels.TypeName(new VariableType(kind)));
+		TMP_Text label = AddDropdown(labels,
+			() => slot.Type == null ? -1 : Array.IndexOf(DeclareTypes, slot.Type.Kind),
+			picked => slot.Type = new VariableType(DeclareTypes[picked]));
 		dynamicTexts.Add((label, () => BlockLabels.TypeName(slot.Type)));
 	}
 
-	TMP_Text AddOptionButton(Action onClick)
+	// malloc의 struct 고르기 (드롭다운): 게임이 정한 struct 목록 (PredefinedStructs.All)
+	void AddStructOption(int index)
+	{
+		SlotData slot = Data.Slots[index];
+		string[] names = new string[PredefinedStructs.All.Count];
+		for (int i = 0; i < names.Length; i++) names[i] = PredefinedStructs.All[i].Name;
+		TMP_Text label = AddDropdown(names,
+			() => Array.IndexOf(names, slot.Type?.StructName),
+			picked => slot.Type = VariableType.StructOf(names[picked]));
+		dynamicTexts.Add((label, () => slot.Type?.StructName ?? "?"));
+	}
+
+	// 누르면 고를 수 있는 것 목록이 아래에 열리는 칸. 고르면 pick을 부르고 글자를 다시 쓴다
+	TMP_Text AddDropdown(string[] labels, Func<int> current, Action<int> pick)
 	{
 		Button button = editor.CreateButton(row);
-		button.onClick.AddListener(() =>
+		var anchor = (RectTransform)button.transform;
+		button.onClick.AddListener(() => editor.ShowDropdown(anchor, labels, current(), picked =>
 		{
-			onClick();
+			pick(picked);
 			RefreshTexts();
 			editor.NotifyChanged();
-		});
+		}));
 		return button.GetComponentInChildren<TMP_Text>();
 	}
 
@@ -294,7 +397,10 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		{
 			// 견본: 새 블록을 만들어서 그걸 끈다. 이후 끌기 이벤트는 새 블록이 받는다
 			dragged = editor.CreateView(templateFactory(), editor.DragLayer);
-			((RectTransform)dragged.transform).sizeDelta = ((RectTransform)transform).rect.size;
+			// 끄는 블록은 칩이 아니라 칸이 다 있는 블록이므로, 그 블록이 원하는 크기로 맞춘다
+			var draggedRect = (RectTransform)dragged.transform;
+			LayoutRebuilder.ForceRebuildLayoutImmediate(draggedRect);
+			draggedRect.sizeDelta = new Vector2(LayoutUtility.GetPreferredWidth(draggedRect), LayoutUtility.GetPreferredHeight(draggedRect));
 			eventData.pointerDrag = dragged.gameObject;
 		}
 		else
@@ -306,6 +412,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			if (OwnerList != null) OwnerList.Detach(this);
 			if (OwnerSlot != null) OwnerSlot.Detach(this);
 			transform.SetParent(editor.DragLayer, true);
+			editor.ShowTrash(true); // 놓인 블록을 끌 때만: 블록 목록 위에 「여기에 놓으면 지워요」
 		}
 
 		dragged.StartDrag(eventData);
@@ -314,6 +421,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	void StartDrag(PointerEventData eventData)
 	{
 		dragging = true;
+		canvasGroup.alpha = dragAlpha; // 아직 놓이지 않았다는 표시
 		// 끄는 블록이 마우스를 가리면 아래에 있는 놓을 자리를 찾을 수 없으므로 클릭을 통과시킨다
 		canvasGroup.blocksRaycasts = false;
 		MoveTo(eventData);
@@ -321,7 +429,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 	public void OnDrag(PointerEventData eventData)
 	{
-		if (dragging) MoveTo(eventData);
+		if (!dragging) return;
+		MoveTo(eventData);
+		editor.ShowDropPreview(this, FindDropTarget(eventData), eventData); // 들어갈 자리 줄, 끼울 수 있는 값 칸 표시
 	}
 
 	public void OnEndDrag(PointerEventData eventData)
@@ -329,6 +439,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (!dragging) return;
 		dragging = false;
 		canvasGroup.blocksRaycasts = true;
+		canvasGroup.alpha = 1f;
+		editor.ShowTrash(false);
+		editor.HideDropPreview();
 
 		Component target = FindDropTarget(eventData);
 		if (target == null)

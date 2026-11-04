@@ -8,37 +8,68 @@ using UnityEngine.UI;
 /// <para>
 /// - 장착은 내 캐릭터의 <c>SlotLoadout</c>(박진우) API만 부른다: EquipFunction, EquipSkill, Unequip, CodeSize, Changed (slot-caster.md).<br/>
 ///   장착이 바뀌면 FunctionExecutorNetwork가 서버로 슬롯과 함수를 다시 보낸다 (이우림, network.md).<br/>
-/// - 쓰는 법: 위의 슬롯 칸을 눌러 고른 뒤 아래 목록에서 함수나 스킬을 누르면 그 칸에 들어간다. 「비우기」는 고른 칸을 비운다.<br/>
-/// - 버튼은 모두 Button Prefab에서 만들고, 지우는 일은 ClearButtons 한 곳에서 한다 (CLAUDE.md 코드 작성 규칙 3, 4).
+/// - 쓰는 법: 위의 슬롯 카드를 눌러 고른 뒤 아래 「내 함수」나 「C 스킬」에서 누르면 그 칸에 들어간다. 「칸 비우기」는 고른 칸을 비운다.<br/>
+/// - 실제 계정(FunctionExecutorNetwork.UsesServerData)은 슬롯 8개가 늘 슬롯 함수 slot1~slot8이라 장착을 바꾸지 않는다 (이우림 #239).
+///   이때는 슬롯 카드에 slot1~slot8만 보여 주고, 슬롯 함수는 편집 터미널에서 고치라고 안내한다.<br/>
+/// - 카드와 목록 줄은 모두 프리팹에서 만들고, 지우는 일은 Clear 한 곳에서 한다 (CLAUDE.md 코드 작성 규칙 3, 4).
 /// </para>
 /// </summary>
 public class SlotEquipPanel : InputBlockingPanel
 {
 	static readonly string[] SlotKeys = { "Q", "W", "E", "R", "A", "S", "D", "F" };
 
-	[SerializeField, Tooltip("버튼 (Button - TextMeshPro). BlockCoding의 BlockButton 프리팹을 써도 된다")]
-	Button buttonPrefab;
+	[Header("프리팹")]
+	[SerializeField, Tooltip("슬롯 카드 (SlotCard 프리팹)")]
+	SlotCardView slotCardPrefab;
 
-	[SerializeField, Tooltip("슬롯 8칸 버튼이 만들어질 줄 (Horizontal Layout Group)")]
+	[SerializeField, Tooltip("목록 한 줄 (ListItem 프리팹)")]
+	ListItemView itemPrefab;
+
+	[Header("화면")]
+	[SerializeField, Tooltip("슬롯 카드 8개가 만들어질 줄 (Horizontal Layout Group)")]
 	RectTransform slotRow;
 
-	[SerializeField, Tooltip("함수·스킬 버튼이 만들어질 곳 (Vertical 또는 Grid Layout Group. 스크롤을 쓰면 Scroll Rect의 Content)")]
-	RectTransform list;
+	[SerializeField, Tooltip("「내 함수」 목록 (Vertical 또는 Grid Layout Group)")]
+	RectTransform functionList;
 
-	[SerializeField, Tooltip("고른 슬롯, 코드 영역 크기, 안내를 보여 줄 글자")]
+	[SerializeField, Tooltip("「C 스킬」 목록 (Grid Layout Group)")]
+	RectTransform skillList;
+
+	[SerializeField, Tooltip("아래 줄 글자: 고른 칸, 코드 영역, 안내")]
 	TMP_Text infoText;
 
-	[SerializeField, Tooltip("고른 슬롯 버튼 색")]
-	Color selectedColor = new Color32(0x6A, 0x5A, 0xC9, 0xFF);
+	[SerializeField, Tooltip("「칸 비우기」 버튼")]
+	Button clearButton;
 
-	[SerializeField, Tooltip("고르지 않은 슬롯 버튼 색")]
-	Color normalColor = new Color32(0x2A, 0x2F, 0x45, 0xFF);
+	[SerializeField, Tooltip("슬롯 줄 머리글 오른쪽 안내 글자. 비워도 된다")]
+	TMP_Text hintText;
+
+	[Header("색")]
+	[SerializeField, Tooltip("색 띠: 내 함수")]
+	Color functionTagColor = new Color32(0x3F, 0x8A, 0x80, 0xFF);
+
+	[SerializeField, Tooltip("색 띠: C 스킬")]
+	Color skillTagColor = new Color32(0x6A, 0x5A, 0xC9, 0xFF);
+
+	[SerializeField, Tooltip("색 띠: 공통 이동 (대시, 더블점프)")]
+	Color commonTagColor = new Color32(0xC9, 0xA0, 0x5A, 0xFF);
+
+	[SerializeField, Tooltip("아래 줄의 강조 색 (고른 칸 글자)")]
+	Color accentColor = new Color32(0xFF, 0xCC, 0x4D, 0xFF);
+
+	[SerializeField, Tooltip("아래 줄 안내 색: 잘 됐을 때")]
+	Color okColor = new Color32(0x8A, 0xD0, 0xA0, 0xFF);
+
+	[SerializeField, Tooltip("아래 줄 안내 색: 안 됐을 때")]
+	Color errorColor = new Color32(0xFF, 0x8A, 0x96, 0xFF);
 
 	SlotLoadout loadout;
+	bool fixedSlots; // 실제 계정이면 true: 슬롯 함수가 고정이라 장착 목록을 만들지 않는다
 	int selectedSlot;
 	string message = "";
-	readonly List<Button> slotButtons = new List<Button>();
-	readonly List<Button> listButtons = new List<Button>();
+	bool messageIsError;
+	readonly List<SlotCardView> slotCards = new List<SlotCardView>();
+	readonly List<GameObject> listItems = new List<GameObject>();
 
 	/// <summary>
 	/// 장착 화면을 연다. 그 플레이어의 SlotLoadout을 쓴다.
@@ -56,11 +87,21 @@ public class SlotEquipPanel : InputBlockingPanel
 		loadout = next;
 		loadout.Changed += OnLoadoutChanged;
 
-		message = "";
+		fixedSlots = player.TryGetComponent(out FunctionExecutorNetwork network) && network.UsesServerData;
+		SetMessage(fixedSlots ? "실제 계정은 슬롯 함수가 고정: 편집 터미널에서 slot1~slot8을 고치세요" : "");
+		if (hintText != null) hintText.text = fixedSlots ? "슬롯 함수는 편집 터미널에서 고칩니다" : "칸을 고르고 아래에서 넣을 것을 누르세요";
+		if (clearButton != null) clearButton.gameObject.SetActive(!fixedSlots);
+
 		base.OpenFor(player);
 		BuildSlots();
-		BuildList(); // 편집 화면에서 새로 저장한 함수도 보이도록 열 때마다 다시 만든다
+		BuildLists(); // 편집 화면에서 새로 저장한 함수도 보이도록 열 때마다 다시 만든다
 		Refresh();
+	}
+
+	// Awake는 InputBlockingPanel이 창을 숨기는 데 쓰므로 여기서는 Start를 쓴다
+	void Start()
+	{
+		if (clearButton != null) clearButton.onClick.AddListener(ClearSelectedSlot);
 	}
 
 	void OnDestroy()
@@ -74,76 +115,103 @@ public class SlotEquipPanel : InputBlockingPanel
 
 	void BuildSlots()
 	{
-		if (slotButtons.Count > 0) return;
+		if (slotCards.Count > 0 || slotCardPrefab == null || slotRow == null) return;
 		for (int i = 0; i < SlotLoadout.SlotCount; i++)
 		{
 			int slot = i;
-			slotButtons.Add(CreateButton(slotRow, "", () => SelectSlot(slot)));
+			SlotCardView card = Instantiate(slotCardPrefab, slotRow);
+			card.Button.onClick.AddListener(() => SelectSlot(slot));
+			slotCards.Add(card);
 		}
 	}
 
-	void BuildList()
+	void BuildLists()
 	{
-		ClearButtons(listButtons);
-
-		CreateListButton("비우기", () =>
-		{
-			loadout.Unequip(selectedSlot);
-			message = $"{SlotKeys[selectedSlot]} 칸을 비움";
-			Refresh();
-		});
+		Clear();
+		if (fixedSlots || itemPrefab == null) return;
 
 		// 블록 함수 (편집 화면에서 저장한 것)
-		foreach (FunctionData function in FunctionStorage.LoadAll())
+		if (functionList != null)
 		{
-			string guid = function.Guid;
-			string label = $"[함수] {function.Name}";
-			CreateListButton(label, () => Equip(loadout.EquipFunction(selectedSlot, guid), label));
+			GlobalVariablesData globals = GlobalVariablesStorage.Load();
+			foreach (FunctionData function in FunctionStorage.LoadAll())
+			{
+				string guid = function.Guid;
+				string name = function.Name;
+				// 컴파일 오류가 있는 함수는 흐리게 「오류」로 보이고 넣을 수 없다 (FunctionChecker, 편집 화면의 컴파일과 같은 검사)
+				if (FunctionChecker.HasErrors(function, globals))
+				{
+					CreateItem(functionList, name, "오류", functionTagColor, () =>
+					{
+						SetMessage($"{name}에 컴파일 오류가 있어서 넣을 수 없어요. 편집 터미널에서 고치세요", true);
+						Refresh();
+					}, true);
+					continue;
+				}
+				CreateItem(functionList, name, "", functionTagColor, () => Equip(loadout.EquipFunction(selectedSlot, guid), name));
+			}
 		}
 
 		// C 스킬, 공통 이동 (시험용 test.는 빼고)
-		foreach (PredefinedFunction skill in PredefinedFunctionRegistry.All)
+		if (skillList != null)
 		{
-			string id = skill.Id;
-			if (!(id.StartsWith("c.") || id.StartsWith("common.")) || !SlotLoadout.IsEquippableSkill(id)) continue;
-			string label = $"[스킬] {SkillName(id)}";
-			CreateListButton(label, () => Equip(loadout.EquipSkill(selectedSlot, id), label));
+			foreach (PredefinedFunction skill in PredefinedFunctionRegistry.All)
+			{
+				string id = skill.Id;
+				if (!(id.StartsWith("c.") || id.StartsWith("common.")) || !SlotLoadout.IsEquippableSkill(id)) continue;
+				string name = SkillName(id);
+				Color tag = id.StartsWith("common.") ? commonTagColor : skillTagColor;
+				CreateItem(skillList, name, "", tag, () => Equip(loadout.EquipSkill(selectedSlot, id), name));
+			}
 		}
 	}
 
-	void CreateListButton(string label, System.Action onClick) => listButtons.Add(CreateButton(list, label, onClick));
-
-	Button CreateButton(RectTransform parent, string label, System.Action onClick)
+	void CreateItem(RectTransform parent, string name, string detail, Color tag, System.Action onClick, bool broken = false)
 	{
-		Button button = Instantiate(buttonPrefab, parent);
-		TMP_Text text = button.GetComponentInChildren<TMP_Text>();
-		if (text != null) text.text = label;
-		button.onClick.AddListener(() => onClick());
-		return button;
+		ListItemView item = Instantiate(itemPrefab, parent);
+		item.Show("", name, detail, false, broken, broken);
+		item.SetTagColor(tag);
+		item.Button.onClick.AddListener(() => onClick());
+		listItems.Add(item.gameObject);
 	}
 
-	void ClearButtons(List<Button> buttons)
+	void Clear()
 	{
-		foreach (Button button in buttons)
+		foreach (GameObject item in listItems)
 		{
-			if (button != null) Destroy(button.gameObject);
+			if (item != null) Destroy(item);
 		}
-		buttons.Clear();
+		listItems.Clear();
 	}
 
 	// 버튼 ---------------------------------------------------------------------
 
 	void SelectSlot(int slot)
 	{
+		if (fixedSlots) return; // 실제 계정은 칸을 골라 넣을 것이 없다
 		selectedSlot = slot;
-		message = "";
+		SetMessage("");
 		Refresh();
 	}
 
-	void Equip(bool ok, string label)
+	void ClearSelectedSlot()
 	{
-		message = ok ? $"{SlotKeys[selectedSlot]} 칸에 {label}" : $"{label}은(는) 넣을 수 없음";
+		if (loadout == null || fixedSlots) return;
+		loadout.Unequip(selectedSlot);
+		SetMessage($"{SlotKeys[selectedSlot]} 칸을 비움");
 		Refresh();
+	}
+
+	void Equip(bool ok, string name)
+	{
+		SetMessage(ok ? $"{SlotKeys[selectedSlot]} 칸에 {name}" : $"{name}은(는) 넣을 수 없음", !ok);
+		Refresh();
+	}
+
+	void SetMessage(string text, bool error = false)
+	{
+		message = text;
+		messageIsError = error;
 	}
 
 	// 다시 그리기 -----------------------------------------------------------------
@@ -152,27 +220,35 @@ public class SlotEquipPanel : InputBlockingPanel
 	{
 		if (loadout == null) return;
 
-		for (int i = 0; i < slotButtons.Count; i++)
+		for (int i = 0; i < slotCards.Count; i++)
 		{
-			TMP_Text text = slotButtons[i].GetComponentInChildren<TMP_Text>();
-			if (text != null) text.text = $"{SlotKeys[i]} {EntryName(loadout.GetEntry(i))}";
-			Image image = slotButtons[i].GetComponent<Image>();
-			if (image != null) image.color = i == selectedSlot ? selectedColor : normalColor;
+			if (fixedSlots)
+			{
+				slotCards[i].Show(SlotKeys[i], ProgressRules.SlotFunctionName(i), false, false);
+				continue;
+			}
+			SlotLoadout.Entry entry = loadout.GetEntry(i);
+			slotCards[i].Show(SlotKeys[i], EntryName(entry), entry.IsEmpty, i == selectedSlot);
 		}
 
 		if (infoText != null)
 		{
-			infoText.text = $"고른 칸: {SlotKeys[selectedSlot]}    코드 영역 {loadout.CodeSize}" +
-				(string.IsNullOrEmpty(message) ? "" : $"\n{message}");
+			string accent = ColorUtility.ToHtmlStringRGB(accentColor);
+			string note = ColorUtility.ToHtmlStringRGB(messageIsError ? errorColor : okColor);
+			string head = fixedSlots
+				? $"코드 영역 {loadout.CodeSize}"
+				: $"고른 칸 <color=#{accent}>{SlotKeys[selectedSlot]}</color>    코드 영역 {loadout.CodeSize}";
+			infoText.text = head + (string.IsNullOrEmpty(message) ? "" : $"    <color=#{note}>{message}</color>");
 		}
 	}
 
 	static string EntryName(SlotLoadout.Entry entry)
 	{
-		if (entry.IsEmpty) return "-";
+		if (entry.IsEmpty) return "";
 		if (entry.Kind == SlotLoadout.EntryKind.Skill) return SkillName(entry.Id);
 		FunctionData function = FunctionStorage.Load(entry.Id);
-		return function != null ? function.Name : "(지워진 함수)";
+		if (function == null) return "(지워진 함수)";
+		return FunctionChecker.HasErrors(function, GlobalVariablesStorage.Load()) ? $"{function.Name} (오류)" : function.Name;
 	}
 
 	static string SkillName(string id) => SkillTable.TryGet(id, out SkillData data) ? data.DisplayName : id;

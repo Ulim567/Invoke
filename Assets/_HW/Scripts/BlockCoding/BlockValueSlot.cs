@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// 블록 안의 값 칸 하나. 키보드로 값·변수를 적거나, 값 블록(연산, 비교, 논리, 값을 돌려주는 함수)을 끌어다 끼운다.
@@ -24,6 +25,52 @@ public class BlockValueSlot : MonoBehaviour
 
 	/// <summary>이 칸의 데이터 (블록 데이터의 Slots[칸 번호])</summary>
 	public SlotData Slot => ownerBlock.Data.Slots[slotIndex];
+
+	/// <summary>
+	/// 꼭 채워야 하는데 비어 있는 칸이면 true (컴파일 오류 표시). 선언의 초기값과 return의 값은 비워도 된다.
+	/// </summary>
+	public bool IsMissingValue
+	{
+		get
+		{
+			if (Held != null || Slot == null || Slot.Kind != SlotKind.Value) return false;
+			BlockKind kind = ownerBlock.Data.Kind;
+			if (kind == BlockKind.Return || (kind == BlockKind.Declare && slotIndex == 2)) return false;
+			return string.IsNullOrEmpty(Slot.Literal) && string.IsNullOrEmpty(Slot.VariableName);
+		}
+	}
+
+	// 칸 바탕 색: 보통 / 끌고 있는 값 블록을 놓을 수 있음(보라) / 컴파일 오류(빨강)
+	static readonly Color HighlightColor = new Color32(0x8B, 0x9C, 0xFF, 0xC0);
+	static readonly Color ErrorColor = new Color32(0xE0, 0x50, 0x60, 0xC0);
+	Image image;
+	Color baseColor;
+	bool highlighted;
+	bool error;
+
+	/// <summary>끌고 있는 값 블록을 여기에 놓을 수 있다는 표시 (BlockEditor가 부른다)</summary>
+	public void SetHighlight(bool on)
+	{
+		highlighted = on;
+		ApplyColor();
+	}
+
+	/// <summary>컴파일 오류(비어 있는 칸) 표시 (BlockEditor가 부른다)</summary>
+	public void SetError(bool on)
+	{
+		error = on;
+		ApplyColor();
+	}
+
+	void ApplyColor()
+	{
+		if (image == null)
+		{
+			if (!TryGetComponent(out image)) return;
+			baseColor = image.color;
+		}
+		image.color = highlighted ? HighlightColor : error ? ErrorColor : baseColor;
+	}
 
 	/// <summary>
 	/// 블록의 slotIndex번 칸과 연결한다. 칸에 블록이 이미 있으면 (불러온 함수) 그 블록도 화면에 만든다.

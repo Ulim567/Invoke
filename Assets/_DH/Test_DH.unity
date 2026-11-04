@@ -1570,6 +1570,70 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &878968546
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 878968549}
+  - component: {fileID: 878968548}
+  - component: {fileID: 878968547}
+  m_Layer: 0
+  m_Name: RaidBossSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &878968547
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 878968546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dcca4427e72b5047a7661886654632f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RaidJudge
+  checkInterval: 0.25
+  resultDelay: 3
+--- !u!114 &878968548
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 878968546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6138abb0f03116b47bf1c1002317969a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RaidBossSpawner
+  bossPrefab: {fileID: 156086606247248762, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 64
+  hoverHeight: 0
+--- !u!4 &878968549
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 878968546}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -2.7931, y: 1.63628, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1398325081
 GameObject:
   m_ObjectHideFlags: 0
@@ -2317,6 +2381,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Gateway
       objectReference: {fileID: 0}
+    - target: {fileID: 1495201610127570355, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1822836462144901155, guid: 9df8bbb08a405f442af18c92c391e8b7, type: 3}
       propertyPath: sceneId
       value: 523493663
@@ -2341,3 +2409,4 @@ SceneRoots:
   - {fileID: 689834509}
   - {fileID: 8630720295027418311}
   - {fileID: 4309376243877557872}
+  - {fileID: 878968549}

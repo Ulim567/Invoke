@@ -10,6 +10,7 @@
 - 공중을 떠다니며 멀리서 쏘는 몬스터의 AI(`FlyingShooterAI`)를 맡는다. 잡몹 2 Loop가 쓴다.
 - 레이드 보스 Gateway의 패턴(`GatewayAI`)과 공격을 맡는다. 지금은 공격 1(패킷 던지기·패킷 낙하, #128), 공격 2(웜 소환·때리기, #203)와 페이즈 전환·기믹 1(기둥 파괴)·기믹 2(전체 공격)·기믹 3(진짜 찾기, `GatewayPhases`)까지 있다.
 - 화면에 보스 체력 바(`BossHealthBar`)를 보여 준다 (#188).
+- 레이드 던전에 보스를 만드는 일(`RaidBossSpawner`)과 클리어·실패 판정(`RaidJudge`)은 `raid.md`에 적는다.
 - 사냥터에 몬스터를 만들고 다시 만드는 스포너(`MonsterSpawner`)를 맡는다.
 - 몬스터가 죽으면 근처 플레이어에게 경험치·돈·재료(드롭)를 준다(`MonsterReward`).
 - 몬스터 공격을 "공격 형태 + 효과"로 만드는 구조를 맡는다(버그 0차). 지금 있는 형태는 투사체(`ProjectileAttack`, `MonsterProjectile`)다.

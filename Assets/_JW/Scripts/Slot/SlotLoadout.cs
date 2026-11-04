@@ -167,10 +167,12 @@ public class SlotLoadout : MonoBehaviour
 		}
 	}
 
-	/// <summary>슬롯에 넣을 수 있는 스킬인지. 등록된 사전 정의 함수이고 입력 함수(input.*)가 아니면 true.</summary>
+	/// <summary>슬롯에 넣을 수 있는 스킬인지. 등록된 사전 정의 함수이고 입력 함수(input.*)가 아니면 true. 더블점프(패시브)는 false (#256).</summary>
 	public static bool IsEquippableSkill(string skillId)
 	{
 		if (string.IsNullOrEmpty(skillId) || skillId.StartsWith("input.")) return false;
+		// 더블점프는 해금하면 Space로 쓰는 패시브라 슬롯에 넣지 않는다 (#256). 블록코딩에서는 부를 수 있다
+		if (skillId == PredefinedFunctionIds.DoubleJump) return false;
 		return PredefinedFunctionRegistry.TryGet(skillId, out _);
 	}
 

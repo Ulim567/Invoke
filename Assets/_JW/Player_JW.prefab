@@ -159,6 +159,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5769754583816353781}
+    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8802111770226181066}
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
 --- !u!1 &933170754771805909 stripped
 GameObject:
@@ -185,6 +188,11 @@ MonoBehaviour:
   runSpeedMultiplier: 1.5
   lungeSpeed: 30
   lungeMaxTime: 0.35
+  dashDistance: 4
+  dashDuration: 0.15
+  allowDoubleJumpWithoutProgress: 1
+  rideSpeed: 9
+  rideSeconds: 30
   body: {fileID: 7079417861596757320}
   bodyCollider: {fileID: 2850566709390127241}
   input: {fileID: 1965934584990814665}
@@ -363,6 +371,7 @@ MonoBehaviour:
     m_Bits: 192
   followOffset: {x: 0.6, y: 3.2}
   followSpacing: 0.45
+  rideOffset: {x: 0, y: -0.15}
   pickUpRange: 1.5
 --- !u!114 &7588237388506021420
 MonoBehaviour:
@@ -519,6 +528,25 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &8802111770226181066
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 933170754771805909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48208ebbdd0e24deb9b071488e6b73ed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SwordRideTimerView
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  headHeight: 2.6
+  barSize: {x: 28, y: 2.5}
+  fillColor: {r: 0.55, g: 0.85, b: 1, a: 0.95}
+  backColor: {r: 0, g: 0, b: 0, a: 0.55}
 --- !u!114 &1965934584990814665 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3376740816470663825, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}

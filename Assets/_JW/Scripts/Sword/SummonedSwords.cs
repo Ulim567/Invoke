@@ -28,6 +28,8 @@ public class SummonedSwords : MonoBehaviour
 	[Tooltip("사용 가능한 소환검이 떠 있는 자리: 발밑 기준. x는 바라보는 반대쪽으로, 검마다 X Spacing씩 벌어진다")]
 	[SerializeField] Vector2 followOffset = new Vector2(0.6f, 3.2f);
 	[SerializeField, Min(0f)] float followSpacing = 0.45f;
+	[Tooltip("검 타기에서 검이 붙는 자리: 발밑 기준 (유닛, #256)")]
+	[SerializeField] Vector2 rideOffset = new Vector2(0f, -0.15f);
 	[Tooltip("떨어진 소환검과 이 거리 안이면 주울 수 있다 (유닛)")]
 	[SerializeField, Min(0f)] float pickUpRange = 1.5f;
 
@@ -206,6 +208,29 @@ public class SummonedSwords : MonoBehaviour
 		return true;
 	}
 
+	/// <summary>
+	/// 검 타기 (#256): 사용 가능한 검을 플레이어 발밑(Ride Offset)으로 보내 seconds초 동안 붙인다. Riding 상태라 다른 스킬에 쓰이지 않는다.<br/>
+	/// 시간이 다 되면 이 컴포넌트가 스스로 EndRide해서 곁으로 돌아온다. 그 전에 EndRide를 부르면 바로 돌아온다.
+	/// </summary>
+	public bool Ride(SummonedSword sword, float seconds)
+	{
+		if (sword == null || !swords.Contains(sword) || sword.State != SummonedSwordState.Ready) return false;
+		sword.LaunchRide(seconds);
+		NotifyChanged();
+		return true;
+	}
+
+	/// <summary>검 타기를 끝낸다 (#256). 타고 있던 검만 다시 사용 가능으로 바뀌고 곁의 자리로 날아온다.</summary>
+	public void EndRide(SummonedSword sword)
+	{
+		if (sword == null || !swords.Contains(sword) || sword.State != SummonedSwordState.Riding) return;
+		sword.SetReady();
+		NotifyChanged();
+	}
+
+	// 검 타기에서 검이 붙을 자리: 플레이어 발밑
+	internal Vector2 RidePoint => (Vector2)transform.position + rideOffset;
+
 	/// <summary>검무를 끝낸다 (#243). 도는 중인 검만 다시 사용 가능으로 바뀌고 곁의 자리로 날아온다.</summary>
 	public void EndDance(SummonedSword sword)
 	{
@@ -326,6 +351,12 @@ public class SummonedSwords : MonoBehaviour
 	{
 		// 클라이언트에서는 소환검이 움직이지 않으므로 자리를 정하지 않는다 (#229)
 		if (IsClientOnly) return;
+		// 검 타기 시간이 다 된 검은 곁으로 (#256)
+		for (int i = swords.Count - 1; i >= 0; i--)
+		{
+			SummonedSword s = swords[i];
+			if (s != null && s.State == SummonedSwordState.Riding && Time.time >= s.RideEndTime) EndRide(s);
+		}
 		// 사용 가능한 검을 머리 뒤쪽에 순서대로 줄 세운다
 		int facing = movement != null ? movement.Facing : 1;
 		int slot = 0;

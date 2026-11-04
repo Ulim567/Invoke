@@ -13,6 +13,7 @@ public enum SummonedSwordState
 	Stabbing, // 소환검 찌르기: 대상에게 날아가 찌르고 돌아오는 중 (#165)
 	Returning, // 검 돌아오기: 곁으로 날아오는 중 (#167)
 	Dancing,  // 검무: 대상 주위를 도는 중 (#243)
+	Riding,   // 검 타기: 플레이어 발밑에 붙어 있음 (#256)
 }
 
 /// <summary>
@@ -177,6 +178,19 @@ public class SummonedSword : NetworkBehaviour
 		SetState(SummonedSwordState.Dancing);
 	}
 
+	// 검 타기가 끝나는 시각 (#256). SummonedSwords가 이 시각에 EndRide한다
+	internal float RideEndTime { get; private set; }
+
+	// 검 타기 (#256): 플레이어 발밑에 붙는다. 끝내는 일은 SummonedSwords.EndRide(SetReady)
+	internal void LaunchRide(float seconds)
+	{
+		RideEndTime = Time.time + seconds;
+		stuckTo = null;
+		falling = false;
+		transform.rotation = Quaternion.identity;
+		SetState(SummonedSwordState.Riding);
+	}
+
 	internal void SetDropped()
 	{
 		falling = false;
@@ -269,6 +283,10 @@ public class SummonedSword : NetworkBehaviour
 				break;
 			case SummonedSwordState.Dancing:
 				Dance();
+				break;
+			case SummonedSwordState.Riding:
+				// 플레이어 발밑으로 바짝 따라간다
+				if (owner != null) transform.position = Vector2.MoveTowards(transform.position, owner.RidePoint, stabSpeed * Time.deltaTime);
 				break;
 		}
 	}

@@ -217,6 +217,13 @@
 | `Parried` (event) | `Vector2` 잡은 위치, `Vector2` 되돌려 보낼 방향 | - | [로직] 잡았을 때. 패링 스킬이 반격한다. 서버에서만 |
 | `ParryEffectPlayed` (event) | `Vector2` 잡은 위치 | - | [연출] 잡았을 때. 모든 화면에서. 패링 이펙트·소리 (임혜원) |
 
+### 이동 스킬: 대시·더블점프·검 타기 (#256)
+- 공통(`MovementSkill`): 스킬 동안 표의 heap(1칸)을 잡고 끝나면 돌려준다. heap이 모자라면 이동하지 않는다. 끊기면 heap은 누수.
+- 이동은 소유 클라이언트가 하므로 스킬은 `PlayerMovement`에 요청만 한다 (서버에서는 `[TargetRpc]`, player-movement.md 「이동 스킬」).
+- 대시 (`common.dash`): 바라보는 쪽으로 4칸 / 0.15초 (임시). 공중 가능, 맨손 가능.
+- 더블점프 (`common.double_jump`): 해금하면 공중에서 Space로 한 번 더 (패시브, `PlayerMovement`가 함). **슬롯에는 넣지 못한다** (`SlotLoadout.IsEquippableSkill`이 false). 블록코딩에서 부르면 공중 점프 한 번.
+- 검 타기 (`c.sword_ride`): 사용 가능한 소환검 1개가 발밑에 붙고(`SummonedSwords.Ride`, `Riding` 상태), 스킬 동안 중력 없이 그 높이에서 ←→로 난다. `PlayerMovement.RideSeconds`(임시 30초) 동안 날고, 스킬(20틱)은 시작만 하고 먼저 끝난다. 시간이 다 되면 내려오고 검은 곁으로 (끊기면 바로). 머리 위 작은 바로 남은 시간 표시(`SwordRideTimerView`, 임시). 슬롯 키를 뗀 뒤 ←→로 난다. 위아래는 MoveY 입력(이우림 요청)이 생긴 뒤.
+
 ### 검 소환·해제 (#102, #220)
 - 검 소환 (`c.summon_sword`, malloc)
   - 시작할 때(첫 틱) `SummonedSwords.SpawnSword` → `PredefinedFunction.Malloc(task, 소환검, CSummonSword.SwordHeapSize)` → 성공하면 `SummonedSwords.Register`, `NullPointer`면 `SummonedSwords.DespawnSword`.
@@ -279,9 +286,10 @@
 | `Slash2SimTest` | Test_JW의 Slash2Test. 켜고 Play → Host (약 12초). 사용 가능한 소환검을 3개까지 소환한 뒤 소환검 휘두르기(날린 검기 수만큼 맞음. heap이 모자라면 소환검 수보다 적게 날림, heap 원래대로, 검은 제자리), 상처 가르기(출혈 대상 배율 +100%, 다음 출혈 틱 2배, 출혈 풀리면 배율 없어짐, 출혈 아닌 대상은 배율 없음), 검 다중베기(소환검 수만큼 벰, 검 모두 돌아옴)를 확인. 「[Slash2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordPointerSimTest` | Test_JW의 SwordPointerTest. 켜고 Play → Host (약 12초). 몬스터 2마리 이상. 블록코딩 `malloc(Sword)` → `free(s)`(진짜 소환검이 생겼다 사라짐, heap 원래대로), `Sword* s = SummonSword(); FreeSword(s);`, 소환검 던지기·찌르기에 두 번째 검 포인터를 넘기면 그 검을 씀, 해제에 포인터를 넘기면 그 검만 해제·같은 포인터로 또 해제하면 `InvalidPointerError`, 전장 휩쓸기 `[a, b, a]`(각 1번씩 맞음, 검 모두 돌아옴)를 확인. 「[SwordPointerTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SkillSyncLogTest` | Test_JW의 SkillSyncLog (#223). 켜 두고 에디터 Play → Host, `Test_JW`만 넣은 빌드 → Client. 클라이언트 캐릭터로 스킬을 쓰면 Host 콘솔에 「[SkillSyncLog] [클라이언트 …] 스킬 발사: 방향 / 명중: 대상, 데미지, 실명·이속감소」가 남는다. 돌진·바라보는 방향·급소공략 결과가 서버에 왔는지 사람이 로그로 확인한다. 평소에는 꺼 둔다. |
-| `SwordSyncSlotsTest` | Test_JW의 SwordSyncSlots (#229). 켜 두면 내 캐릭터 슬롯에 Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기를 넣는다(에디터 Host·빌드 Client 각자). `Restore Slots`면 Play를 멈출 때 되돌린다. 소환검·검기·던진 검이 두 화면에서 같은 자리로 보이는지 사람이 확인한다. 평소에는 꺼 둔다. |
+| `SwordSyncSlotsTest` | Test_JW의 SwordSyncSlots (#229). 켜 두면 내 캐릭터 슬롯에 Q 검 소환, W 소환검 던지기, E 검 던지기, R 검 돌아오기, A 검 휘두르기, S 대시, D 검 타기(#256)를 넣는다(에디터 Host·빌드 Client 각자). `Restore Slots`면 Play를 멈출 때 되돌린다. 소환검·검기·던진 검이 두 화면에서 같은 자리로 보이는지 사람이 확인한다. 평소에는 꺼 둔다. |
 | `MarkDanceSimTest` | Test_JW의 MarkDanceTest (#243). 켜고 Play → Host (약 8초). 소환검 1개로 표식 남기기 → `NoSummonedSwordError`, 2개로 표식 남기기 → 검 2개가 각각 데미지·표식·기절·검 돌아옴, 검무 → 소환검 수 이상 맞음·출혈·검무 중 상태·끝나면 돌아옴을 확인. 「[MarkDanceTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `ParrySimTest` | Test_JW의 ParryTest (#245). Inspector에 Bullet Prefab(`MonsterBullet`), Parryable Attack(`Loop_Shot`), Unparryable Attack(`Packet_Drop`)을 넣고 켜서 Play → Host (약 4초). `ParryGuard.TryParry`를 직접 불러 패링 안 했을 때·패링 불가 공격은 못 잡음, 패링 가능 공격은 잡고 한 번에 닫힘, 날아온 쪽 몬스터에게 반격 검기가 맞음·heap 원래대로, 0.3초 뒤엔 못 잡음을 확인. 「[ParryTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `MovementSkillSimTest` | 이동 스킬 테스트 (#256). player-movement.md 「테스트」 참고. |
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기(소환검이 곁으로 오고 오는 길 몬스터에 데미지, 물리 검은 땅에 그대로. 한 번 더 써도 물리 검은 안 옴, #232), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |

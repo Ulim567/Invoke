@@ -40,6 +40,7 @@ public class SummonedSwordHud : NetworkBehaviour
 		SummonedSwordState.Stabbing => "찌르는 중",
 		SummonedSwordState.Returning => "돌아오는 중",
 		SummonedSwordState.Dancing => "검무 중",
+		SummonedSwordState.Riding => "타는 중",
 		_ => state.ToString(),
 	};
 }

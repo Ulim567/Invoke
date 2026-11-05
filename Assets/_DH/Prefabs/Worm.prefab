@@ -18,6 +18,8 @@ GameObject:
   - component: {fileID: 5694127331615184758}
   - component: {fileID: 2395701333986949891}
   - component: {fileID: 8902484127152749957}
+  - component: {fileID: 3963380389480247877}
+  - component: {fileID: 8586265728357617497}
   m_Layer: 9
   m_Name: Worm
   m_TagString: Untagged
@@ -142,6 +144,7 @@ MonoBehaviour:
   maxHp: 20
   despawnDelay: 1.2
   isBoss: 0
+  invulnerable: 0
 --- !u!114 &7986434417487431863
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -285,3 +288,45 @@ MonoBehaviour:
   targetLayers:
     serializedVersion: 2
     m_Bits: 256
+--- !u!95 &3963380389480247877
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8134418012723844412}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 3183b5b959af14eb795141e97cd59476, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &8586265728357617497
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8134418012723844412}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 887d688eda6914fa0859f77f97ed40ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterAnimator
+  animator: {fileID: 0}
+  baseState: Crawl
+  hitState: Hit
+  deathState: Death
+  shootState: 
+  hitDuration: 0.42
+  shootDuration: 0.58
+  idleSpeed: 0.35

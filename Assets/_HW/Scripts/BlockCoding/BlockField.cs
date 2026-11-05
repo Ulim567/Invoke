@@ -49,6 +49,25 @@ public class BlockField : MonoBehaviour
 		set { minWidth = value; Resize(); }
 	}
 
+	/// <summary>칸에 적을 수 있는지. 슬롯 함수의 이름 칸처럼 바꾸면 안 되는 칸은 끈다</summary>
+	public bool Interactable
+	{
+		get { Setup(); return input.interactable; }
+		set { Setup(); input.interactable = value; }
+	}
+
+	/// <summary>
+	/// 칸 바탕 그림과 색을 바꾼다. 선언의 이름 칸은 밑줄, 대입의 변수 칸은 점선 상자로 보인다 (BlockView).
+	/// sprite가 null이면 바탕을 보이지 않는다.
+	/// </summary>
+	public void SetBackground(Sprite sprite, Color color)
+	{
+		if (!TryGetComponent(out Image image)) return;
+		image.sprite = sprite;
+		image.type = Image.Type.Sliced;
+		image.color = sprite != null ? color : new Color(0, 0, 0, 0);
+	}
+
 	/// <summary>
 	/// 잘못된 값이면 글자를 빨갛게 보여 준다.
 	/// </summary>

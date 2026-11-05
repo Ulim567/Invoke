@@ -33,6 +33,14 @@ public static class BlockSlotText
 
 		if (text.Length == 0) return true;
 
+		// 포인터를 비우는 값 (function-data.md #120: SlotData.FromNull과 같은 값)
+		if (text == "NULL")
+		{
+			slot.Type = VariableType.PointerTo(null);
+			slot.Literal = SlotData.NullLiteral;
+			return true;
+		}
+
 		if (text == "true" || text == "false")
 			return SetLiteral(slot, VariableTypeKind.Bool, text);
 
@@ -67,6 +75,7 @@ public static class BlockSlotText
 		if (slot == null || slot.Block != null) return "";
 		if (!string.IsNullOrEmpty(slot.VariableName)) return slot.VariableName;
 		if (slot.Literal == null) return "";
+		if (slot.Literal == SlotData.NullLiteral && slot.Type?.Kind == VariableTypeKind.Pointer) return "NULL";
 
 		return slot.Type?.Kind switch
 		{

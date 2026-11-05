@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 3784829334782531943}
   - component: {fileID: 1202138453343239004}
   - component: {fileID: 6704748891605179568}
+  - component: {fileID: 284819284132079046}
   m_Layer: 5
   m_Name: Block
   m_TagString: Untagged
@@ -70,8 +71,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: bace2395530640fbbaaec147426c4ea4, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -98,7 +99,7 @@ MonoBehaviour:
     m_Top: 2
     m_Bottom: 2
   m_ChildAlignment: 0
-  m_Spacing: 2
+  m_Spacing: 0
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
@@ -133,6 +134,39 @@ MonoBehaviour:
   background: {fileID: 6304083070054196063}
   row: {fileID: 3751810098735189170}
   innerBlocks: {fileID: 8802336029854762539}
+  statementSprite: {fileID: 21300000, guid: bace2395530640fbbaaec147426c4ea4, type: 3}
+  valueSprite: {fileID: 21300000, guid: c0d8d0ce226d4b94a53075f3cecf3c15, type: 3}
+  chipSprite: {fileID: 21300000, guid: ae8fbc34dd0749a4a5b6f4824cd73b87, type: 3}
+  innerSprite: {fileID: 21300000, guid: 102e583e3af743968e3ec91c98e40860, type: 3}
+  innerColor: {r: 0.078431375, g: 0.09411765, b: 0.13725491, a: 1}
+  nameFieldSprite: {fileID: 21300000, guid: 4da2e0e7312746ffb5d9d615ab8eead9, type: 3}
+  variableFieldSprite: {fileID: 21300000, guid: c1356bd033674e50aa12bfdd68516b3c, type: 3}
+  fieldLineColor: {r: 1, g: 1, b: 1, a: 0.75}
+  containerBottom: 7
+  errorColor: {r: 0.78431374, g: 0.28235295, b: 0.34509805, a: 1}
+  dragAlpha: 0.75
+--- !u!114 &284819284132079046
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2649361150070973732}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
+  m_IgnoreLayout: 0
+  m_MinWidth: -1
+  m_MinHeight: -1
+  m_PreferredWidth: -1
+  m_PreferredHeight: -1
+  m_FlexibleWidth: 0
+  m_FlexibleHeight: 0
+  m_LayoutPriority: 1
+  m_MaxWidth: -1
+  m_MaxHeight: -1
 --- !u!1 &3260142452206727227
 GameObject:
   m_ObjectHideFlags: 0
@@ -194,15 +228,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 0.23529412}
+  m_Color: {r: 0.078431375, g: 0.09411765, b: 0.13725491, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 102e583e3af743968e3ec91c98e40860, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -224,13 +258,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
-    m_Left: 8
-    m_Right: 0
-    m_Top: 2
-    m_Bottom: 2
+    m_Left: 12
+    m_Right: 2
+    m_Top: 3
+    m_Bottom: 3
   m_ChildAlignment: 0
   m_Spacing: 2
-  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
   m_ChildControlHeight: 1
@@ -251,7 +285,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
   m_IgnoreLayout: 0
   m_MinWidth: -1
-  m_MinHeight: 12
+  m_MinHeight: 14
   m_PreferredWidth: -1
   m_PreferredHeight: -1
   m_FlexibleWidth: -1
@@ -326,7 +360,7 @@ MonoBehaviour:
     m_Top: 0
     m_Bottom: 0
   m_ChildAlignment: 3
-  m_Spacing: 2
+  m_Spacing: 3
   m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1

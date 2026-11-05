@@ -16,6 +16,10 @@
   - 원인: Shortcut Keys Consume Input 설정 때문에 Player 액션 맵의 `Move`(1D Axis 조합)가 ← → 입력을 먼저 가져가고, Attack 액션 맵의 `TargetPrev`·`TargetNext`(단일 키)에는 입력이 전달되지 않음
 - Space는 Player 액션 맵의 `Jump`와 Attack 액션 맵의 `Mark`가 함께 받는다. 슬롯 키를 누르는 동안 Player 액션 맵이 활성화되어 있으면 `JumpPressed`와 `MarkPressed`가 함께 true가 된다.
   - 원인: 두 액션 모두 단일 키 바인딩이라 Shortcut Keys Consume Input이 한쪽 입력을 막지 않음
+- ↑는 `MoveY`(Player 액션 맵의 `MoveUp`)와 `Interact`가 함께 받는다. ↑를 누르면 `MoveY`가 1이 되고, 그 프레임에 `InteractPressed`도 true가 된다 (#271).
+  - `MoveY`를 1D Axis 조합 대신 단일 키 액션 `MoveUp`·`MoveDown`으로 만든 이유: 1D Axis 조합이면 Shortcut Keys Consume Input 때문에 ↑를 `Interact`보다 먼저 가져가 `InteractPressed`가 항상 false가 됨
+- ↓는 `MoveY`(Player 액션 맵의 `MoveDown`)와 `Down`(↓ + Space)의 modifier가 함께 받는다. ↓만 누르면 `MoveY`가 -1이고, ↓ + Space는 지금처럼 `DropPressed`가 true가 된다 (#271).
+  - 한계: Space를 먼저 누른 채 ↓를 누르면 `Down`이 ↓를 가져가, ↓를 다시 누를 때까지 `MoveY`가 0
 
 ## 다른 시스템이 쓰는 것
 
@@ -26,6 +30,7 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `MoveX` | - | `float` | 좌우 이동 값. ← 는 -1, → 는 1, 누르지 않으면 0. 슬롯을 누르고 있는 동안에는 항상 0 |
+| `MoveY` | - | `float` | (#271) 위아래 이동 값. ↑ 는 1, ↓ 는 -1, 누르지 않거나 둘 다 누르면 0. 검 타기에서 위아래로 날 때 씀. 슬롯을 누르고 있는 동안에는 항상 0. ↑ 는 `InteractPressed`와 함께 받음 |
 | `JumpPressed` | - | `bool` | 이번 프레임에 점프 키(Space)를 눌렀으면 true. ↓ + Space(내려가기)일 때는 false |
 | `RunHeld` | - | `bool` | 달리기 키(왼쪽 Shift)를 누르고 있는 동안 true. 슬롯을 누르고 있는 동안에는 false |
 | `DropPressed` | - | `bool` | 이번 프레임에 ↓ 를 누른 채 Space를 눌렀으면 true. 발판 아래로 내려가기에 쓴다 |
@@ -52,7 +57,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `SetPlayerMapEnabled(bool)` | true: 활성화, false: 비활성화 | - | Player 액션 맵(Move, Jump, Run, Down, PickUp, Interact)을 활성화·비활성화. 내 캐릭터에서만 동작 |
+| `SetPlayerMapEnabled(bool)` | true: 활성화, false: 비활성화 | - | Player 액션 맵(Move, MoveUp, MoveDown, Jump, Run, Down, PickUp, Interact)을 활성화·비활성화. 내 캐릭터에서만 동작 |
 | `SetAttackMapEnabled(bool)` | true: 활성화, false: 비활성화 | - | Attack 액션 맵(Slot1~Slot8, TargetPrev, TargetNext, Mark, Cancel)을 활성화·비활성화. 비활성화하면 누르고 있던 슬롯도 해제(`HeldSlot`이 -1). 내 캐릭터에서만 동작 |
 
 - 여러 이유가 겹칠 때: 이 함수들은 이유를 기억하지 않는다. 예를 들어 슬롯 키를 누른 채 UI를 열었다 닫을 때, UI 쪽에서 `SetPlayerMapEnabled(true)`를 부르면 슬롯 키가 눌려 있어도 Player 액션 맵이 활성화된다.

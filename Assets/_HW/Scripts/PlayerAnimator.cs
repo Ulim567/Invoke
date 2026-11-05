@@ -9,8 +9,10 @@ using UnityEngine;
 /// - 읽는 곳 (없으면 임시 값으로 대신한다)<br/>
 ///   · 이동: Rigidbody2D 가로 속도<br/>
 ///   · 공중: <c>PlayerMovement.IsGrounded</c> (박진우). 없으면 세로 속도로 임시 판단. 더블점프(<c>PlayerMovement.AirJumped</c>)면 Jump를 처음부터 다시 튼다<br/>
-///   · 시전: <c>FunctionExecutorNetwork.TaskStarted</c> (이우림). 함수는 서버에서만 실행되므로 모든 화면에 알려 주는 이쪽을 받는다.
-///     FunctionExecutorNetwork가 없는 시험용 플레이어는 <c>FunctionExecutor.TaskStarted</c><br/>
+///   · 스킬 모션: <c>SkillEffectEvents.Started</c>(스킬 ID, 박진우 #152). 스킬마다 자기 이름의 Animator 상태(예: c_wide_slash)를 튼다.
+///     어떤 임시 모션을 넣었는지, 몇 초 보여 줄지는 <c>SkillMotionTable</c>에 있다. 이동 계열은 모션 없음 (이동이 보여 준다).
+///     스킬 상태가 컨트롤러에 없으면 임시 모션 상태(Cast, Slash, Throw, Summon, Lunge)를, 표에 없는 새 스킬은 스킬 계열로 고른 임시 모션을 튼다<br/>
+///   · SkillEffectEvents가 없는 시험용 플레이어는 예전처럼 함수 시작(<c>FunctionExecutorNetwork.TaskStarted</c> / <c>FunctionExecutor.TaskStarted</c>)에 Cast<br/>
 ///   · 피격·사망: <c>PlayerHealth.HitEffectPlayed</c>, <c>DeathEffectPlayed</c>, <c>RespawnEffectPlayed</c> (김도훈)
 /// </para>
 /// </summary>
@@ -21,7 +23,7 @@ public class PlayerAnimator : MonoBehaviour
 	const string IdleState = "Idle";
 	const string RunState = "Run";
 	const string JumpState = "Jump";
-	const string CastState = "Cast";
+	const string CastState = "Cast"; // 찌르기 (공용 시전 모션)
 	const string HitState = "Hit";
 	const string DeathState = "Death";
 
@@ -48,6 +50,8 @@ public class PlayerAnimator : MonoBehaviour
 	PlayerHealth health;
 	FunctionExecutor executor;
 	FunctionExecutorNetwork executorNetwork;
+	SkillEffectEvents skillEvents;
+	string castState = CastState; // 지금 시전 중인 모션
 
 	float castEndTime;
 	float hitEndTime;
@@ -62,6 +66,7 @@ public class PlayerAnimator : MonoBehaviour
 		health = GetComponent<PlayerHealth>();
 		executor = GetComponent<FunctionExecutor>();
 		executorNetwork = GetComponent<FunctionExecutorNetwork>();
+		skillEvents = GetComponent<SkillEffectEvents>();
 		if (fallbackGroundLayers.value == 0) fallbackGroundLayers = LayerMask.GetMask("Ground", "Platform");
 	}
 
@@ -74,7 +79,9 @@ public class PlayerAnimator : MonoBehaviour
 			health.RespawnEffectPlayed += OnRespawn;
 		}
 		// 둘 다 있으면 네트워크 쪽만 받는다. FunctionExecutorNetwork는 네트워크 없이 돌 때도 TaskStarted를 불러 주므로 두 번 받지 않게 한다
-		if (executorNetwork != null) executorNetwork.TaskStarted += OnNetworkCastStarted;
+		// 스킬 모션은 SkillEffectEvents.Started로 고른다. 없을 때만 함수 시작에 공용 Cast를 튼다
+		if (skillEvents != null) skillEvents.Started += OnSkillStarted;
+		else if (executorNetwork != null) executorNetwork.TaskStarted += OnNetworkCastStarted;
 		else if (executor != null) executor.TaskStarted += OnCastStarted;
 		if (movement != null) movement.AirJumped += OnAirJumped;
 	}
@@ -87,7 +94,8 @@ public class PlayerAnimator : MonoBehaviour
 			health.DeathEffectPlayed -= OnDeath;
 			health.RespawnEffectPlayed -= OnRespawn;
 		}
-		if (executorNetwork != null) executorNetwork.TaskStarted -= OnNetworkCastStarted;
+		if (skillEvents != null) skillEvents.Started -= OnSkillStarted;
+		else if (executorNetwork != null) executorNetwork.TaskStarted -= OnNetworkCastStarted;
 		else if (executor != null) executor.TaskStarted -= OnCastStarted;
 		if (movement != null) movement.AirJumped -= OnAirJumped;
 	}
@@ -108,7 +116,7 @@ public class PlayerAnimator : MonoBehaviour
 		float now = Time.time;
 		if (dead) return DeathState;
 		if (now < hitEndTime) return HitState;
-		if (now < castEndTime) return CastState;
+		if (now < castEndTime) return castState;
 		if (!IsGrounded()) return JumpState;
 		if (body != null && Mathf.Abs(body.linearVelocity.x) > runThreshold) return RunState;
 		return IdleState;
@@ -155,9 +163,41 @@ public class PlayerAnimator : MonoBehaviour
 	// FunctionExecutor.TaskStarted. FunctionExecutorNetwork가 없는 시험용 플레이어만
 	void OnCastStarted(FunctionTask task) => StartCast();
 
-	void StartCast()
+	void StartCast() => StartCast(CastState, castDuration);
+
+	void StartCast(string state, float duration)
 	{
-		castEndTime = Time.time + castDuration;
+		castState = state;
+		castEndTime = Time.time + duration;
 		currentState = null; // 연달아 시전해도 처음부터 다시 튼다
 	}
+
+	// SkillEffectEvents.Started (스킬 ID). 모든 화면에서 불린다. 스킬 전용 상태를 튼다 (SkillMotionTable)
+	void OnSkillStarted(string skillId)
+	{
+		if (SkillMotionTable.TryGet(skillId, out SkillMotionTable.Entry motion))
+		{
+			if (motion.Base == null) return; // 이동 계열: 움직임이 보여 준다
+			string skillState = motion.StateName;
+			StartCast(HasState(skillState) ? skillState : motion.Base, motion.Duration);
+			return;
+		}
+
+		// 표에 없는 새 스킬: 스킬 계열로 임시 모션을 고른다. SkillMotionTable에 한 줄 더하면 전용 상태를 쓴다
+		if (!SkillTable.TryGet(skillId, out SkillData skill))
+		{
+			StartCast();
+			return;
+		}
+		switch (skill.Family)
+		{
+			case SkillFamily.Slash: StartCast(SkillMotionTable.Slash, castDuration); break;
+			case SkillFamily.Throw: StartCast(SkillMotionTable.Throw, castDuration); break;
+			case SkillFamily.Summon: StartCast(SkillMotionTable.Summon, castDuration); break;
+			case SkillFamily.Movement: break;
+			default: StartCast(); break; // 찌르기
+		}
+	}
+
+	bool HasState(string state) => animator.HasState(0, Animator.StringToHash(state));
 }

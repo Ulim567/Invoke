@@ -12,7 +12,7 @@ using UnityEngine.InputSystem;
 /// - 값은 읽을 때마다 그 프레임의 입력을 돌려주므로, Update에서 필요할 때 바로 읽으면 된다. 따로 저장해 둘 필요가 없다.
 /// </para>
 /// <para>
-/// 이동 담당: MoveX, JumpPressed, RunHeld, DropPressed<br/>
+/// 이동 담당: MoveX, MoveY, JumpPressed, RunHeld, DropPressed<br/>
 /// 시전 담당: HeldSlot, TargetStep, MarkPressed, CancelPressed, SlotPressed(), SlotReleased()<br/>
 /// 그 밖: PickUpPressed(검 줍기), InteractPressed(입구 들어가기, 스킬 트리 해금 장소)<br/>
 /// 액션 맵 활성화·비활성화: SetPlayerMapEnabled(), SetAttackMapEnabled()
@@ -27,7 +27,7 @@ public class PlayerInputReader : NetworkBehaviour
 	const int SlotCount = 8;
 
 	InputActionMap playerMap, attackMap;
-	InputAction move, jump, run, down, pickUp, interact, targetPrev, targetNext, mark, cancel;
+	InputAction move, moveUp, moveDown, jump, run, down, pickUp, interact, targetPrev, targetNext, mark, cancel;
 	readonly InputAction[] slots = new InputAction[SlotCount];
 
 	// 내 캐릭터가 사라질 때 -=로 등록을 해제하려면 등록할 때와 같은 함수 객체가 필요하므로 보관
@@ -49,6 +49,15 @@ public class PlayerInputReader : NetworkBehaviour
 	/// 슬롯을 누르고 있는 동안에는 ← → 가 대상 선택에 쓰이므로 항상 0, 즉 플레이어는 움직이지 않는다.
 	/// </summary>
 	public float MoveX => IsSlotHeld ? 0f : move.ReadValue<float>();
+
+	/// <summary>
+	/// 위아래 이동 값. ↑ 는 1, ↓ 는 -1, 누르지 않거나 둘 다 누르면 0. 검 타기에서 위아래로 날 때 쓴다.
+	/// 슬롯을 누르고 있는 동안에는 MoveX와 같이 항상 0이다.
+	/// ↑ 는 InteractPressed, ↓ 는 DropPressed(↓ + Space)와 함께 받는다.
+	/// Space를 먼저 누른 채 ↓ 를 누르면 Down(내려가기)이 ↓ 를 가져가므로, ↓ 를 다시 누를 때까지 0이다. (Shortcut Keys Consume Input)
+	/// </summary>
+	// 1D Axis 조합으로 만들면 Shortcut Keys Consume Input 때문에 ↑ 를 Interact보다 먼저 가져가 InteractPressed가 항상 false가 되므로, 단일 키 액션 두 개로 계산한다
+	public float MoveY => IsSlotHeld ? 0f : (moveUp.IsPressed() ? 1f : 0f) - (moveDown.IsPressed() ? 1f : 0f);
 
 	/// <summary>
 	/// 이번 프레임에 점프 키(Space)를 눌렀으면 true.
@@ -108,7 +117,7 @@ public class PlayerInputReader : NetworkBehaviour
 	public bool SlotReleased(int index) => slots[index].WasReleasedThisFrame();
 
 	/// <summary>
-	/// Player 액션 맵(Move, Jump, Run, Down, PickUp, Interact)을 활성화하거나 비활성화한다.<br/>
+	/// Player 액션 맵(Move, MoveUp, MoveDown, Jump, Run, Down, PickUp, Interact)을 활성화하거나 비활성화한다.<br/>
 	/// 이 컴포넌트는 활성화·비활성화만 한다. 언제 부를지와, 여러 이유(UI, 슬롯 키 등)가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.<br/>
 	/// 내 캐릭터(isLocalPlayer)에서만 동작한다.
 	/// </summary>
@@ -143,6 +152,8 @@ public class PlayerInputReader : NetworkBehaviour
 
 		playerMap = InputSystem.actions.FindActionMap("Player", true);
 		move = playerMap.FindAction("Move", true);
+		moveUp = playerMap.FindAction("MoveUp", true);
+		moveDown = playerMap.FindAction("MoveDown", true);
 		jump = playerMap.FindAction("Jump", true);
 		run = playerMap.FindAction("Run", true);
 		down = playerMap.FindAction("Down", true);

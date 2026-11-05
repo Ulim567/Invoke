@@ -8,7 +8,7 @@ using UnityEngine;
 ///   어떤 상태를 재생할지는 이 스크립트가 정해서 <c>Animator.Play</c>로 바꾼다.<br/>
 /// - 읽는 곳 (없으면 임시 값으로 대신한다)<br/>
 ///   · 이동: Rigidbody2D 가로 속도<br/>
-///   · 공중: <c>PlayerMovement.IsGrounded</c> (박진우). 없으면 세로 속도로 임시 판단<br/>
+///   · 공중: <c>PlayerMovement.IsGrounded</c> (박진우). 없으면 세로 속도로 임시 판단. 더블점프(<c>PlayerMovement.AirJumped</c>)면 Jump를 처음부터 다시 튼다<br/>
 ///   · 시전: <c>FunctionExecutorNetwork.TaskStarted</c> (이우림). 함수는 서버에서만 실행되므로 모든 화면에 알려 주는 이쪽을 받는다.
 ///     FunctionExecutorNetwork가 없는 시험용 플레이어는 <c>FunctionExecutor.TaskStarted</c><br/>
 ///   · 피격·사망: <c>PlayerHealth.HitEffectPlayed</c>, <c>DeathEffectPlayed</c>, <c>RespawnEffectPlayed</c> (김도훈)
@@ -76,6 +76,7 @@ public class PlayerAnimator : MonoBehaviour
 		// 둘 다 있으면 네트워크 쪽만 받는다. FunctionExecutorNetwork는 네트워크 없이 돌 때도 TaskStarted를 불러 주므로 두 번 받지 않게 한다
 		if (executorNetwork != null) executorNetwork.TaskStarted += OnNetworkCastStarted;
 		else if (executor != null) executor.TaskStarted += OnCastStarted;
+		if (movement != null) movement.AirJumped += OnAirJumped;
 	}
 
 	void OnDisable()
@@ -88,7 +89,11 @@ public class PlayerAnimator : MonoBehaviour
 		}
 		if (executorNetwork != null) executorNetwork.TaskStarted -= OnNetworkCastStarted;
 		else if (executor != null) executor.TaskStarted -= OnCastStarted;
+		if (movement != null) movement.AirJumped -= OnAirJumped;
 	}
+
+	// 더블점프: 이미 공중이라 Jump 상태가 바뀌지 않으므로, 상태를 비워서 Jump를 처음부터 다시 튼다 (PlayerMovement.AirJumped, 박진우 #256)
+	void OnAirJumped() => currentState = null;
 
 	void Update()
 	{

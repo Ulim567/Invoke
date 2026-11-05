@@ -4,7 +4,8 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// 내 캐릭터의 입력을 읽어서 이동·시전 스크립트에 전달하는 컴포넌트.<br/>
-/// 키를 직접 읽지 않고 이 컴포넌트의 값만 사용한다. (나중에 키 사용자 지정을 붙일 때 고칠 곳을 하나로 만들기 위함)
+/// 키를 직접 읽지 않고 이 컴포넌트의 값만 사용한다. (나중에 키 사용자 지정을 붙일 때 고칠 곳을 하나로 만들기 위함)<br/>
+/// 액션은 GameInput에서 가져온다.
 /// <para>
 /// 사용법<br/>
 /// - 플레이어 프리팹에 붙어 있으므로 GetComponent&lt;PlayerInputReader&gt;()로 가져온다.<br/>
@@ -24,7 +25,7 @@ using UnityEngine.InputSystem;
 /// </summary>
 public class PlayerInputReader : NetworkBehaviour
 {
-	const int SlotCount = 8;
+	const int SlotCount = GameInput.Attack.SlotCount;
 
 	InputActionMap playerMap, attackMap;
 	InputAction move, moveUp, moveDown, jump, run, down, pickUp, interact, targetPrev, targetNext, mark, cancel;
@@ -150,26 +151,27 @@ public class PlayerInputReader : NetworkBehaviour
 	{
 		base.OnStartLocalPlayer();
 
-		playerMap = InputSystem.actions.FindActionMap("Player", true);
-		move = playerMap.FindAction("Move", true);
-		moveUp = playerMap.FindAction("MoveUp", true);
-		moveDown = playerMap.FindAction("MoveDown", true);
-		jump = playerMap.FindAction("Jump", true);
-		run = playerMap.FindAction("Run", true);
-		down = playerMap.FindAction("Down", true);
-		pickUp = playerMap.FindAction("PickUp", true);
-		interact = playerMap.FindAction("Interact", true);
+		// 내 캐릭터에서만 액션을 담아 둔다. 다른 플레이어의 캐릭터에서 값을 읽으면 비어 있어 오류가 나므로, 내 키에 반응하는 실수를 바로 알 수 있다
+		playerMap = GameInput.Player.Map;
+		move = GameInput.Player.Move;
+		moveUp = GameInput.Player.MoveUp;
+		moveDown = GameInput.Player.MoveDown;
+		jump = GameInput.Player.Jump;
+		run = GameInput.Player.Run;
+		down = GameInput.Player.Down;
+		pickUp = GameInput.Player.PickUp;
+		interact = GameInput.Player.Interact;
 
-		attackMap = InputSystem.actions.FindActionMap("Attack", true);
-		targetPrev = attackMap.FindAction("TargetPrev", true);
-		targetNext = attackMap.FindAction("TargetNext", true);
-		mark = attackMap.FindAction("Mark", true);
-		cancel = attackMap.FindAction("Cancel", true);
+		attackMap = GameInput.Attack.Map;
+		targetPrev = GameInput.Attack.TargetPrev;
+		targetNext = GameInput.Attack.TargetNext;
+		mark = GameInput.Attack.Mark;
+		cancel = GameInput.Attack.Cancel;
 
 		for (int i = 0; i < SlotCount; i++)
 		{
 			int index = i;
-			slots[i] = attackMap.FindAction($"Slot{i + 1}", true);
+			slots[i] = GameInput.Attack.Slot(i);
 
 			// 슬롯을 누르고 있는 동안 ← →를 대상 선택으로 쓰기 위해, 먼저 누른 슬롯 하나만 기록한다
 			// Update에서 계산하면 스크립트 실행 순서에 영향을 받으므로, 모든 Update보다 먼저 불리는 이벤트로 관리한다

@@ -11,6 +11,7 @@
 ## 폴더
 - `Assets/_UL`, `_JW`, `_DH`, `_HW`: 각자의 개인 작업 폴더. 다른 사람 폴더는 고치지 않는다.
 - `Assets/Prefabs`, `Assets/Scenes`: 공용. 고치면 PR의 「씬·프리팹 변경」에 반드시 적는다.
+- `Assets/Scripts`: 공용 스크립트(입력 `Assets/Scripts/Input` 등). 누구나 고칠 수 있다.
 - `Assets/Mirror`: 외부 패키지. 고치지 않는다.
 
 ## 코드 작성 규칙
@@ -32,12 +33,14 @@
 4. 게임 중에 만드는 오브젝트는 반드시 프리팹으로 만든다.
    - 코드에서 `new GameObject()`로 만들고 컴포넌트를 붙이는 방식은 쓰지 않는다. 프리팹을 `Instantiate`한다.
    - 이유: Mirror는 미리 등록한 프리팹(Registered Spawnable Prefabs)만 다른 플레이어 화면에 만들어 줄 수 있다.
-5. 키 입력은 `PlayerInputReader`에서만 읽는다.
-   - `Keyboard.current`나 `InputAction`을 직접 읽지 않고, `PlayerInputReader`의 값(`MoveX`, `JumpPressed`, `HeldSlot` 등)을 쓴다.
-   - 이유: 멀티플레이에서는 내 캐릭터(`isLocalPlayer`)만 입력을 받아야 한다. 입력을 한 곳에서 읽어야 다른 플레이어의 캐릭터가 내 키에 반응하는 문제가 생기지 않는다. 나중에 키 사용자 지정을 붙일 때도 한 곳만 고치면 된다.
+5. 입력 액션은 `GameInput`에서만 찾는다.
+   - `Keyboard.current`나 `InputAction`을 직접 읽지 않는다.
+   - 캐릭터 입력은 `PlayerInputReader`의 값(`MoveX`, `JumpPressed`, `HeldSlot` 등)을 쓴다.
+   - UI 입력은 `GameInput.UI`의 값(`SubmitPressed`, `CancelPressed`)을 쓴다. 화면의 Enter·ESC는 `UIShortcut` 컴포넌트를 붙인다.
+   - 이유: 멀티플레이에서는 내 캐릭터(`isLocalPlayer`)만 입력을 받아야 한다. 캐릭터 입력을 `PlayerInputReader`에서 읽어야 다른 플레이어의 캐릭터가 내 키에 반응하는 문제가 생기지 않는다. 키가 어디서 읽히는지 `GameInput` 하나만 보면 알 수 있고, 나중에 키 사용자 지정을 붙일 때도 한 곳만 고치면 된다.
 
 ## 코드 스타일
-- 기존 코드와 같은 방식으로 쓴다 (`Assets/_UL/Scripts/PlayerInputReader.cs` 참고).
+- 기존 코드와 같은 방식으로 쓴다 (`Assets/Scripts/Input/PlayerInputReader.cs` 참고).
 - 다른 사람이 코드를 이해할 수 있도록 한국어 주석을 단다.
   - 모든 곳에 달 필요는 없다. 중요한 부분과, 다른 스크립트에서 가져다 쓰는 클래스·함수에만 단다.
   - 다른 스크립트에서 쓰는 클래스와 함수에는 `<summary>`로 역할과 사용법을 적는다.
@@ -46,9 +49,10 @@
 - 다른 사람 시스템의 코드는 고치지 않는다. `docs/systems/`에 적힌 함수와 데이터 형식만 사용한다.
 - 문서에 없는 함수가 필요하면 작업을 멈추고 사람에게 알린다. 담당자끼리 정한 뒤 문서부터 고친다.
 - 접점(함수 이름, 데이터 형식)을 새로 정했으면 해당 `docs/systems/` 문서에 기록한다.
-- 입력 설정 파일 `Assets/Settings/InputSystem_Actions.inputactions`는 입력 담당(이우림)만 고친다.
-  - AI가 고쳐도 되지만, 고친 뒤에는 사람이 Unity의 Input Actions 편집 창에서 열어 형식이 깨지지 않았는지 확인한다.
-  - 다른 팀원은 이 파일을 고치지 않고, 필요한 키를 이우림에게 요청한다.
+- 입력 설정 파일 `Assets/Settings/InputSystem_Actions.inputactions`와 `Assets/Scripts/Input`은 누구나 고칠 수 있다.
+  - 고친 PR은 입력 담당(이우림)이 검토한다.
+  - 입력 설정 파일을 고친 뒤에는 고친 사람이 Unity의 Input Actions 편집 창에서 열어 형식이 깨지지 않았는지 확인한다. AI가 고쳤으면 사람이 확인한다.
+  - 새 액션을 추가하면 `GameInput`에 그 액션을 찾는 줄을 함께 추가한다.
 
 ## AI가 하지 않는 것
 - `.unity`, `.prefab`, `.asset` 파일을 직접 고치지 않는다. 씬·프리팹 작업은 사람이 에디터에서 하도록 순서만 안내한다.

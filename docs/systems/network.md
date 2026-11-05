@@ -22,6 +22,7 @@
 | --- | --- | --- |
 | 값 바꾸기 | 서버 | 함수 실행, 데미지, 체력, 메모리, 쿨타임, 네트워크 오브젝트 생성·삭제 |
 | 키 입력 읽기 | 로컬 플레이어의 클라이언트(`isLocalPlayer`) | `PlayerInputReader`, `SlotCaster`의 대상 고르기 |
+| UI 키 입력 읽기 | 각 클라이언트 (내 화면) | `GameInput.UI`, `UIShortcut`. Player가 없어도 동작 |
 | 연출 | 모든 클라이언트 | 이펙트, 소리, 애니메이션 |
 
 | 실행 방식 | 함수 실행기(`FunctionExecutor`) |

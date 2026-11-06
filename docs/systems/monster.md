@@ -91,6 +91,11 @@
   - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 맞은 플레이어가 실행 중이던 함수가 모두 끊긴다
   - 공격 고르기: 목록(던지기, 낙하, 소환, 때리기)에서 랜덤. 직전 공격과 지금 쓸 수 없는 공격(가까운 플레이어 없는 때리기, 웜이 가득 찬 소환)은 뺀다
   - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 모으던 낙하·소환·때리기는 취소된다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+  - 연출 이벤트는 모든 화면에서 불린다 (#310)
+    - `GatewayAI`, `GatewayPhases`, `ProjectileAttack`: `NetworkBehaviour`. 연출 함수가 서버에서 `[ClientRpc]`를 보내 그 몬스터를 보는 모든 화면(호스트 포함)에서 이벤트를 부른다. 전용 서버에서는 불리지 않는다. 네트워크 없는 테스트는 그 자리에서
+    - `ProjectileAttack`을 쓰는 프리팹에는 `NetworkIdentity`가 있어야 한다: Gateway, Loop, `TestMonster`(#310에서 `NetworkIdentity` 추가, Test_DH·Test_HW·Test_JW 씬에 놓여 있음)
+    - 새 몬스터 부품의 연출 이벤트: 그 부품이 네트워크 프리팹에만 쓰이면 `GatewayAI`처럼 직접 `[ClientRpc]`, `NetworkIdentity` 없는 오브젝트도 쓰면 `Monster`처럼 네트워크 컴포넌트를 따로 둔다
+    - `Monster`만 따로 두는 이유는 연습장 허수아비(`NetworkIdentity` 없는 씬 오브젝트). 허수아비를 네트워크 프리팹으로 바꾸면 `MonsterNetwork`를 `Monster`로 합친다
 - 페이즈와 기믹 (`GatewayPhases`)
   - 1페이즈 100~70%, 2페이즈 70% 이하, 3페이즈 40% 이하 (`Phase Thresholds`). 기믹은 **페이즈마다 한 번**만 나온다.
   - 1페이즈 기믹: 플레이어를 처음 발견하고 `First Gimmick Delay`(15초) 뒤 기믹 1
@@ -251,13 +256,12 @@
 
 ### `ProjectileAttack`
 
-몬스터 프리팹에 `Monster`와 함께 붙인다. Inspector에서 `Attack`(MonsterAttackData), `Projectile Prefab`, `Speed`, `Fire Point Offset`, `Fire Delay`(모으는 시간)를 정한다.
+몬스터 프리팹에 `Monster`와 함께 붙인다. Inspector에서 `Attack`(MonsterAttackData), `Projectile Prefab`, `Speed`, `Fire Point Offset`, `Fire Delay`(모으는 시간)를 정한다. `NetworkBehaviour`라서 프리팹에 `NetworkIdentity`가 있어야 한다 (#310).
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 쏜다. 몬스터 AI가 부른다. 연출이 바로 나가고 `Fire Delay`초 뒤 투사체가 나간다. 죽었거나 기절했거나 방향이 (0, 0)이거나 모으는 중이면 쏘지 않는다. 실명 중에 나간 투사체는 빗나간다. |
-| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` |
-| `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
+| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` || `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
 
 ### `FlyingShooterAI`
 

@@ -32,11 +32,12 @@ using UnityEngine.Serialization;
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster, GatewayAI, StatusEffects와 함께 붙인다. 기둥 프리팹은 NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다.<br/>
-/// 네트워크를 붙이면 서버에서만 돈다. 땅 찾기는 보스가 속한 씬의 물리 세계에 한다.
+/// 페이즈·기믹은 서버(또는 네트워크 없는 테스트)에서만 돈다. 땅 찾기는 보스가 속한 씬의 물리 세계에 한다.<br/>
+/// 연출 이벤트(ChargeEffectPlayed, OverloadEffectPlayed, GroggyEffectPlayed)는 [ClientRpc]로 이 보스를 보는 모든 화면(호스트 포함)에서 불린다. 전용 서버에서는 불리지 않는다 (#310).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster), typeof(GatewayAI), typeof(StatusEffects))]
-public class GatewayPhases : MonoBehaviour
+public class GatewayPhases : NetworkBehaviour
 {
 	[Header("페이즈")]
 	[SerializeField, Tooltip("다음 페이즈로 넘어가는 체력 비율. 큰 값부터 (2페이즈 0.7, 3페이즈 0.4)")]
@@ -443,12 +444,34 @@ public class GatewayPhases : MonoBehaviour
 		ClearClones();
 	}
 
-	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
-	void PlayGroggyEffect() => GroggyEffectPlayed?.Invoke(groggyDuration);
+	// 연출만 한다 (코드 작성 규칙 1). 서버에서 부르면 [ClientRpc]로 이 보스를 보는 모든 화면(호스트 포함)에서 연출한다.
+	// 서버에서 따로 부르지 않아 호스트에서 두 번 불리지 않는다. 네트워크를 켜지 않은 테스트는 그 자리에서 부른다
+	void PlayGroggyEffect()
+	{
+		if (!NetworkServer.active) { GroggyEffectPlayed?.Invoke(groggyDuration); return; }
+		RpcGroggyEffect(groggyDuration);
+	}
 
-	void PlayChargeEffect() => ChargeEffectPlayed?.Invoke(chargeTime);
+	void PlayChargeEffect()
+	{
+		if (!NetworkServer.active) { ChargeEffectPlayed?.Invoke(chargeTime); return; }
+		RpcChargeEffect(chargeTime);
+	}
 
-	void PlayOverloadEffect() => OverloadEffectPlayed?.Invoke();
+	void PlayOverloadEffect()
+	{
+		if (!NetworkServer.active) { OverloadEffectPlayed?.Invoke(); return; }
+		RpcOverloadEffect();
+	}
+
+	[ClientRpc]
+	void RpcGroggyEffect(float duration) => GroggyEffectPlayed?.Invoke(duration);
+
+	[ClientRpc]
+	void RpcChargeEffect(float duration) => ChargeEffectPlayed?.Invoke(duration);
+
+	[ClientRpc]
+	void RpcOverloadEffect() => OverloadEffectPlayed?.Invoke();
 
 	// 서버이거나 네트워크를 켜지 않은 테스트면 true
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;

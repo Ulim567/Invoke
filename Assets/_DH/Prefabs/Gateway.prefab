@@ -238,6 +238,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ed66e26bdb411d409c0e4acf1d11f33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectileAttack
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   attack: {fileID: 11400000, guid: d42fd5a0f3990d74c927c43678b86779, type: 2}
   projectilePrefab: {fileID: 4266484544849432736, guid: a918335594367b94f8d49ffadd2c5af3, type: 3}
   speed: 7
@@ -255,6 +258,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c19c64dbaadab6c49b5463578ef3fb73, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GatewayAI
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   patterns: 00000000010000000200000003000000i
   attackInterval: 3
   firstAttackDelay: 2
@@ -318,6 +324,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc7150d362f23e3489a873fe62e07d43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GatewayPhases
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   phaseThresholds:
   - 0.7
   - 0.4

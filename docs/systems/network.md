@@ -224,5 +224,4 @@ void CmdPickUp()
   - 「데미지·상태 이상을 서버에서 판정하기」: 상태 이상
 - 지금 한계
   - 함수·슬롯·전역 변수 파일이 컴퓨터마다 하나: 같은 컴퓨터의 다른 계정·캐릭터도 같은 데이터를 보냄(서버 DB 이슈에서 해결)
-  - 공용 `Player.prefab`에 실행기 묶음(`FunctionExecutor`, `SlotLoadout`, `FunctionExecutorNetwork` 등)이 아직 없음. 시험은 `Player_UL` + `NetworkTest` 씬
   - `SlotCaster` 연결 전: 클라이언트로만 접속한 플레이어의 `GetBug`에 답하는 곳이 없음

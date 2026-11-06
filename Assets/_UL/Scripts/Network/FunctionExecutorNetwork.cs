@@ -783,6 +783,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return;
 		}
 
+		// 공격할 수 없는 장소(로비 등)에서는 시전하지 않는다. 클라이언트가 막지 않아도 서버가 거부하므로, 요청을 조작해도 시전되지 않는다 (#313)
+		if (PlaceScenes.IsPlayerInNoCastPlace(gameObject))
+		{
+			ReplyCastRejected(slot, CastRejection.InNoCastPlace);
+			return;
+		}
+
 		FunctionBlock original = GetSlotOriginal(slot);
 		if (original == null)
 		{

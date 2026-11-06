@@ -20,6 +20,10 @@
   - 레이드 방, 보스, 성공·실패 판정, 결과 화면 그림: [raid.md](raid.md) (김도훈, 결과 화면 그림은 임혜원)
   - 보스·몬스터·플레이어의 체력·연출·위치 동기화: [monster.md](monster.md), [player-health.md](player-health.md) (#310에서 이우림이 김도훈과 합의해 맞춤)
   - 조작된 이동 요청 막기 (예: 로비를 거치지 않는 이동): 보안 작업 때. 검사 자리는 `InvokeNetworkManager.OnTravelRequest`
+- 공격할 수 없는 장소 (#313): 장소 목록 `PlaceScenes.NoCastPlaces`(지금은 로비)에 있는 장소에서는 서버가 시전을 거부
+  - 서버의 `FunctionExecutorNetwork.ServerCast`가 `CanAct` 검사 다음에 `PlaceScenes.IsPlayerInNoCastPlace`를 확인해 `CastRejection.InNoCastPlace`로 거부 (클라이언트가 막지 않아도 거부되므로 조작된 요청도 막힘)
+  - 장소 판단: 서버(호스트 포함)·네트워크를 켜지 않은 테스트는 플레이어가 속한 씬의 이름, 클라이언트는 불러온 씬 중에 목록의 장소가 있는지 (클라이언트의 플레이어는 늘 `Base` 씬에 있으므로)
+  - 하지 않는 일: 슬롯 HUD 회색 표시(UI는 별도 이슈), `SlotCaster`가 요청을 보내지 않게 하기
 
 ## 동작 규칙
 
@@ -213,6 +217,9 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | --- | --- | --- |
 | `Lobby`, `HuntingGround`, `TrainingRoom`, `RaidDungeon` | `string` | 각 장소의 씬 이름 |
 | `FixedPlaces` | `string[]` | 서버가 시작할 때 한 번씩 불러오는 장소 (로비, 사냥터). 연습장·레이드 던전은 입장마다 따로 불러오므로 넣지 않음 |
+| `NoCastPlaces` | `string[]` | 공격할 수 없는 장소 (지금은 로비). 장소를 더하거나 빼려면 여기만 고침 (#313) |
+| `IsNoCastPlace(string sceneName)` | 씬 이름 | `bool` | 그 씬 이름이 `NoCastPlaces`에 있으면 true |
+| `IsPlayerInNoCastPlace(GameObject player)` | 플레이어 오브젝트 | `bool` | 그 플레이어가 지금 공격할 수 없는 장소에 있으면 true. 서버·호스트·클라이언트 어디서든 부를 수 있음. 슬롯 HUD를 회색으로 표시할 때 클라이언트에서 부름 |
 
 ### `InvokeNetworkManager`
 
@@ -266,6 +273,7 @@ static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파�
 | 이름 | 설명 |
 | --- | --- |
 | `TrainingRoomTest` | 연습장 입장마다 열기(#301). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `TrainingRoomTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-trainingRoomTest member`로 실행(호스트 + 클라이언트). 입장 전 연습장 없음 → 입장하면 하나 열림 → (클라이언트가 있으면) 둘이 입장해 연습장이 둘, 서로 다른 씬, 서로의 observer가 아님 → 나가면 내 연습장만 내림 → 클라이언트가 접속을 끊으면 그 연습장도 내림 → 다시 입장하면 새 씬 → 플레이어가 없어지면(`DespawnPlayer`) 내림. 「[TrainingRoomTest][역할] 전체 통과」면 통과 |
+| `NoCastPlaceTest` | 공격할 수 없는 장소(#313). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `NoCastPlaceTest.StartInEditor()`(호스트 혼자). 로비에서 시전 → `InNoCastPlace` 거부 → 사냥터에서는 `InNoCastPlace`로 거부되지 않음 → 로비로 돌아와 다시 거부. 「[NoCastPlaceTest] 전체 통과」면 통과 |
 | `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 클리어 결과 화면(클라이언트는 서버가 보낸 결과) → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 실패 결과 화면 3초 뒤 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 실패 결과 화면 3초 뒤 로비로 돌아옴. 결과 화면은 `RaidJudge.ResultEffectPlayed`로 확인. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
 
 ### 씬에 놓는 컴포넌트

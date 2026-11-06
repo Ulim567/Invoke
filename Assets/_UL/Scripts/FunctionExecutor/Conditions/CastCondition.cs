@@ -13,6 +13,8 @@ public enum CastRejection
 	NoFunction,
 	// 시전자가 죽었거나 경직 중이다(PlayerHealth.CanAct가 false). 멀티플레이에서 서버의 FunctionExecutorNetwork가 쓴다 (#310)
 	CannotAct,
+	// 시전자가 공격할 수 없는 장소(PlaceScenes.NoCastPlaces, 지금은 로비)에 있다. 멀티플레이에서 서버의 FunctionExecutorNetwork가 쓴다 (#313)
+	InNoCastPlace,
 }
 
 /// <summary>

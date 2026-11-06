@@ -45,6 +45,8 @@ using UnityEngine;
 public class FunctionExecutorNetwork : NetworkBehaviour
 {
 	FunctionExecutor executor;
+	// 시전자의 체력. 죽었거나 경직 중이면 시전을 거부하고, 죽으면 실행 중인 함수를 끊는다 (#310). 없으면(시험용 오브젝트) 검사하지 않는다
+	PlayerHealth health;
 	SlotLoadout loadout;
 	ProcessMemory memory;
 	// 해금 목록을 읽는 곳. 저장 요청의 해금 검사에 쓴다
@@ -176,6 +178,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		loadout = GetComponent<SlotLoadout>();
 		memory = GetComponent<ProcessMemory>();
 		progress = GetComponent<PlayerProgress>();
+		health = GetComponent<PlayerHealth>();
 	}
 
 	// 실행기의 event는 실행기가 돌고 있는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불린다. 받아서 화면들에 전한다
@@ -185,6 +188,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded += OnExecutorTaskEnded;
 		executor.InputRequested += OnExecutorInputRequested;
 		executor.CooldownStarted += OnExecutorCooldownStarted;
+		if (health != null) health.Died += OnPlayerDied;
 	}
 
 	void OnDisable()
@@ -193,7 +197,12 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded -= OnExecutorTaskEnded;
 		executor.InputRequested -= OnExecutorInputRequested;
 		executor.CooldownStarted -= OnExecutorCooldownStarted;
+		if (health != null) health.Died -= OnPlayerDied;
 	}
+
+	// 죽은 캐릭터가 시전해 둔 함수가 관전하는 동안 계속 돌지 않도록 모두 끊는다 (이우림 결정 #310).
+	// Died는 판정하는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불리므로 서버의 실행기가 끊는다. 끊긴 작업은 EndReason Interrupted
+	void OnPlayerDied() => executor.InterruptAll();
 
 	public override void OnStartClient()
 	{
@@ -767,6 +776,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// 나중에 보안 검사(그 몬스터들을 정말 고를 수 있었는지)를 넣을 곳이다
 	void ServerCast(int slot, GameObject target, GameObject[] targets)
 	{
+		// 죽었거나 경직 중이면 시전하지 않는다. 클라이언트의 SlotCaster도 막지만, 서버에서 죽은 순간과 클라이언트가 그 사실을 받는 순간 사이에 보낸 요청을 막기 위함 (#310)
+		if (health != null && !health.CanAct)
+		{
+			ReplyCastRejected(slot, CastRejection.CannotAct);
+			return;
+		}
+
 		FunctionBlock original = GetSlotOriginal(slot);
 		if (original == null)
 		{

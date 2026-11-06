@@ -75,6 +75,12 @@
 - 박진우와 정한 것
   - `PlayerMovement`가 `CanAct`가 false면 이동·점프를 막는다 (#53)
   - `SlotCaster`가 `CanAct`가 false면 시전하지 않고 고르던 대상도 취소한다 (#48)
+- 죽은 뒤 입력 막기 (#310, 이우림 결정: 사용처마다 `CanAct` 검사)
+  - 이동·점프(`PlayerMovement`), 슬롯 시전(`SlotCaster`): 이미 검사. 체력 동기화(위 「네트워크」)로 클라이언트에서도 서버와 같은 때 막힌다
+  - 서버의 시전 처리(`FunctionExecutorNetwork`): `CanAct`가 false면 `CastRejection.CannotAct`로 거부
+  - 출구(`PlaceExit`): `CanAct`가 false면 ↑ 무시
+  - 죽으면 그 플레이어가 실행 중인 함수를 모두 끊는다 (`FunctionExecutorNetwork`가 서버의 `Died`를 받아 `FunctionExecutor.InterruptAll`)
+  - 요청 (각 담당자): 검 줍기 `SwordPickUpInput.CmdPickUp`(박진우, 서버에서 `CanAct` 검사), `SlotCaster`의 `CannotAct` 거부 처리(박진우), 로비 입구 `LobbyInteractable`(임혜원, `CanAct`가 false면 ↑ 무시)
 - 임혜원과 정한 것
   - `PlayerAnimator`가 `HitEffectPlayed`, `DeathEffectPlayed`, `RespawnEffectPlayed`를 받아 피격·사망 모션을 재생한다 (#49)
 - 다른 시스템이 쓰는 곳

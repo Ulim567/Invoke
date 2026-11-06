@@ -76,6 +76,8 @@ public class RaidPartyTest : MonoBehaviour
 	bool myDeath;
 	bool myHide;
 	bool myRespawn;
+	// member: 서버가 보낸 시전 거부 이유 (받기 전에는 null)
+	CastRejection? myCastRejection;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -310,8 +312,12 @@ public class RaidPartyTest : MonoBehaviour
 				memberHealth.TakeDamage(MemberHitDamage);
 				yield return new WaitForSeconds(1.5f);
 				yield return Wait(round + "파티원 캐릭터의 무적이 끝남", () => !memberHealth.IsInvincible);
+				// 입력(대상)을 기다리며 계속 도는 함수를 서버에서 시전해 둔 뒤 바로 죽인다. 죽으면 실행 중인 함수가 모두 끊겨야 한다 (이우림 결정, #310)
+				FunctionTask waitingTask = CastWaitingFunction(memberHealth.GetComponent<FunctionExecutor>());
+				Check(round + "파티원 캐릭터가 입력을 기다리는 함수를 실행 중", waitingTask != null && !waitingTask.IsEnded);
 				memberHealth.TakeDamage(memberHealth.Hp);
 				Check(round + "서버에서 파티원 캐릭터가 죽음", memberHealth.IsDead);
+				yield return Wait(round + "죽으면 실행 중인 함수가 끊김 (Interrupted)", () => waitingTask == null || (waitingTask.IsEnded && waitingTask.EndReason == FunctionTaskEndReason.Interrupted));
 				// 숨김(1초)까지 기다린다
 				yield return new WaitForSeconds(1.5f);
 			}
@@ -500,6 +506,14 @@ public class RaidPartyTest : MonoBehaviour
 		Check(round + "죽은 동안 움직이거나 시전할 수 없음 (CanAct false)", health.IsDead && !health.CanAct);
 		yield return Wait(round + "내 캐릭터 숨김(관전) 연출", () => myHide);
 		Check(round + "숨겨진 상태 (IsHidden)", health.IsHidden);
+
+		// 죽은 채로 시전을 요청하면 서버가 CannotAct로 거부한다 (#310). SlotCaster를 거치지 않고 바로 보내 서버의 검사를 본다
+		FunctionExecutorNetwork net = me.GetComponent<FunctionExecutorNetwork>();
+		myCastRejection = null;
+		net.CastRejected += OnMyCastRejected;
+		net.RequestCast(0);
+		yield return Wait(round + "죽은 채로 시전하면 서버가 거부 (CannotAct)", () => myCastRejection == CastRejection.CannotAct);
+		net.CastRejected -= OnMyCastRejected;
 		yield return Wait(round + "전체 공격 모으기 연출", () => bossChargePlayed);
 		yield return Wait(round + "보스 사망 연출", () => bossDeathPlayed);
 		// 보스는 플레이어를 발견하고 2초 뒤부터 3초마다 공격하므로, 사망 전까지 공격 연출이 한 번 이상 왔어야 한다
@@ -544,6 +558,19 @@ public class RaidPartyTest : MonoBehaviour
 	}
 
 	void OnMyDeath() => myDeath = true;
+
+	void OnMyCastRejected(int slot, CastRejection reason) => myCastRejection = reason;
+
+	// 서버에서: 찌르기(대상 입력을 기다림) 함수를 그 실행기로 시전한다. 대상을 넣지 않으면 계속 기다리므로, 실행 중인 작업으로 남는다 (CastSyncTest와 같은 함수)
+	static FunctionTask CastWaitingFunction(FunctionExecutor executor)
+	{
+		if (executor == null) return null;
+		FunctionData data = FunctionData.Create("RaidPartyTestWaitInput");
+		data.Blocks.Add(BlockData.CallPredefinedFunction(PredefinedFunctionIds.Thrust,
+			SlotData.FromBlock(BlockData.CallPredefinedFunction(PredefinedFunctionIds.GetBug))));
+		if (!FunctionDataConverter.TryConvert(data, new[] { data }, out UserFunction function)) return null;
+		return executor.Cast(function);
+	}
 
 	void OnMyHide() => myHide = true;
 

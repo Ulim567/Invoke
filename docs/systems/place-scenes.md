@@ -245,6 +245,22 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
 | --- | --- | --- | --- |
 | `RequestGiveUp()` | - | - | [클라이언트] 서버에 레이드 포기를 보냄. 레이드 던전의 「레이드 포기」 버튼이 부름. 서버가 그 레이드를 실패로 끝내고 포기한 사람을 포함해 파티원 모두를 로비로 옮김. 싸우는 중이 아니면 서버가 무시. 접속하지 않았으면 경고 로그만 |
 
+### `PlayerRoster` (#310)
+
+static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파티원 체력 UI처럼 「지금 누가 있는지」가 필요한 화면이 쓴다. 목록은 `PlayerHealth`가 채우고(Start에 넣고 OnDestroy에 뺌), 다른 스크립트는 읽기만 한다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Players` | - | `IReadOnlyList<PlayerHealth>` | 이 화면에 있는 플레이어 (내 캐릭터 포함). 클라이언트에서는 같은 장소의 플레이어뿐이다 (레이드 던전에서는 파티원) |
+| `PlayerAdded` (event) | `PlayerHealth` | - | [표시] 플레이어가 나타남 (그 장소에 들어옴, 접속함, 내가 그 장소로 옴). 체력 값은 이미 서버의 값 |
+| `PlayerRemoved` (event) | `PlayerHealth` | - | [표시] 플레이어가 사라짐 (장소를 떠남, 접속 끊김, 내가 그 장소를 떠남) |
+| `IsLocal(PlayerHealth)` | 플레이어 | `bool` | 내 캐릭터면 true. 「나를 뺀 파티원」만 그릴 때 |
+| `IsInMyPlace(PlayerHealth)` | 플레이어 | `bool` | 내 캐릭터와 같은 장소면 true. 클라이언트에서는 늘 true. 호스트는 다른 장소의 플레이어도 갖고 있으므로 호스트 화면의 UI는 그릴 때마다 이것으로 거른다 (호스트에서는 장소를 옮겨도 이벤트가 불리지 않음) |
+
+- 각 플레이어의 체력은 `PlayerHealth.HpChanged`, `Hp`, `MaxHp`, `IsDead`, `IsHidden`으로 읽는다 ([player-health.md](player-health.md))
+- 클라이언트에서는 Mirror가 다른 플레이어 오브젝트를 `Base` 씬에 만들므로, 씬 이름으로 같은 장소인지 거르지 않는다
+- 정한 것 (이우림 #310): 「파티원」은 같은 장소에 있는 플레이어. 실제 파티원 명단은 보내지 않음
+
 ### 시험
 
 | 이름 | 설명 |

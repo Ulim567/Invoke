@@ -142,12 +142,27 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	void Start()
 	{
 		// 클라이언트는 서버가 보낸 상태를 쓴다 (OnStartClient)
-		if (!IsAuthority()) return;
+		if (!IsAuthority())
+		{
+			RegisterInRoster();
+			return;
+		}
 		// 처음 나타난 위치(씬의 시작 위치)를 부활 위치로 기억한다
 		respawnPosition = transform.position;
 		Hp = MaxHp;
 		SyncState();
 		ShowHp();
+		RegisterInRoster();
+	}
+
+	// 이 화면의 플레이어 목록(PlayerRoster)에서 뺀다. 클라이언트에서는 장소를 떠나거나 접속이 끊겨 Mirror가 오브젝트를 없앨 때다
+	void OnDestroy() => PlayerRoster.Unregister(this);
+
+	// 이 화면의 플레이어 목록(PlayerRoster)에 넣는다 (#310). 체력 값이 맞춰진 뒤(Start)에 넣어, 목록을 받은 UI가 처음부터 맞는 체력을 읽게 한다.
+	// 플레이어 하나에 PlayerHealth가 둘 붙은 변형 프리팹(Player_HW, Player_JW)이 있어서, 첫 번째 것만 넣어 한 사람이 두 번 들어가지 않게 한다
+	void RegisterInRoster()
+	{
+		if (GetComponent<PlayerHealth>() == this) PlayerRoster.Register(this);
 	}
 
 	void OnEnable() => stats.Changed += OnStatsChanged;

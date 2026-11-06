@@ -78,6 +78,9 @@ public class RaidPartyTest : MonoBehaviour
 	bool myRespawn;
 	// member: 서버가 보낸 시전 거부 이유 (받기 전에는 null)
 	CastRejection? myCastRejection;
+	// member: 플레이어 목록(PlayerRoster)에서 빠지고 들어온 횟수 (#310)
+	int rosterRemoved;
+	int rosterAdded;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -200,9 +203,8 @@ public class RaidPartyTest : MonoBehaviour
 		}
 		if (target == null) { Fail(round + "죽일 캐릭터를 찾지 못함"); yield break; }
 
-		yield return Wait(round + "캐릭터가 맞을 수 있음", () => !target.IsDead && !target.IsInvincible);
-		target.TakeDamage(target.Hp);
-		Check(round + "서버에서 캐릭터가 죽음", target.IsDead);
+		// 사냥터의 몬스터에게 맞아 무적이 된 순간이면 피해가 무시되므로, 죽을 때까지 무적이 아닐 때마다 남은 체력만큼 준다
+		yield return Wait(round + "서버에서 캐릭터가 죽음", () => KillWhenHittable(target));
 
 		if (withMember) yield return Wait(round + "부활한 파티원이 로비로 옮겨짐", () => PlayersInScene(PlaceScenes.Lobby) == 2);
 		else yield return Wait(round + "부활한 호스트가 로비로 옮겨짐", () => HostScene() == PlaceScenes.Lobby);
@@ -222,11 +224,21 @@ public class RaidPartyTest : MonoBehaviour
 		health.DeathEffectPlayed += OnMyDeath;
 		health.RespawnEffectPlayed += OnMyRespawn;
 
+		// 이 화면의 플레이어 목록 (#310): 로비에는 호스트와 나 2명, 사냥터에는 나 혼자다. 장소를 옮기면 Mirror가 호스트 캐릭터를 없애고 다시 만든다
+		yield return Wait(round + "플레이어 목록에서 로비의 2명 (PlayerRoster)", () => PlayerRoster.Players.Count == 2 && CountLocalInRoster() == 1);
+		rosterRemoved = rosterAdded = 0;
+		PlayerRoster.PlayerRemoved += OnRosterRemoved;
+		PlayerRoster.PlayerAdded += OnRosterAdded;
+
 		PlaceTravelClient.Instance.RequestTravel(PlaceScenes.HuntingGround);
 		yield return Wait(round + "사냥터에 도착 (로비는 내림)", () => IsLoaded(PlaceScenes.HuntingGround) && !IsLoaded(PlaceScenes.Lobby));
+		yield return Wait(round + "플레이어 목록에서 호스트가 빠짐 (PlayerRemoved)", () => PlayerRoster.Players.Count == 1 && CountLocalInRoster() == 1 && rosterRemoved >= 1);
 		yield return Wait(round + "내 캐릭터 사망 연출", () => myDeath);
 		yield return Wait(round + "내 캐릭터 부활 연출", () => myRespawn);
 		yield return Wait(round + "부활하면서 로비로 옮겨짐 (사냥터는 내림)", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.HuntingGround));
+		yield return Wait(round + "플레이어 목록에 호스트가 다시 들어옴 (PlayerAdded)", () => PlayerRoster.Players.Count == 2 && rosterAdded >= 1);
+		PlayerRoster.PlayerRemoved -= OnRosterRemoved;
+		PlayerRoster.PlayerAdded -= OnRosterAdded;
 		// 로딩 화면이 걷힌 뒤 다시 움직일 수 있어야 한다
 		yield return Wait(round + "로비에서 다시 움직일 수 있음 (CanAct)", () => health != null && health.CanAct && health.Hp == health.MaxHp);
 
@@ -253,6 +265,9 @@ public class RaidPartyTest : MonoBehaviour
 		yield return Wait(round + "레이드 던전에 도착", () => HostScene() == PlaceScenes.RaidDungeon);
 		Check(round + "던전은 하나만 불러옴", LoadedCount(PlaceScenes.RaidDungeon) == 1);
 		if (withMember) yield return Wait(round + "파티원도 같은 던전에 도착", () => PlayersInHostScene() == 2);
+		// 이 화면의 플레이어 목록 (#310): 호스트는 다른 장소의 플레이어도 갖고 있으므로 IsInMyPlace로 거른 수를 본다
+		int expected = withMember ? 2 : 1;
+		yield return Wait(round + $"플레이어 목록에서 같은 던전의 {expected}명 (PlayerRoster)", () => CountRosterInMyPlace() == expected);
 
 		if (kind == Round.Leave)
 		{
@@ -315,8 +330,8 @@ public class RaidPartyTest : MonoBehaviour
 				// 입력(대상)을 기다리며 계속 도는 함수를 서버에서 시전해 둔 뒤 바로 죽인다. 죽으면 실행 중인 함수가 모두 끊겨야 한다 (이우림 결정, #310)
 				FunctionTask waitingTask = CastWaitingFunction(memberHealth.GetComponent<FunctionExecutor>());
 				Check(round + "파티원 캐릭터가 입력을 기다리는 함수를 실행 중", waitingTask != null && !waitingTask.IsEnded);
-				memberHealth.TakeDamage(memberHealth.Hp);
-				Check(round + "서버에서 파티원 캐릭터가 죽음", memberHealth.IsDead);
+				// 보스에게 맞아 무적이 된 순간이면 피해가 무시되므로, 죽을 때까지 무적이 아닐 때마다 남은 체력만큼 준다
+				yield return Wait(round + "서버에서 파티원 캐릭터가 죽음", () => KillWhenHittable(memberHealth));
 				yield return Wait(round + "죽으면 실행 중인 함수가 끊김 (Interrupted)", () => waitingTask == null || (waitingTask.IsEnded && waitingTask.EndReason == FunctionTaskEndReason.Interrupted));
 				// 숨김(1초)까지 기다린다
 				yield return new WaitForSeconds(1.5f);
@@ -463,6 +478,8 @@ public class RaidPartyTest : MonoBehaviour
 		thrower.FireEffectPlayed += OnBossThrow;
 		phases.ChargeEffectPlayed += OnBossCharge;
 		Check(round + "보스 체력을 서버에서 받음", boss.Hp == boss.MaxHp);
+		// 이 화면의 플레이어 목록 (#310): 던전 안의 나와 호스트 2명
+		yield return Wait(round + "플레이어 목록에서 던전의 2명, 내 캐릭터 1명 (PlayerRoster)", () => PlayerRoster.Players.Count == 2 && CountLocalInRoster() == 1);
 		// 보스는 가장 가까운 플레이어 쪽을 본다. 이 화면에서도 그쪽을 보는지 (방향 동기화)
 		// 호스트가 소환한 웜과 던진 패킷을 지금부터 지켜본다
 		StartCoroutine(WatchWorm());
@@ -560,6 +577,34 @@ public class RaidPartyTest : MonoBehaviour
 	void OnMyDeath() => myDeath = true;
 
 	void OnMyCastRejected(int slot, CastRejection reason) => myCastRejection = reason;
+
+	// 서버에서: 무적이 아니면 남은 체력만큼 피해를 준다. 죽었으면 true (Wait에서 죽을 때까지 되풀이)
+	static bool KillWhenHittable(PlayerHealth target)
+	{
+		if (target == null) return false;
+		if (!target.IsDead && !target.IsInvincible) target.TakeDamage(target.Hp);
+		return target.IsDead;
+	}
+
+	void OnRosterRemoved(PlayerHealth _) => rosterRemoved++;
+
+	void OnRosterAdded(PlayerHealth _) => rosterAdded++;
+
+	static int CountLocalInRoster()
+	{
+		int count = 0;
+		foreach (PlayerHealth p in PlayerRoster.Players)
+			if (PlayerRoster.IsLocal(p)) count++;
+		return count;
+	}
+
+	static int CountRosterInMyPlace()
+	{
+		int count = 0;
+		foreach (PlayerHealth p in PlayerRoster.Players)
+			if (PlayerRoster.IsInMyPlace(p)) count++;
+		return count;
+	}
 
 	// 서버에서: 찌르기(대상 입력을 기다림) 함수를 그 실행기로 시전한다. 대상을 넣지 않으면 계속 기다리므로, 실행 중인 작업으로 남는다 (CastSyncTest와 같은 함수)
 	static FunctionTask CastWaitingFunction(FunctionExecutor executor)

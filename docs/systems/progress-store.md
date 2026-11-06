@@ -8,7 +8,7 @@
 - 클라이언트는 DB에 직접 접근하지 않는다. 클라이언트가 필요한 값은 서버가 보낸다.
 - 하지 않는 일
   - 레벨업 규칙, 경험치 표: `LevelRules`(김도훈, `player-stats.md`). `AddExp`가 이 규칙으로 레벨을 올린다
-  - 노드 해금, 재료 빼기: 「재료 써서 스킬 트리 해금하기」
+  - 해금 버튼, 해금 목록·재료·실패 이유 화면: 「재료 써서 스킬 트리 해금하기」 (#294, 임혜원)
   - 함수 구조 검사: 「만든 함수를 서버로 보내 검사·저장하기」 (해금 검사와 코드 영역 한도 검사는 #306에서 서버가 저장 요청 때 함)
 
 ## 동작 규칙
@@ -168,7 +168,6 @@
   - 붙은 곳: 공용 `Player.prefab` (`Player_UL`, `Player_DH`, `Player_JW`, `Player_HW`가 상속). Base 씬 NetworkManager의 Player Prefab은 공용 `Player.prefab`
   - 같은 오브젝트의 `PlayerLevelStats`(김도훈)도 공용 `Player.prefab`에 붙음
 - `Changed`: 서버(호스트 포함)는 값을 바꾼 함수가, 클라이언트 전용은 동기화 콜백이 부름 (한 번만 불림)
-- 「노드 해금」(`TryUnlock`)은 아직 없음
 - 이 값들은 `PlayerProgress`만 바꿈 (레포 규칙 2). 다른 시스템은 아래 함수를 부름
 - 값을 바꾸는 함수는 서버에서만 동작. 값을 바꾼 직후 `ProgressStore`로 DB에 씀
 - 임시 계정은 DB에 쓰지 않음 (값은 메모리에만)
@@ -180,11 +179,26 @@
 | `LeveledUp` (event) | [로직] 레벨이 오른 순간 (새 레벨). 서버에서만. 여러 레벨이 오르면 레벨마다 | 레벨업 연출·알림 |
 | `AddMoney(int)`, `TrySpendMoney(int)` | 돈 더하기, 빼기. 모자라면 빼지 않고 `false` | 드롭 (김도훈), 상점 |
 | `AddMaterial(string, int)` | 재료 더함 | 드롭 (김도훈) |
-| `TryUnlock(string 노드 ID)` | 선행 조건·재료 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가를 한 트랜잭션으로 | 스킬 트리 해금 (임혜원, 「재료 써서 스킬 트리 해금하기」) |
+| `RequestUnlock(string 노드 ID)` | [소유 클라이언트] 서버에 노드 해금을 요청 (`[Command]`). 결과는 `UnlockAnswered`. 내 플레이어가 아니면 아무것도 하지 않음 | 스킬 트리 화면 (임혜원, #294) |
+| `TryUnlock(string 노드 ID)` | [서버] 아래 「노드 해금 검사」 순서로 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가를 `ProgressStore.SaveUnlock`으로 한 트랜잭션에 저장. `UnlockResult`를 돌려줌 | `RequestUnlock` |
+| `UnlockAnswered(string 노드 ID, UnlockResult)` (event) | [표시] 서버가 처리한 해금 요청의 결과 (`[TargetRpc]`). 성공(`Unlocked`)도 알림. 소유 클라이언트에서 불림 | 스킬 트리 화면 (실패 이유 표시) |
 | `Level`, `Exp`, `Money`, `GetMaterialCount(string)`, `Unlocked` | 값 읽기 | 화면, 스킬 트리 |
 
 - 레벨업 (김도훈, 이우림 허락): `AddExp` 안에서 `LevelRules`(경험치 표, 최대 레벨)로 레벨을 올린다. 레벨에 따른 능력치는 `PlayerLevelStats`(김도훈)가 `PlayerStats.AddBonus`로 준다
-- `TryUnlock`의 검사·화면 연결: 「재료 써서 스킬 트리 해금하기」. 이번 이슈는 `ProgressStore`에 재료와 해금을 한 트랜잭션으로 쓰는 함수까지
+
+#### 노드 해금 검사 (`TryUnlock`, #315)
+- 먼저 걸린 이유 하나만 돌려줌
+
+| 순서 | 검사 | 걸리면 |
+| --- | --- | --- |
+| 1 | `SkillTree.TryGet`에 노드가 있음 | `UnknownNode` |
+| 2 | 해금 목록(`Unlocked`)에 아직 없음 | `AlreadyUnlocked` |
+| 3 | `SkillTree.CanUnlock`: 선행 노드를 모두 해금함 | `PrerequisiteMissing` |
+| 4 | 노드의 `Cost`마다 `GetMaterialCount`가 `Count` 이상 | `MaterialShort` |
+
+- 통과하면 `ProgressStore.SaveUnlock`으로 DB에 먼저 한 번에 쓰고, 성공한 뒤에 메모리를 바꿈 (재료를 `Cost`만큼 빼고, 노드와 `SkillTree.AutoUnlockedBy`가 돌려준 같이 열리는 노드를 해금 목록에 넣음). 저장이 예외로 실패하면 메모리는 그대로
+- `store`가 `null`인 플레이어(임시 계정)는 DB에 쓰지 않고 메모리의 값만 바꿈
+- 화면 쪽(해금 버튼 연결, 목록·재료·실패 이유 표시)은 「재료 써서 스킬 트리 해금하기」(#294)
 
 ### 클라이언트에 진행도 보내기 (`PlayerProgress`)
 - Mirror 동기화로 보냄. 서버가 값을 바꾸면 Mirror가 클라이언트에 같은 값을 맞춤
@@ -262,6 +276,7 @@
 ## 다른 시스템이 쓰는 것
 - `PlayerProgress`: 위 「진행도 컴포넌트」 표 (레벨·경험치·돈·재료·해금 목록 읽기와 바꾸기)
 - `FunctionExecutorNetwork`의 저장 요청 함수: 위 「함수·슬롯·전역 변수 주고받기」 표, [network.md](network.md)
+- `UnlockResult` (`ProgressRules.cs`): 해금 요청의 결과 값 `Unlocked`, `UnknownNode`, `AlreadyUnlocked`, `PrerequisiteMissing`, `MaterialShort`, `NotAllowed`(서버가 아닌 곳에서 `TryUnlock`을 부름, 값을 바꾸지 않음). `PlayerProgress.UnlockAnswered`가 알림
 - `ProgressRules.MaxPageFunctions`: 페이지 함수 최대 개수. 편집 화면이 저장 전에 먼저 안내할 때 씀
 - `ProgressRules.MaxCodeSize`: 슬롯 8개의 코드 영역 크기 최대 (임시 1000). 편집 화면이 먼저 안내할 때 씀
 - `ProgressRules.SlotFunctionName(슬롯 번호)`: 슬롯 함수 이름 `slot1`~`slot8`

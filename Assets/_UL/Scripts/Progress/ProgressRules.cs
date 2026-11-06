@@ -23,6 +23,21 @@ public static class ProgressRules
 	public static string SlotFunctionName(int slot) => $"slot{slot + 1}";
 }
 
+/// <summary>
+/// 스킬 트리 노드 해금 요청의 결과. PlayerProgress.TryUnlock이 돌려주고, 소유 클라이언트에는 PlayerProgress.UnlockAnswered로 알린다.<br/>
+/// 서버가 아래 순서(UnknownNode → AlreadyUnlocked → PrerequisiteMissing → MaterialShort)로 검사하고, 먼저 걸린 이유 하나만 돌려준다.
+/// </summary>
+public enum UnlockResult
+{
+	Unlocked,            // 해금함 (같이 열리는 노드도 함께)
+	UnknownNode,         // SkillTree에 없는 노드 ID (null 포함)
+	AlreadyUnlocked,     // 이미 해금한 노드
+	PrerequisiteMissing, // 선행 노드를 아직 해금하지 않음 (SkillTree.CanUnlock)
+	MaterialShort,       // 노드의 Cost보다 가진 재료가 모자람
+	NotAllowed,          // 서버가 아닌 곳에서 TryUnlock을 부름. 값을 바꾸지 않음
+	// 새 값은 맨 끝에만 더한다. 이 값은 네트워크로 보내므로 중간에 끼우면 뒤 값들의 번호가 바뀐다 (CastRejection과 같은 규칙)
+}
+
 /// <summary>소유 클라이언트가 서버에 보내는 플레이어 데이터 요청의 종류.</summary>
 public enum PlayerDataRequest
 {

@@ -94,11 +94,11 @@
 
 - 노드를 누르면 설명 칸에 종류, 상태, 선행(열었으면 초록, 아니면 빨강), 재료, 같이 열리는 노드, 여는 블록
 - 해금 목록은 `SetUnlocked`로 받는다. 받기 전에는 처음부터 해금된 노드(`StartingNodes` + 같이 열리는 노드)만 해금됨
-- 「해금」 버튼은 `UnlockRequested`만 알린다. 재료 확인·해금·저장은 「재료 써서 스킬 트리 해금하기」에서 받는다
+- 「해금」 버튼은 `UnlockRequested`만 알린다. 화면(임혜원)이 이 event를 받아 `PlayerProgress.RequestUnlock`을 부르고, 서버가 재료 확인·해금·저장을 한다 (progress-store.md 「노드 해금 검사」). 실패 이유는 `PlayerProgress.UnlockAnswered`로 받는다
 
 ## 다른 시스템이 쓰는 것
 - 코드 위치: `Assets/_HW/Scripts/SkillTree/`
-- 해금 목록(`unlocked`)은 해금한 노드 ID들. 저장은 「재료 써서 스킬 트리 해금하기」에서 정한다.
+- 해금 목록(`unlocked`)은 해금한 노드 ID들. 원본은 서버의 `PlayerProgress.Unlocked`이고 DB에 노드 ID로 저장된다 (progress-store.md).
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |

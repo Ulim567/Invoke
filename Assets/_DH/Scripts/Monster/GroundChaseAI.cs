@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -13,7 +14,8 @@ using UnityEngine;
 /// - 탐지·낭떠러지·장애물 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.
 /// </para>
 /// <para>
-/// 네트워크를 붙이면 AI는 서버에서만 돌린다(FixedUpdate에 [ServerCallback]). 위치는 Rigidbody 동기화로 각 화면에 보인다.
+/// AI(순찰·탐지·추적)는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 클라이언트의 복사본이 따로 돌면 그 화면의 몬스터가 서버와 다른 곳으로 걷기 때문이다 (#310).<br/>
+/// MonoBehaviour라 [ServerCallback]을 쓸 수 없어서 IsAuthority()로 확인한다. 클라이언트 화면의 위치는 위치 동기화로 맞춘다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster), typeof(Rigidbody2D), typeof(Collider2D))]
@@ -117,6 +119,8 @@ public class GroundChaseAI : MonoBehaviour
 
 	void Start()
 	{
+		// 처음 방향도 서버가 정한다. 클라이언트에서 따로 랜덤으로 정하면 그림 방향이 서버와 달라진다
+		if (!IsAuthority()) return;
 		// 처음 방향과 상태를 랜덤으로 정해, 같은 프리팹 여러 마리가 똑같이 움직이지 않게 한다
 		Face(Random.value < 0.5f ? 1 : -1);
 		isIdle = Random.value < idleChance;
@@ -125,6 +129,8 @@ public class GroundChaseAI : MonoBehaviour
 
 	void FixedUpdate()
 	{
+		if (!IsAuthority()) return;
+
 		// 죽었거나 기절했으면 그 자리에 멈춘다 (기절: 행동 불가)
 		if (monster.IsDead || (status != null && status.IsStunned))
 		{
@@ -249,6 +255,9 @@ public class GroundChaseAI : MonoBehaviour
 
 	// 내가 속한 장소 씬의 물리 세계. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 검사할 때마다 가져온다
 	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();
+
+	// 서버이거나 네트워크를 켜지 않은 테스트면 true
+	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 
 	void SetVelocityX(float x) => body.linearVelocity = new Vector2(x, body.linearVelocity.y);
 

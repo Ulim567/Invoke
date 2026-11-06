@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -15,7 +16,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 사용법: 몬스터 프리팹에 Monster, Rigidbody2D(Dynamic, Gravity Scale 0, Freeze Rotation Z), Collider2D, ProjectileAttack과 함께 붙인다.<br/>
-/// 네트워크를 붙이면 AI는 서버에서만 돌린다.
+/// AI(이동·탐지·발사)는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 클라이언트의 복사본이 따로 쏘면 그 클라이언트에만 투사체가 생겨 그 화면의 플레이어를 따로 맞히기 때문이다 (#310).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster), typeof(Rigidbody2D), typeof(ProjectileAttack))]
@@ -159,6 +160,8 @@ public class FlyingShooterAI : MonoBehaviour
 
 	void Start()
 	{
+		// 처음 방향도 서버가 정한다. 클라이언트에서 따로 랜덤으로 정하면 그림 방향이 서버와 달라진다
+		if (!IsAuthority()) return;
 		home = body.position + new Vector2(0f, hoverHeight);
 		bobPhase = Random.value * Mathf.PI * 2f;
 
@@ -171,6 +174,8 @@ public class FlyingShooterAI : MonoBehaviour
 
 	void FixedUpdate()
 	{
+		if (!IsAuthority()) return;
+
 		// 죽었거나 기절했으면 그 자리에 멈춘다 (기절: 행동 불가)
 		if (monster.IsDead || (status != null && status.IsStunned))
 		{
@@ -312,6 +317,9 @@ public class FlyingShooterAI : MonoBehaviour
 
 	// 내가 속한 장소 씬의 물리 세계. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 검사할 때마다 가져온다
 	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();
+
+	// 서버이거나 네트워크를 켜지 않은 테스트면 true
+	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 
 	void Face(int dir)
 	{

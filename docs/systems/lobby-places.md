@@ -18,9 +18,11 @@
 - 가까이 있는지: 입구·해금 장소의 Collider 2D(Is Trigger)에 내 캐릭터(`isLocalPlayer`)가 들어와 있으면. 안내(↑ 표시)를 켠다
 - 내 캐릭터가 다른 장소로 가면 놓아준다: 내 캐릭터의 물리 세계(`scene.GetPhysicsScene2D()`)가 로비와 다르면 안내를 끄고 ↑에 반응하지 않는다. 호스트는 로비 씬이 남아 있어 `OnTriggerExit2D`가 불리지 않기 때문 (이우림 #190 알림, #209)
 - 키: `PlayerInputReader.InteractPressed`(↑)만 읽는다
+- 공통 부모 `PlaceInteractable`(#285, 이전 이름 `LobbyInteractable`): 범위·안내·물리 세계 확인·↑ 읽기를 한다. 입구·해금 장소·`PanelStation`과 출구 `PlaceExit`(이우림)가 물려받아 `Interact()`만 구현한다
+  - 검 타기 중(`PlayerMovement.IsRiding`)이거나 죽었거나 경직 중(`PlayerHealth.CanAct` false)이면 ↑를 무시한다
 - 창이 열린 동안 Player·Attack 맵을 둘 다 끈다 (이우림과 정함). 슬롯 키가 눌리지 않으므로 SlotCaster가 대상 고르기를 끝내며 Player 맵을 다시 켜는 일이 없다
 - 창은 버튼으로 닫는다. 창이 꺼지거나 사라질 때도 맵을 다시 켠다
-- 로비 밖에서도 같은 방식을 쓴다 (#225): `PanelStation`(LobbyInteractable)이 ↑에 `InputBlockingPanel.OpenFor(player)`를 부른다. 연습장의 편집 터미널(`BlockEditorPanel`), 장착대(`SlotEquipPanel`)
+- 로비 밖에서도 같은 방식을 쓴다 (#225): `PanelStation`(PlaceInteractable)이 ↑에 `InputBlockingPanel.OpenFor(player)`를 부른다. 연습장의 편집 터미널(`BlockEditorPanel`), 장착대(`SlotEquipPanel`)
 - 창(`LobbyEntrancePanel`, `SkillTreePanel`)은 Lobby 씬에 하나씩 두고, 입구들이 같이 쓴다
 
 | 입구 | `Destination` | 알리는 때 | 알리는 것 |

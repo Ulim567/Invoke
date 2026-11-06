@@ -275,7 +275,7 @@ static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파�
 | 이름 | 붙이는 곳 | 꼭 필요한 설정 | 자유롭게 바꿔도 되는 것 | 설명 |
 | --- | --- | --- | --- | --- |
 | `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). 높이: 땅 위 10 안 (서버가 땅에 맞춰 세움) | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
-| `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 사냥터·연습장에 하나씩, `PlayerStartPosition`과 겹치지 않게. 레이드 던전에는 두지 않음 (#300) | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청. 죽었거나 경직 중(`PlayerHealth.CanAct` false)이면 무시 (#310) |
+| `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 사냥터·연습장에 하나씩, `PlayerStartPosition`과 겹치지 않게. 레이드 던전에는 두지 않음 (#300) | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청. 검 타기 중(`PlayerMovement.IsRiding`)이거나 죽었거나 경직 중(`PlayerHealth.CanAct` false)이면 무시 (#285, #310). `PlaceInteractable`(`Assets/_HW/Scripts/Lobby`)을 물려받음 |
 | `LoadingScreen` | 로딩 화면 Canvas | `panelRoot`: 화면을 덮는 UI의 부모. `canvasGroup`: `panelRoot`에 붙인 `Canvas Group`. 배경 Image의 Raycast Target 체크. Canvas Sort Order는 로비 UI(0)보다 크게. `Base`에 놓고 `PlaceTravel`의 `loadingScreen` 칸에 연결 | 배경, 글자, 글꼴, 애니메이션, `fadeSeconds`(페이드 시간, 기본 0.25초) | `PlaceTravelClient`만 `Show`·`ShowImmediate`·`Hide`를 부름. 이동하는 동안과 접속 직후에 화면을 덮음 |
 
 ## 맞춘 결과
@@ -293,7 +293,7 @@ static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파�
     - 쓰는 곳: `PlaceTravelClient`가 요청을 보낼 때 잠그고 `TravelEndedMessage`를 받으면 풂 (위 「이동하는 동안 움직임 잠금」, #216)
     - `Rigidbody2D`를 `PlaceTravelClient`가 직접 다루지 않는 이유: 속도는 `PlayerMovement`가 매 `FixedUpdate`에 씀. 두 곳에서 바꾸면 돌진 상태 등과 어긋남 (코드 작성 규칙 2)
 - 임혜원에게 알릴 것 (#134)
-  - `LobbyInteractable`도 호스트에서 같은 문제: 호스트가 로비를 떠나도 로비 씬이 서버에 남고 `OnTriggerExit2D`가 불리지 않아, 입구가 로컬 플레이어를 계속 붙잡음 → 다른 장소에서 ↑를 누르면 로비 입구 창이 열림. `PlaceExit`처럼 `Update`에서 로컬 플레이어의 물리 세계(`scene.GetPhysicsScene2D()`)가 자기와 다르면 놓아주면 해결 (씬으로 비교하면 클라이언트에서 늘 달라 상호작용이 안 됨)
+  - `LobbyInteractable`(현재 `PlaceInteractable`)도 호스트에서 같은 문제: 호스트가 로비를 떠나도 로비 씬이 서버에 남고 `OnTriggerExit2D`가 불리지 않아, 입구가 로컬 플레이어를 계속 붙잡음 → 다른 장소에서 ↑를 누르면 로비 입구 창이 열림. `PlaceExit`처럼 `Update`에서 로컬 플레이어의 물리 세계(`scene.GetPhysicsScene2D()`)가 자기와 다르면 놓아주면 해결 (씬으로 비교하면 클라이언트에서 늘 달라 상호작용이 안 됨)
 - 임혜원과 맞춘 것 (#134)
   - 로비 입구는 이벤트(`LobbyEntrance.TravelRequested`, `RaidEntryRequested`) 그대로. `TravelRequested`는 `PlaceTravelClient`, `RaidEntryRequested`는 `RaidLobbyOpener`가 받음 (#242)
   - 「들어가기」 뒤 `LobbyEntrancePanel.Close()`가 액션 맵을 다시 활성화하므로, 이동하는 동안 `PlaceTravelClient`가 Player·Attack 액션 맵을 다시 비활성화

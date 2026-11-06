@@ -9,7 +9,7 @@ using UnityEngine;
 /// - 레이드 던전: 입구 창 없이 ↑에 <see cref="RaidEntryRequested"/>로 알린다. 이우림의 RaidLobbyOpener가 받아 레이드 방 화면(RaidLobbyUI)을 연다 (#242).
 /// </para>
 /// </summary>
-public class LobbyEntrance : LobbyInteractable
+public class LobbyEntrance : PlaceInteractable
 {
 	/// <summary>입구가 어디로 가는지</summary>
 	public enum Destination { HuntingGround, TrainingRoom, RaidDungeon }

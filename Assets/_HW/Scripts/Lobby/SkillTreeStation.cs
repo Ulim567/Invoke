@@ -7,7 +7,7 @@ using UnityEngine;
 /// 재료를 써서 해금하는 일은 「재료 써서 스킬 트리 해금하기」에서 한다.
 /// </para>
 /// </summary>
-public class SkillTreeStation : LobbyInteractable
+public class SkillTreeStation : PlaceInteractable
 {
 	[SerializeField, Tooltip("Lobby 씬에 놓은 스킬 트리 창")]
 	SkillTreePanel panel;

@@ -63,6 +63,9 @@
 - 끝나면 `ResultEffectPlayed(클리어 여부)`(결과 화면용)를 부르고, `Result Delay`(3초) 뒤 `RaidFlow.ReportEnd(던전 씬, 클리어 여부)`를 부른다. 한 던전에서 한 번만 끝난다
 - 클리어 보상은 Gateway의 `MonsterReward`(Whole Scene)가 준다 (`monster.md`)
 - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다
+- 파티원 이탈·레이드 포기 실패 (#300 뒤): 서버의 `RaidParties`(이우림)가 `FailByServer()`를 부른다. 모두 죽었을 때와 똑같이 끝난다 (결과 화면 → 3초 → `ReportEnd(던전 씬, false)`)
+- 클라이언트의 결과 화면: `RaidJudge`는 씬에 놓인 오브젝트라 `[ClientRpc]`를 쓰지 않는다 (겹쳐 불러온 던전 씬에서 Mirror가 켜지 않음). 서버의 `RaidParties`가 `ResultEffectPlayed`를 받아 파티원 클라이언트에 `RaidResultMessage`를 보내고, 클라이언트의 `RaidParties`가 자기가 불러온 던전의 `PlayResultOnly(클리어 여부)`를 부른다 (`place-scenes.md` 「결과 화면 전달」)
+  - 한 던전에서 결과 화면 이벤트는 한 번만 불린다. Host는 서버에서 이미 불렸으므로 `PlayResultOnly`를 불러도 무시한다
 
 ## 다른 시스템이 쓰는 것
 
@@ -71,9 +74,9 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `RequestStart(IReadOnlyList<string>)` | 파티원 이름 목록 (0번 파티장) | - | 레이드 시작 함수. 서버에서 `RaidRooms.TryStart`가 부른다 |
-| `StartRequested` (static event) | `IReadOnlyList<string>` | - | [로직] 레이드 시작 요청. 서버에서만 불린다. 받는 쪽(이우림)이 던전을 불러오고 파티원을 옮긴다. 지금은 받는 쪽이 없어서 로그만 남는다 |
+| `StartRequested` (static event) | `IReadOnlyList<string>` | - | [로직] 레이드 시작 요청. 서버에서만 불린다. 받는 쪽 `RaidParties`(이우림, #300)가 던전을 불러오고 파티원을 옮긴다 |
 | `ReportEnd(Scene, bool)` | 끝난 던전 씬, 클리어면 `true` | - | 레이드 끝 함수. `RaidJudge`가 결과를 보여 준 뒤 부른다 |
-| `Ended` (static event) | `Scene`, `bool` | - | [로직] 레이드 끝. 서버에서만. 받는 쪽(이우림)이 그 던전의 플레이어를 로비로 옮기고 던전을 내린다. 지금은 받는 쪽이 없어서 로그만 남는다 |
+| `Ended` (static event) | `Scene`, `bool` | - | [로직] 레이드 끝. 서버에서만. 받는 쪽 `RaidParties`(이우림, #300)가 그 던전의 파티원을 로비로 옮기고 던전을 내린다 |
 
 ### `RaidBossSpawner`
 
@@ -93,7 +96,9 @@ Inspector: `Boss Prefab`(Gateway), `Ground Layers`(Ground), `Hover Height`(0)
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `IsEnded` | - | `bool` | 레이드가 끝났으면 `true` |
-| `ResultEffectPlayed` (event) | `bool` (클리어면 `true`) | - | [연출] 레이드가 끝난 순간. 결과 화면("레이드 성공/실패")에 쓴다 |
+| `ResultEffectPlayed` (event) | `bool` (클리어면 `true`) | - | [연출] 레이드가 끝난 순간. 결과 화면("레이드 성공/실패")에 쓴다. 서버에서는 판정 때, 클라이언트에서는 `PlayResultOnly` 때 불린다. 한 던전에서 한 번만 |
+| `FailByServer()` | - | - | [서버] 레이드를 실패로 끝낸다. 파티원 이탈·레이드 포기 때 `RaidParties`가 부른다. 모두 죽었을 때와 같음: `ResultEffectPlayed(false)` → `Result Delay` 뒤 `RaidFlow.ReportEnd(던전 씬, false)`. 이미 끝났으면(`IsEnded`) 아무것도 안 함. 클라이언트에서 부르면 경고 로그만 |
+| `PlayResultOnly(bool)` | 클리어면 `true` | - | [클라이언트] 판정·`ReportEnd` 없이 `ResultEffectPlayed`만 부른다. `RaidResultMessage`를 받은 클라이언트에서 `RaidParties`가 부른다. 이 던전에서 이미 불렀으면(Host 등) 무시 |
 
 Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
 
@@ -168,5 +173,9 @@ Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
     - `RequestFailed`를 받으면 안내 글자에 이유
     - `localName`(`"나"`) → `RaidRooms.MyName`
     - 테스트 버튼: 서버에 접속했을 때(`RaidRooms.IsOnline`) 숨기기
+- 파티 레이드 연결 (#300 뒤, 이우림 요청 11/6)
+  - 이우림이 `RaidParties`(#304)를 만들고 `RaidJudge`에 함수 두 개를 요청함. 이름은 김도훈이 정함: `FailByServer()`(서버), `PlayResultOnly(bool)`(클라이언트)
+  - 연결(`RaidParties.FailRaid`, `RaidParties.OnResult`에서 부르기)은 이우림. `_UL` 코드는 김도훈이 고치지 않음
+  - 다음: 레이드 방 유지·3명 제한 (김도훈), 보스·플레이어 체력 동기화 (김도훈·이우림)
 - 임혜원과 정한 것
   - Gateway는 레이드 던전 맵 가운데에 둔다 (`map-background.md`). 레이드 던전 씬에는 보스 스포너 오브젝트만 추가하고 땅·꾸미기는 건드리지 않는다

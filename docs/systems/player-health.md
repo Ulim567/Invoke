@@ -25,9 +25,15 @@
   - 사망 페널티는 알파에서 없다.
 - 부활
   - 사망 3초(`Respawn Delay`) 뒤 최대 체력으로 부활하고, 무적 1초 동안 깜빡인다. 부활 전용 모션은 없다.
-  - 부활할 때 `LobbyReturnRequested`로 로비(마을)로 보내 달라고 요청한다. 씬 이동이 생기기 전까지는 처음 나타난 위치(씬의 시작 위치)에서 부활한다.
+  - 부활할 때 `LobbyReturnRequested`로 로비(마을)로 보내 달라고 요청한다. 서버에서는 씬 이동 담당(이우림, `InvokeNetworkManager`)이 받아 레이드 밖이면 로비로 옮긴다 (#310, place-scenes.md 「부활 이동」). 네트워크를 켜지 않은 테스트에서는 처음 나타난 위치(씬의 시작 위치)에서 부활한다.
   - `AutoRespawn`이 false면(레이드) 부활하지 않고 숨긴 채 관전만 한다.
-- event는 몬스터와 같이 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
+- event는 몬스터와 같이 로직용과 연출용으로 나뉜다. 로직용은 서버에서만, 표시·연출용은 모든 화면에서 불린다.
+- 네트워크 (#310): `PlayerHealth`는 `NetworkBehaviour`다
+  - 피해·사망·숨김·부활은 서버(또는 네트워크 없는 테스트)에서만 정한다. 숨김·부활 시각도 서버만 센다
+  - 상태: 체력, 최대 체력, 죽음, 숨김을 `[SyncVar]`로 보낸다. 나중에 그 장소에 들어와 처음 본 클라이언트도 받는다(이미 죽어 있거나 숨겨졌으면 그때 사망·숨김 연출을 한 번 부름)
+  - 연출: 피격(데미지, 맞은 뒤 체력)·사망·숨김·부활을 `[ClientRpc]`로 보낸다. 받은 클라이언트는 상태를 맞추고 같은 이벤트를 부른다. 경직·무적은 받은 순간부터 센다
+  - 그래서 클라이언트에서도 `Hp`, `MaxHp`(서버의 값), `IsDead`, `IsHidden`, `CanAct`가 서버와 같다. 내 캐릭터가 서버에서 죽으면 내 화면에서도 이동·시전이 막힌다
+  - 로직 이벤트(`Damaged`, `Died`, `Respawned`, `LobbyReturnRequested`)와 `SetAutoRespawn`은 서버에서만 의미가 있다
   - 순서(피격): `Damaged` → `HpChanged` → `HitEffectPlayed`
   - 순서(사망): `Damaged` → `HpChanged` → `Died` → `DeathEffectPlayed` → (1초 뒤) `HideEffectPlayed`
   - 순서(부활): `LobbyReturnRequested` → `Respawned` → `HpChanged` → `RespawnEffectPlayed`
@@ -61,6 +67,8 @@
 | `HideEffectPlayed` (event) | - | - | [연출] 캐릭터를 숨기고 카메라를 관전으로 넘길 때 |
 | `RespawnEffectPlayed` (event) | - | - | [연출] 캐릭터가 다시 보이고 카메라를 내 캐릭터로 돌릴 때 |
 
+- 다른 플레이어(파티원)의 체력을 보여 줄 때: 이 화면에 있는 플레이어 목록은 `PlayerRoster`(place-scenes.md)에서 받는다. 클라이언트에서도 위 값과 이벤트가 서버와 같다 (#310)
+
 ## 맞춘 결과
 - 임혜원과 정한 것 (#28)
   - 피격: 경직 0.3초, 이후 무적 1초. 무적 깜빡임은 코드로 한다.
@@ -69,6 +77,12 @@
 - 박진우와 정한 것
   - `PlayerMovement`가 `CanAct`가 false면 이동·점프를 막는다 (#53)
   - `SlotCaster`가 `CanAct`가 false면 시전하지 않고 고르던 대상도 취소한다 (#48)
+- 죽은 뒤 입력 막기 (#310, 이우림 결정: 사용처마다 `CanAct` 검사)
+  - 이동·점프(`PlayerMovement`), 슬롯 시전(`SlotCaster`): 이미 검사. 체력 동기화(위 「네트워크」)로 클라이언트에서도 서버와 같은 때 막힌다
+  - 서버의 시전 처리(`FunctionExecutorNetwork`): `CanAct`가 false면 `CastRejection.CannotAct`로 거부
+  - 출구(`PlaceExit`): `CanAct`가 false면 ↑ 무시
+  - 죽으면 그 플레이어가 실행 중인 함수를 모두 끊는다 (`FunctionExecutorNetwork`가 서버의 `Died`를 받아 `FunctionExecutor.InterruptAll`)
+  - 요청 (각 담당자): 검 줍기 `SwordPickUpInput.CmdPickUp`(박진우, 서버에서 `CanAct` 검사), `SlotCaster`의 `CannotAct` 거부 처리(박진우), 로비 입구 `LobbyInteractable`(임혜원, `CanAct`가 false면 ↑ 무시)
 - 임혜원과 정한 것
   - `PlayerAnimator`가 `HitEffectPlayed`, `DeathEffectPlayed`, `RespawnEffectPlayed`를 받아 피격·사망 모션을 재생한다 (#49)
 - 다른 시스템이 쓰는 곳
@@ -76,8 +90,8 @@
 - 공용 Player 합치기 (#268, 박진우 정리)
   - 김도훈이 공용 `Player.prefab`에 `PlayerHealth`, `PlayerHealthEffects`를 붙인다. 값은 기본값(경직 0.3초, 무적 1초, 숨김 1초, 부활 3초)
   - 변형 프리팹에 따로 붙어 있던 것은 각 담당자가 지운다 (`Player_DH`: 김도훈, `Player_JW`: 박진우, `Player_HW`: 임혜원)
-  - 체력은 아직 네트워크로 동기화하지 않는다. 판정은 서버에서만 하고, 다른 플레이어 화면의 체력·사망 연출은 「플레이어 상태를 네트워크로 동기화하기」에서 맞춘다
+  - 체력은 아직 네트워크로 동기화하지 않는다. 판정은 서버에서만 하고, 다른 플레이어 화면의 체력·사망 연출은 「플레이어 상태를 네트워크로 동기화하기」에서 맞춘다 → #310에서 맞춤 (이우림, 김도훈 합의. 위 「동작 규칙」의 네트워크)
 - 이우림과 정해야 할 것
-  - 씬 이동이 생기면 `LobbyReturnRequested`를 받아 로비로 옮기는지
+  - 씬 이동이 생기면 `LobbyReturnRequested`를 받아 로비로 옮기는지 → #310에서 옮김 (레이드 밖에서 부활하면 로비로, 레이드는 관전 뒤 `RaidParties`가 옮김)
 - 박진우와 정해야 할 것
   - 관전 카메라가 `HideEffectPlayed`에 다른 파티원으로, `RespawnEffectPlayed`에 내 캐릭터로 돌아오는지

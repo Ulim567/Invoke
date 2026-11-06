@@ -12,8 +12,9 @@ GameObject:
   - component: {fileID: 6302560910126700942}
   - component: {fileID: 5568201669623603068}
   - component: {fileID: 6174726394754743009}
-  - component: {fileID: 2080740477131302831}
   - component: {fileID: 9074842743074092137}
+  - component: {fileID: 4647438487366998449}
+  - component: {fileID: 2080740477131302831}
   - component: {fileID: 1371428248722224599}
   m_Layer: 11
   m_Name: MonsterBullet
@@ -160,25 +161,6 @@ CircleCollider2D:
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
   m_Radius: 0.25
---- !u!114 &2080740477131302831
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1700679278810974433}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bbca81c6d6653a943a9ee3a0d1edee4b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MonsterProjectile
-  lifetime: 5
-  targetLayers:
-    serializedVersion: 2
-    m_Bits: 256
-  blockLayers:
-    serializedVersion: 2
-    m_Bits: 192
 --- !u!95 &9074842743074092137
 Animator:
   serializedVersion: 7
@@ -201,6 +183,46 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &4647438487366998449
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1700679278810974433}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 0
+  _assetId: 962045881
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
+--- !u!114 &2080740477131302831
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1700679278810974433}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbca81c6d6653a943a9ee3a0d1edee4b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterProjectile
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  lifetime: 5
+  targetLayers:
+    serializedVersion: 2
+    m_Bits: 256
+  blockLayers:
+    serializedVersion: 2
+    m_Bits: 192
+  pierce: 0
 --- !u!114 &1371428248722224599
 MonoBehaviour:
   m_ObjectHideFlags: 0

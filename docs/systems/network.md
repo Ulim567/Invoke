@@ -158,7 +158,7 @@ void CmdPickUp()
 | `RequestCancel(int slot)` | 슬롯 번호 | - | [소유 클라이언트] 그 슬롯으로 시전한 작업 끊기 요청(`FunctionExecutor.Cancel`). 끊기면 `TaskEnded(Cancelled)` |
 | `ProvideTarget(int taskId, GameObject target)` | 작업 번호, 고른 몬스터(없으면 `null`) | - | [소유 클라이언트] 입력을 기다리는 이 플레이어의 작업에 몬스터 넣기 요청. 이미 끝난 작업이면 서버가 버림 |
 | `CastAccepted` (event) | `int` 슬롯, `int` 작업 번호 | - | [로직] 시전 성공. 소유 클라이언트에만 |
-| `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음) |
+| `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음), `CannotAct`(시전자가 죽었거나 경직 중, #310) |
 | `TaskStarted` (event) | `int` 작업 번호, `int` 슬롯(비동기 작업 -1), `string` 함수 이름 | - | [연출] 작업이 진행 시작. 모든 클라이언트. 시전 모션 |
 | `TaskEnded` (event) | `int` 작업 번호, `FunctionTaskEndReason` | - | [로직] 작업이 끝남. 모든 클라이언트. 시작 전에 끊긴 작업은 이것만 |
 | `InputRequested` (event) | `int` 작업 번호, `string` 입력 함수 ID, `int` 슬롯(비동기 작업 -1) | - | [로직] 이 플레이어의 작업이 입력을 기다림. 소유 클라이언트에만. 이 안에서 바로 `ProvideTarget`을 불러도 됨 |
@@ -220,7 +220,7 @@ void CmdPickUp()
 - 다른 이슈로 넘긴 것
   - 박진우 서버 동기화: 찌르기 돌진·바라보는 방향, 급소공략 미니게임 판정, `SkillEffectEvents` 연출 전달 → #223에서 함
   - 「소환검·검기를 서버에서 생성하고 동기화하기」: 검 오브젝트 위치·상태, 소환검 HUD, 줍기 → #229에서 함 (summoned-sword.md, physical-sword.md)
-  - 몬스터 서버 동기화: 몬스터 체력·사망
+  - 몬스터 서버 동기화: 몬스터 체력·사망 → #310에서 `MonsterNetwork` (monster.md)
   - 「데미지·상태 이상을 서버에서 판정하기」: 상태 이상
 - 지금 한계
   - 함수·슬롯·전역 변수 파일이 컴퓨터마다 하나: 같은 컴퓨터의 다른 계정·캐릭터도 같은 데이터를 보냄(서버 DB 이슈에서 해결)

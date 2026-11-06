@@ -11,6 +11,8 @@ public enum CastRejection
 	// 시전할 함수가 없다. 멀티플레이에서 서버에 그 슬롯의 원본이 없을 때(데이터가 오기 전, 실행할 수 없는 함수) FunctionExecutorNetwork가 쓴다
 	// 새 값은 맨 끝에만 더한다. 중간에 끼우면 뒤 값들의 번호가 바뀌기 때문
 	NoFunction,
+	// 시전자가 죽었거나 경직 중이다(PlayerHealth.CanAct가 false). 멀티플레이에서 서버의 FunctionExecutorNetwork가 쓴다 (#310)
+	CannotAct,
 }
 
 /// <summary>

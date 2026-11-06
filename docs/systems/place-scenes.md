@@ -18,7 +18,7 @@
   - 결과 화면 전달: 서버의 판정 결과를 파티원 클라이언트에
 - 하지 않는 일
   - 레이드 방, 보스, 성공·실패 판정, 결과 화면 그림: [raid.md](raid.md) (김도훈, 결과 화면 그림은 임혜원)
-  - 보스·플레이어 체력의 화면 동기화: 김도훈의 동기화 이슈
+  - 보스·몬스터·플레이어의 체력·연출·위치 동기화: [monster.md](monster.md), [player-health.md](player-health.md) (#310에서 이우림이 김도훈과 합의해 맞춤)
   - 조작된 이동 요청 막기 (예: 로비를 거치지 않는 이동): 보안 작업 때. 검사 자리는 `InvokeNetworkManager.OnTravelRequest`
 
 ## 동작 규칙
@@ -115,7 +115,9 @@
      - 지금은 `RaidRooms.TryStart`가 이미 방을 지워서 남은 파티원이 방을 잃음. 방 유지(아래 「김도훈에게 요청할 것 (#300 뒤)」)가 생기면 `RaidParties`가 시작 취소를 알려 방을 대기로 되돌림
   3. 파티원마다 `TravelStartedMessage`, 던전을 `LoadRaidDungeon`으로 한 번 불러옴
   4. 파티원마다 던전을 다 불러옴 + 그 파티원의 `TravelReadyMessage` 도착 → `TravelPlayer`로 던전에 이동 (모두 옮기면 상태: 진행 중)
-- 서버가 시작한 이동 (시작, 끝)
+- 서버가 시작한 이동 (시작, 끝, 아래 「부활 이동」도 같음)
+  - 코드: 알리기·답 받기·답 기다리기 시간은 `ServerTravel`(static, #310)이 맡고, 누구를 언제 어디로 옮길지는 부르는 쪽(`RaidParties`, `InvokeNetworkManager`)이 정함. `TravelReadyMessage`를 받는 곳은 `ServerTravel` 하나 (Mirror는 메시지 종류마다 받는 함수를 하나만 등록함)
+  - 같은 연결에 새 이동을 알리면 이전 이동은 버림
   - 서버 → 파티원 클라이언트 `TravelStartedMessage`: `PlaceTravelClient`가 `RequestTravel`과 같이 액션 맵 비활성화, 움직임 잠금, 로딩 화면 페이드 인
   - 화면을 다 덮으면 클라이언트 → 서버 `TravelReadyMessage`. 서버는 이 답을 받은 파티원만 옮김 (화면을 다 덮은 뒤 옮기는 이유는 「장소 사이 이동」과 같음)
     - 클라이언트가 이미 이동 중(자기 요청의 답을 기다림): 덮은 뒤면 바로 답함. 덮기 전이면 아직 보내지 않은 요청 대신 답을 보냄 (먼저 보낸 요청이 레이드 던전에서 다시 옮기지 않게)
@@ -123,6 +125,11 @@
     - 답 기다리기 시간 5초: 지나도 답이 없으면 서버가 답 없이 옮김. 답이 오지 않아 그 파티원이 이동을 기다리는 채로 남거나 던전이 내려가지 않는 일을 막기 위함
   - 마무리는 다른 이동과 같음: `TravelPlayer`의 `TravelEndedMessage`
   - 이동 취소: 서버가 `TravelEndedMessage`만 보냄 → 로딩 화면 걷힘, 그 자리에 그대로
+- 부활 이동 (#310, 이우림 결정): 레이드 밖(사냥터 등)에서 죽은 플레이어는 부활하는 순간 로비로 옮김
+  - 서버의 `PlayerHealth.LobbyReturnRequested`(부활 순간)를 `InvokeNetworkManager`가 받아 `ServerTravel`로 알림 → 덮이면 `TravelPlayer(로비)`. 도착 위치는 다른 이동과 같음 (사냥터에서 왔으면 사냥터 입구 앞)
+  - 옮기지 않음: 로비에서 죽음(그 자리에서 부활), 레이드 던전(부활하지 않고 관전, 레이드 끝에 `RaidParties`가 옮김), 서버가 알린 다른 이동을 기다리는 중
+  - 부활 목적지를 정하는 곳은 `InvokeNetworkManager.TryGetRespawnDestination` 하나. 장소마다 다르게 하려면 여기서 씬의 설정을 읽게 바꿈
+  - 기다리는 동안 그 클라이언트의 이동 요청은 무시 (레이드 이동과 같음)
 - 끝: 서버에서 `RaidFlow.Ended(던전 씬, 클리어 여부)`
   - 그 던전의 기록을 찾아 상태: 끝남. 기록이 없는 던전(네트워크 없이 시험하는 씬 등): 경고 로그, 무시
   - 파티원마다 「서버가 시작한 이동」으로 로비에 이동. 도착 위치: 로비의 `Arrival_RaidDungeon`
@@ -136,23 +143,24 @@
     - 죽음: 관전하는 파티원도 파티원. 모두 죽으면 `RaidJudge`의 실패
     - 상태가 끝남일 때 빠짐: 기록에서만 뺌. 클리어가 실패로 바뀌지 않음
     - 시작 전 파티방에서 나감: 방 나가기 ([raid.md](raid.md))
-  - 진행 중에 이탈: 그 던전의 `RaidJudge`에 실패로 끝내기를 요청 → 결과 화면(지금의 「레이드 실패」 그대로) 3초 → `Ended` → 남은 파티원 로비로
-    - 지금: `RaidJudge`의 실패로 끝내기 함수(아래 「김도훈에게 요청할 것」)가 생기기 전까지 결과 화면 없이 남은 파티원을 바로 로비로
+  - 진행 중에 이탈: 그 던전의 `RaidJudge.FailByServer()` → 결과 화면(지금의 「레이드 실패」 그대로) 3초 → `Ended` → 남은 파티원 로비로
+    - 이미 클리어로 끝난 뒤(결과 화면 3초 동안)의 이탈: `FailByServer`가 무시. 클리어 그대로
+    - 결과 화면 3초 동안 아직 던전에 들어오지 않은 파티원: 던전에 넣지 않음. 로딩 화면이 덮인 채 로비에서 기다리다 `Ended` 때 이동 취소
   - 불러오는 중에 이탈: 남은 파티원은 이동 취소(로비에 그대로), 결과 화면 없음, 던전은 다 불러온 뒤 바로 내림
 - 레이드 포기: 파티원이 「레이드 포기」 버튼을 누르면 그 레이드는 실패
   - 클라이언트: 버튼이 `RaidParties.RequestGiveUp()`을 부름 → 서버에 `RaidGiveUpMessage`
   - 서버: 보낸 사람이 진행 중인 레이드의 파티원이고 그 던전 안에 있을 때만 처리. 불러오는 중·끝난 뒤·던전 밖에서 온 요청은 경고 로그, 무시
-  - 처리: 진행 중에 이탈과 같은 실패(실패로 끝내기 → 결과 화면 → `Ended` → 로비)
+  - 처리: 진행 중에 이탈과 같은 실패(`FailByServer()` → 결과 화면 → `Ended` → 로비)
   - 이탈과 다른 점: 포기한 파티원은 기록에서 빠지지 않음. 다른 파티원과 함께 결과 화면을 보고 로비로
-    - 지금: 실패로 끝내기 함수가 생기기 전까지 결과 화면 없이 포기한 파티원을 포함해 모두 바로 로비로
 - 던전 내리기: 기록의 파티원이 0명이 되면 `RaidParties`가 기록을 지우고 `UnloadRaidDungeon`
   - 불러오는 중에 0명: 다 불러온 뒤 내림
   - 혼자 시작한 레이드에서 그 파티원이 이탈: 결과 화면 없이 던전만 내림
 - 결과 화면 전달
   - 문제: `RaidResultView`(임혜원)는 자기 컴퓨터의 `RaidJudge.ResultEffectPlayed`를 받음. `RaidJudge`는 서버에서만 판정하므로 호스트가 아닌 클라이언트에서는 결과 화면이 뜨지 않음
-  - 서버: 던전을 불러온 뒤 그 던전의 `RaidJudge.ResultEffectPlayed`를 받아, 파티원 클라이언트에 `RaidResultMessage { cleared }` (호스트의 클라이언트 제외, 이미 뜸)
-  - 클라이언트: 자기가 불러온 레이드 던전의 `RaidJudge`에 결과 화면 이벤트만 부르기를 요청 → `RaidResultView`는 그대로
-    - 지금: `RaidJudge`의 결과 화면 이벤트만 부르기 함수가 생기기 전까지 받은 결과를 로그로만 남김. 호스트 화면에는 결과 화면이 뜸
+  - 서버: 던전을 불러온 뒤 그 던전의 `RaidJudge.ResultEffectPlayed`를 받아, 그 던전 안에 있는 파티원 클라이언트에 `RaidResultMessage { cleared }`
+    - 호스트의 클라이언트 제외: 서버의 `RaidJudge`를 같이 써서 이미 뜸
+    - 아직 던전에 들어오지 않은 파티원 제외: 던전 씬을 불러오지 않아 띄울 곳이 없음
+  - 클라이언트: 자기가 불러온 레이드 던전의 `RaidJudge.PlayResultOnly(cleared)` → `ResultEffectPlayed` → `RaidResultView`가 결과 화면 (`RaidResultView`는 그대로)
 
 ### 판정 (물리 세계)
 - `Physics2D.OverlapBox`, `Physics2D.Raycast`, `Physics2D.OverlapCircleAll` 등 `Physics2D`의 판정 함수: 기준 씬의 물리 세계만 검사. 서버에서는 내용 씬의 오브젝트를 찾지 못함
@@ -237,12 +245,28 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
 | --- | --- | --- | --- |
 | `RequestGiveUp()` | - | - | [클라이언트] 서버에 레이드 포기를 보냄. 레이드 던전의 「레이드 포기」 버튼이 부름. 서버가 그 레이드를 실패로 끝내고 포기한 사람을 포함해 파티원 모두를 로비로 옮김. 싸우는 중이 아니면 서버가 무시. 접속하지 않았으면 경고 로그만 |
 
+### `PlayerRoster` (#310)
+
+static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파티원 체력 UI처럼 「지금 누가 있는지」가 필요한 화면이 쓴다. 목록은 `PlayerHealth`가 채우고(Start에 넣고 OnDestroy에 뺌), 다른 스크립트는 읽기만 한다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Players` | - | `IReadOnlyList<PlayerHealth>` | 이 화면에 있는 플레이어 (내 캐릭터 포함). 클라이언트에서는 같은 장소의 플레이어뿐이다 (레이드 던전에서는 파티원) |
+| `PlayerAdded` (event) | `PlayerHealth` | - | [표시] 플레이어가 나타남 (그 장소에 들어옴, 접속함, 내가 그 장소로 옴). 체력 값은 이미 서버의 값 |
+| `PlayerRemoved` (event) | `PlayerHealth` | - | [표시] 플레이어가 사라짐 (장소를 떠남, 접속 끊김, 내가 그 장소를 떠남) |
+| `IsLocal(PlayerHealth)` | 플레이어 | `bool` | 내 캐릭터면 true. 「나를 뺀 파티원」만 그릴 때 |
+| `IsInMyPlace(PlayerHealth)` | 플레이어 | `bool` | 내 캐릭터와 같은 장소면 true. 클라이언트에서는 늘 true. 호스트는 다른 장소의 플레이어도 갖고 있으므로 호스트 화면의 UI는 그릴 때마다 이것으로 거른다 (호스트에서는 장소를 옮겨도 이벤트가 불리지 않음) |
+
+- 각 플레이어의 체력은 `PlayerHealth.HpChanged`, `Hp`, `MaxHp`, `IsDead`, `IsHidden`으로 읽는다 ([player-health.md](player-health.md))
+- 클라이언트에서는 Mirror가 다른 플레이어 오브젝트를 `Base` 씬에 만들므로, 씬 이름으로 같은 장소인지 거르지 않는다
+- 정한 것 (이우림 #310): 「파티원」은 같은 장소에 있는 플레이어. 실제 파티원 명단은 보내지 않음
+
 ### 시험
 
 | 이름 | 설명 |
 | --- | --- |
 | `TrainingRoomTest` | 연습장 입장마다 열기(#301). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `TrainingRoomTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-trainingRoomTest member`로 실행(호스트 + 클라이언트). 입장 전 연습장 없음 → 입장하면 하나 열림 → (클라이언트가 있으면) 둘이 입장해 연습장이 둘, 서로 다른 씬, 서로의 observer가 아님 → 나가면 내 연습장만 내림 → 클라이언트가 접속을 끊으면 그 연습장도 내림 → 다시 입장하면 새 씬 → 플레이어가 없어지면(`DespawnPlayer`) 내림. 「[TrainingRoomTest][역할] 전체 통과」면 통과 |
-| `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 로비로 돌아옴. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
+| `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 클리어 결과 화면(클라이언트는 서버가 보낸 결과) → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 실패 결과 화면 3초 뒤 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 실패 결과 화면 3초 뒤 로비로 돌아옴. 결과 화면은 `RaidJudge.ResultEffectPlayed`로 확인. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
 
 ### 씬에 놓는 컴포넌트
 
@@ -251,13 +275,13 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
 | 이름 | 붙이는 곳 | 꼭 필요한 설정 | 자유롭게 바꿔도 되는 것 | 설명 |
 | --- | --- | --- | --- | --- |
 | `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). 높이: 땅 위 10 안 (서버가 땅에 맞춰 세움) | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
-| `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 사냥터·연습장에 하나씩, `PlayerStartPosition`과 겹치지 않게. 레이드 던전에는 두지 않음 (#300) | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청 |
+| `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 사냥터·연습장에 하나씩, `PlayerStartPosition`과 겹치지 않게. 레이드 던전에는 두지 않음 (#300) | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청. 죽었거나 경직 중(`PlayerHealth.CanAct` false)이면 무시 (#310) |
 | `LoadingScreen` | 로딩 화면 Canvas | `panelRoot`: 화면을 덮는 UI의 부모. `canvasGroup`: `panelRoot`에 붙인 `Canvas Group`. 배경 Image의 Raycast Target 체크. Canvas Sort Order는 로비 UI(0)보다 크게. `Base`에 놓고 `PlaceTravel`의 `loadingScreen` 칸에 연결 | 배경, 글자, 글꼴, 애니메이션, `fadeSeconds`(페이드 시간, 기본 0.25초) | `PlaceTravelClient`만 `Show`·`ShowImmediate`·`Hide`를 부름. 이동하는 동안과 접속 직후에 화면을 덮음 |
 
 ## 맞춘 결과
 - 김도훈에게 알릴 것
   - `ContactDamage.cs`의 `Physics2D.OverlapBox`: 서버에서 내용 씬의 플레이어를 찾지 못함. 자기 씬의 물리 세계에 질의 필요
-  - `ProjectileAttack.cs`의 투사체 생성, `MonsterProjectile.cs`·`Monster.cs`의 삭제: 네트워크를 붙일 때 `NetworkSpawner.Spawn` / `Despawn` 사용
+  - `ProjectileAttack.cs`의 투사체 생성, `MonsterProjectile.cs`·`Monster.cs`의 삭제: 네트워크를 붙일 때 `NetworkSpawner.Spawn` / `Despawn` 사용 → #310에서 바꿈 (김도훈과 합의, monster.md)
 - 박진우에게 알릴 것
   - `SlotCaster.cs`의 대상 찾기(`Physics2D.OverlapCircleAll`): 서버에서 내용 씬의 대상을 찾지 못함. 자기 씬의 물리 세계에 질의 필요
   - `PlayerMovement.cs`의 바닥 판정·발판 내려가기: 내 캐릭터(클라이언트)에서만 실행하므로 전용 서버에서는 영향 없음. 호스트 모드에서는 바닥을 찾지 못함 (자기 씬의 물리 세계에 질의하면 해결)
@@ -283,17 +307,16 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
   - 지금 임시본의 모습: 출구는 `Entrance`의 문 스프라이트와 `Prompt` 복사, 로딩 화면은 검은 배경과 "Loading..." 글자
 - `Assets/_UL/Prefabs`의 임시 프리팹 파일: 임혜원의 프리팹으로 바꾼 뒤 이우림이 삭제
 - 이우림 결정 (#300)
-  - 범위: 파티 던전 열기·옮기기, 끝난 뒤 로비로, 파티원 이탈 실패, 레이드 포기, 결과 화면 전달. 보스·플레이어 체력의 화면 동기화는 김도훈의 동기화 이슈
+  - 범위: 파티 던전 열기·옮기기, 끝난 뒤 로비로, 파티원 이탈 실패, 레이드 포기, 결과 화면 전달. 보스·플레이어 체력의 화면 동기화는 김도훈의 동기화 이슈 → #310에서 이우림이 함 (김도훈 합의, monster.md·player-health.md)
   - 시작 인원: `RaidRooms.TryStart` 그대로 1~3명
   - 파티원이 한 명이라도 빠지면 실패, 레이드 던전에 출구 없음
   - 파티원 이탈 실패의 결과 화면: 지금의 「레이드 실패」 그대로. 이탈에 맞는 문구는 나중에 임혜원과
   - 레이드 포기: 포기한 사람도 다른 파티원과 함께 결과 화면을 보고 로비로. 결과 화면은 「레이드 실패」 그대로
   - 시작: 시작을 누른 파티원이 모두 있어야 시작. 한 명이라도 없으면 시작하지 않음
   - 레이드 방 (#300 뒤 김도훈 구현): 클리어·실패·파티원 이탈·레이드 포기 모든 경우에 남음. 접속이 끊긴 사람만 빠지고, 1명만 남아도 유지
-- 김도훈에게 요청할 것 (#300, `RaidJudge`)
-  - 실패로 끝내기 (서버): 파티원이 이탈하거나 레이드를 포기하면 `RaidParties`가 부름. 모두 죽었을 때와 같이 결과 화면 이벤트 → `Result Delay` 뒤 `ReportEnd(던전, false)`. 이미 끝났으면 무시
-  - 결과 화면 이벤트만 부르기 (클라이언트): `RaidResultMessage`를 받은 클라이언트에서 부름. 판정 없이 `ResultEffectPlayed(클리어 여부)`만
-  - 함수 이름은 김도훈이 정하고 `raid.md`에 먼저 적음
+- 김도훈에게 요청한 것 (#300, `RaidJudge`) → 김도훈이 #308에서 만듦 ([raid.md](raid.md)), 이우림이 #310에서 연결
+  - 실패로 끝내기 (서버): `FailByServer()`. 파티원이 이탈하거나 레이드를 포기하면 `RaidParties.FailRaid`가 부름. 모두 죽었을 때와 같이 결과 화면 이벤트 → `Result Delay` 뒤 `ReportEnd(던전, false)`. 이미 끝났으면 무시
+  - 결과 화면 이벤트만 부르기 (클라이언트): `PlayResultOnly(bool)`. `RaidResultMessage`를 받은 클라이언트에서 `RaidParties`가 부름. 판정 없이 `ResultEffectPlayed(클리어 여부)`만
 - 김도훈에게 요청할 것 (#300 뒤, `RaidRooms` 방 유지)
   - 시작해도 방을 지우지 않고 「레이드 중」으로 남김
   - 레이드 끝 또는 시작 취소를 받는 함수: `RaidParties`가 부름. 방을 대기로 되돌리고 파티원의 준비를 풂

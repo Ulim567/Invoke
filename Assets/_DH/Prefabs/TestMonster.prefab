@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8546834575496172171}
   - component: {fileID: 1214435386135848727}
   - component: {fileID: 3775676273824404508}
+  - component: {fileID: 4139372549976500364}
   - component: {fileID: 6117843773794850283}
   - component: {fileID: 4301682130805217797}
   - component: {fileID: 8926670108708325781}
@@ -170,6 +171,23 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
+--- !u!114 &4139372549976500364
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7396410919086133594}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 0
+  _assetId: 1669196886
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!114 &6117843773794850283
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -184,6 +202,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Monster
   maxHp: 100
   despawnDelay: 0.5
+  isBoss: 0
+  invulnerable: 0
 --- !u!114 &4301682130805217797
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -215,7 +235,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ed66e26bdb411d409c0e4acf1d11f33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectileAttack
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   attack: {fileID: 11400000, guid: 32740dbd762c0324196285f59677bbd9, type: 2}
   projectilePrefab: {fileID: 2080740477131302831, guid: abc73a51d2e70b64299cb36326d347fa, type: 3}
   speed: 6
   firePointOffset: {x: 0.5, y: 0.5}
+  fireDelay: 0

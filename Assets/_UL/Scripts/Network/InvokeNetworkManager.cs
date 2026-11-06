@@ -57,6 +57,7 @@ public class InvokeNetworkManager : NetworkManager
 		base.OnStartServer();
 		// Mirror는 서버를 끌 때 등록한 처리 함수를 모두 지우므로, 서버를 켤 때마다 등록한다
 		NetworkServer.RegisterHandler<TravelRequestMessage>(OnTravelRequest);
+		ServerTravel.StartServer(this);
 		RaidRoomsNetwork.StartServer();
 		RaidParties.StartServer(this);
 		InstanceScenes.StartServer(this);
@@ -174,6 +175,7 @@ public class InvokeNetworkManager : NetworkManager
 		if (conn.identity == null) return;
 
 		NetworkServer.RemovePlayerForConnection(conn, RemovePlayerOptions.Destroy);
+		ServerTravel.OnPlayerGone(conn);
 		// 연습장이 있었으면 내린다. 플레이어를 없앤 뒤에 알려야 플레이어가 연습장과 함께 사라지지 않는다
 		TrainingRooms.OnPlayerGone(conn);
 		// 레이드 중이었으면 파티원 이탈이다. 플레이어를 없앤 뒤에 알려야, 남은 파티원이 없을 때 던전을 내려도 이 플레이어가 던전과 함께 사라지지 않는다
@@ -198,6 +200,8 @@ public class InvokeNetworkManager : NetworkManager
 		player.transform.position = PlaceOnGround(lobby, player.transform.position, player);
 		// 여러 플레이어를 Hierarchy에서 구분하기 위해 연결 번호를 붙인다
 		player.name = $"{playerPrefab.name} [connId={conn.connectionId}]";
+		// 부활할 때 부활 목적지로 옮긴다 (#310). 플레이어가 없어지면 이벤트도 함께 사라지므로 떼지 않는다
+		if (player.TryGetComponent(out PlayerHealth health)) health.LobbyReturnRequested += () => OnPlayerRespawned(conn, player);
 
 		// 씬을 불러오라는 알림이 플레이어 생성보다 먼저 가야, 클라이언트에 바닥이 생긴 뒤에 플레이어가 나타난다
 		PutPlayerInScene(conn, player, lobby);
@@ -236,12 +240,12 @@ public class InvokeNetworkManager : NetworkManager
 			RejectTravel(conn, msg.destination, "플레이어 오브젝트가 아직 없습니다");
 			return;
 		}
-		// 서버가 레이드 이동을 알린 파티원이 다른 이동을 함께 받지 않게 한다
-		// 거절 답(TravelEndedMessage)은 보내지 않는다. 클라이언트는 이동 끝을 하나만 기다리므로, 보내면 레이드 이동 전에 로딩 화면을 걷는다.
-		// 이 요청을 보낸 클라이언트의 로딩 화면은 레이드 이동의 TravelEndedMessage가 걷는다
-		if (RaidParties.IsWaitingForTravel(conn))
+		// 서버가 이동을 알린 플레이어(레이드 시작·끝, 부활해 로비로)가 다른 이동을 함께 받지 않게 한다
+		// 거절 답(TravelEndedMessage)은 보내지 않는다. 클라이언트는 이동 끝을 하나만 기다리므로, 보내면 서버가 알린 이동 전에 로딩 화면을 걷는다.
+		// 이 요청을 보낸 클라이언트의 로딩 화면은 서버가 알린 이동의 TravelEndedMessage가 걷는다
+		if (RaidParties.IsWaitingForTravel(conn) || ServerTravel.IsWaiting(conn))
 		{
-			Debug.LogWarning($"[InvokeNetworkManager] connId={conn.connectionId}의 {msg.destination} 이동 요청을 무시합니다: 레이드 이동을 기다리는 중입니다");
+			Debug.LogWarning($"[InvokeNetworkManager] connId={conn.connectionId}의 {msg.destination} 이동 요청을 무시합니다: 서버가 알린 이동을 기다리는 중입니다");
 			return;
 		}
 		if (player.scene.name == msg.destination)
@@ -323,6 +327,37 @@ public class InvokeNetworkManager : NetworkManager
 		if (InstanceScenes.IsRaidScene(previous)) RaidParties.OnLeftDungeon(conn, previous);
 	}
 
+	// [서버] 플레이어가 부활하는 순간(PlayerHealth.LobbyReturnRequested). 부활 목적지가 있으면 로딩 화면을 덮은 뒤 그곳으로 옮긴다 (#310)
+	void OnPlayerRespawned(NetworkConnectionToClient conn, GameObject player)
+	{
+		if (player == null || conn.identity == null || conn.identity.gameObject != player) return;
+		// 서버가 알린 다른 이동(레이드 끝에 로비로 등)을 기다리는 중이면 그 이동에 맡긴다
+		if (ServerTravel.IsWaiting(conn) || RaidParties.IsWaitingForTravel(conn)) return;
+		if (!TryGetRespawnDestination(player, out Scene target)) return;
+
+		ServerTravel.Begin(conn, () =>
+		{
+			// 기다리는 사이에 플레이어가 없어졌거나 이미 그 장소면 옮기지 않고 로딩 화면만 걷는다
+			if (conn.identity != null && conn.identity.gameObject == player && player.scene != target) TravelPlayer(conn, player, target);
+			else conn.Send(new TravelEndedMessage());
+		});
+	}
+
+	/// <summary>
+	/// [서버] 부활한 플레이어를 옮길 장소. 옮기지 않으면(그 자리에서 부활) false.<br/>
+	/// 부활 목적지를 정하는 곳은 여기 하나다. 장소마다 다르게 하려면 이 함수에서 플레이어가 있는 씬의 설정을 읽게 바꾼다 (사용자 결정 #310: 지금은 레이드 밖은 모두 로비로)
+	/// </summary>
+	bool TryGetRespawnDestination(GameObject player, out Scene target)
+	{
+		target = default;
+		Scene current = player.scene;
+		// 레이드 던전: 부활하지 않고 관전하다가, 레이드가 끝나면 RaidParties가 파티원 모두를 로비로 옮긴다
+		if (InstanceScenes.IsRaidScene(current)) return false;
+		// 로비에서 죽었으면 그 자리에서 부활한다
+		if (current.name == PlaceScenes.Lobby) return false;
+		return TryGetPlaceScene(PlaceScenes.Lobby, out target);
+	}
+
 	// 장소 사이를 이동한 플레이어가 도착할 위치를 찾는다.
 	// 떠나온 장소(fromPlace)가 같은 ArrivalPoint가 있으면 그 위치, 없으면 씬의 NetworkStartPosition 위치
 	static Vector3 FindArrivalPosition(Scene scene, string fromPlace)
@@ -388,6 +423,7 @@ public class InvokeNetworkManager : NetworkManager
 		RaidRoomsNetwork.OnServerDisconnect(conn);
 
 		base.OnServerDisconnect(conn);
+		ServerTravel.OnPlayerGone(conn);
 		// 연습장이 있었으면 내린다. base가 플레이어를 없앤 뒤에 알려야 플레이어가 연습장과 함께 사라지지 않는다
 		TrainingRooms.OnPlayerGone(conn);
 		// 레이드 중이었으면 파티원 이탈이다. base가 플레이어를 없앤 뒤에 알려야, 던전을 내려도 이 플레이어가 던전과 함께 사라지지 않는다
@@ -402,6 +438,7 @@ public class InvokeNetworkManager : NetworkManager
 		TrainingRooms.StopServer();
 		RaidRoomsNetwork.StopServer();
 		RaidParties.StopServer();
+		ServerTravel.StopServer();
 
 		// 에디터에서 서버를 껐다 켤 때 같은 씬이 두 번 불러와지지 않도록 내린다
 		// 오브젝트가 꺼진 채로 불리면 코루틴을 시작할 수 없으므로 확인한다

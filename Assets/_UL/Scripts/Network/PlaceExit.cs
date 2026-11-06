@@ -54,6 +54,8 @@ public class PlaceExit : MonoBehaviour
 
 		// 이동하는 동안은 PlaceTravelClient가 Player 액션 맵을 비활성화해 두므로 InteractPressed가 false다. 요청이 두 번 가지 않는다
 		if (!localPlayer.InteractPressed) return;
+		// 죽었거나 경직 중이면 나가지 않는다 (#310). 죽은 캐릭터는 부활할 때 서버가 로비로 옮긴다
+		if (localPlayer.TryGetComponent(out PlayerHealth health) && !health.CanAct) return;
 
 		if (PlaceTravelClient.Instance == null)
 		{

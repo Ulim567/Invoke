@@ -24,6 +24,10 @@ public class PlaceTravelClient : MonoBehaviour
 
 	// 서버에 이동을 요청하고 답(TravelEndedMessage)을 기다리는 중이면 true. 답을 받기 전에 다시 요청하지 않기 위함
 	bool traveling;
+	// 이번 이동에서 로딩 화면이 화면을 다 덮었으면 true
+	bool covered;
+	// 로딩 화면이 다 덮으면 부를 일 (요청 보내기, 또는 서버에 덮었다고 답하기). 덮기 전에 서버가 이동을 시작하면 답하기로 바꾼다
+	System.Action onCovered;
 	// 접속 직후 서버가 로컬 플레이어의 함수 데이터를 다 받기를 기다리는 중이면 true
 	bool waitingForData;
 	// 이번 접속에서 로컬 플레이어의 함수 데이터가 준비되었으면 true. 접속이 끊기면 다시 false
@@ -52,7 +56,7 @@ public class PlaceTravelClient : MonoBehaviour
 	/// 서버에 장소 이동을 요청한다. 로컬 플레이어의 클라이언트에서 부른다.<br/>
 	/// 서버에 접속하지 않았거나, 로컬 플레이어가 아직 없거나, 이전 요청의 답을 기다리는 중이면 아무것도 하지 않는다.
 	/// </summary>
-	/// <param name="destination">갈 씬 이름 (PlaceScenes의 Lobby, HuntingGround, TrainingRoom, RaidDungeon)</param>
+	/// <param name="destination">갈 씬 이름 (PlaceScenes의 Lobby, HuntingGround, TrainingRoom). RaidDungeon은 서버가 거절한다</param>
 	public void RequestTravel(string destination)
 	{
 		if (!NetworkClient.isConnected || NetworkClient.localPlayer == null) return;
@@ -68,29 +72,47 @@ public class PlaceTravelClient : MonoBehaviour
 	/// </summary>
 	public void HandleTravelStarted()
 	{
-		if (!NetworkClient.isConnected || NetworkClient.localPlayer == null) return;
+		if (!NetworkClient.isConnected) return;
 
-		// 이미 이동 중이면 화면은 덮였거나 덮이는 중이다. 서버는 답이 와야 옮기므로 바로 답한다
-		if (traveling)
+		// 서버는 답이 와야 옮기므로, 막을 화면이 없어도 답은 꼭 보낸다
+		if (NetworkClient.localPlayer == null)
 		{
-			NetworkClient.Send(new TravelReadyMessage());
+			SendTravelReady();
 			return;
 		}
-		BeginTravel(() => NetworkClient.Send(new TravelReadyMessage()));
+
+		// 이미 이동 중이면 끝(TravelEndedMessage)은 하나만 온다. 서버가 이 이동을 기다리는 동안 보낸 요청은 답 없이 무시하기 때문이다
+		if (traveling)
+		{
+			// 덮은 뒤면 바로 답한다. 덮기 전이면 아직 보내지 않은 요청 대신 답을 보낸다 (먼저 보낸 요청이 레이드 던전에서 다시 옮기지 않게)
+			if (covered) SendTravelReady();
+			else onCovered = SendTravelReady;
+			return;
+		}
+		BeginTravel(SendTravelReady);
 	}
 
+	static void SendTravelReady() => NetworkClient.Send(new TravelReadyMessage());
+
 	// 이동을 시작한다: 화면을 막고 로딩 화면을 덮은 뒤 onCovered를 부른다. 답(TravelEndedMessage)은 HandleTravelEnded가 받는다
-	void BeginTravel(System.Action onCovered)
+	void BeginTravel(System.Action action)
 	{
 		traveling = true;
+		covered = false;
+		onCovered = action;
 		// 입구 창(LobbyEntrancePanel)·레이드 방 화면은 닫힐 때 액션 맵을 다시 활성화하므로, 이동하는 동안 다시 비활성화한다
 		SetInputBlocked(true);
 		SetMovementLocked(true);
-		loadingScreen.Show(() =>
-		{
-			// 페이드하는 사이에 접속이 끊겼으면 보내지 않는다. 원래대로 돌리는 일은 Update가 한다
-			if (NetworkClient.isConnected) onCovered();
-		});
+		loadingScreen.Show(OnCovered);
+	}
+
+	void OnCovered()
+	{
+		covered = true;
+		System.Action action = onCovered;
+		onCovered = null;
+		// 페이드하는 사이에 접속이 끊겼으면 보내지 않는다. 원래대로 돌리는 일은 Update가 한다
+		if (NetworkClient.isConnected) action?.Invoke();
 	}
 
 	/// <summary>
@@ -101,6 +123,8 @@ public class PlaceTravelClient : MonoBehaviour
 	{
 		if (!traveling) return;
 		traveling = false;
+		covered = false;
+		onCovered = null;
 		// teleport까지 마쳤거나 서버가 거절했으므로, 접속 직후의 로딩과 상관없이 움직임을 푼다
 		SetMovementLocked(false);
 
@@ -118,6 +142,8 @@ public class PlaceTravelClient : MonoBehaviour
 			// 로컬 플레이어 오브젝트는 삭제되고(움직임 잠금도 함께 사라짐), 액션 맵은 PlayerInputReader.OnStopLocalPlayer가 다시 활성화한다
 			if (traveling || waitingForData) loadingScreen.Hide();
 			traveling = false;
+			covered = false;
+			onCovered = null;
 			waitingForData = false;
 			dataReady = false;
 			inputBlocked = false;

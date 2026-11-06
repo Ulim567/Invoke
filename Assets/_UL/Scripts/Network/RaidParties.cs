@@ -25,6 +25,8 @@ class RaidParty
 	public readonly HashSet<NetworkConnectionToClient> waiting = new HashSet<NetworkConnectionToClient>();
 	// waiting 중 로딩 화면이 다 덮였다고 답한(TravelReadyMessage) 파티원
 	public readonly HashSet<NetworkConnectionToClient> ready = new HashSet<NetworkConnectionToClient>();
+	// 파티원마다 마지막으로 알린 이동의 번호. 답 기다리기 시간이 지났을 때 그 사이 새 이동이 시작됐는지 가리기 위함
+	public readonly Dictionary<NetworkConnectionToClient, int> travelIds = new Dictionary<NetworkConnectionToClient, int>();
 
 	public RaidPartyState state;
 	// LoadRaidDungeon이 넘긴 던전. dungeonLoaded가 false면 아직 비어 있다
@@ -55,7 +57,12 @@ class RaidParty
 /// </summary>
 public static class RaidParties
 {
+	// 이동을 알린 뒤 클라이언트의 답(TravelReadyMessage)을 기다리는 시간. 지나면 답 없이 옮긴다.
+	// 답이 오지 않는 클라이언트(로딩 화면이 없음 등) 때문에 그 파티원이 이동을 기다리는 채로 남거나 던전이 내려가지 않는 일을 막기 위함. 로딩 화면 페이드(0.25초)보다 넉넉히 길게
+	const float ReadyTimeoutSeconds = 5f;
+
 	static InvokeNetworkManager manager;
+	static int nextTravelId;
 	static readonly List<RaidParty> parties = new List<RaidParty>();
 	// 던전 씬에서 RaidJudge를 찾을 때 쓰는 최상위 오브젝트 목록
 	static readonly List<GameObject> roots = new List<GameObject>(32);
@@ -135,7 +142,9 @@ public static class RaidParties
 			NetworkConnectionToClient conn = FindConnection(name);
 			if (conn == null || FindByMember(conn) != null)
 			{
-				// 시작을 누른 뒤 한 프레임 사이에 접속이 끊긴 경우. 아무에게도 이동을 알리지 않았으므로 시작하지 않으면 끝난다
+				// 시작을 누른 뒤 한 프레임 사이에 접속이 끊긴 경우. 시작을 누른 파티원이 모두 있어야 시작한다 (이우림 결정, place-scenes.md).
+				// 아직 아무에게도 이동을 알리지 않았으므로 모두 로비에 그대로 남는다.
+				// 지금은 RaidRooms.TryStart가 이미 방을 지워서 남은 파티원이 방을 잃는다. 방 유지(김도훈)가 생기면 여기서 RaidRooms에 시작 취소를 알려 방을 대기 상태로 되돌린다
 				Debug.LogWarning($"[RaidParties] 파티원 {name}을(를) 찾지 못해 레이드를 시작하지 않습니다.");
 				return;
 			}
@@ -234,6 +243,7 @@ public static class RaidParties
 			party.members.Remove(conn);
 			party.waiting.Remove(conn);
 			party.ready.Remove(conn);
+			party.travelIds.Remove(conn);
 			// 덮던(덮어 둔) 로딩 화면을 걷게 한다. 클라이언트는 이동이 끝난 것과 같이 처리한다
 			conn.Send(new TravelEndedMessage());
 		}
@@ -246,6 +256,7 @@ public static class RaidParties
 		if (!party.members.Remove(conn)) return;
 		party.waiting.Remove(conn);
 		party.ready.Remove(conn);
+		party.travelIds.Remove(conn);
 
 		if (party.state != RaidPartyState.Ended)
 		{
@@ -294,7 +305,24 @@ public static class RaidParties
 	static void SendTravelStarted(RaidParty party, NetworkConnectionToClient conn)
 	{
 		party.waiting.Add(conn);
+		int travelId = ++nextTravelId;
+		party.travelIds[conn] = travelId;
 		conn.Send(new TravelStartedMessage());
+		manager?.StartCoroutine(MoveWithoutReplyAfterTimeout(party, conn, travelId));
+	}
+
+	// 답 기다리기 시간이 지나도 답이 없으면 답한 것으로 보고 옮긴다. 화면이 덮이지 않은 채 옮겨질 수 있지만, 이동을 기다리는 채로 남는 것보다 낫다
+	static IEnumerator MoveWithoutReplyAfterTimeout(RaidParty party, NetworkConnectionToClient conn, int travelId)
+	{
+		yield return new WaitForSecondsRealtime(ReadyTimeoutSeconds);
+
+		// 그 사이 옮겼거나, 기록에서 빠졌거나, 새 이동을 알렸으면 할 일이 없다
+		if (!parties.Contains(party) || !party.waiting.Contains(conn) || party.ready.Contains(conn)) yield break;
+		if (!party.travelIds.TryGetValue(conn, out int current) || current != travelId) yield break;
+
+		Debug.LogWarning($"[RaidParties] 파티원(connId={conn.connectionId})이 {ReadyTimeoutSeconds}초 안에 이동 준비를 답하지 않아 답 없이 옮깁니다.");
+		party.ready.Add(conn);
+		MoveIfReady(party, conn);
 	}
 
 	// 던전의 RaidJudge가 결과 화면 이벤트를 부르면 파티원 클라이언트에 보내도록 붙인다

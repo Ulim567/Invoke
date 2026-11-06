@@ -72,9 +72,16 @@ public class InvokeNetworkManager : NetworkManager
 		base.OnStartClient();
 		// Mirror는 클라이언트를 끌 때 등록한 처리 함수를 모두 지우므로, 접속할 때마다 등록한다
 		NetworkClient.RegisterHandler<TravelEndedMessage>(_ => PlaceTravelClient.Instance?.HandleTravelEnded());
-		NetworkClient.RegisterHandler<TravelStartedMessage>(_ => PlaceTravelClient.Instance?.HandleTravelStarted());
+		NetworkClient.RegisterHandler<TravelStartedMessage>(OnTravelStarted);
 		RaidRoomsNetwork.StartClient();
 		RaidParties.StartClient();
+	}
+
+	// [클라이언트] 서버가 이동을 시작했다. 서버는 답(TravelReadyMessage)이 와야 옮기므로, 화면을 막을 PlaceTravelClient가 없어도 답은 보낸다
+	static void OnTravelStarted(TravelStartedMessage _)
+	{
+		if (PlaceTravelClient.Instance != null) PlaceTravelClient.Instance.HandleTravelStarted();
+		else NetworkClient.Send(new TravelReadyMessage());
 	}
 
 	// [서버] 서버가 시작할 때 불러온 장소(로비·사냥터·연습장)의 씬. RaidParties가 레이드를 마친 파티원을 로비로 옮길 때 쓴다
@@ -285,9 +292,11 @@ public class InvokeNetworkManager : NetworkManager
 			return;
 		}
 		// 서버가 레이드 이동을 알린 파티원이 다른 이동을 함께 받지 않게 한다
+		// 거절 답(TravelEndedMessage)은 보내지 않는다. 클라이언트는 이동 끝을 하나만 기다리므로, 보내면 레이드 이동 전에 로딩 화면을 걷는다.
+		// 이 요청을 보낸 클라이언트의 로딩 화면은 레이드 이동의 TravelEndedMessage가 걷는다
 		if (RaidParties.IsWaitingForTravel(conn))
 		{
-			RejectTravel(conn, msg.destination, "레이드 이동을 기다리는 중입니다");
+			Debug.LogWarning($"[InvokeNetworkManager] connId={conn.connectionId}의 {msg.destination} 이동 요청을 무시합니다: 레이드 이동을 기다리는 중입니다");
 			return;
 		}
 		if (player.scene.name == msg.destination)

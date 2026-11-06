@@ -329,7 +329,7 @@ MonoBehaviour:
   bodyCollider: {fileID: 1304864832004228049}
   input: {fileID: 3376740816470663825}
   stats: {fileID: 8827871125244465063}
-  health: {fileID: 0}
+  health: {fileID: 7930981262655194856}
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
@@ -404,7 +404,7 @@ MonoBehaviour:
   net: {fileID: 0}
   loadout: {fileID: 0}
   minigame: {fileID: 0}
-  health: {fileID: 0}
+  health: {fileID: 7930981262655194856}
 --- !u!114 &1210551639577649294
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -712,6 +712,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c6fab3c7c6687a43a66a28de95b5e68, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   hitStunTime: 0.3
   invincibleTime: 1
   hideDelay: 1

@@ -12,16 +12,17 @@ GameObject:
   - component: {fileID: 8967025524109814026}
   - component: {fileID: 8057066878222613019}
   - component: {fileID: 5634174422891679356}
+  - component: {fileID: -5998150243559993913}
+  - component: {fileID: 6787085104944719434}
   - component: {fileID: 4264313277744599497}
   - component: {fileID: 8707404824260945093}
   - component: {fileID: 2158289550452669959}
   - component: {fileID: 8567598208607585720}
   - component: {fileID: 8782932534168710310}
-  - component: {fileID: 6787085104944719434}
-  - component: {fileID: -5998150243559993913}
   - component: {fileID: -8882788714917605207}
   - component: {fileID: -4527870653899485198}
   - component: {fileID: 3637307629106896013}
+  - component: {fileID: 2646029998434878842}
   m_Layer: 9
   m_Name: Loop
   m_TagString: Untagged
@@ -167,6 +168,45 @@ CircleCollider2D:
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
   m_Radius: 0.55
+--- !u!95 &-5998150243559993913
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 47cafbd7722c147f8a56e7b95fdd6f43, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &6787085104944719434
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 0
+  _assetId: 2628525042
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!114 &4264313277744599497
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -268,45 +308,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5dcb3679c0d9e4a448d7024b3aaec3e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusEffects
---- !u!114 &6787085104944719434
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4097032019296542800}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
-  sceneId: 0
-  _assetId: 2628525042
-  serverOnly: 0
-  visibility: 0
-  hasSpawned: 0
---- !u!95 &-5998150243559993913
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4097032019296542800}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 47cafbd7722c147f8a56e7b95fdd6f43, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &-8882788714917605207
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -365,3 +366,18 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   wholeScene: 0
+--- !u!114 &2646029998434878842
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dabd2c308ade4db4794d046aaefaa2f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterNetwork
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0

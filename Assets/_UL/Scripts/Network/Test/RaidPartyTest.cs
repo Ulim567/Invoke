@@ -17,7 +17,8 @@ using UnityEngine.SceneManagement;
 /// - host: 직접 레이드 던전 요청 거절, 로비에서 보낸 레이드 포기 무시 → [클리어] 방 만들기·시작 → 던전 도착 → 보스를 바로 죽여 클리어 → 로비로 돌아옴 → 던전 내림
 /// → [포기] 한 판 더 시작해 포기(호스트만이면 호스트가, 클라이언트가 있으면 클라이언트가)하면 실패 결과 화면 뒤(Result Delay 이상 지나서) 모두 로비로 돌아오는지 본다
 /// → [이탈] 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 실패 결과 화면 뒤 로비로 돌아오는지 본다.<br/>
-/// - member: 방에 들어가 준비 → 던전 도착 → 클리어 결과 화면 이벤트 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 실패 결과 화면 이벤트 뒤 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
+/// - [클리어] 판의 보스: 호스트가 먼저 100을 주고 죽인다. member는 보스 몸에 자기 캐릭터를 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않는지, 보스 체력·피격·사망 연출이 서버와 같은지 본다 (#310).<br/>
+/// - member: 방에 들어가 준비 → 던전 도착 → 보스 동기화 확인 → 클리어 결과 화면 이벤트 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 실패 결과 화면 이벤트 뒤 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
 /// - 결과 화면은 그 던전의 RaidJudge.ResultEffectPlayed로 확인한다 (클라이언트에서는 RaidParties가 서버의 결과로 PlayResultOnly를 부를 때 불림).<br/>
 /// - 「[RaidPartyTest][역할] 전체 통과」면 통과.
 /// </para>
@@ -31,6 +32,12 @@ public class RaidPartyTest : MonoBehaviour
 	const float TimeoutSeconds = 30f;
 	// 결과 화면 이벤트부터 로비 도착까지 걸려야 하는 최소 시간. RaidJudge의 Result Delay(3초)에서 프레임 오차만 뺀다
 	const float MinResultSeconds = 2.9f;
+	// [클리어] 판에서 호스트가 보스를 죽이기 전에 먼저 주는 데미지. 클라이언트가 체력·피격 연출 동기화를 확인한다
+	const int FirstHitDamage = 100;
+	// 클라이언트가 보스를 찾고 자기 캐릭터를 보스 몸에 겹쳐 확인하는 동안 호스트가 기다리는 시간
+	const float MemberCheckSeconds = 4f;
+	// 클라이언트가 자기 캐릭터를 보스 몸에 겹쳐 두는 시간
+	const float ContactSeconds = 1.5f;
 
 	// 한 판을 어떻게 끝내는지
 	enum Round { Clear, GiveUp, Leave }
@@ -41,6 +48,9 @@ public class RaidPartyTest : MonoBehaviour
 	RaidJudge watchedJudge;
 	bool? result;
 	float resultTime;
+	// member: 클라이언트의 보스에서 받은 피격 연출 데미지(받기 전에는 0)와 사망 연출
+	int bossHitDamage;
+	bool bossDeathPlayed;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -176,7 +186,12 @@ public class RaidPartyTest : MonoBehaviour
 			Monster boss = null;
 			yield return Wait(round + "보스 생성", () => (boss = FindBossInHostScene()) != null);
 			if (boss == null) yield break;
-			boss.TakeDamage(boss.MaxHp);
+			// 클라이언트가 보스를 찾아 확인할 시간을 준 뒤 먼저 조금 때린다 (몬스터 체력·피격 연출 동기화, #310)
+			if (withMember) yield return new WaitForSeconds(MemberCheckSeconds);
+			boss.TakeDamage(FirstHitDamage);
+			Check(round + $"보스에게 {FirstHitDamage} 데미지 (서버 체력)", boss.Hp == boss.MaxHp - FirstHitDamage);
+			yield return new WaitForSeconds(1.5f);
+			boss.TakeDamage(boss.Hp);
 			yield return Wait(round + "보스를 죽이면 클리어 결과 화면", () => result == true);
 			yield return Wait(round + "결과 화면 뒤 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
 			if (withMember) yield return Wait(round + "파티원도 로비로 돌아옴", () => PlayersInScene(PlaceScenes.Lobby) == 2);
@@ -266,8 +281,58 @@ public class RaidPartyTest : MonoBehaviour
 			yield break;
 		}
 
+		yield return CheckBossSync(round);
 		yield return Wait(round + "서버의 결과로 클리어 결과 화면", () => result == true);
 		yield return Wait(round + "로비로 돌아옴 (던전은 내림)", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.RaidDungeon));
+	}
+
+	// [클리어] 판 클라이언트: 서버가 만든 보스의 체력·피격·사망 연출이 이 화면에도 오는지 본다 (#310).
+	// 그 전에 자기 캐릭터를 보스 몸에 겹쳐, 이 화면의 보스 복사본이 따로 접촉 피해를 주지 않는지도 본다
+	IEnumerator CheckBossSync(string round)
+	{
+		Monster boss = null;
+		yield return Wait(round + "보스가 이 화면에 보임", () => (boss = FindBossInDungeon()) != null);
+		if (boss == null) yield break;
+
+		bossHitDamage = 0;
+		bossDeathPlayed = false;
+		boss.HitEffectPlayed += OnBossHit;
+		boss.DeathEffectPlayed += OnBossDeath;
+		Check(round + "보스 체력을 서버에서 받음", boss.Hp == boss.MaxHp);
+
+		// 플레이어 체력 동기화 전이라, 서버가 준 접촉 피해는 이 화면의 체력에 보이지 않는다. 이 화면에서 따로 깎지 않았으면 그대로 최대다
+		GameObject me = NetworkClient.localPlayer.gameObject;
+		PlayerHealth health = me.GetComponent<PlayerHealth>();
+		Rigidbody2D body = me.GetComponent<Rigidbody2D>();
+		float until = Time.time + ContactSeconds;
+		while (Time.time < until)
+		{
+			body.position = boss.transform.position;
+			yield return new WaitForFixedUpdate();
+		}
+		Check(round + "보스 몸에 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않음", health.Hp == health.MaxHp);
+
+		yield return Wait(round + $"보스 피격 연출 ({FirstHitDamage} 데미지)", () => bossHitDamage == FirstHitDamage);
+		Check(round + "보스 체력이 서버와 같음", boss != null && boss.Hp == boss.MaxHp - FirstHitDamage);
+		yield return Wait(round + "보스 사망 연출", () => bossDeathPlayed);
+		if (boss != null)
+		{
+			boss.HitEffectPlayed -= OnBossHit;
+			boss.DeathEffectPlayed -= OnBossDeath;
+		}
+	}
+
+	void OnBossHit(int damage) => bossHitDamage = damage;
+
+	void OnBossDeath() => bossDeathPlayed = true;
+
+	// 클라이언트에서는 Mirror가 네트워크 오브젝트를 Base 씬에 만들므로 씬으로 거르지 않는다.
+	// 클라이언트는 같은 씬(자기 던전)의 네트워크 오브젝트만 받으므로 보이는 보스는 자기 던전의 보스다
+	static Monster FindBossInDungeon()
+	{
+		foreach (Monster m in FindObjectsByType<Monster>(FindObjectsSortMode.None))
+			if (m.IsBoss) return m;
+		return null;
 	}
 
 	static RaidRoom FindRoom(string roomName)

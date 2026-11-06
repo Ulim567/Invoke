@@ -23,7 +23,7 @@
 ## 동작 규칙
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
 - Inspector 값 `Invulnerable`을 켜면 맞아도 체력이 줄지 않고 죽지 않는다. `Damaged`, `HitEffectPlayed`는 그대로 받은 데미지를 넘겨 불린다 (연습장 허수아비, 임혜원과 정함).
-- 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 오브젝트를 없앤다. `Despawn Delay`는 사망 모션 길이 이상으로 둔다(Leak 1.0초).
+- 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 `NetworkSpawner.Despawn`으로 오브젝트를 없앤다(서버에서 없애면 모든 클라이언트에서도 사라짐, #310). `Despawn Delay`는 사망 모션 길이 이상으로 둔다(Leak 1.0초).
 - event는 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
   - 로직(드롭, 스포너, 보스 페이즈, 레이드 판정)은 `Damaged`, `Died`를 받는다.
   - 연출(이펙트, 소리, 애니메이션, 데미지 숫자)은 `HitEffectPlayed`, `DeathEffectPlayed`를 받는다.
@@ -70,7 +70,7 @@
     - 마리 수는 씬에 놓은 스포너에서만 바꾼다. 프리팹 원본(Leak 3, Loop 2)은 테스트용으로 그대로 둔다
   - 서버(Host 포함)에서만 만든다. 서버가 켜지는 순간 모든 지점에 만들고, 클라이언트는 서버가 만든 몬스터를 받기만 한다. 네트워크를 켜지 않으면 만들지 않는다.
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
-  - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(몬스터 서버 동기화 이슈).
+  - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 체력·피격·사망 연출은 `MonsterNetwork`로 맞춘다(#310). 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(#310의 위치 동기화 단계).
 
 - 떠다니며 쏘기 (`FlyingShooterAI`)
   - 떠다니기: 중력 없이 생긴 자리보다 `Hover Height`(2.5)만큼 위에서 위아래로 살짝 둥실거린다.
@@ -126,7 +126,7 @@
   - 위치는 임시로 화면 위쪽 가운데(프리팹의 Panel 위치만 바꾸면 옮겨진다. 그림·UI 배치 때 확정). 내 캐릭터와 같은 씬에 살아 있는 보스(`Monster.IsBoss`)가 있을 때만 보인다. 여러 마리면 최대 체력이 가장 큰 보스. `Search Interval`(0.5초)마다 찾는다.
   - 빨간 막대 = 지금 체력, 흰 막대 = 맞은 뒤 `Trail Delay`(0.4초) 기다렸다가 천천히 따라 줄어듦, 숫자 = 지금 / 최대, 이름 = 보스 오브젝트 이름("(Clone)" 뗌)
   - 페이즈 구분선을 70%, 40% 위치에 놓는다 (`Phase Thresholds`)
-  - 체력은 아직 동기화되지 않아 Host 화면에서만 정확하다. 몬스터 서버 동기화 이슈에서 맞춘다
+  - 체력은 `MonsterNetwork`로 동기화되어 클라이언트 화면에서도 정확하다 (#310)
   - 지금은 색 막대(임시). 그림은 임혜원(테두리, 빨간 채움, 흰 채움, 구분선)
   - UI 프리팹 `BossHealthBar`(`_DH`). Base 씬(공용) 화면 UI에 놓는 일은 이우림과 정한다
 - 스포너 설정 확인: `Monster Prefab`이나 `Ground Layers`가 비어 있으면 시작할 때 `[MonsterSpawner]` 경고를 남긴다 (#188)
@@ -181,6 +181,19 @@
 | `Died` (event) | - | - | [로직] 체력이 0이 된 순간 한 번 불린다. 드롭, 스포너 집계, 레이드 판정에 쓴다. |
 | `HitEffectPlayed` (event) | `int` (받은 데미지) | - | [연출] 피격 이펙트, 소리, 데미지 숫자 표시에 쓴다. |
 | `DeathEffectPlayed` (event) | - | - | [연출] 사망 이펙트, 소리, 애니메이션에 쓴다. 한 번 불린다. |
+| `ApplyServerHp(int)`, `PlayHitFromServer(int, int)`, `PlayDeathFromServer()` | - | - | [클라이언트] `MonsterNetwork`만 부른다. 다른 스크립트는 부르지 않는다 (#310) |
+
+- 클라이언트에서는 `Hp`, `IsDead`, `HitEffectPlayed`, `DeathEffectPlayed`가 서버와 같다 (`MonsterNetwork`가 붙은 몬스터). `TakeDamage`, `Damaged`, `Died`는 서버에서만
+
+### `MonsterNetwork` (#310)
+
+네트워크 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다 (Gateway, GatewayClone, Pillar, Worm, Leak, Loop). `NetworkIdentity`가 있어야 한다. 다른 스크립트가 부르는 함수는 없다.
+
+- 서버 → 그 몬스터를 보는 클라이언트: 체력(`[SyncVar]`), 피격 알림(데미지, 맞은 뒤 체력, `[ClientRpc]`), 사망 알림(`[ClientRpc]`)
+- 받은 클라이언트: `Monster`에 체력을 넣고 `HitEffectPlayed`·`DeathEffectPlayed`만 부른다
+- 나중에 그 장소에 들어와 몬스터를 처음 본 클라이언트도 생성 때 지금 체력을 받는다
+- 호스트: 서버의 `Monster`가 이미 연출 이벤트를 불러서 받은 알림은 무시. 네트워크를 켜지 않은 테스트: 아무것도 하지 않음
+- `Monster`를 `NetworkBehaviour`로 바꾸지 않고 따로 둔 이유: 연습장 허수아비처럼 `NetworkIdentity` 없는 씬 오브젝트도 `Monster`를 쓴다
 
 ### `ContactDamage`
 
@@ -332,7 +345,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
   - 스포너가 몬스터를 만들 수 있도록 김도훈이 Leak에 `NetworkIdentity`를 붙이고 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록한다(#86, 이우림 허락).
   - 사냥터 씬(`HuntingGround`)에 스포너를 놓고 구역을 맵에 맞추는 일은 김도훈이 한다 (처음엔 이우림이 하기로 했으나 김도훈이 맡음).
-  - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 투사체 생성·삭제와 몬스터 삭제를 `NetworkSpawner`로 바꾸는 일은 몬스터 서버 동기화 이슈에서 한다.
+  - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 몬스터 삭제는 #310에서 `NetworkSpawner.Despawn`으로 바꿨다. 투사체 생성·삭제는 #310의 투사체 단계에서 바꾼다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 상태 이상(#97)은 `StatusEffects`가 걸고 풀고, 몬스터 반응(기절·이속 감소·실명)은 김도훈이 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 한다(#103). 몬스터 프리팹에 `StatusEffects`를 붙이는 일은 김도훈이 한다.

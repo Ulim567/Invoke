@@ -9,7 +9,7 @@
 - 하지 않는 일
   - 레벨업 규칙, 경험치 표: `LevelRules`(김도훈, `player-stats.md`). `AddExp`가 이 규칙으로 레벨을 올린다
   - 노드 해금, 재료 빼기: 「재료 써서 스킬 트리 해금하기」
-  - 함수 내용 검사: 「만든 함수를 서버로 보내 검사·저장하기」
+  - 함수 구조 검사: 「만든 함수를 서버로 보내 검사·저장하기」 (해금 검사와 코드 영역 한도 검사는 #306에서 서버가 저장 요청 때 함)
 
 ## 동작 규칙
 
@@ -202,7 +202,22 @@
 
 | 요청 함수 (소유 클라이언트) | 서버가 하는 일 | 거부 |
 | --- | --- | --- |
-| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked` |
+| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 슬롯 함수 틀 검사 → 내용 검사(아래) → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded` |
+
+#### 함수 내용 검사 (`FunctionExecutorNetwork.CheckFunctionContent`, #306)
+- 서버가 저장 요청의 함수를 `PlayerProgress.Unlocked`(해금한 노드 ID)로 검사. 네트워크와 상관없는 `static` 함수라 서버 없이 부를 수 있음
+- 함수 안의 모든 블록(칸에 끼운 블록, 블록 영역 안까지, `FunctionData.AllBlocks()`)을 차례로 검사하고, 먼저 걸린 이유로 거부
+
+| 검사 | 거부 | 규칙 |
+| --- | --- | --- |
+| 블록 종류 | `BlockLocked` | `SkillTree.IsBlockUnlocked(블록 종류, 해금 목록)`이 false. 어떤 노드에도 없는 블록 종류는 통과 |
+| C 스킬 | `SkillLocked` | 함수 블록(`IsUserFunction`이 false)이 부르는 고정 ID의 노드가 `SkillTree`에 있는데 해금 목록에 없음. 스킬 트리에 노드가 없는 ID(입력 함수 `input.*`, 테스트 함수 `test.*`)는 통과 |
+| 코드 영역 크기 | `CodeSizeExceeded` | 저장하는 함수를 반영한 함수 목록으로 `CodeSizeCalculator.Calculate(슬롯 함수 GUID 8개, 없음, 목록)`을 센 값이 `ProgressRules.MaxCodeSize`(임시 1000)보다 큼 |
+
+- 스킬 노드 ID와 고정 ID는 같은 값이라 (`c.thrust`) 해금 목록에서 바로 찾음
+- 해금 목록을 읽을 수 없으면(`PlayerProgress`가 없음) 검사할 수 없으므로 `NotAllowed`로 거부
+- 크기는 슬롯 8개 전체를 셈 (`function-data.md` 「코드 영역 크기 규칙」). 슬롯 함수가 부르는 함수를 고쳐도 그 함수를 저장하는 순간 걸림. 슬롯에서 닿지 않는 함수는 세지 않으므로 거부하지 않음
+- 이미 저장된 함수는 다시 검사하지 않음. 나중에 해금 규칙이 바뀌어도 저장된 함수는 그대로 남고, 그 함수를 다시 저장할 때 걸림
 | `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected` |
 
 - 장착을 바꾸는 요청: 없음 (슬롯 함수 GUID 고정)
@@ -210,7 +225,7 @@
 - 거부되면 `ReceivedXxx`는 그대로. 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)의 요청은 `NotAllowed`
 - 「로그인 건너뛰기」 임시 계정: 지금처럼 PC 파일 (`SlotLoadout`의 장착 그대로)
 - `SlotLoadout` 연결: 박진우의 `SlotLoadout.SetEntries(Entry[], IReadOnlyList<FunctionData>)`가 생긴 뒤, `FunctionExecutorNetwork`가 `PlayerDataReceived` 때(실제 계정, 소유 클라이언트) 부름. 그 전까지 실제 계정의 소유 클라이언트 `SlotLoadout`은 서버의 슬롯을 모름 (시전은 서버의 슬롯 원본으로 되므로 영향 없음)
-- 함수 내용 검사(구조, 해금한 블록만 썼는지): 「만든 함수를 서버로 보내 검사·저장하기」. 이번 이슈는 JSON 읽기와 개수 제한까지
+- 함수 구조 검사: 「만든 함수를 서버로 보내 검사·저장하기」. 해금한 블록·스킬만 썼는지, 코드 영역 한도는 위 「함수 내용 검사」
 
 ### `ProgressStore` 함수 (서버)
 - 부르는 곳: `AccountStore`, `AccountServer`, `PlayerProgress`, `FunctionExecutorNetwork`만. 다른 시스템은 `PlayerProgress`를 부름
@@ -248,6 +263,7 @@
 - `PlayerProgress`: 위 「진행도 컴포넌트」 표 (레벨·경험치·돈·재료·해금 목록 읽기와 바꾸기)
 - `FunctionExecutorNetwork`의 저장 요청 함수: 위 「함수·슬롯·전역 변수 주고받기」 표, [network.md](network.md)
 - `ProgressRules.MaxPageFunctions`: 페이지 함수 최대 개수. 편집 화면이 저장 전에 먼저 안내할 때 씀
+- `ProgressRules.MaxCodeSize`: 슬롯 8개의 코드 영역 크기 최대 (임시 1000). 편집 화면이 먼저 안내할 때 씀
 - `ProgressRules.SlotFunctionName(슬롯 번호)`: 슬롯 함수 이름 `slot1`~`slot8`
 
 ## 정할 것

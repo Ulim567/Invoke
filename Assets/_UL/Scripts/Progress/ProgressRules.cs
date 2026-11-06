@@ -12,6 +12,13 @@ public static class ProgressRules
 	/// </summary>
 	public const int MaxPageFunctions = 5;
 
+	/// <summary>
+	/// 캐릭터의 코드 영역 최대 크기 (임시). 슬롯 함수 8개와 그 함수들이 호출로 닿는 사용자 정의 함수들의 블록 수 합(CodeSizeCalculator).<br/>
+	/// 서버는 함수를 저장할 때마다 저장한 뒤의 크기를 세어 이 값을 넘으면 거부한다.<br/>
+	/// 메모리 작업에서 코드 영역 한도의 위치가 정해지면 그곳으로 옮긴다.
+	/// </summary>
+	public const int MaxCodeSize = 1000;
+
 	/// <summary>슬롯 함수의 고정 이름. 슬롯 번호 0~7 → slot1~slot8.</summary>
 	public static string SlotFunctionName(int slot) => $"slot{slot + 1}";
 }
@@ -31,5 +38,8 @@ public enum PlayerDataRequestResult
 	InvalidData,      // JSON을 읽을 수 없음, GUID가 없음
 	TooManyFunctions, // 새 함수(페이지 함수)인데 이미 ProgressRules.MaxPageFunctions개
 	SlotFunctionLocked, // 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님)를 바꾸려 함. 슬롯 함수는 function body만 바꿀 수 있음
+	BlockLocked,      // 해금하지 않은 문법의 블록을 씀 (SkillTree.IsBlockUnlocked)
+	SkillLocked,      // 해금하지 않은 C 스킬을 부름 (스킬 트리에 노드가 있는 사전 정의 함수만 해당)
+	CodeSizeExceeded, // 저장하면 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘음
 	GlobalsRejected,  // 전역 변수 검사에 걸림 (칸 부족 등. 이유는 서버 콘솔 오류)
 }

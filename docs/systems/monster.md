@@ -24,7 +24,7 @@
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
 - Inspector 값 `Invulnerable`을 켜면 맞아도 체력이 줄지 않고 죽지 않는다. `Damaged`, `HitEffectPlayed`는 그대로 받은 데미지를 넘겨 불린다 (연습장 허수아비, 임혜원과 정함).
 - 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 `NetworkSpawner.Despawn`으로 오브젝트를 없앤다(서버에서 없애면 모든 클라이언트에서도 사라짐, #310). `Despawn Delay`는 사망 모션 길이 이상으로 둔다(Leak 1.0초).
-- event는 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
+- event는 로직용과 연출용으로 나뉜다. 로직용은 서버(또는 네트워크 없는 테스트)에서만, 연출용은 그 몬스터를 보는 모든 화면에서 불린다 (#310, `MonsterNetwork`와 각 컴포넌트의 `[ClientRpc]`).
   - 로직(드롭, 스포너, 보스 페이즈, 레이드 판정)은 `Damaged`, `Died`를 받는다.
   - 연출(이펙트, 소리, 애니메이션, 데미지 숫자)은 `HitEffectPlayed`, `DeathEffectPlayed`를 받는다.
   - 순서: `Damaged` → `HitEffectPlayed` → (체력 0이면) `Died` → `DeathEffectPlayed`
@@ -71,7 +71,7 @@
     - 마리 수는 씬에 놓은 스포너에서만 바꾼다. 프리팹 원본(Leak 3, Loop 2)은 테스트용으로 그대로 둔다
   - 서버(Host 포함)에서만 만든다. 서버가 켜지는 순간 모든 지점에 만들고, 클라이언트는 서버가 만든 몬스터를 받기만 한다. 네트워크를 켜지 않으면 만들지 않는다.
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
-  - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 체력·피격·사망 연출은 `MonsterNetwork`로 맞춘다(#310). 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(#310의 위치 동기화 단계).
+  - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 체력·피격·사망 연출은 `MonsterNetwork`로 맞춘다(#310). 위치는 `NetworkRigidbodyReliable2D`(Gateway는 `NetworkTransformReliable`, Sync Direction Server To Client)로 맞춘다(#310, 아래 「위치·방향은 모든 화면에서 같다」).
 
 - 떠다니며 쏘기 (`FlyingShooterAI`)
   - 떠다니기: 중력 없이 생긴 자리보다 `Hover Height`(2.5)만큼 위에서 위아래로 살짝 둥실거린다.

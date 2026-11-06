@@ -6,6 +6,7 @@ using UnityEngine;
 /// <para>
 /// 하는 일<br/>
 /// - 로비 입구의 이벤트(LobbyEntrance.TravelRequested)를 받아 서버에 TravelRequestMessage를 보낸다. 레이드 입구는 이동이 아니라 레이드 방 화면을 연다(RaidLobbyOpener).<br/>
+/// - 서버가 시작한 이동(TravelStartedMessage, 레이드 시작·끝)도 같은 방법으로 화면을 막고, 다 덮으면 TravelReadyMessage로 답한다.<br/>
 /// - 요청을 보낸 뒤 서버의 답(TravelEndedMessage)이 올 때까지 로딩 화면을 보이고, 로컬 플레이어의 Player·Attack 액션 맵을 비활성화한다.<br/>
 /// - 같은 동안 로컬 플레이어의 움직임을 잠근다(PlayerMovement.SetMovementLocked). 이전 씬을 언로드한 뒤 밟을 땅이 없어 떨어지지 않게 하기 위함이다.<br/>
 /// - 접속 직후에도 서버가 로컬 플레이어의 함수 데이터를 다 받을 때까지(FunctionExecutorNetwork.IsDataReady) 같은 방법으로 막는다.
@@ -57,15 +58,38 @@ public class PlaceTravelClient : MonoBehaviour
 		if (!NetworkClient.isConnected || NetworkClient.localPlayer == null) return;
 		if (traveling || waitingForData) return;
 
+		// 로딩 화면이 화면을 다 덮은 뒤에 요청을 보낸다. 먼저 보내면 이전 장소가 사라지는 모습이 페이드 사이로 보인다
+		BeginTravel(() => NetworkClient.Send(new TravelRequestMessage { destination = destination }));
+	}
+
+	/// <summary>
+	/// 서버의 TravelStartedMessage를 받았을 때 InvokeNetworkManager가 부른다. 다른 스크립트는 부르지 않는다.<br/>
+	/// RequestTravel과 같이 화면을 막고, 로딩 화면이 다 덮으면 서버에 TravelReadyMessage로 답한다.
+	/// </summary>
+	public void HandleTravelStarted()
+	{
+		if (!NetworkClient.isConnected || NetworkClient.localPlayer == null) return;
+
+		// 이미 이동 중이면 화면은 덮였거나 덮이는 중이다. 서버는 답이 와야 옮기므로 바로 답한다
+		if (traveling)
+		{
+			NetworkClient.Send(new TravelReadyMessage());
+			return;
+		}
+		BeginTravel(() => NetworkClient.Send(new TravelReadyMessage()));
+	}
+
+	// 이동을 시작한다: 화면을 막고 로딩 화면을 덮은 뒤 onCovered를 부른다. 답(TravelEndedMessage)은 HandleTravelEnded가 받는다
+	void BeginTravel(System.Action onCovered)
+	{
 		traveling = true;
-		// 입구 창(LobbyEntrancePanel)은 「들어가기」를 누르면 창을 닫으며 액션 맵을 다시 활성화하므로, 이동하는 동안 다시 비활성화한다
+		// 입구 창(LobbyEntrancePanel)·레이드 방 화면은 닫힐 때 액션 맵을 다시 활성화하므로, 이동하는 동안 다시 비활성화한다
 		SetInputBlocked(true);
 		SetMovementLocked(true);
-		// 로딩 화면이 화면을 다 덮은 뒤에 요청을 보낸다. 먼저 보내면 이전 장소가 사라지는 모습이 페이드 사이로 보인다
 		loadingScreen.Show(() =>
 		{
 			// 페이드하는 사이에 접속이 끊겼으면 보내지 않는다. 원래대로 돌리는 일은 Update가 한다
-			if (NetworkClient.isConnected) NetworkClient.Send(new TravelRequestMessage { destination = destination });
+			if (NetworkClient.isConnected) onCovered();
 		});
 	}
 

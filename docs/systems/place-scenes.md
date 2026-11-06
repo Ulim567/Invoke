@@ -90,6 +90,7 @@
   1. 서버에서 `RaidFlow.StartRequested(파티원 이름 목록)` → `RaidParties`가 다음 프레임에 처리
      - 다음 프레임인 이유: `RaidRooms.TryStart`는 `StartRequested`를 부른 뒤에 방 목록을 보냄. 이동 알림이 방 목록보다 먼저 도착하면, 방 목록을 받은 `RaidLobbyUI`가 화면을 닫으며 액션 맵을 다시 활성화함
   2. 이름마다 `AccountSession.Nickname`이 같은 연결을 찾아 기록 생성 (상태: 불러오는 중)
+     - 찾지 못한 파티원이 있으면(한 프레임 사이에 접속이 끊김) 시작하지 않음. 아직 아무에게도 이동을 알리지 않았으므로 모두 로비에 그대로
   3. 파티원마다 `TravelStartedMessage`, 던전을 `LoadRaidDungeon`으로 한 번 불러옴
   4. 파티원마다 던전을 다 불러옴 + 그 파티원의 `TravelReadyMessage` 도착 → `TravelPlayer`로 던전에 이동 (모두 옮기면 상태: 진행 중)
 - 서버가 시작한 이동 (시작, 끝)
@@ -111,6 +112,7 @@
     - 상태가 끝남일 때 빠짐: 기록에서만 뺌. 클리어가 실패로 바뀌지 않음
     - 시작 전 파티방에서 나감: 방 나가기 ([raid.md](raid.md))
   - 진행 중에 이탈: 그 던전의 `RaidJudge`에 실패로 끝내기를 요청 → 결과 화면(지금의 「레이드 실패」 그대로) 3초 → `Ended` → 남은 파티원 로비로
+    - 지금: `RaidJudge`의 실패로 끝내기 함수(아래 「김도훈에게 요청할 것」)가 생기기 전까지 결과 화면 없이 남은 파티원을 바로 로비로
   - 불러오는 중에 이탈: 남은 파티원은 이동 취소(로비에 그대로), 결과 화면 없음, 던전은 다 불러온 뒤 바로 내림
 - 던전 내리기: 기록의 파티원이 0명이 되면 `RaidParties`가 기록을 지우고 `UnloadRaidDungeon`
   - 불러오는 중에 0명: 다 불러온 뒤 내림
@@ -119,6 +121,7 @@
   - 문제: `RaidResultView`(임혜원)는 자기 컴퓨터의 `RaidJudge.ResultEffectPlayed`를 받음. `RaidJudge`는 서버에서만 판정하므로 호스트가 아닌 클라이언트에서는 결과 화면이 뜨지 않음
   - 서버: 던전을 불러온 뒤 그 던전의 `RaidJudge.ResultEffectPlayed`를 받아, 파티원 클라이언트에 `RaidResultMessage { cleared }` (호스트의 클라이언트 제외, 이미 뜸)
   - 클라이언트: 자기가 불러온 레이드 던전의 `RaidJudge`에 결과 화면 이벤트만 부르기를 요청 → `RaidResultView`는 그대로
+    - 지금: `RaidJudge`의 결과 화면 이벤트만 부르기 함수가 생기기 전까지 받은 결과를 로그로만 남김. 호스트 화면에는 결과 화면이 뜸
 
 ### 판정 (물리 세계)
 - `Physics2D.OverlapBox`, `Physics2D.Raycast`, `Physics2D.OverlapCircleAll` 등 `Physics2D`의 판정 함수: 기준 씬의 물리 세계만 검사. 서버에서는 내용 씬의 오브젝트를 찾지 못함
@@ -194,6 +197,12 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | `RequestTravel(string destination)` | 갈 씬 이름 (`PlaceScenes`) | - | 서버에 이동 요청. 접속 안 함, 로컬 플레이어 없음, 이전 요청의 답을 기다리는 중이면 무시. 답(`TravelEndedMessage`)이 올 때까지 로컬 플레이어의 Player·Attack 액션 맵 비활성화, 움직임 잠금. 레이드 던전(`PlaceScenes.RaidDungeon`)은 서버가 거절 |
 
 - 레이드 시작·끝의 이동은 서버가 시작함 (`TravelStartedMessage`, 위 「파티 레이드」). 다른 스크립트가 부를 함수는 없음
+
+### 시험
+
+| 이름 | 설명 |
+| --- | --- |
+| `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 시작 → 같은 던전 도착 → 보스 처치 → 로비 복귀·던전 내림, 클라이언트가 던전에서 접속을 끊으면 호스트가 로비로 돌아옴. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
 
 ### 씬에 놓는 컴포넌트
 

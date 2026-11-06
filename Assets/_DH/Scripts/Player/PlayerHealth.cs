@@ -1,4 +1,5 @@
 using System;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -11,11 +12,17 @@ using UnityEngine;
 /// - AutoRespawn이 꺼져 있으면(레이드) 부활하지 않고 숨긴 채로 둔다.
 /// </para>
 /// <para>
-/// 이벤트는 몬스터와 같이 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
+/// 이벤트는 몬스터와 같이 로직용과 연출용으로 나뉜다. 로직용(Damaged, Died, Respawned, LobbyReturnRequested)은 서버에서만, 연출·표시용은 모든 화면에서 불린다.
+/// </para>
+/// <para>
+/// 네트워크 (#310): 피해·사망·숨김·부활은 서버(또는 네트워크 없는 테스트)에서만 정한다.<br/>
+/// - 상태(체력, 최대 체력, 죽음, 숨김)는 [SyncVar]로 보내 나중에 그 장소에 들어온 클라이언트도 받는다.<br/>
+/// - 피격·사망·숨김·부활 연출은 [ClientRpc]로 보낸다. 받은 클라이언트는 상태를 맞추고 연출 이벤트를 부른다. 경직·무적은 받은 순간부터 센다.<br/>
+/// - 그래서 클라이언트에서도 Hp, IsDead, IsHidden, CanAct가 서버와 같다 (이동·시전이 CanAct를 읽음). 호스트는 서버의 값과 이벤트를 그대로 쓴다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(PlayerStats))]
-public class PlayerHealth : MonoBehaviour, IDamageable
+public class PlayerHealth : NetworkBehaviour, IDamageable
 {
 	[SerializeField, Min(0f), Tooltip("맞았을 때 경직 시간(초). 피격 모션 길이")]
 	float hitStunTime = 0.3f;
@@ -37,11 +44,20 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 	float hideTime;
 	float respawnTime;
 
+	// 서버의 상태를 클라이언트에 보내는 칸 (#310). 서버는 상태가 바뀔 때마다 SyncState로 옮기고, 클라이언트는 받으면 아래 속성에 넣는다.
+	// 속성과 따로 두는 이유: 클라이언트에서 [SyncVar]에 직접 쓰지 않고, 연출 알림([ClientRpc])으로도 같은 속성을 맞추기 위함
+	[SyncVar(hook = nameof(OnSyncedHp))] int syncedHp;
+	[SyncVar(hook = nameof(OnSyncedHp))] int syncedMaxHp;
+	[SyncVar(hook = nameof(OnSyncedDead))] bool syncedDead;
+	[SyncVar(hook = nameof(OnSyncedHidden))] bool syncedHidden;
+	// 클라이언트에서 쓰는 최대 체력 (서버의 값). 다른 플레이어의 레벨이 이 화면에 맞게 와 있는지와 상관없이 서버 값을 쓰기 위함
+	int clientMaxHp;
+
 	/// <summary>지금 체력. 0이면 죽은 것이다.</summary>
 	public int Hp { get; private set; }
 
-	/// <summary>최대 체력. PlayerStats.MaxHp를 그대로 돌려준다.</summary>
-	public int MaxHp => stats.MaxHp;
+	/// <summary>최대 체력. PlayerStats.MaxHp를 그대로 돌려준다. 클라이언트에서는 서버의 값이다.</summary>
+	public int MaxHp => IsAuthority() ? stats.MaxHp : clientMaxHp;
 
 	/// <summary>죽었으면 true. 부활하면 false가 된다.</summary>
 	public bool IsDead { get; private set; }
@@ -105,11 +121,32 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 		body = GetComponent<Rigidbody2D>();
 	}
 
+	// 서버: 생성 메시지에 처음 체력이 담기도록 생성 전에 채운다 (OnStartServer는 클라이언트에 생성을 알리기 전에 불린다)
+	public override void OnStartServer()
+	{
+		Hp = MaxHp;
+		SyncState();
+	}
+
+	// 클라이언트: 생성 때 함께 온 서버의 상태를 넣는다. 호스트는 서버의 값을 그대로 쓴다
+	public override void OnStartClient()
+	{
+		if (isServer) return;
+		ApplySyncedState();
+		ShowHp();
+		// 이미 죽어 있거나 숨겨진 플레이어를 나중에 보게 된 경우: 연출 쪽(그림 숨기기 등)이 그 상태를 알도록 한 번 알린다
+		if (IsDead) DeathEffectPlayed?.Invoke();
+		if (IsHidden) HideEffectPlayed?.Invoke();
+	}
+
 	void Start()
 	{
+		// 클라이언트는 서버가 보낸 상태를 쓴다 (OnStartClient)
+		if (!IsAuthority()) return;
 		// 처음 나타난 위치(씬의 시작 위치)를 부활 위치로 기억한다
 		respawnPosition = transform.position;
 		Hp = MaxHp;
+		SyncState();
 		ShowHp();
 	}
 
@@ -119,7 +156,8 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 
 	void Update()
 	{
-		if (!IsDead) return;
+		// 숨김·부활 시각은 서버만 센다. 클라이언트는 서버의 알림을 기다린다
+		if (!IsDead || !IsAuthority()) return;
 
 		float now = Time.time;
 		if (!IsHidden && now >= hideTime) Hide();
@@ -138,6 +176,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 		stunEndTime = now + hitStunTime;
 		invincibleEndTime = stunEndTime + invincibleTime;
 
+		SyncState();
 		Damaged?.Invoke(damage);
 		ShowHp();
 
@@ -161,6 +200,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 		invincibleEndTime = 0f;
 		hideTime = now + hideDelay;
 		respawnTime = now + respawnDelay;
+		SyncState();
 
 		Died?.Invoke();
 		PlayDeathEffect();
@@ -169,6 +209,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 	void Hide()
 	{
 		IsHidden = true;
+		SyncState();
 		PlayHideEffect();
 	}
 
@@ -178,6 +219,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 		IsHidden = false;
 		Hp = MaxHp;
 		invincibleEndTime = Time.time + invincibleTime;
+		SyncState();
 
 		LobbyReturnRequested?.Invoke();
 		// 씬 이동이 생기기 전까지는 시작 위치로 옮긴다. 씬 이동이 생기면 로비의 시작 위치로 옮겨진다
@@ -200,21 +242,125 @@ public class PlayerHealth : MonoBehaviour, IDamageable
 
 	void OnStatsChanged(StatType type)
 	{
-		if (type != StatType.MaxHp) return;
+		// 클라이언트의 최대 체력은 서버의 값(syncedMaxHp)을 쓴다
+		if (type != StatType.MaxHp || !IsAuthority()) return;
 
 		// 최대 체력이 줄어 지금 체력보다 작아지면 맞춘다. 늘어날 때는 회복하지 않는다
 		if (Hp > MaxHp) Hp = MaxHp;
+		SyncState();
 		ShowHp();
 	}
 
-	// 아래 함수들은 표시·연출만 한다. 네트워크를 붙이면 Hp는 [SyncVar]의 hook에서, 연출은 [ClientRpc]로 부른다 (코드 작성 규칙 1)
+	// ── 네트워크 (#310) ──
+
+	// 서버: 바뀐 상태를 [SyncVar] 칸에 옮긴다. 값이 같으면 Mirror가 보내지 않는다. 네트워크를 켜지 않은 테스트에서는 칸에만 들어간다
+	void SyncState()
+	{
+		syncedHp = Hp;
+		syncedMaxHp = MaxHp;
+		syncedDead = IsDead;
+		syncedHidden = IsHidden;
+	}
+
+	// 클라이언트: 받은 상태를 속성에 넣는다
+	void ApplySyncedState()
+	{
+		Hp = syncedHp;
+		clientMaxHp = syncedMaxHp;
+		IsDead = syncedDead;
+		IsHidden = syncedHidden;
+	}
+
+	void OnSyncedHp(int _, int __)
+	{
+		if (isServer) return;
+		Hp = syncedHp;
+		clientMaxHp = syncedMaxHp;
+		ShowHp();
+	}
+
+	void OnSyncedDead(bool _, bool dead)
+	{
+		if (!isServer) IsDead = dead;
+	}
+
+	void OnSyncedHidden(bool _, bool hidden)
+	{
+		if (!isServer) IsHidden = hidden;
+	}
+
+	// 서버이거나 네트워크를 켜지 않은 테스트면 true
+	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
+
+	// 아래 함수들은 표시·연출만 한다 (코드 작성 규칙 1). 서버(호스트 포함)는 그 자리에서 이벤트를 부르고,
+	// 다른 클라이언트에는 [ClientRpc]로 알린다. 받은 클라이언트는 상태를 맞춘 뒤 같은 이벤트를 부른다
 	void ShowHp() => HpChanged?.Invoke(Hp, MaxHp);
 
-	void PlayHitEffect(int damage) => HitEffectPlayed?.Invoke(damage);
+	void PlayHitEffect(int damage)
+	{
+		HitEffectPlayed?.Invoke(damage);
+		if (NetworkServer.active && isServer) RpcHit(damage, Hp);
+	}
 
-	void PlayDeathEffect() => DeathEffectPlayed?.Invoke();
+	void PlayDeathEffect()
+	{
+		DeathEffectPlayed?.Invoke();
+		if (NetworkServer.active && isServer) RpcDeath();
+	}
 
-	void PlayHideEffect() => HideEffectPlayed?.Invoke();
+	void PlayHideEffect()
+	{
+		HideEffectPlayed?.Invoke();
+		if (NetworkServer.active && isServer) RpcHide();
+	}
 
-	void PlayRespawnEffect() => RespawnEffectPlayed?.Invoke();
+	void PlayRespawnEffect()
+	{
+		RespawnEffectPlayed?.Invoke();
+		if (NetworkServer.active && isServer) RpcRespawn(Hp);
+	}
+
+	// 경직·무적은 받은 순간부터 센다. 이동·시전(CanAct)이 서버와 거의 같은 때 막힌다
+	[ClientRpc]
+	void RpcHit(int damage, int hpAfter)
+	{
+		if (isServer) return;
+		Hp = hpAfter;
+		stunEndTime = Time.time + hitStunTime;
+		invincibleEndTime = stunEndTime + invincibleTime;
+		ShowHp();
+		HitEffectPlayed?.Invoke(damage);
+	}
+
+	[ClientRpc]
+	void RpcDeath()
+	{
+		if (isServer) return;
+		Hp = 0;
+		IsDead = true;
+		stunEndTime = 0f;
+		invincibleEndTime = 0f;
+		ShowHp();
+		DeathEffectPlayed?.Invoke();
+	}
+
+	[ClientRpc]
+	void RpcHide()
+	{
+		if (isServer) return;
+		IsHidden = true;
+		HideEffectPlayed?.Invoke();
+	}
+
+	[ClientRpc]
+	void RpcRespawn(int hp)
+	{
+		if (isServer) return;
+		IsDead = false;
+		IsHidden = false;
+		Hp = hp;
+		invincibleEndTime = Time.time + invincibleTime;
+		ShowHp();
+		RespawnEffectPlayed?.Invoke();
+	}
 }

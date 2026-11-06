@@ -176,6 +176,6 @@ Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
 - 파티 레이드 연결 (#300 뒤, 이우림 요청 11/6)
   - 이우림이 `RaidParties`(#304)를 만들고 `RaidJudge`에 함수 두 개를 요청함. 이름은 김도훈이 정함: `FailByServer()`(서버), `PlayResultOnly(bool)`(클라이언트)
   - 연결(`RaidParties.FailRaid`, `RaidParties.OnResult`에서 부르기)은 이우림. `_UL` 코드는 김도훈이 고치지 않음
-  - 다음: 레이드 방 유지·3명 제한 (김도훈), 보스·플레이어 체력 동기화 (김도훈·이우림)
+  - 다음: 레이드 방 유지·3명 제한 (김도훈), 보스·플레이어 체력 동기화 (김도훈·이우림) → 체력 동기화는 #310에서 이우림이 함 (김도훈 합의, `_DH` 코드 수정 포함)
 - 임혜원과 정한 것
   - Gateway는 레이드 던전 맵 가운데에 둔다 (`map-background.md`). 레이드 던전 씬에는 보스 스포너 오브젝트만 추가하고 땅·꾸미기는 건드리지 않는다

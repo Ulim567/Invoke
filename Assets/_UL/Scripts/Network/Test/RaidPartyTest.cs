@@ -42,6 +42,8 @@ public class RaidPartyTest : MonoBehaviour
 	const float MemberCheckSeconds = 4f;
 	// 클라이언트가 자기 캐릭터를 보스 몸에 겹쳐 두는 시간
 	const float ContactSeconds = 1.5f;
+	// 호스트가 서버에서 파티원 캐릭터에게 주는 데미지. 몬스터 공격(10, 12, 15, 20, 25, 60)에 없는 값이라 구분된다
+	const int MemberHitDamage = 7;
 
 	// 한 판을 어떻게 끝내는지
 	enum Round { Clear, GiveUp, Leave }
@@ -67,6 +69,12 @@ public class RaidPartyTest : MonoBehaviour
 	// member: 몬스터 투사체가 이 화면에 보였는지, 보인 뒤 가장 멀리 날아간 거리 (#310)
 	bool projectileSeen;
 	float projectileMaxMove;
+	// member: 내 캐릭터가 받은 피격 데미지 합, 표시한 데미지(MemberHitDamage)를 받았는지, 사망·숨김·부활 연출 (#310)
+	int myHitSum;
+	bool myMarkedHit;
+	bool myDeath;
+	bool myHide;
+	bool myRespawn;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -229,6 +237,22 @@ public class RaidPartyTest : MonoBehaviour
 			Check(round + $"보스에게 {FirstHitDamage} 데미지 (서버 체력)", boss.Hp == boss.MaxHp - FirstHitDamage);
 			yield return new WaitForSeconds(1.5f);
 
+			// 서버에서 파티원 캐릭터에게 피해를 주고 죽여, 그 클라이언트 화면의 체력·사망·숨김이 맞는지 member가 본다 (플레이어 체력 동기화, #310).
+			// 몬스터 공격에 없는 데미지(7)로 구분한다. 레이드 중이라 부활하지 않고, 레이드가 끝날 때 부활한다
+			if (withMember)
+			{
+				PlayerHealth memberHealth = FindMemberHealth();
+				yield return Wait(round + "파티원 캐릭터가 맞을 수 있음", () => memberHealth != null && !memberHealth.IsDead && !memberHealth.IsInvincible);
+				if (memberHealth == null) yield break;
+				memberHealth.TakeDamage(MemberHitDamage);
+				yield return new WaitForSeconds(1.5f);
+				yield return Wait(round + "파티원 캐릭터의 무적이 끝남", () => !memberHealth.IsInvincible);
+				memberHealth.TakeDamage(memberHealth.Hp);
+				Check(round + "서버에서 파티원 캐릭터가 죽음", memberHealth.IsDead);
+				// 숨김(1초)까지 기다린다
+				yield return new WaitForSeconds(1.5f);
+			}
+
 			// 체력을 2페이즈 문턱(70%) 아래로 깎아 전체 공격 모으기 연출을 낸다.
 			// 터지기(모으기 3초) 전에 보스를 죽인다. 전체 공격과 보스 공격이 겹쳐 모두 죽으면 클리어가 아니라 실패가 되기 때문이다
 			GatewayPhases phases = boss.GetComponent<GatewayPhases>();
@@ -376,20 +400,42 @@ public class RaidPartyTest : MonoBehaviour
 		SpriteRenderer bossSprite = boss.GetComponent<SpriteRenderer>();
 		yield return Wait(round + "보스가 가장 가까운 플레이어 쪽을 봄", () => boss != null && FacesNearestPlayer(boss.transform, bossSprite));
 
-		// 플레이어 체력 동기화 전이라, 서버가 준 접촉 피해는 이 화면의 체력에 보이지 않는다. 이 화면에서 따로 깎지 않았으면 그대로 최대다
+		// 내 캐릭터의 체력·사망·숨김·부활 알림을 받는다 (플레이어 체력 동기화, #310)
 		GameObject me = NetworkClient.localPlayer.gameObject;
 		PlayerHealth health = me.GetComponent<PlayerHealth>();
 		Rigidbody2D body = me.GetComponent<Rigidbody2D>();
+		myHitSum = 0;
+		myMarkedHit = myDeath = myHide = myRespawn = false;
+		health.HitEffectPlayed += OnMyHit;
+		health.DeathEffectPlayed += OnMyDeath;
+		health.HideEffectPlayed += OnMyHide;
+		health.RespawnEffectPlayed += OnMyRespawn;
+		// 보스가 이미 공격했을 수 있으므로 최대 체력만 본다
+		Check(round + $"내 체력을 서버에서 받음 ({health.Hp}/{health.MaxHp})", health.MaxHp > 0 && health.Hp > 0);
+
+		// 보스 몸에 겹친 동안 서버가 준 접촉 피해만 이 화면에 보여야 한다. 받은 피격 알림의 데미지 합만큼만 체력이 줄었는지 본다
+		// (이 화면의 보스 복사본이 따로 피해를 주면 합보다 더 줄어든다)
+		int startHp = health.Hp;
 		float until = Time.time + ContactSeconds;
 		while (Time.time < until)
 		{
 			body.position = boss.transform.position;
 			yield return new WaitForFixedUpdate();
 		}
-		Check(round + "보스 몸에 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않음", health.Hp == health.MaxHp);
+		yield return new WaitForSeconds(0.3f);
+		Check(round + $"보스 몸에 겹친 동안 서버의 피격 알림만큼만 체력이 줄어듦 ({startHp} → {health.Hp}, 알림 합 {myHitSum})", health.Hp == startHp - myHitSum);
+		// 호스트가 이 캐릭터를 때리기 전에 보스 몸에서 떨어진다 (접촉 피해로 먼저 죽지 않게)
+		body.position = (Vector2)boss.transform.position + new Vector2(-12f, 0f);
 
 		yield return Wait(round + $"보스 피격 연출 ({FirstHitDamage} 데미지)", () => bossHitDamage == FirstHitDamage);
 		Check(round + "보스 체력이 서버와 같음", boss != null && boss.Hp == boss.MaxHp - FirstHitDamage);
+
+		yield return Wait(round + $"서버가 준 피해({MemberHitDamage})의 피격 연출이 내 화면에 옴", () => myMarkedHit);
+		Check(round + "내 체력이 줄어듦", health.Hp < health.MaxHp);
+		yield return Wait(round + "내 캐릭터 사망 연출", () => myDeath);
+		Check(round + "죽은 동안 움직이거나 시전할 수 없음 (CanAct false)", health.IsDead && !health.CanAct);
+		yield return Wait(round + "내 캐릭터 숨김(관전) 연출", () => myHide);
+		Check(round + "숨겨진 상태 (IsHidden)", health.IsHidden);
 		yield return Wait(round + "전체 공격 모으기 연출", () => bossChargePlayed);
 		yield return Wait(round + "보스 사망 연출", () => bossDeathPlayed);
 		// 보스는 플레이어를 발견하고 2초 뒤부터 3초마다 공격하므로, 사망 전까지 공격 연출이 한 번 이상 왔어야 한다
@@ -398,6 +444,16 @@ public class RaidPartyTest : MonoBehaviour
 		yield return CheckWormSync(round);
 		Check(round + "보스가 던진 패킷이 이 화면에 보임", projectileSeen);
 		Check(round + $"패킷이 이 화면에서 날아감 (최대 {projectileMaxMove:0.00}칸)", projectileMaxMove > 0.5f);
+		// 레이드가 끝나면 RaidJudge가 부활을 되돌려 죽어 있던 캐릭터가 부활한다
+		yield return Wait(round + "레이드가 끝나면 내 캐릭터 부활 연출", () => myRespawn);
+		Check(round + "부활한 뒤 체력이 최대", health != null && !health.IsDead && health.Hp == health.MaxHp);
+		if (health != null)
+		{
+			health.HitEffectPlayed -= OnMyHit;
+			health.DeathEffectPlayed -= OnMyDeath;
+			health.HideEffectPlayed -= OnMyHide;
+			health.RespawnEffectPlayed -= OnMyRespawn;
+		}
 		if (boss != null)
 		{
 			boss.HitEffectPlayed -= OnBossHit;
@@ -416,6 +472,26 @@ public class RaidPartyTest : MonoBehaviour
 	}
 
 	void OnBossDeath() => bossDeathPlayed = true;
+
+	void OnMyHit(int damage)
+	{
+		myHitSum += damage;
+		if (damage == MemberHitDamage) myMarkedHit = true;
+	}
+
+	void OnMyDeath() => myDeath = true;
+
+	void OnMyHide() => myHide = true;
+
+	void OnMyRespawn() => myRespawn = true;
+
+	// 호스트에서: 호스트가 아닌 파티원(시험 빌드 클라이언트)의 서버 쪽 PlayerHealth
+	static PlayerHealth FindMemberHealth()
+	{
+		foreach (NetworkConnectionToClient conn in NetworkServer.connections.Values)
+			if (!(conn is LocalConnectionToClient) && conn.identity != null) return conn.identity.GetComponent<PlayerHealth>();
+		return null;
+	}
 
 	void OnBossAttack() => bossAttackPlayed = true;
 

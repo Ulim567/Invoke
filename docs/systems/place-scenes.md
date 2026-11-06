@@ -136,23 +136,24 @@
     - 죽음: 관전하는 파티원도 파티원. 모두 죽으면 `RaidJudge`의 실패
     - 상태가 끝남일 때 빠짐: 기록에서만 뺌. 클리어가 실패로 바뀌지 않음
     - 시작 전 파티방에서 나감: 방 나가기 ([raid.md](raid.md))
-  - 진행 중에 이탈: 그 던전의 `RaidJudge`에 실패로 끝내기를 요청 → 결과 화면(지금의 「레이드 실패」 그대로) 3초 → `Ended` → 남은 파티원 로비로
-    - 지금: `RaidJudge`의 실패로 끝내기 함수(아래 「김도훈에게 요청할 것」)가 생기기 전까지 결과 화면 없이 남은 파티원을 바로 로비로
+  - 진행 중에 이탈: 그 던전의 `RaidJudge.FailByServer()` → 결과 화면(지금의 「레이드 실패」 그대로) 3초 → `Ended` → 남은 파티원 로비로
+    - 이미 클리어로 끝난 뒤(결과 화면 3초 동안)의 이탈: `FailByServer`가 무시. 클리어 그대로
+    - 결과 화면 3초 동안 아직 던전에 들어오지 않은 파티원: 던전에 넣지 않음. 로딩 화면이 덮인 채 로비에서 기다리다 `Ended` 때 이동 취소
   - 불러오는 중에 이탈: 남은 파티원은 이동 취소(로비에 그대로), 결과 화면 없음, 던전은 다 불러온 뒤 바로 내림
 - 레이드 포기: 파티원이 「레이드 포기」 버튼을 누르면 그 레이드는 실패
   - 클라이언트: 버튼이 `RaidParties.RequestGiveUp()`을 부름 → 서버에 `RaidGiveUpMessage`
   - 서버: 보낸 사람이 진행 중인 레이드의 파티원이고 그 던전 안에 있을 때만 처리. 불러오는 중·끝난 뒤·던전 밖에서 온 요청은 경고 로그, 무시
-  - 처리: 진행 중에 이탈과 같은 실패(실패로 끝내기 → 결과 화면 → `Ended` → 로비)
+  - 처리: 진행 중에 이탈과 같은 실패(`FailByServer()` → 결과 화면 → `Ended` → 로비)
   - 이탈과 다른 점: 포기한 파티원은 기록에서 빠지지 않음. 다른 파티원과 함께 결과 화면을 보고 로비로
-    - 지금: 실패로 끝내기 함수가 생기기 전까지 결과 화면 없이 포기한 파티원을 포함해 모두 바로 로비로
 - 던전 내리기: 기록의 파티원이 0명이 되면 `RaidParties`가 기록을 지우고 `UnloadRaidDungeon`
   - 불러오는 중에 0명: 다 불러온 뒤 내림
   - 혼자 시작한 레이드에서 그 파티원이 이탈: 결과 화면 없이 던전만 내림
 - 결과 화면 전달
   - 문제: `RaidResultView`(임혜원)는 자기 컴퓨터의 `RaidJudge.ResultEffectPlayed`를 받음. `RaidJudge`는 서버에서만 판정하므로 호스트가 아닌 클라이언트에서는 결과 화면이 뜨지 않음
-  - 서버: 던전을 불러온 뒤 그 던전의 `RaidJudge.ResultEffectPlayed`를 받아, 파티원 클라이언트에 `RaidResultMessage { cleared }` (호스트의 클라이언트 제외, 이미 뜸)
-  - 클라이언트: 자기가 불러온 레이드 던전의 `RaidJudge`에 결과 화면 이벤트만 부르기를 요청 → `RaidResultView`는 그대로
-    - 지금: `RaidJudge`의 결과 화면 이벤트만 부르기 함수가 생기기 전까지 받은 결과를 로그로만 남김. 호스트 화면에는 결과 화면이 뜸
+  - 서버: 던전을 불러온 뒤 그 던전의 `RaidJudge.ResultEffectPlayed`를 받아, 그 던전 안에 있는 파티원 클라이언트에 `RaidResultMessage { cleared }`
+    - 호스트의 클라이언트 제외: 서버의 `RaidJudge`를 같이 써서 이미 뜸
+    - 아직 던전에 들어오지 않은 파티원 제외: 던전 씬을 불러오지 않아 띄울 곳이 없음
+  - 클라이언트: 자기가 불러온 레이드 던전의 `RaidJudge.PlayResultOnly(cleared)` → `ResultEffectPlayed` → `RaidResultView`가 결과 화면 (`RaidResultView`는 그대로)
 
 ### 판정 (물리 세계)
 - `Physics2D.OverlapBox`, `Physics2D.Raycast`, `Physics2D.OverlapCircleAll` 등 `Physics2D`의 판정 함수: 기준 씬의 물리 세계만 검사. 서버에서는 내용 씬의 오브젝트를 찾지 못함
@@ -242,7 +243,7 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
 | 이름 | 설명 |
 | --- | --- |
 | `TrainingRoomTest` | 연습장 입장마다 열기(#301). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `TrainingRoomTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-trainingRoomTest member`로 실행(호스트 + 클라이언트). 입장 전 연습장 없음 → 입장하면 하나 열림 → (클라이언트가 있으면) 둘이 입장해 연습장이 둘, 서로 다른 씬, 서로의 observer가 아님 → 나가면 내 연습장만 내림 → 클라이언트가 접속을 끊으면 그 연습장도 내림 → 다시 입장하면 새 씬 → 플레이어가 없어지면(`DespawnPlayer`) 내림. 「[TrainingRoomTest][역할] 전체 통과」면 통과 |
-| `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 로비로 돌아옴. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
+| `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 클리어 결과 화면(클라이언트는 서버가 보낸 결과) → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 실패 결과 화면 3초 뒤 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 실패 결과 화면 3초 뒤 로비로 돌아옴. 결과 화면은 `RaidJudge.ResultEffectPlayed`로 확인. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
 
 ### 씬에 놓는 컴포넌트
 
@@ -290,10 +291,9 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
   - 레이드 포기: 포기한 사람도 다른 파티원과 함께 결과 화면을 보고 로비로. 결과 화면은 「레이드 실패」 그대로
   - 시작: 시작을 누른 파티원이 모두 있어야 시작. 한 명이라도 없으면 시작하지 않음
   - 레이드 방 (#300 뒤 김도훈 구현): 클리어·실패·파티원 이탈·레이드 포기 모든 경우에 남음. 접속이 끊긴 사람만 빠지고, 1명만 남아도 유지
-- 김도훈에게 요청할 것 (#300, `RaidJudge`)
-  - 실패로 끝내기 (서버): 파티원이 이탈하거나 레이드를 포기하면 `RaidParties`가 부름. 모두 죽었을 때와 같이 결과 화면 이벤트 → `Result Delay` 뒤 `ReportEnd(던전, false)`. 이미 끝났으면 무시
-  - 결과 화면 이벤트만 부르기 (클라이언트): `RaidResultMessage`를 받은 클라이언트에서 부름. 판정 없이 `ResultEffectPlayed(클리어 여부)`만
-  - 함수 이름은 김도훈이 정하고 `raid.md`에 먼저 적음
+- 김도훈에게 요청한 것 (#300, `RaidJudge`) → 김도훈이 #308에서 만듦 ([raid.md](raid.md)), 이우림이 #310에서 연결
+  - 실패로 끝내기 (서버): `FailByServer()`. 파티원이 이탈하거나 레이드를 포기하면 `RaidParties.FailRaid`가 부름. 모두 죽었을 때와 같이 결과 화면 이벤트 → `Result Delay` 뒤 `ReportEnd(던전, false)`. 이미 끝났으면 무시
+  - 결과 화면 이벤트만 부르기 (클라이언트): `PlayResultOnly(bool)`. `RaidResultMessage`를 받은 클라이언트에서 `RaidParties`가 부름. 판정 없이 `ResultEffectPlayed(클리어 여부)`만
 - 김도훈에게 요청할 것 (#300 뒤, `RaidRooms` 방 유지)
   - 시작해도 방을 지우지 않고 「레이드 중」으로 남김
   - 레이드 끝 또는 시작 취소를 받는 함수: `RaidParties`가 부름. 방을 대기로 되돌리고 파티원의 준비를 풂

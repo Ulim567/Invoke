@@ -15,9 +15,10 @@ using UnityEngine.SceneManagement;
 /// </para>
 /// <para>
 /// - host: 직접 레이드 던전 요청 거절, 로비에서 보낸 레이드 포기 무시 → [클리어] 방 만들기·시작 → 던전 도착 → 보스를 바로 죽여 클리어 → 로비로 돌아옴 → 던전 내림
-/// → [포기] 한 판 더 시작해 포기(호스트만이면 호스트가, 클라이언트가 있으면 클라이언트가)하면 모두 로비로 돌아오는지 본다
-/// → [이탈] 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 로비로 돌아오는지 본다.<br/>
-/// - member: 방에 들어가 준비 → 던전 도착 → 서버의 결과 메시지 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
+/// → [포기] 한 판 더 시작해 포기(호스트만이면 호스트가, 클라이언트가 있으면 클라이언트가)하면 실패 결과 화면 뒤(Result Delay 이상 지나서) 모두 로비로 돌아오는지 본다
+/// → [이탈] 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 실패 결과 화면 뒤 로비로 돌아오는지 본다.<br/>
+/// - member: 방에 들어가 준비 → 던전 도착 → 클리어 결과 화면 이벤트 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 실패 결과 화면 이벤트 뒤 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
+/// - 결과 화면은 그 던전의 RaidJudge.ResultEffectPlayed로 확인한다 (클라이언트에서는 RaidParties가 서버의 결과로 PlayResultOnly를 부를 때 불림).<br/>
 /// - 「[RaidPartyTest][역할] 전체 통과」면 통과.
 /// </para>
 /// </summary>
@@ -28,14 +29,18 @@ public class RaidPartyTest : MonoBehaviour
 	const string RoomName = "RaidPartyTest";
 	// 결과 화면(RaidJudge Result Delay 3초)과 이동 시간을 넉넉히 기다린다
 	const float TimeoutSeconds = 30f;
+	// 결과 화면 이벤트부터 로비 도착까지 걸려야 하는 최소 시간. RaidJudge의 Result Delay(3초)에서 프레임 오차만 뺀다
+	const float MinResultSeconds = 2.9f;
 
 	// 한 판을 어떻게 끝내는지
 	enum Round { Clear, GiveUp, Leave }
 
 	string role;
 	int failedCount;
-	// member: 서버의 결과 메시지를 받았다는 RaidParties의 로그를 보았으면 true
-	bool resultReceived;
+	// 지금 던전의 RaidJudge와, 그 결과 화면 이벤트로 받은 값(받기 전에는 null)과 받은 시각
+	RaidJudge watchedJudge;
+	bool? result;
+	float resultTime;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -58,20 +63,54 @@ public class RaidPartyTest : MonoBehaviour
 
 	IEnumerator Start()
 	{
-		Application.logMessageReceived += OnLog;
+		// 던전 씬이 불러와지는 순간 구독한다. 클라이언트는 불러오는 동안 미뤄 둔 결과 메시지를 불러온 직후 처리하므로, 코루틴에서 기다렸다 구독하면 놓칠 수 있다
+		SceneManager.sceneLoaded += OnSceneLoaded;
 
 		if (role == "host" || role == "host+member") yield return RunHost(role == "host+member");
 		else if (role == "member") yield return RunMember();
 		else Fail($"모르는 역할: {role}");
 
-		Application.logMessageReceived -= OnLog;
+		SceneManager.sceneLoaded -= OnSceneLoaded;
+		WatchJudge(null);
 		Log(failedCount == 0 ? "전체 통과" : $"실패 {failedCount}개");
 		if (role == "member") Application.Quit();
 	}
 
-	void OnLog(string message, string stackTrace, LogType type)
+	void OnSceneLoaded(Scene scene, LoadSceneMode mode)
 	{
-		if (message.StartsWith("[RaidParties] 서버의 레이드 결과")) resultReceived = true;
+		if (scene.name != PlaceScenes.RaidDungeon) return;
+		foreach (GameObject root in scene.GetRootGameObjects())
+		{
+			RaidJudge judge = root.GetComponentInChildren<RaidJudge>(true);
+			if (judge == null) continue;
+			WatchJudge(judge);
+			return;
+		}
+	}
+
+	// 새 던전의 RaidJudge 결과 화면 이벤트를 받는다. 이전 판의 결과는 버린다
+	void WatchJudge(RaidJudge judge)
+	{
+		if (watchedJudge != null) watchedJudge.ResultEffectPlayed -= OnResult;
+		watchedJudge = judge;
+		result = null;
+		if (watchedJudge != null) watchedJudge.ResultEffectPlayed += OnResult;
+	}
+
+	void OnResult(bool cleared)
+	{
+		result = cleared;
+		resultTime = Time.realtimeSinceStartup;
+	}
+
+	// 실패 결과 화면 이벤트를 기다린 뒤, 결과 화면이 보이는 시간(Result Delay)이 지나서 로비에 왔는지 본다
+	IEnumerator WaitFailResultThenLobby(string round, Func<bool> inLobby)
+	{
+		yield return Wait(round + "실패 결과 화면", () => result == false);
+		yield return Wait(round + "결과 화면 뒤 로비로 돌아옴", inLobby);
+		if (failedCount > 0) yield break;
+		float shown = Time.realtimeSinceStartup - resultTime;
+		Check($"{round}결과 화면이 {MinResultSeconds}초 이상 보인 뒤 이동 ({shown:0.00}초)", shown >= MinResultSeconds);
 	}
 
 	#region 호스트
@@ -118,7 +157,7 @@ public class RaidPartyTest : MonoBehaviour
 
 		if (kind == Round.Leave)
 		{
-			yield return Wait(round + "파티원이 접속을 끊으면 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
+			yield return WaitFailResultThenLobby(round + "파티원이 접속을 끊으면 ", () => HostScene() == PlaceScenes.Lobby);
 		}
 		else if (kind == Round.GiveUp)
 		{
@@ -129,7 +168,7 @@ public class RaidPartyTest : MonoBehaviour
 				RaidParties.RequestGiveUp();
 			}
 			string who = withMember ? "파티원이" : "호스트가";
-			yield return Wait(round + who + " 포기하면 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
+			yield return WaitFailResultThenLobby(round + who + " 포기하면 ", () => HostScene() == PlaceScenes.Lobby);
 			if (withMember) yield return Wait(round + "포기한 파티원도 로비로 돌아옴", () => PlayersInScene(PlaceScenes.Lobby) == 2);
 		}
 		else
@@ -138,7 +177,8 @@ public class RaidPartyTest : MonoBehaviour
 			yield return Wait(round + "보스 생성", () => (boss = FindBossInHostScene()) != null);
 			if (boss == null) yield break;
 			boss.TakeDamage(boss.MaxHp);
-			yield return Wait(round + "보스를 죽이면 결과 화면 뒤 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
+			yield return Wait(round + "보스를 죽이면 클리어 결과 화면", () => result == true);
+			yield return Wait(round + "결과 화면 뒤 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
 			if (withMember) yield return Wait(round + "파티원도 로비로 돌아옴", () => PlayersInScene(PlaceScenes.Lobby) == 2);
 		}
 		yield return Wait(round + "던전을 내림", () => LoadedCount(PlaceScenes.RaidDungeon) == 0);
@@ -222,12 +262,11 @@ public class RaidPartyTest : MonoBehaviour
 			// 호스트가 도착을 본 뒤에 포기한다
 			yield return new WaitForSeconds(2f);
 			RaidParties.RequestGiveUp();
-			yield return Wait(round + "포기하면 로비로 돌아옴 (던전은 내림)", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.RaidDungeon));
+			yield return WaitFailResultThenLobby(round + "포기하면 ", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.RaidDungeon));
 			yield break;
 		}
 
-		resultReceived = false;
-		yield return Wait(round + "서버의 결과 메시지를 받음", () => resultReceived);
+		yield return Wait(round + "서버의 결과로 클리어 결과 화면", () => result == true);
 		yield return Wait(round + "로비로 돌아옴 (던전은 내림)", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.RaidDungeon));
 	}
 

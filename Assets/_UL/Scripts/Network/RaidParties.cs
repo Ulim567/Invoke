@@ -200,6 +200,9 @@ public static class RaidParties
 		else
 		{
 			if (!party.dungeonLoaded) return;
+			// 결과 화면을 보여 주는 동안(RaidJudge는 끝났고 Ended는 아직)에는 던전에 넣지 않는다.
+			// 끝난 레이드에 들어가 결과 화면도 못 본 채 바로 로비로 돌아오게 되기 때문이다. Ended 때 SendAllToLobby가 이동을 취소한다
+			if (party.judge != null && party.judge.IsEnded) return;
 			target = party.dungeon;
 		}
 
@@ -284,11 +287,16 @@ public static class RaidParties
 	}
 
 	// 레이드를 실패로 끝낸다 (파티원 이탈 실패, 레이드 포기).
-	// 정한 동작: 싸우는 중(Playing)이면 RaidJudge에 실패로 끝내기를 요청 → 결과 화면 → RaidFlow.Ended → 로비 (place-scenes.md 「파티 레이드」).
-	// 김도훈의 RaidJudge "실패로 끝내기" 함수가 아직 없어서, 그 함수가 생길 때까지는 결과 화면 없이 바로 로비로 보낸다.
-	// 함수가 생기면 Playing일 때 그 함수를 부르고, 로비로 보내는 일은 OnEnded에 맡긴다
+	// 싸우는 중이면 RaidJudge가 모두 죽었을 때와 같이 끝낸다: 결과 화면 → Result Delay 뒤 RaidFlow.Ended → OnEnded가 로비로 (place-scenes.md 「파티 레이드」).
+	// 이미 클리어로 끝났으면 FailByServer가 무시하므로 클리어가 실패로 바뀌지 않는다.
+	// 불러오는 중이거나 RaidJudge가 없으면 보여 줄 결과 화면이 없으므로 바로 로비로 보낸다
 	static void FailRaid(RaidParty party)
 	{
+		if (party.state == RaidPartyState.Playing && party.judge != null)
+		{
+			party.judge.FailByServer();
+			return;
+		}
 		SendAllToLobby(party);
 	}
 
@@ -352,6 +360,9 @@ public static class RaidParties
 		{
 			// 호스트의 클라이언트는 서버의 RaidJudge를 같이 쓰므로 이미 결과 화면이 떴다
 			if (conn is LocalConnectionToClient) continue;
+			// 아직 던전에 들어오지 않은 파티원의 클라이언트는 던전 씬이 없어 결과 화면을 띄울 곳이 없다
+			GameObject player = conn.identity != null ? conn.identity.gameObject : null;
+			if (player == null || player.scene != party.dungeon) continue;
 			conn.Send(new RaidResultMessage { cleared = cleared });
 		}
 	}
@@ -415,9 +426,8 @@ public static class RaidParties
 			return;
 		}
 
-		// 정한 동작: 이 클라이언트의 RaidJudge에 결과 화면 이벤트만 부르게 해서 RaidResultView가 결과 화면을 띄운다.
-		// 김도훈의 RaidJudge "결과 화면 이벤트만 부르기" 함수가 아직 없어서, 그 함수가 생기면 여기서 judge의 그 함수를 부른다
-		Debug.Log($"[RaidParties] 서버의 레이드 결과({(msg.cleared ? "클리어" : "실패")})를 받았습니다. RaidJudge에 결과 화면을 부를 함수가 아직 없어 띄우지 못합니다.");
+		// 이 클라이언트의 RaidJudge는 판정하지 않으므로, 결과 화면 이벤트만 부르게 해서 RaidResultView가 결과 화면을 띄운다
+		judge.PlayResultOnly(msg.cleared);
 	}
 
 	// 클라이언트는 자기 플레이어가 있는 레이드 던전 하나만 불러온다

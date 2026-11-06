@@ -22,6 +22,7 @@ using UnityEngine.SceneManagement;
 /// - [클리어] 판의 보스: 호스트가 먼저 100을 주고, 2페이즈로 깎아 전체 공격 모으기를 낸 뒤(터지기 전에) 죽인다. member는 보스 몸에 자기 캐릭터를 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않는지,
 /// 보스 체력·피격·사망 연출, 공격 연출, 모으기 연출이 이 화면에도 오는지 본다. 호스트가 웜 소환을 직접 부르고, member는 웜이 움직이며 플레이어 쪽을 보는지, 보스가 플레이어 쪽을 보는지 본다 (#310).<br/>
 /// - [포기] 판(클라이언트가 있을 때): 호스트가 보스를 40% 아래로 깎아 3페이즈로 보낸다. member는 분신 2마리, 진짜의 순간이동(10칸 간격), 같은 방향을 본 뒤 포기한다 (#310).<br/>
+/// - [사냥터 부활] 판 (#310, [포기]와 [이탈] 사이): 사냥터에서 죽은 캐릭터(호스트만이면 호스트, 아니면 클라이언트)가 부활하면서 로비로 옮겨지는지, 체력이 최대인지 본다.<br/>
 /// - member: 방에 들어가 준비 → 던전 도착 → 보스 동기화 확인 → 클리어 결과 화면 이벤트 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 실패 결과 화면 이벤트 뒤 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
 /// - 결과 화면은 그 던전의 RaidJudge.ResultEffectPlayed로 확인한다 (클라이언트에서는 RaidParties가 서버의 결과로 PlayResultOnly를 부를 때 불림).<br/>
 /// - 「[RaidPartyTest][역할] 전체 통과」면 통과.
@@ -46,7 +47,7 @@ public class RaidPartyTest : MonoBehaviour
 	const int MemberHitDamage = 7;
 
 	// 한 판을 어떻게 끝내는지
-	enum Round { Clear, GiveUp, Leave }
+	enum Round { Clear, GiveUp, Leave, HuntRespawn }
 
 	string role;
 	int failedCount;
@@ -167,10 +168,72 @@ public class RaidPartyTest : MonoBehaviour
 
 		yield return HostRound(withMember, Round.Clear);
 		yield return HostRound(withMember, Round.GiveUp);
+		yield return HostHuntRespawn(withMember);
 		if (withMember) yield return HostRound(true, Round.Leave);
 	}
 
-	static string RoundLabel(Round kind) => kind == Round.Clear ? "[클리어] " : kind == Round.GiveUp ? "[포기] " : "[이탈] ";
+	static string RoundLabel(Round kind) =>
+		kind == Round.Clear ? "[클리어] " : kind == Round.GiveUp ? "[포기] " : kind == Round.Leave ? "[이탈] " : "[사냥터 부활] ";
+
+	// [사냥터 부활] 판 (#310): 레이드 밖에서 죽으면 부활할 때 로비로 옮겨지는지 본다.
+	// 호스트만이면 호스트가 사냥터로 가서 죽는다. 클라이언트가 있으면 클라이언트가 사냥터로 가고, 호스트가 서버에서 그 캐릭터를 죽인다
+	IEnumerator HostHuntRespawn(bool withMember)
+	{
+		if (failedCount > 0) yield break;
+		string round = RoundLabel(Round.HuntRespawn);
+
+		PlayerHealth target;
+		if (withMember)
+		{
+			yield return Wait(round + "파티원이 사냥터에 도착", () => PlayersInScene(PlaceScenes.HuntingGround) == 1);
+			target = FindMemberHealth();
+		}
+		else
+		{
+			// 이전 판의 이동이 끝난 뒤에 요청한다 (이동 중의 요청은 무시됨)
+			yield return new WaitForSeconds(1f);
+			PlaceTravelClient.Instance.RequestTravel(PlaceScenes.HuntingGround);
+			yield return Wait(round + "호스트가 사냥터에 도착", () => HostScene() == PlaceScenes.HuntingGround);
+			target = NetworkClient.localPlayer.GetComponent<PlayerHealth>();
+		}
+		if (target == null) { Fail(round + "죽일 캐릭터를 찾지 못함"); yield break; }
+
+		yield return Wait(round + "캐릭터가 맞을 수 있음", () => !target.IsDead && !target.IsInvincible);
+		target.TakeDamage(target.Hp);
+		Check(round + "서버에서 캐릭터가 죽음", target.IsDead);
+
+		if (withMember) yield return Wait(round + "부활한 파티원이 로비로 옮겨짐", () => PlayersInScene(PlaceScenes.Lobby) == 2);
+		else yield return Wait(round + "부활한 호스트가 로비로 옮겨짐", () => HostScene() == PlaceScenes.Lobby);
+		Check(round + "부활한 캐릭터의 체력이 최대", target != null && !target.IsDead && target.Hp == target.MaxHp);
+	}
+
+	// [사냥터 부활] 판 클라이언트: 사냥터로 가서 서버에서 죽은 뒤, 부활하면서 로비로 옮겨지는지 이 화면에서 본다 (#310)
+	IEnumerator MemberHuntRespawn()
+	{
+		if (failedCount > 0) yield break;
+		string round = RoundLabel(Round.HuntRespawn);
+
+		// 이전 판의 이동이 끝난 뒤에 요청한다 (이동 중의 요청은 무시됨)
+		yield return new WaitForSeconds(1f);
+		PlayerHealth health = NetworkClient.localPlayer.GetComponent<PlayerHealth>();
+		myDeath = myRespawn = false;
+		health.DeathEffectPlayed += OnMyDeath;
+		health.RespawnEffectPlayed += OnMyRespawn;
+
+		PlaceTravelClient.Instance.RequestTravel(PlaceScenes.HuntingGround);
+		yield return Wait(round + "사냥터에 도착 (로비는 내림)", () => IsLoaded(PlaceScenes.HuntingGround) && !IsLoaded(PlaceScenes.Lobby));
+		yield return Wait(round + "내 캐릭터 사망 연출", () => myDeath);
+		yield return Wait(round + "내 캐릭터 부활 연출", () => myRespawn);
+		yield return Wait(round + "부활하면서 로비로 옮겨짐 (사냥터는 내림)", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.HuntingGround));
+		// 로딩 화면이 걷힌 뒤 다시 움직일 수 있어야 한다
+		yield return Wait(round + "로비에서 다시 움직일 수 있음 (CanAct)", () => health != null && health.CanAct && health.Hp == health.MaxHp);
+
+		if (health != null)
+		{
+			health.DeathEffectPlayed -= OnMyDeath;
+			health.RespawnEffectPlayed -= OnMyRespawn;
+		}
+	}
 
 	// 한 판: 방 만들기 → (파티원 기다림) → 시작 → 던전 → 보스 처치, 레이드 포기 또는 파티원 이탈 → 로비
 	IEnumerator HostRound(bool withMember, Round kind)
@@ -333,6 +396,7 @@ public class RaidPartyTest : MonoBehaviour
 
 		yield return MemberRound(Round.Clear);
 		yield return MemberRound(Round.GiveUp);
+		yield return MemberHuntRespawn();
 		yield return MemberRound(Round.Leave);
 	}
 

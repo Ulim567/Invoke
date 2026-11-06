@@ -8,7 +8,7 @@ using UnityEngine;
 /// 흐름 (시간은 임혜원과 정한 값, #28)<br/>
 /// - 피격: 경직 hitStunTime초(피격 모션) → 무적 invincibleTime초(깜빡임). 피격 순간부터 둘이 끝날 때까지 다시 맞지 않는다.<br/>
 /// - 사망: 체력 0 → 사망 모션 → hideDelay초 뒤 숨김(관전으로 전환) → respawnDelay초 뒤 최대 체력으로 부활(직후 무적 깜빡임).<br/>
-/// - 부활할 때 로비로 보내 달라고 LobbyReturnRequested로 알린다. 씬 이동이 생기기 전까지는 처음 나타난 위치(시작 위치)에서 부활한다.<br/>
+/// - 부활할 때 LobbyReturnRequested로 알린다. 서버에서는 씬 이동 담당이 받아 레이드 밖이면 로비로 옮긴다 (#310). 네트워크를 켜지 않은 테스트에서는 처음 나타난 위치(시작 위치)에서 부활한다.<br/>
 /// - AutoRespawn이 꺼져 있으면(레이드) 부활하지 않고 숨긴 채로 둔다.
 /// </para>
 /// <para>
@@ -221,9 +221,10 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 		invincibleEndTime = Time.time + invincibleTime;
 		SyncState();
 
+		// 서버에서는 씬 이동 담당(InvokeNetworkManager)이 받아 부활 목적지(레이드 밖은 로비)로 옮긴다 (#310)
 		LobbyReturnRequested?.Invoke();
-		// 씬 이동이 생기기 전까지는 시작 위치로 옮긴다. 씬 이동이 생기면 로비의 시작 위치로 옮겨진다
-		MoveTo(respawnPosition);
+		// 네트워크를 켜지 않은 테스트에서만 처음 위치로 옮긴다. 서버에서는 위치를 소유 클라이언트가 정하므로 여기서 옮겨도 덮어써진다
+		if (!NetworkServer.active) MoveTo(respawnPosition);
 
 		Respawned?.Invoke();
 		ShowHp();

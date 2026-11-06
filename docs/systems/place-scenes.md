@@ -115,7 +115,9 @@
      - 지금은 `RaidRooms.TryStart`가 이미 방을 지워서 남은 파티원이 방을 잃음. 방 유지(아래 「김도훈에게 요청할 것 (#300 뒤)」)가 생기면 `RaidParties`가 시작 취소를 알려 방을 대기로 되돌림
   3. 파티원마다 `TravelStartedMessage`, 던전을 `LoadRaidDungeon`으로 한 번 불러옴
   4. 파티원마다 던전을 다 불러옴 + 그 파티원의 `TravelReadyMessage` 도착 → `TravelPlayer`로 던전에 이동 (모두 옮기면 상태: 진행 중)
-- 서버가 시작한 이동 (시작, 끝)
+- 서버가 시작한 이동 (시작, 끝, 아래 「부활 이동」도 같음)
+  - 코드: 알리기·답 받기·답 기다리기 시간은 `ServerTravel`(static, #310)이 맡고, 누구를 언제 어디로 옮길지는 부르는 쪽(`RaidParties`, `InvokeNetworkManager`)이 정함. `TravelReadyMessage`를 받는 곳은 `ServerTravel` 하나 (Mirror는 메시지 종류마다 받는 함수를 하나만 등록함)
+  - 같은 연결에 새 이동을 알리면 이전 이동은 버림
   - 서버 → 파티원 클라이언트 `TravelStartedMessage`: `PlaceTravelClient`가 `RequestTravel`과 같이 액션 맵 비활성화, 움직임 잠금, 로딩 화면 페이드 인
   - 화면을 다 덮으면 클라이언트 → 서버 `TravelReadyMessage`. 서버는 이 답을 받은 파티원만 옮김 (화면을 다 덮은 뒤 옮기는 이유는 「장소 사이 이동」과 같음)
     - 클라이언트가 이미 이동 중(자기 요청의 답을 기다림): 덮은 뒤면 바로 답함. 덮기 전이면 아직 보내지 않은 요청 대신 답을 보냄 (먼저 보낸 요청이 레이드 던전에서 다시 옮기지 않게)
@@ -123,6 +125,11 @@
     - 답 기다리기 시간 5초: 지나도 답이 없으면 서버가 답 없이 옮김. 답이 오지 않아 그 파티원이 이동을 기다리는 채로 남거나 던전이 내려가지 않는 일을 막기 위함
   - 마무리는 다른 이동과 같음: `TravelPlayer`의 `TravelEndedMessage`
   - 이동 취소: 서버가 `TravelEndedMessage`만 보냄 → 로딩 화면 걷힘, 그 자리에 그대로
+- 부활 이동 (#310, 이우림 결정): 레이드 밖(사냥터 등)에서 죽은 플레이어는 부활하는 순간 로비로 옮김
+  - 서버의 `PlayerHealth.LobbyReturnRequested`(부활 순간)를 `InvokeNetworkManager`가 받아 `ServerTravel`로 알림 → 덮이면 `TravelPlayer(로비)`. 도착 위치는 다른 이동과 같음 (사냥터에서 왔으면 사냥터 입구 앞)
+  - 옮기지 않음: 로비에서 죽음(그 자리에서 부활), 레이드 던전(부활하지 않고 관전, 레이드 끝에 `RaidParties`가 옮김), 서버가 알린 다른 이동을 기다리는 중
+  - 부활 목적지를 정하는 곳은 `InvokeNetworkManager.TryGetRespawnDestination` 하나. 장소마다 다르게 하려면 여기서 씬의 설정을 읽게 바꿈
+  - 기다리는 동안 그 클라이언트의 이동 요청은 무시 (레이드 이동과 같음)
 - 끝: 서버에서 `RaidFlow.Ended(던전 씬, 클리어 여부)`
   - 그 던전의 기록을 찾아 상태: 끝남. 기록이 없는 던전(네트워크 없이 시험하는 씬 등): 경고 로그, 무시
   - 파티원마다 「서버가 시작한 이동」으로 로비에 이동. 도착 위치: 로비의 `Arrival_RaidDungeon`

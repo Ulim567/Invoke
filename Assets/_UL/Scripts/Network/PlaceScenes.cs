@@ -14,7 +14,7 @@ public static class PlaceScenes
 
 	/// <summary>
 	/// 서버가 시작할 때 한 번씩 불러오는 장소.
-	/// 레이드 던전은 파티마다 따로 불러오므로 여기에 넣지 않는다.
+	/// 연습장과 레이드 던전은 입장할 때마다 따로 불러오므로 여기에 넣지 않는다.
 	/// </summary>
-	public static readonly string[] FixedPlaces = { Lobby, HuntingGround, TrainingRoom };
+	public static readonly string[] FixedPlaces = { Lobby, HuntingGround };
 }

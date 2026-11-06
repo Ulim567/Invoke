@@ -3,7 +3,7 @@
 - 담당자: 이우림
 
 ## 하는 일
-- 서버 하나에서 로비·사냥터·연습장·레이드 던전 씬 동시 운영
+- 서버 하나에서 로비·사냥터 씬과, 입장마다 따로 여는 연습장·레이드 던전 씬 동시 운영
 - 씬마다 물리 세계 분리: 다른 씬의 오브젝트끼리 충돌·판정 없음
 - 같은 씬의 네트워크 오브젝트만 그 씬에 있는 클라이언트에 전송 (`SceneInterestManagement`)
 - 들어가기(로그인 뒤 캐릭터 고르기)에 성공한 플레이어를 로비 시작 위치에 생성 (`account.md`)
@@ -31,8 +31,10 @@
   - `HuntingGround`, `TrainingRoom`: `PlaceExit` 1개 (맵 왼쪽, `PlayerStartPosition`과 겹치지 않는 위치)
   - `RaidDungeon`: 출구 없음 (#300). 레이드는 클리어·실패로만 끝남
 - 서버
-  - 시작 시 로비·사냥터·연습장을 한 번씩 불러옴 (Additive, `LocalPhysicsMode.Physics2D`)
-  - 레이드 던전은 시작한 파티마다 같은 씬을 한 번 더 불러옴. 이름이 모두 같으므로 `Scene` 값으로 구분
+  - 시작 시 로비·사냥터를 한 번씩 불러옴 (Additive, `LocalPhysicsMode.Physics2D`)
+  - 연습장은 플레이어가 이동을 요청할 때마다 같은 씬을 한 번 더 불러옴 (아래 「연습장」)
+  - 레이드 던전은 시작한 파티마다 같은 씬을 한 번 더 불러옴
+  - 따로 불러온 씬은 이름이 모두 같으므로 `Scene` 값으로 구분
 - 클라이언트
   - 서버가 알려 준 씬만 불러옴 (자기 플레이어가 있는 씬)
   - 물리 분리 없이 기본 물리 세계에 불러옴
@@ -48,7 +50,8 @@
   - 거절: 플레이어 오브젝트 없음, 이미 그 장소, 레이드 던전(`PlaceScenes.RaidDungeon`), 모르는 장소 → 경고 로그 + `TravelEndedMessage`
   - 무시: 레이드 이동을 기다리는 파티원의 요청 → 경고 로그만, `TravelEndedMessage` 없음. 클라이언트는 이동 끝을 하나만 기다리므로, 보내면 레이드 이동 전에 로딩 화면이 걷힘. 그 클라이언트의 로딩 화면은 레이드 이동의 `TravelEndedMessage`가 걷음
     - 레이드 던전을 거절하는 이유: 레이드 던전에는 파티장이 시작할 때 서버가 옮겨 줄 때만 들어감 (아래 「파티 레이드」)
-  - 그 밖의 장소: 서버가 시작할 때 로드한 씬으로 `TravelPlayer`
+  - 연습장: 요청한 플레이어를 위해 `TrainingRooms.TryOpen`이 씬을 한 번 불러옴 → 다 불러오면 `TravelPlayer`. 불러오는 동안 같은 연결의 요청이 또 오면 경고 로그만, `TravelEndedMessage` 없음 (먼저 한 요청의 로딩 화면을 일찍 걷지 않기 위함)
+  - 그 밖의 장소(로비·사냥터): 서버가 시작할 때 로드한 씬으로 `TravelPlayer`
   - 레이드 중인 파티원의 요청: 출구가 없어 보내는 클라이언트 코드는 없음. 받으면 그 장소로 옮기고 파티원 이탈로 봄
 - 서버의 이동 순서 (`TravelPlayer`)
   1. `FunctionExecutor.InterruptAll()`: 실행 중인 함수 모두 중단 (이전 장소에서 시전한 작업이 새 장소에서 이어지지 않도록)
@@ -58,7 +61,8 @@
      - 이유: Player 위치는 소유 클라이언트가 정함(Client To Server). 서버 위치만 바꾸면 클라이언트가 덮어씀
      - 씬 메시지 뒤에 보내는 이유: 클라이언트가 새 씬을 다 로드한 뒤에 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아옴
   5. `TravelEndedMessage`
-  6. 이전 씬이 레이드 던전이면 `RaidParties`에 그 파티원이 빠졌다고 알림 (던전을 내릴지는 `RaidParties`가 정함)
+  6. 이전 씬이 연습장이면 그 씬을 내림
+  7. 이전 씬이 레이드 던전이면 `RaidParties`에 그 파티원이 빠졌다고 알림 (던전을 내릴지는 `RaidParties`가 정함)
 - 클라이언트의 처리 순서: 요청(움직임 잠금) → 이전 씬 언로드 → 새 씬 로드 → teleport → `TravelEndedMessage`(움직임 잠금 해제, 로딩 화면 페이드 아웃, 액션 맵 활성화)
 - 이동하는 동안 움직임 잠금 (#216): `PlaceTravelClient`가 `RequestTravel`에서 로컬 플레이어의 `PlayerMovement.SetMovementLocked(true)`, `TravelEndedMessage`를 받으면 `SetMovementLocked(false)` 호출
   - 이유(클라이언트): 이전 씬을 언로드한 뒤 밟을 땅이 없어 떨어지고, teleport 뒤에도 떨어지던 속도가 남음
@@ -80,6 +84,22 @@
   - 로컬 플레이어는 들어가기 성공 뒤에 생김 → 로그인·캐릭터 화면을 보는 동안에도 로딩 화면이 덮고 있음 (`account.md` 「맞춘 결과」)
   - `FunctionExecutorNetwork`가 없는 플레이어 프리팹(시험 씬의 프리팹 등): 로컬 플레이어가 생기면 바로 걷힘. 공용 `Player.prefab`에는 있음 (#268)
 - 접속이 끊기면: 로딩 화면 숨김. 액션 맵은 `PlayerInputReader.OnStopLocalPlayer`가 다시 활성화
+
+### 연습장 (#301)
+- 코드: 서버의 `TrainingRooms`(static)가 연습장을 언제 열고 내릴지 정하고, `InstanceScenes`(static)가 씬을 불러오고 내림
+  - `TrainingRooms`: 연습장을 연 플레이어마다 기록(`TrainingRoom`: 주인 연결, 씬) 하나. 레이드의 `RaidParties`와 같은 방식
+  - `InstanceScenes`: 연습장·레이드 던전이 함께 쓰는 도구. 불러오기 요청은 한 줄에 서서 한 번에 하나씩 처리됨. 언제 불러오고 내릴지는 정하지 않음
+  - `InvokeNetworkManager`는 이동 요청·이동 끝·접속 끊김·플레이어 없앰 때 `TrainingRooms`를 부르기만 함. 서버가 물리를 돌릴 씬 목록은 `FixedUpdate`가 쓰므로 `InvokeNetworkManager`에 남고, `InstanceScenes`가 씬을 열고 내릴 때 넣고 뺌
+- 단위: 플레이어 한 명마다 연습장 씬 하나. 다른 플레이어의 연습장과 물리 세계·네트워크 전송이 모두 분리됨
+- 열기: 로비의 입구 창에서 「들어가기」 → 이동 요청(`TrainingRoom`) → `OnTravelRequest`가 `TrainingRooms.TryOpen`을 부름 → 씬을 다 불러오면 `TravelPlayer`
+  - 입장할 때마다 새 씬: 나갔다 다시 들어가면 이전 연습장의 상태(허수아비 등)가 남지 않음
+- 내리기: 아래 경우에 그 플레이어의 연습장 기록을 지우고 씬을 내림 (연결로 기록을 찾으므로 어느 씬인지 따로 기억하지 않음)
+  - 로비로 나감: `TravelPlayer`가 `TrainingRooms.OnLeftRoom`
+  - 접속이 끊김: `OnServerDisconnect`가 `TrainingRooms.OnPlayerGone`
+  - 같은 계정의 다른 로그인으로 쫓겨남: `DespawnPlayer`가 `TrainingRooms.OnPlayerGone`
+  - 불러오는 사이에 접속이 끊김: 기록만 지우고, 다 불러온 뒤 기록이 없는 것을 보고 바로 내림
+- 개수: 동시에 여는 개수에 상한 없음. 서버 부담이 문제가 되면 `OnTravelRequest`에서 막음
+- 연습장 안의 오브젝트(허수아비, 편집 터미널, 장착대)는 씬에 놓은 일반 오브젝트(`NetworkIdentity` 없음)라 씬마다 따로 생김. `Monster`, `DamageNumberView`, `PanelStation`, `InputBlockingPanel`에 `static` 멤버 없음
 
 ### 파티 레이드 (#300)
 - 레이드 한 판 기록: 서버의 `RaidParties`(static)가 시작한 레이드마다 `RaidParty` 하나를 가짐
@@ -184,7 +204,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | 이름 | 값 | 설명 |
 | --- | --- | --- |
 | `Lobby`, `HuntingGround`, `TrainingRoom`, `RaidDungeon` | `string` | 각 장소의 씬 이름 |
-| `FixedPlaces` | `string[]` | 서버가 시작할 때 한 번씩 불러오는 장소 (로비, 사냥터, 연습장) |
+| `FixedPlaces` | `string[]` | 서버가 시작할 때 한 번씩 불러오는 장소 (로비, 사냥터). 연습장·레이드 던전은 입장마다 따로 불러오므로 넣지 않음 |
 
 ### `InvokeNetworkManager`
 
@@ -193,10 +213,10 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)` | 플레이어의 연결, 플레이어 오브젝트, 갈 씬 | - | 플레이어를 다른 장소로 이동 (실행 중인 함수 중단, 이전 씬 언로드 알림, 씬 이동, 도착 위치로 teleport, `TravelEndedMessage`). 레이드 시작·끝에는 `RaidParties`가 파티원마다 부름 |
-| `DespawnPlayer(NetworkConnectionToClient conn)` | 플레이어의 연결 | - | 접속은 둔 채 그 연결의 플레이어를 없앰 (서버·모든 클라이언트). 레이드 파티원이었으면 파티원 이탈. 같은 계정 중복 로그인으로 쫓겨난 연결에 `InvokeAuthenticator`가 부름 |
+| `DespawnPlayer(NetworkConnectionToClient conn)` | 플레이어의 연결 | - | 접속은 둔 채 그 연결의 플레이어를 없앰 (서버·모든 클라이언트). 연습장에 있었으면 그 연습장을 내림. 레이드 파티원이었으면 파티원 이탈. 같은 계정 중복 로그인으로 쫓겨난 연결에 `InvokeAuthenticator`가 부름 |
 | `PutPlayerInScene(NetworkConnectionToClient conn, GameObject player, Scene scene)` | 플레이어의 연결, 플레이어 오브젝트, 넣을 씬 | - | 서버: 플레이어를 그 씬으로 이동. 클라이언트: 그 씬을 불러오라고 알림. 위치 변경, 이전 씬 내리기는 하지 않음 (장소 사이 이동은 `TravelPlayer`) |
-| `LoadRaidDungeon(Action<Scene> onLoaded)` | 다 불러온 뒤 부를 함수 | - | 레이드 던전 씬을 한 번 더 불러옴. 다 불러오면 `onLoaded`에 그 `Scene` 값을 넘김. 요청은 한 번에 하나씩 처리 |
-| `UnloadRaidDungeon(Scene scene)` | `LoadRaidDungeon`으로 받은 씬 | - | 그 레이드 던전 씬을 내림. 던전 안의 플레이어는 부르기 전에 다른 씬으로 옮겨야 함 (남아 있으면 씬과 함께 사라짐) |
+| `LoadRaidDungeon(Action<Scene> onLoaded)` | 다 불러온 뒤 부를 함수 | - | 레이드 던전 씬을 한 번 더 불러옴 (`InstanceScenes.Load`). 다 불러오면 `onLoaded`에 그 `Scene` 값을 넘김. 요청은 한 번에 하나씩 처리 |
+| `UnloadRaidDungeon(Scene scene)` | `LoadRaidDungeon`으로 받은 씬 | - | 그 레이드 던전 씬을 내림 (`InstanceScenes.Unload`). 던전 안의 플레이어는 부르기 전에 다른 씬으로 옮겨야 함 (남아 있으면 씬과 함께 사라짐) |
 
 ### `PlaceTravelClient`
 
@@ -221,6 +241,7 @@ static 클래스. `RaidParties.RequestGiveUp()`처럼 바로 부른다. 아래 �
 
 | 이름 | 설명 |
 | --- | --- |
+| `TrainingRoomTest` | 연습장 입장마다 열기(#301). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `TrainingRoomTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-trainingRoomTest member`로 실행(호스트 + 클라이언트). 입장 전 연습장 없음 → 입장하면 하나 열림 → (클라이언트가 있으면) 둘이 입장해 연습장이 둘, 서로 다른 씬, 서로의 observer가 아님 → 나가면 내 연습장만 내림 → 클라이언트가 접속을 끊으면 그 연습장도 내림 → 다시 입장하면 새 씬 → 플레이어가 없어지면(`DespawnPlayer`) 내림. 「[TrainingRoomTest][역할] 전체 통과」면 통과 |
 | `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 로비로 돌아옴. 「[RaidPartyTest][역할] 전체 통과」면 통과 |
 
 ### 씬에 놓는 컴포넌트

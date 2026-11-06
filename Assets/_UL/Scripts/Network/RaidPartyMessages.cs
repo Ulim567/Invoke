@@ -13,3 +13,13 @@ public struct RaidResultMessage : NetworkMessage
 	/// <summary>클리어면 true, 실패면 false</summary>
 	public bool cleared;
 }
+
+/// <summary>
+/// 클라이언트가 서버에 "레이드를 포기한다"고 알리는 메시지. RaidParties.RequestGiveUp이 보내고, 서버의 RaidParties가 받는다.
+/// <para>
+/// - 서버는 보낸 사람이 싸우는 중인 레이드 던전에 있는 파티원일 때만 그 레이드를 실패로 끝낸다. 아니면 무시한다.
+/// </para>
+/// </summary>
+public struct RaidGiveUpMessage : NetworkMessage
+{
+}

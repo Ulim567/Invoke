@@ -44,10 +44,13 @@ class RaidParty
 /// - 옮기기 전에 파티원 클라이언트에 TravelStartedMessage를 보내고, 로딩 화면이 다 덮였다는 답(TravelReadyMessage)을 받은 파티원만 옮긴다.<br/>
 /// - RaidFlow.Ended를 받으면 같은 방법으로 파티원 모두를 로비로 옮긴다. 남은 파티원이 없으면 던전을 내린다.<br/>
 /// - 시작할 때 있던 파티원이 한 명이라도 빠지면(접속 끊김, 중복 로그인, 던전 밖으로 옮겨짐) 그 레이드는 실패다 (파티원 이탈 실패).<br/>
+/// - 파티원이 레이드 포기를 보내면(RaidGiveUpMessage) 파티원 이탈 실패와 같이 그 레이드를 실패로 끝낸다. 포기한 파티원도 다른 파티원과 함께 로비로 간다.<br/>
 /// - 던전의 RaidJudge가 결과 화면 이벤트를 부르면 파티원 클라이언트에 RaidResultMessage를 보낸다.
 /// </para>
 /// <para>
-/// 사용법: InvokeNetworkManager가 서버·클라이언트를 켜고 끌 때, 플레이어가 던전을 떠나거나 없어질 때 아래 함수를 부른다. 다른 스크립트는 부르지 않는다.
+/// 사용법<br/>
+/// - 화면: 「레이드 포기」 버튼이 RequestGiveUp()을 부른다.<br/>
+/// - 그 밖의 public 함수는 InvokeNetworkManager가 서버·클라이언트를 켜고 끌 때, 플레이어가 던전을 떠나거나 없어질 때 부른다. 다른 스크립트는 부르지 않는다.
 /// </para>
 /// </summary>
 public static class RaidParties
@@ -64,6 +67,7 @@ public static class RaidParties
 	{
 		manager = networkManager;
 		NetworkServer.RegisterHandler<TravelReadyMessage>(OnTravelReady);
+		NetworkServer.RegisterHandler<RaidGiveUpMessage>(OnGiveUp);
 		RaidFlow.StartRequested += OnStartRequested;
 		RaidFlow.Ended += OnEnded;
 	}
@@ -246,16 +250,33 @@ public static class RaidParties
 		if (party.state != RaidPartyState.Ended)
 		{
 			Debug.Log($"[RaidParties] 파티원(connId={conn.connectionId})이 빠져서 레이드를 실패로 끝냅니다.");
-			FailByLeave(party);
+			FailRaid(party);
 		}
 		RemoveIfEmpty(party);
 	}
 
-	// 파티원 이탈 실패.
+	static void OnGiveUp(NetworkConnectionToClient conn, RaidGiveUpMessage _)
+	{
+		RaidParty party = FindByMember(conn);
+		GameObject player = conn.identity != null ? conn.identity.gameObject : null;
+
+		// 던전에 들어와 싸우는 중인 파티원만 포기할 수 있다. 불러오는 중·끝난 뒤·던전 밖에서 온 요청은 버튼을 볼 수 없는 때라 무시한다
+		if (party == null || party.state != RaidPartyState.Playing || player == null || player.scene != party.dungeon)
+		{
+			Debug.LogWarning($"[RaidParties] 싸우는 중인 레이드 던전에 있지 않은 연결(connId={conn.connectionId})의 레이드 포기를 무시합니다.");
+			return;
+		}
+
+		Debug.Log($"[RaidParties] 파티원(connId={conn.connectionId})이 레이드를 포기해서 실패로 끝냅니다.");
+		// 파티원 이탈과 달리 포기한 파티원은 기록에 남는다. 다른 파티원과 함께 결과 화면을 보고 로비로 간다
+		FailRaid(party);
+	}
+
+	// 레이드를 실패로 끝낸다 (파티원 이탈 실패, 레이드 포기).
 	// 정한 동작: 싸우는 중(Playing)이면 RaidJudge에 실패로 끝내기를 요청 → 결과 화면 → RaidFlow.Ended → 로비 (place-scenes.md 「파티 레이드」).
 	// 김도훈의 RaidJudge "실패로 끝내기" 함수가 아직 없어서, 그 함수가 생길 때까지는 결과 화면 없이 바로 로비로 보낸다.
 	// 함수가 생기면 Playing일 때 그 함수를 부르고, 로비로 보내는 일은 OnEnded에 맡긴다
-	static void FailByLeave(RaidParty party)
+	static void FailRaid(RaidParty party)
 	{
 		SendAllToLobby(party);
 	}
@@ -341,6 +362,20 @@ public static class RaidParties
 	public static void StartClient()
 	{
 		NetworkClient.RegisterHandler<RaidResultMessage>(OnResult);
+	}
+
+	/// <summary>
+	/// [클라이언트] 서버에 레이드 포기를 보낸다. 레이드 던전의 「레이드 포기」 버튼이 부른다.<br/>
+	/// 서버가 그 레이드를 실패로 끝내고, 포기한 사람을 포함한 파티원 모두를 로비로 옮긴다. 싸우는 중이 아니면 서버가 무시한다.
+	/// </summary>
+	public static void RequestGiveUp()
+	{
+		if (!NetworkClient.isConnected)
+		{
+			Debug.LogWarning("[RaidParties] 서버에 접속하지 않아 레이드 포기를 보내지 않습니다.");
+			return;
+		}
+		NetworkClient.Send(new RaidGiveUpMessage());
 	}
 
 	static void OnResult(RaidResultMessage msg)

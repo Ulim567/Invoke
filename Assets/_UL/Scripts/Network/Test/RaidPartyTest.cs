@@ -14,9 +14,10 @@ using UnityEngine.SceneManagement;
 /// - 인자가 없으면 아무것도 하지 않으므로 씬에 놓지 않는다.
 /// </para>
 /// <para>
-/// - host: 직접 레이드 던전 요청 거절 → 방 만들기·시작 → 던전 도착 → 보스를 바로 죽여 클리어 → 로비로 돌아옴 → 던전 내림.
-/// 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 로비로 돌아오는지 본다.<br/>
-/// - member: 방에 들어가 준비 → 던전 도착 → 서버의 결과 메시지 → 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
+/// - host: 직접 레이드 던전 요청 거절, 로비에서 보낸 레이드 포기 무시 → [클리어] 방 만들기·시작 → 던전 도착 → 보스를 바로 죽여 클리어 → 로비로 돌아옴 → 던전 내림
+/// → [포기] 한 판 더 시작해 포기(호스트만이면 호스트가, 클라이언트가 있으면 클라이언트가)하면 모두 로비로 돌아오는지 본다
+/// → [이탈] 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 로비로 돌아오는지 본다.<br/>
+/// - member: 방에 들어가 준비 → 던전 도착 → 서버의 결과 메시지 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
 /// - 「[RaidPartyTest][역할] 전체 통과」면 통과.
 /// </para>
 /// </summary>
@@ -27,6 +28,9 @@ public class RaidPartyTest : MonoBehaviour
 	const string RoomName = "RaidPartyTest";
 	// 결과 화면(RaidJudge Result Delay 3초)과 이동 시간을 넉넉히 기다린다
 	const float TimeoutSeconds = 30f;
+
+	// 한 판을 어떻게 끝내는지
+	enum Round { Clear, GiveUp, Leave }
 
 	string role;
 	int failedCount;
@@ -84,15 +88,22 @@ public class RaidPartyTest : MonoBehaviour
 		yield return new WaitForSeconds(1.5f);
 		Check("직접 보낸 레이드 던전 이동 요청은 거절되어 로비에 남음", HostScene() == PlaceScenes.Lobby && LoadedCount(PlaceScenes.RaidDungeon) == 0);
 
-		yield return HostRound(withMember, false);
-		if (withMember) yield return HostRound(true, true);
+		RaidParties.RequestGiveUp();
+		yield return new WaitForSeconds(1f);
+		Check("로비에서 보낸 레이드 포기는 무시되어 로비에 남음", HostScene() == PlaceScenes.Lobby && LoadedCount(PlaceScenes.RaidDungeon) == 0);
+
+		yield return HostRound(withMember, Round.Clear);
+		yield return HostRound(withMember, Round.GiveUp);
+		if (withMember) yield return HostRound(true, Round.Leave);
 	}
 
-	// 한 판: 방 만들기 → (파티원 기다림) → 시작 → 던전 → 보스 처치 또는 파티원 이탈 → 로비
-	IEnumerator HostRound(bool withMember, bool memberLeaves)
+	static string RoundLabel(Round kind) => kind == Round.Clear ? "[클리어] " : kind == Round.GiveUp ? "[포기] " : "[이탈] ";
+
+	// 한 판: 방 만들기 → (파티원 기다림) → 시작 → 던전 → 보스 처치, 레이드 포기 또는 파티원 이탈 → 로비
+	IEnumerator HostRound(bool withMember, Round kind)
 	{
 		if (failedCount > 0) yield break;
-		string round = memberLeaves ? "[이탈] " : "[클리어] ";
+		string round = RoundLabel(kind);
 
 		RaidRooms.RequestCreate(RoomName, "");
 		yield return Wait(round + "방 만들기", () => RaidRooms.FindRoomOf(RaidRooms.MyName) != null);
@@ -105,9 +116,21 @@ public class RaidPartyTest : MonoBehaviour
 		Check(round + "던전은 하나만 불러옴", LoadedCount(PlaceScenes.RaidDungeon) == 1);
 		if (withMember) yield return Wait(round + "파티원도 같은 던전에 도착", () => PlayersInHostScene() == 2);
 
-		if (memberLeaves)
+		if (kind == Round.Leave)
 		{
 			yield return Wait(round + "파티원이 접속을 끊으면 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
+		}
+		else if (kind == Round.GiveUp)
+		{
+			// 클라이언트가 있으면 클라이언트가 포기한다(서버로 보내는 메시지를 시험). 호스트만이면 호스트가 포기한다
+			if (!withMember)
+			{
+				yield return new WaitForSeconds(1f);
+				RaidParties.RequestGiveUp();
+			}
+			string who = withMember ? "파티원이" : "호스트가";
+			yield return Wait(round + who + " 포기하면 로비로 돌아옴", () => HostScene() == PlaceScenes.Lobby);
+			if (withMember) yield return Wait(round + "포기한 파티원도 로비로 돌아옴", () => PlayersInScene(PlaceScenes.Lobby) == 2);
 		}
 		else
 		{
@@ -168,14 +191,15 @@ public class RaidPartyTest : MonoBehaviour
 		InvokeAuthenticator.Current.RequestEnter(CharacterLanguages.C);
 		yield return Wait("게임에 들어감", () => NetworkClient.localPlayer != null && RaidRooms.MyName != "나" && IsLoaded(PlaceScenes.Lobby));
 
-		yield return MemberRound(false);
-		yield return MemberRound(true);
+		yield return MemberRound(Round.Clear);
+		yield return MemberRound(Round.GiveUp);
+		yield return MemberRound(Round.Leave);
 	}
 
-	IEnumerator MemberRound(bool leave)
+	IEnumerator MemberRound(Round kind)
 	{
 		if (failedCount > 0) yield break;
-		string round = leave ? "[이탈] " : "[클리어] ";
+		string round = RoundLabel(kind);
 
 		yield return Wait(round + "호스트의 방이 보임", () => FindRoom(RoomName) != null);
 		RaidRoom room = FindRoom(RoomName);
@@ -186,11 +210,19 @@ public class RaidPartyTest : MonoBehaviour
 
 		yield return Wait(round + "레이드 던전에 도착 (로비는 내림)", () => IsLoaded(PlaceScenes.RaidDungeon) && !IsLoaded(PlaceScenes.Lobby));
 
-		if (leave)
+		if (kind == Round.Leave)
 		{
 			// 호스트가 도착을 본 뒤에 끊는다
 			yield return new WaitForSeconds(2f);
 			Pass(round + "던전에서 접속을 끊음");
+			yield break;
+		}
+		if (kind == Round.GiveUp)
+		{
+			// 호스트가 도착을 본 뒤에 포기한다
+			yield return new WaitForSeconds(2f);
+			RaidParties.RequestGiveUp();
+			yield return Wait(round + "포기하면 로비로 돌아옴 (던전은 내림)", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.RaidDungeon));
 			yield break;
 		}
 

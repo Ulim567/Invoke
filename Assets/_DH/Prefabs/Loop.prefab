@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 5634174422891679356}
   - component: {fileID: -5998150243559993913}
   - component: {fileID: 6787085104944719434}
+  - component: {fileID: 1060419843656209916}
   - component: {fileID: 4264313277744599497}
   - component: {fileID: 8707404824260945093}
   - component: {fileID: 2158289550452669959}
@@ -207,6 +208,40 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &1060419843656209916
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ec4f7556ca1e4b55a3381fc6a02b1bc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror.Components::Mirror.NetworkRigidbodyReliable2D
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  target: {fileID: 4041108557832776983}
+  syncPosition: 1
+  syncRotation: 1
+  syncScale: 0
+  onlySyncOnChange: 1
+  compressRotation: 1
+  interpolatePosition: 1
+  interpolateRotation: 1
+  interpolateScale: 1
+  coordinateSpace: 0
+  timelineOffset: 1
+  showGizmos: 0
+  showOverlay: 0
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.5}
+  onlySyncOnChangeCorrectionMultiplier: 2
+  useFixedUpdate: 0
+  rotationSensitivity: 0.01
+  positionPrecision: 0.01
+  scalePrecision: 0.01
 --- !u!114 &4264313277744599497
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -254,6 +289,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ed66e26bdb411d409c0e4acf1d11f33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectileAttack
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   attack: {fileID: 11400000, guid: aa263215b4608214586b36c7d41ff1a6, type: 2}
   projectilePrefab: {fileID: 2080740477131302831, guid: abc73a51d2e70b64299cb36326d347fa, type: 3}
   speed: 6
@@ -271,6 +309,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 538ca080b0f2da046ab2e1f9bc8db850, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlyingShooterAI
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   hoverHeight: 2.5
   bobAmplitude: 0.15
   bobFrequency: 1

@@ -375,8 +375,7 @@ public class GatewayPhases : NetworkBehaviour
 			Vector3 pos = new Vector3(center.x + cloneSlots[i], center.y, center.z);
 			if (i == realSlot)
 			{
-				// 진짜는 랜덤한 자리로 순간이동한다 (움직이지 않는 보스라 위치를 바로 바꾼다)
-				transform.position = pos;
+				TeleportTo(pos);
 				continue;
 			}
 
@@ -387,8 +386,36 @@ public class GatewayPhases : NetworkBehaviour
 			clone.Damaged += OnCloneDamaged;
 			clones.Add(clone);
 			// 진짜와 같은 쪽을 보게 한다 (연출)
-			if (obj.TryGetComponent(out SpriteRenderer cloneSr)) cloneSr.flipX = flip;
+			ShowCloneFacing(obj, flip);
 		}
+	}
+
+	// 진짜는 랜덤한 자리로 순간이동한다 (움직이지 않는 보스라 위치를 바로 바꾼다).
+	// 서버에서는 NetworkTransform의 ServerTeleport를 쓴다. 위치만 바꾸면 클라이언트 화면에서 보스가 미끄러지듯 옮겨 가기 때문이다 (#310)
+	void TeleportTo(Vector3 pos)
+	{
+		if (NetworkServer.active && TryGetComponent(out NetworkTransformBase networkTransform))
+		{
+			networkTransform.ServerTeleport(pos, transform.rotation);
+			return;
+		}
+		transform.position = pos;
+	}
+
+	// 분신에는 방향을 맞춰 주는 GatewayAI가 없어서, 만든 직후 [ClientRpc]로 모든 화면에 방향을 알린다.
+	// 레이드는 시작 뒤에 새로 들어오는 사람이 없으므로 한 번 알리면 된다
+	void ShowCloneFacing(GameObject clone, bool flipX)
+	{
+		SetCloneFlip(clone, flipX);
+		if (NetworkServer.active) RpcCloneFacing(clone, flipX);
+	}
+
+	[ClientRpc]
+	void RpcCloneFacing(GameObject clone, bool flipX) => SetCloneFlip(clone, flipX);
+
+	static void SetCloneFlip(GameObject clone, bool flipX)
+	{
+		if (clone != null && clone.TryGetComponent(out SpriteRenderer sr)) sr.flipX = flipX;
 	}
 
 	// 분신을 때리면 같은 씬의 모든 플레이어가 반사 피해를 받는다 (TakeDamage에는 때린 사람 정보가 없어서 파티 전체)

@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 5694127331615184758}
   - component: {fileID: 3963380389480247877}
   - component: {fileID: 8782181699427885890}
+  - component: {fileID: 1779202504505406625}
   - component: {fileID: 2701535415265043455}
   - component: {fileID: 7986434417487431863}
   - component: {fileID: 874245754509165766}
@@ -215,6 +216,40 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &1779202504505406625
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8134418012723844412}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ec4f7556ca1e4b55a3381fc6a02b1bc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror.Components::Mirror.NetworkRigidbodyReliable2D
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  target: {fileID: 826072589378187044}
+  syncPosition: 1
+  syncRotation: 1
+  syncScale: 0
+  onlySyncOnChange: 1
+  compressRotation: 1
+  interpolatePosition: 1
+  interpolateRotation: 1
+  interpolateScale: 1
+  coordinateSpace: 0
+  timelineOffset: 1
+  showGizmos: 0
+  showOverlay: 0
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.5}
+  onlySyncOnChangeCorrectionMultiplier: 2
+  useFixedUpdate: 0
+  rotationSensitivity: 0.01
+  positionPrecision: 0.01
+  scalePrecision: 0.01
 --- !u!114 &2701535415265043455
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -270,6 +305,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a74bfb22f7d7524ca47bb6afc138bec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GroundChaseAI
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   patrolSpeed: 1.5
   chaseSpeed: 3
   groundLayers:

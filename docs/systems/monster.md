@@ -91,6 +91,11 @@
   - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 맞은 플레이어가 실행 중이던 함수가 모두 끊긴다
   - 공격 고르기: 목록(던지기, 낙하, 소환, 때리기)에서 랜덤. 직전 공격과 지금 쓸 수 없는 공격(가까운 플레이어 없는 때리기, 웜이 가득 찬 소환)은 뺀다
   - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 모으던 낙하·소환·때리기는 취소된다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+  - 위치·방향은 모든 화면에서 같다 (#310)
+    - 위치: Gateway는 `NetworkTransformReliable`, Worm·Leak·Loop는 `NetworkRigidbodyReliable2D`(둘 다 Sync Direction Server To Client). 분신·기둥·안전지대·낙하 패킷은 움직이지 않아 생성 위치만
+    - 진짜 찾기의 순간이동: 서버에서 `NetworkTransformBase.ServerTeleport`. 클라이언트 화면에서도 미끄러지지 않고 바로 옮겨진다
+    - 바라보는 방향: `GatewayAI`, `GroundChaseAI`, `FlyingShooterAI`의 방향이 `[SyncVar]`. 바뀌면 각 화면에서 그림을 뒤집는다. 분신 방향은 만든 직후 `GatewayPhases`가 `[ClientRpc]`로 한 번 알린다
+    - `GroundChaseAI.IsMoving`: 클라이언트에서는 서버 값(`[SyncVar]`). 클라이언트의 Rigidbody 속도는 서버와 다를 수 있다
   - 연출 이벤트는 모든 화면에서 불린다 (#310)
     - `GatewayAI`, `GatewayPhases`, `ProjectileAttack`: `NetworkBehaviour`. 연출 함수가 서버에서 `[ClientRpc]`를 보내 그 몬스터를 보는 모든 화면(호스트 포함)에서 이벤트를 부른다. 전용 서버에서는 불리지 않는다. 네트워크 없는 테스트는 그 자리에서
     - `ProjectileAttack`을 쓰는 프리팹에는 `NetworkIdentity`가 있어야 한다: Gateway, Loop, `TestMonster`(#310에서 `NetworkIdentity` 추가, Test_DH·Test_HW·Test_JW 씬에 놓여 있음)

@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using Mirror;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -18,7 +20,8 @@ using UnityEngine.SceneManagement;
 /// → [포기] 한 판 더 시작해 포기(호스트만이면 호스트가, 클라이언트가 있으면 클라이언트가)하면 실패 결과 화면 뒤(Result Delay 이상 지나서) 모두 로비로 돌아오는지 본다
 /// → [이탈] 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 실패 결과 화면 뒤 로비로 돌아오는지 본다.<br/>
 /// - [클리어] 판의 보스: 호스트가 먼저 100을 주고, 2페이즈로 깎아 전체 공격 모으기를 낸 뒤(터지기 전에) 죽인다. member는 보스 몸에 자기 캐릭터를 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않는지,
-/// 보스 체력·피격·사망 연출, 공격 연출, 모으기 연출이 이 화면에도 오는지 본다 (#310).<br/>
+/// 보스 체력·피격·사망 연출, 공격 연출, 모으기 연출이 이 화면에도 오는지 본다. 호스트가 웜 소환을 직접 부르고, member는 웜이 움직이며 플레이어 쪽을 보는지, 보스가 플레이어 쪽을 보는지 본다 (#310).<br/>
+/// - [포기] 판(클라이언트가 있을 때): 호스트가 보스를 40% 아래로 깎아 3페이즈로 보낸다. member는 분신 2마리, 진짜의 순간이동(10칸 간격), 같은 방향을 본 뒤 포기한다 (#310).<br/>
 /// - member: 방에 들어가 준비 → 던전 도착 → 보스 동기화 확인 → 클리어 결과 화면 이벤트 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 실패 결과 화면 이벤트 뒤 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
 /// - 결과 화면은 그 던전의 RaidJudge.ResultEffectPlayed로 확인한다 (클라이언트에서는 RaidParties가 서버의 결과로 PlayResultOnly를 부를 때 불림).<br/>
 /// - 「[RaidPartyTest][역할] 전체 통과」면 통과.
@@ -57,6 +60,10 @@ public class RaidPartyTest : MonoBehaviour
 	bool bossChargePlayed;
 	// host: 보스가 전체 공격을 모으기 시작했으면 true
 	bool hostChargeSeen;
+	// member: 웜이 처음 보인 x(보이기 전에는 null), 그 뒤 가장 멀리 옮겨 간 거리, 서버의 IsMoving이 true였던 적이 있는지 (#310)
+	float? wormFirstX;
+	float wormMaxMove;
+	bool wormSawMoving;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -183,6 +190,17 @@ public class RaidPartyTest : MonoBehaviour
 				yield return new WaitForSeconds(1f);
 				RaidParties.RequestGiveUp();
 			}
+			else
+			{
+				// 클라이언트가 보스를 찾은 뒤, 체력을 40% 아래로 한 번에 깎아 3페이즈(진짜 찾기)로 보낸다 (순간이동·분신 방향 동기화, #310).
+				// 한 번에 여러 문턱을 넘으면 2페이즈 전체 공격 없이 3페이즈로 간다. 클라이언트는 분신을 확인한 뒤 포기한다
+				Monster boss = null;
+				yield return Wait(round + "보스 생성", () => (boss = FindBossInHostScene()) != null);
+				if (boss == null) yield break;
+				yield return new WaitForSeconds(2f);
+				boss.TakeDamage(boss.Hp - Mathf.FloorToInt(boss.MaxHp * 0.35f));
+				yield return Wait(round + "3페이즈에서 분신 2마리", () => CountClonesInHostScene() == 2);
+			}
 			string who = withMember ? "파티원이" : "호스트가";
 			yield return WaitFailResultThenLobby(round + who + " 포기하면 ", () => HostScene() == PlaceScenes.Lobby);
 			if (withMember) yield return Wait(round + "포기한 파티원도 로비로 돌아옴", () => PlayersInScene(PlaceScenes.Lobby) == 2);
@@ -192,6 +210,9 @@ public class RaidPartyTest : MonoBehaviour
 			Monster boss = null;
 			yield return Wait(round + "보스 생성", () => (boss = FindBossInHostScene()) != null);
 			if (boss == null) yield break;
+			// 공격이 랜덤이라 웜이 생긴다고 보장할 수 없으므로 웜 소환을 직접 한 번 부른다 (웜 위치·방향 동기화, #310)
+			typeof(GatewayAI).GetMethod("SpawnWorms", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(boss.GetComponent<GatewayAI>(), null);
+			Check(round + "웜 소환", CountWormsInHostScene() > 0);
 			// 클라이언트가 보스를 찾아 확인할 시간을 준 뒤 먼저 조금 때린다 (몬스터 체력·피격 연출 동기화, #310)
 			if (withMember) yield return new WaitForSeconds(MemberCheckSeconds);
 			boss.TakeDamage(FirstHitDamage);
@@ -234,6 +255,19 @@ public class RaidPartyTest : MonoBehaviour
 		int count = 0;
 		foreach (NetworkConnectionToClient conn in NetworkServer.connections.Values)
 			if (conn.identity != null && conn.identity.gameObject.scene.name == sceneName) count++;
+		return count;
+	}
+
+	static int CountWormsInHostScene() => CountInHostScene<GroundChaseAI>();
+
+	static int CountClonesInHostScene() => CountInHostScene<CloneGlitch>();
+
+	static int CountInHostScene<T>() where T : Component
+	{
+		Scene hostScene = NetworkClient.localPlayer.gameObject.scene;
+		int count = 0;
+		foreach (T c in FindObjectsByType<T>(FindObjectsSortMode.None))
+			if (c.gameObject.scene == hostScene) count++;
 		return count;
 	}
 
@@ -291,8 +325,8 @@ public class RaidPartyTest : MonoBehaviour
 		}
 		if (kind == Round.GiveUp)
 		{
-			// 호스트가 도착을 본 뒤에 포기한다
-			yield return new WaitForSeconds(2f);
+			// 호스트가 3페이즈로 보내면 분신과 순간이동한 보스를 확인한 뒤 포기한다
+			yield return CheckCloneSync(round);
 			RaidParties.RequestGiveUp();
 			yield return WaitFailResultThenLobby(round + "포기하면 ", () => IsLoaded(PlaceScenes.Lobby) && !IsLoaded(PlaceScenes.RaidDungeon));
 			yield break;
@@ -325,6 +359,11 @@ public class RaidPartyTest : MonoBehaviour
 		thrower.FireEffectPlayed += OnBossThrow;
 		phases.ChargeEffectPlayed += OnBossCharge;
 		Check(round + "보스 체력을 서버에서 받음", boss.Hp == boss.MaxHp);
+		// 보스는 가장 가까운 플레이어 쪽을 본다. 이 화면에서도 그쪽을 보는지 (방향 동기화)
+		// 호스트가 소환한 웜을 지금부터 지켜본다
+		StartCoroutine(WatchWorm());
+		SpriteRenderer bossSprite = boss.GetComponent<SpriteRenderer>();
+		yield return Wait(round + "보스가 가장 가까운 플레이어 쪽을 봄", () => boss != null && FacesNearestPlayer(boss.transform, bossSprite));
 
 		// 플레이어 체력 동기화 전이라, 서버가 준 접촉 피해는 이 화면의 체력에 보이지 않는다. 이 화면에서 따로 깎지 않았으면 그대로 최대다
 		GameObject me = NetworkClient.localPlayer.gameObject;
@@ -344,6 +383,8 @@ public class RaidPartyTest : MonoBehaviour
 		yield return Wait(round + "보스 사망 연출", () => bossDeathPlayed);
 		// 보스는 플레이어를 발견하고 2초 뒤부터 3초마다 공격하므로, 사망 전까지 공격 연출이 한 번 이상 왔어야 한다
 		Check(round + "보스 공격 연출(던지기·낙하·때리기·소환)", bossAttackPlayed);
+		// 호스트가 소환한 웜: 결과 화면(3초) 동안에도 플레이어를 쫓으므로 이때 본다
+		yield return CheckWormSync(round);
 		if (boss != null)
 		{
 			boss.HitEffectPlayed -= OnBossHit;
@@ -370,6 +411,80 @@ public class RaidPartyTest : MonoBehaviour
 	void OnBossCharge(float _) => bossChargePlayed = true;
 
 	void OnHostCharge(float _) => hostChargeSeen = true;
+
+	// 웜(GroundChaseAI)이 이 화면에서도 움직이고, 쫓는 플레이어 쪽을 보는지 본다 (위치·방향 동기화, #310).
+	// 웜은 플레이어 옆에 닿으면 멈추므로, 마지막 몇 초가 아니라 처음 보인 때부터 지켜본 결과로 판단한다 (WatchWorm)
+	IEnumerator CheckWormSync(string round)
+	{
+		yield return Wait(round + "웜이 이 화면에 보임", () => wormFirstX.HasValue);
+		if (!wormFirstX.HasValue) yield break;
+		Check(round + $"웜이 이 화면에서 움직임 (처음 x {wormFirstX.Value:0.00}에서 최대 {wormMaxMove:0.00}칸)", wormMaxMove > 0.5f);
+		Check(round + "웜의 걷는 중(IsMoving)을 서버에서 받음", wormSawMoving);
+		GroundChaseAI worm = FindAnyObjectByType<GroundChaseAI>();
+		if (worm != null) Check(round + "웜이 가장 가까운 플레이어 쪽을 봄", FacesNearestPlayer(worm.transform, worm.GetComponent<SpriteRenderer>()));
+	}
+
+	// 웜이 처음 보인 위치, 그 뒤 가장 멀리 옮겨 간 거리, IsMoving이 true였던 적이 있는지 기록한다. 던전을 나가면(웜이 사라지면) 멈춘다
+	IEnumerator WatchWorm()
+	{
+		wormFirstX = null;
+		wormMaxMove = 0f;
+		wormSawMoving = false;
+		GroundChaseAI worm = null;
+		float until = Time.realtimeSinceStartup + TimeoutSeconds;
+		while ((worm = FindAnyObjectByType<GroundChaseAI>()) == null)
+		{
+			if (Time.realtimeSinceStartup > until) yield break;
+			yield return null;
+		}
+		wormFirstX = worm.transform.position.x;
+		while (worm != null)
+		{
+			wormMaxMove = Mathf.Max(wormMaxMove, Mathf.Abs(worm.transform.position.x - wormFirstX.Value));
+			if (worm.IsMoving) wormSawMoving = true;
+			yield return null;
+		}
+	}
+
+	// [포기] 판 클라이언트: 3페이즈에서 분신 2마리가 보이고, 진짜가 분신 자리 중 하나로 순간이동했고, 모두 같은 쪽을 보는지 본다 (#310)
+	IEnumerator CheckCloneSync(string round)
+	{
+		Monster boss = null;
+		yield return Wait(round + "보스가 이 화면에 보임", () => (boss = FindBossInDungeon()) != null);
+		if (boss == null) yield break;
+		yield return Wait(round + "분신 2마리가 이 화면에 보임", () => FindObjectsByType<CloneGlitch>(FindObjectsSortMode.None).Length == 2);
+		yield return Wait(round + "보스가 분신 자리 중 하나로 순간이동, 모두 같은 쪽을 봄", () => boss != null && ClonesLinedUpWith(boss));
+	}
+
+	// 보스와 분신 2마리의 x가 10칸 간격(GatewayPhases Clone Slots -10, 0, +10)으로 서 있고 그림 방향이 모두 같으면 true
+	static bool ClonesLinedUpWith(Monster boss)
+	{
+		CloneGlitch[] clones = FindObjectsByType<CloneGlitch>(FindObjectsSortMode.None);
+		if (clones.Length != 2) return false;
+		bool flip = boss.GetComponent<SpriteRenderer>().flipX;
+		var xs = new List<float> { boss.transform.position.x };
+		foreach (CloneGlitch c in clones)
+		{
+			if (c.GetComponent<SpriteRenderer>().flipX != flip) return false;
+			xs.Add(c.transform.position.x);
+		}
+		xs.Sort();
+		return Mathf.Abs(xs[1] - xs[0] - 10f) < 0.5f && Mathf.Abs(xs[2] - xs[1] - 10f) < 0.5f;
+	}
+
+	// target이 이 화면의 가장 가까운 플레이어 쪽을 보고 있으면 true (그림은 오른쪽을 보고 그리고 왼쪽이면 flipX). 거의 같은 x면 판단하지 않고 true
+	static bool FacesNearestPlayer(Transform target, SpriteRenderer sprite)
+	{
+		PlayerHealth nearest = null;
+		float best = float.MaxValue;
+		foreach (PlayerHealth p in FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None))
+		{
+			float d = Mathf.Abs(p.transform.position.x - target.position.x);
+			if (d < best) { best = d; nearest = p; }
+		}
+		if (nearest == null || best < 0.5f) return true;
+		return sprite.flipX == (nearest.transform.position.x < target.position.x);
+	}
 
 	// 클라이언트에서는 Mirror가 네트워크 오브젝트를 Base 씬에 만들므로 씬으로 거르지 않는다.
 	// 클라이언트는 같은 씬(자기 던전)의 네트워크 오브젝트만 받으므로 보이는 보스는 자기 던전의 보스다

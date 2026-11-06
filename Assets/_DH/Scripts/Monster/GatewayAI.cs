@@ -119,6 +119,8 @@ public class GatewayAI : NetworkBehaviour
 	// 모으는 중인 낙하. Slam 연출 뒤 시간이 되면 그림자를 만든다
 	bool dropPending;
 	float dropTime;
+	// 바라보는 방향. 서버가 바꾸면 클라이언트에서도 그림을 뒤집는다 (#310)
+	[SyncVar(hook = nameof(OnFacingChanged))]
 	int facing = 1;
 	// 이 시각까지 공격을 멈춘다 (페이즈 전환 등)
 	float pausedUntil;
@@ -425,6 +427,11 @@ public class GatewayAI : NetworkBehaviour
 		facing = dir;
 		ShowFacing();
 	}
+
+	// 처음 받은 방향으로 그림을 맞춘다 (생성 때 함께 온 값)
+	public override void OnStartClient() => ShowFacing();
+
+	void OnFacingChanged(int _, int __) => ShowFacing();
 
 	// 아래 함수들은 연출만 한다 (코드 작성 규칙 1)
 	// 그림은 오른쪽을 보고 그린다고 정하고, 왼쪽이면 뒤집는다

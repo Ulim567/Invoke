@@ -97,6 +97,7 @@ public class ProjectileAttack : NetworkBehaviour
 	{
 		Vector2 offset = new Vector2(dir.x < 0f ? -firePointOffset.x : firePointOffset.x, firePointOffset.y);
 		MonsterProjectile projectile = SpawnProjectile((Vector2)transform.position + offset);
+		if (projectile == null) return;
 		// 실명 중에 나간 투사체는 날아가는 동안 실명이 풀려도 빗나간다
 		projectile.Launch(attack, dir * speed, status != null && status.IsBlinded);
 	}
@@ -114,8 +115,13 @@ public class ProjectileAttack : NetworkBehaviour
 	[ClientRpc]
 	void RpcFireEffect(Vector2 dir) => FireEffectPlayed?.Invoke(dir);
 
-	// 투사체를 만드는 곳은 여기 하나다. 네트워크를 붙이면 NetworkServer.Spawn을 더한다 (코드 작성 규칙 3·4)
-	MonsterProjectile SpawnProjectile(Vector2 position) => Instantiate(projectilePrefab, position, Quaternion.identity);
+	// 투사체를 만드는 곳은 여기 하나다 (코드 작성 규칙 3·4). NetworkSpawner로 이 몬스터의 씬에 만든다 (#310).
+	// Instantiate는 서버의 활성 씬(Base)에 만들어서, 던전·사냥터의 플레이어와 판정되지 않고 클라이언트에도 보이지 않았다
+	MonsterProjectile SpawnProjectile(Vector2 position)
+	{
+		GameObject obj = NetworkSpawner.Spawn(projectilePrefab.gameObject, position, Quaternion.identity, gameObject.scene);
+		return obj != null ? obj.GetComponent<MonsterProjectile>() : null;
+	}
 
 	void OnDrawGizmosSelected()
 	{

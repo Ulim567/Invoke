@@ -64,6 +64,9 @@ public class RaidPartyTest : MonoBehaviour
 	float? wormFirstX;
 	float wormMaxMove;
 	bool wormSawMoving;
+	// member: 몬스터 투사체가 이 화면에 보였는지, 보인 뒤 가장 멀리 날아간 거리 (#310)
+	bool projectileSeen;
+	float projectileMaxMove;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 	static void CreateIfRequested()
@@ -215,6 +218,13 @@ public class RaidPartyTest : MonoBehaviour
 			Check(round + "웜 소환", CountWormsInHostScene() > 0);
 			// 클라이언트가 보스를 찾아 확인할 시간을 준 뒤 먼저 조금 때린다 (몬스터 체력·피격 연출 동기화, #310)
 			if (withMember) yield return new WaitForSeconds(MemberCheckSeconds);
+
+			// 공격이 랜덤이라 던지기가 나온다고 보장할 수 없으므로 직접 한 번 던진다. 투사체가 Base가 아니라 던전 씬에 생겨야 던전 플레이어와 판정된다 (#310)
+			ProjectileAttack thrower = boss.GetComponent<ProjectileAttack>();
+			yield return Wait(round + "보스가 던질 수 있음", () => !thrower.IsCharging);
+			thrower.Fire(Vector2.right);
+			yield return Wait(round + "던진 패킷이 던전 씬에 생김", () => CountInHostScene<MonsterProjectile>() > 0);
+
 			boss.TakeDamage(FirstHitDamage);
 			Check(round + $"보스에게 {FirstHitDamage} 데미지 (서버 체력)", boss.Hp == boss.MaxHp - FirstHitDamage);
 			yield return new WaitForSeconds(1.5f);
@@ -360,8 +370,9 @@ public class RaidPartyTest : MonoBehaviour
 		phases.ChargeEffectPlayed += OnBossCharge;
 		Check(round + "보스 체력을 서버에서 받음", boss.Hp == boss.MaxHp);
 		// 보스는 가장 가까운 플레이어 쪽을 본다. 이 화면에서도 그쪽을 보는지 (방향 동기화)
-		// 호스트가 소환한 웜을 지금부터 지켜본다
+		// 호스트가 소환한 웜과 던진 패킷을 지금부터 지켜본다
 		StartCoroutine(WatchWorm());
+		StartCoroutine(WatchProjectile());
 		SpriteRenderer bossSprite = boss.GetComponent<SpriteRenderer>();
 		yield return Wait(round + "보스가 가장 가까운 플레이어 쪽을 봄", () => boss != null && FacesNearestPlayer(boss.transform, bossSprite));
 
@@ -385,6 +396,8 @@ public class RaidPartyTest : MonoBehaviour
 		Check(round + "보스 공격 연출(던지기·낙하·때리기·소환)", bossAttackPlayed);
 		// 호스트가 소환한 웜: 결과 화면(3초) 동안에도 플레이어를 쫓으므로 이때 본다
 		yield return CheckWormSync(round);
+		Check(round + "보스가 던진 패킷이 이 화면에 보임", projectileSeen);
+		Check(round + $"패킷이 이 화면에서 날아감 (최대 {projectileMaxMove:0.00}칸)", projectileMaxMove > 0.5f);
 		if (boss != null)
 		{
 			boss.HitEffectPlayed -= OnBossHit;
@@ -422,6 +435,26 @@ public class RaidPartyTest : MonoBehaviour
 		Check(round + "웜의 걷는 중(IsMoving)을 서버에서 받음", wormSawMoving);
 		GroundChaseAI worm = FindAnyObjectByType<GroundChaseAI>();
 		if (worm != null) Check(round + "웜이 가장 가까운 플레이어 쪽을 봄", FacesNearestPlayer(worm.transform, worm.GetComponent<SpriteRenderer>()));
+	}
+
+	// 투사체(MonsterProjectile)가 이 화면에 보였는지, 보인 뒤 가장 멀리 날아간 거리를 기록한다. 투사체가 사라지면 다음 투사체를 기다린다 (#310)
+	IEnumerator WatchProjectile()
+	{
+		projectileSeen = false;
+		projectileMaxMove = 0f;
+		float until = Time.realtimeSinceStartup + TimeoutSeconds * 2f;
+		while (Time.realtimeSinceStartup < until && projectileMaxMove <= 0.5f)
+		{
+			MonsterProjectile p = FindAnyObjectByType<MonsterProjectile>();
+			if (p == null) { yield return null; continue; }
+			projectileSeen = true;
+			Vector2 start = p.transform.position;
+			while (p != null)
+			{
+				projectileMaxMove = Mathf.Max(projectileMaxMove, Vector2.Distance(start, p.transform.position));
+				yield return null;
+			}
+		}
 	}
 
 	// 웜이 처음 보인 위치, 그 뒤 가장 멀리 옮겨 간 거리, IsMoving이 true였던 적이 있는지 기록한다. 던전을 나가면(웜이 사라지면) 멈춘다

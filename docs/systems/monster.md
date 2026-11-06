@@ -38,7 +38,8 @@
   - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 실행 중단은 맞은 대상의 `FunctionExecutor.InterruptAll()`(이우림)로 실행 중인 함수를 모두 끊는다(실행기가 없으면 무시). 메모리 효과(점유·탈취·회수 방해)는 받는 방식을 정하기 전까지 로그만 남긴다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
   - 패링: Player에 맞으면 효과를 주기 전에 그 플레이어의 `ParryGuard.TryParry(투사체)`(박진우, `c-skills.md`)를 묻는다. `true`면 효과 없이 사라진다. 관통 투사체도 잡히면 사라진다. 관통은 이미 맞힌 대상에게는 다시 묻지 않는다.
-  - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
+  - 맞았는지 판단과 효과 적용은 서버(또는 네트워크 없는 테스트)에서만 한다 (#310).
+  - 네트워크 (#310): 투사체 프리팹(`PacketThrow`, `MonsterBullet`)은 `NetworkIdentity`가 있고 Base NetworkManager에 등록돼 있다. `ProjectileAttack`이 `NetworkSpawner`로 쏜 몬스터의 씬에 만든다(서버의 `Base`가 아니라 던전·사냥터의 물리 세계에서 판정됨). 클라이언트는 서버가 `[ClientRpc]`로 보낸 출발 위치·속도로 그림만 날리고(검기와 같은 방식), 서버가 없애면 함께 사라진다. `Instantiate`로 직접 만든 투사체(시험용)는 그 자리에서만 동작한다
 
 - 잡몹
   - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects` + `StatusIconView`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
@@ -354,7 +355,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
   - 스포너가 몬스터를 만들 수 있도록 김도훈이 Leak에 `NetworkIdentity`를 붙이고 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록한다(#86, 이우림 허락).
   - 사냥터 씬(`HuntingGround`)에 스포너를 놓고 구역을 맵에 맞추는 일은 김도훈이 한다 (처음엔 이우림이 하기로 했으나 김도훈이 맡음).
-  - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 몬스터 삭제는 #310에서 `NetworkSpawner.Despawn`으로 바꿨다. 투사체 생성·삭제는 #310의 투사체 단계에서 바꾼다.
+  - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 몬스터 삭제와 투사체 생성·삭제는 #310에서 `NetworkSpawner`로 바꿨다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 상태 이상(#97)은 `StatusEffects`가 걸고 풀고, 몬스터 반응(기절·이속 감소·실명)은 김도훈이 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 한다(#103). 몬스터 프리팹에 `StatusEffects`를 붙이는 일은 김도훈이 한다.

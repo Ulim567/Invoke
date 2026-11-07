@@ -1752,6 +1752,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1810310909}
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1810310911}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &477589597
 GameObject:
@@ -1862,6 +1865,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1943402326}
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1943402328}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &832843940
 GameObject:
@@ -2154,6 +2160,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1391551130}
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1391551132}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &1036190583
 GameObject:
@@ -2526,6 +2535,29 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &1391551132
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1391551121}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 403729004d0d745eb8a3c1a63bea5d34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusEffectView
+  targetRenderer: {fileID: 0}
+  blindTint: {r: 0.45, g: 0.45, b: 0.5, a: 1}
+  slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
+  bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
+  bleedFlashSeconds: 0.15
+  bleedEffect: {fileID: 0}
+  markEffect: {fileID: 0}
+  stunEffect: {fileID: 0}
+  blindEffect: {fileID: 0}
+  slowEffect: {fileID: 0}
+  headEffectHeight: 0.2
 --- !u!1 &1398325081
 GameObject:
   m_ObjectHideFlags: 0
@@ -2860,6 +2892,50 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1571074967
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1571074969}
+  - component: {fileID: 1571074968}
+  m_Layer: 0
+  m_Name: StatusViewTest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &1571074968
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1571074967}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acbfe7f01e2d946ad82ecf395c8437f5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusEffectViewSimTest
+--- !u!4 &1571074969
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1571074967}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1646183014
 GameObject:
   m_ObjectHideFlags: 0
@@ -2957,6 +3033,29 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &1810310911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1810310900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 403729004d0d745eb8a3c1a63bea5d34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusEffectView
+  targetRenderer: {fileID: 0}
+  blindTint: {r: 0.45, g: 0.45, b: 0.5, a: 1}
+  slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
+  bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
+  bleedFlashSeconds: 0.15
+  bleedEffect: {fileID: 0}
+  markEffect: {fileID: 0}
+  stunEffect: {fileID: 0}
+  blindEffect: {fileID: 0}
+  slowEffect: {fileID: 0}
+  headEffectHeight: 0.2
 --- !u!1 &1943402317 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
@@ -3009,6 +3108,29 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &1943402328
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1943402317}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 403729004d0d745eb8a3c1a63bea5d34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusEffectView
+  targetRenderer: {fileID: 0}
+  blindTint: {r: 0.45, g: 0.45, b: 0.5, a: 1}
+  slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
+  bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
+  bleedFlashSeconds: 0.15
+  bleedEffect: {fileID: 0}
+  markEffect: {fileID: 0}
+  stunEffect: {fileID: 0}
+  blindEffect: {fileID: 0}
+  slowEffect: {fileID: 0}
+  headEffectHeight: 0.2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3047,3 +3169,4 @@ SceneRoots:
   - {fileID: 1071069560}
   - {fileID: 238713165}
   - {fileID: 1390917288}
+  - {fileID: 1571074969}

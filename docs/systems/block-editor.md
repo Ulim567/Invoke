@@ -19,6 +19,7 @@
 - 저장하면 내 캐릭터의 `SlotLoadout.ReloadFunctions()`를 부른다. 슬롯에 넣어 둔 함수를 고쳐도 바로 고친 내용으로 시전되고, `FunctionExecutorNetwork`가 서버로 함수를 다시 보낸다 (slot-caster.md, network.md)
 - 슬롯 장착은 같은 연습장의 장착대(`SlotEquipPanel`)에서 한다: 위의 슬롯 칸을 고르고 아래 목록(저장한 함수, C 스킬)에서 누르면 들어간다. `SlotLoadout`의 `EquipFunction`, `EquipSkill`, `Unequip`, `CodeSize`, `Changed`만 쓴다 (박진우 #160)
 - 연습장 허수아비: `Monster`의 「체력 안 줄어듦」(`invulnerable`, 김도훈 #214) + `DamageNumberView`(맞으면 머리 위에 데미지 숫자)
+  - 네트워크 오브젝트다 (#297): 프리팹 `Assets/_HW/Training/TrainingDummy`(NetworkIdentity, Base NetworkManager에 등록). 연습장 씬의 `DummySpawner`(`TrainingDummySpawner`)가 서버에서 자기 자리에 1마리 만들고, 연습장 씬이 내려가면 없앤다 (`NetworkSpawner.Spawn`/`Despawn`). 씬에 허수아비를 직접 두면 대상 배열 시전(전장 휩쓸기)이 서버에서 「대상 없음」이 된다
 
 - 스크립트: `Assets/_HW/Scripts/BlockCoding`
 

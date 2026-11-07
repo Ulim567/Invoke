@@ -35,6 +35,11 @@ public class UIShortcut : MonoBehaviour
 	[SerializeField] UnityEvent onSubmit;
 	[SerializeField] UnityEvent onCancel;
 
+	/// <summary>Enter를 눌렀을 때 부를 함수. 코드에서 AddListener로 붙일 때 쓴다 (예: InputBlockingPanel이 창마다 붙인다)</summary>
+	public UnityEvent OnSubmit => onSubmit ??= new UnityEvent();
+	/// <summary>ESC를 눌렀을 때 부를 함수. 코드에서 AddListener로 붙일 때 쓴다</summary>
+	public UnityEvent OnCancel => onCancel ??= new UnityEvent();
+
 	// 열린 순서. 마지막 칸이 맨 위 화면이다
 	static readonly List<UIShortcut> openOrder = new List<UIShortcut>();
 	// 키에 반응한 프레임. 반응한 함수가 화면을 여닫으면 같은 프레임에 다른 화면이 맨 위가 되므로, 그 화면이 같은 키에 또 반응하지 않게 막는다
@@ -68,9 +73,9 @@ public class UIShortcut : MonoBehaviour
 		if (!IsTop || handledFrame == Time.frameCount) return;
 
 		if (GameInput.UI.CancelPressed && !SelectedHandles<ICancelHandler>())
-			Handle(onCancel);
+			Handle(OnCancel);
 		else if (GameInput.UI.SubmitPressed && !SelectedHandles<ISubmitHandler>())
-			Handle(onSubmit);
+			Handle(OnSubmit);
 	}
 
 	static void Handle(UnityEvent action)

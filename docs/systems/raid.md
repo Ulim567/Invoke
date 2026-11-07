@@ -62,6 +62,7 @@
 - 플레이어는 `Check Interval`(0.25초)마다 이 씬의 최상위 오브젝트 중 `PlayerHealth`가 붙은 것을 다시 센다
 - 끝나면 `ResultEffectPlayed(클리어 여부)`(결과 화면용)를 부르고, `Result Delay`(3초) 뒤 `RaidFlow.ReportEnd(던전 씬, 클리어 여부)`를 부른다. 한 던전에서 한 번만 끝난다
 - 클리어 보상은 Gateway의 `MonsterReward`(Whole Scene)가 준다 (`monster.md`)
+- 보스 체력은 던전 안 인원에 맞춘다 (#380, `Hp Rate By Players`: 1명 40%, 2명 70%, 3명 100% → 1200 / 2100 / 3000). 파티원이 몇 초 차이로 들어오므로 보스가 처음 맞기 전까지 0.25초마다 다시 맞추고, 처음 맞으면 그대로 둔다 (`Monster.TrySetMaxHpRate`, 최대 체력은 `MonsterNetwork`가 클라이언트에 전함)
 - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다
 - 파티원 이탈·레이드 포기 실패 (#300 뒤): 서버의 `RaidParties`(이우림)가 `FailByServer()`를 부른다. 모두 죽었을 때와 똑같이 끝난다 (결과 화면 → 3초 → `ReportEnd(던전 씬, false)`)
 - 클라이언트의 결과 화면: `RaidJudge`는 씬에 놓인 오브젝트라 `[ClientRpc]`를 쓰지 않는다 (겹쳐 불러온 던전 씬에서 Mirror가 켜지 않음). 서버의 `RaidParties`가 `ResultEffectPlayed`를 받아 파티원 클라이언트에 `RaidResultMessage`를 보내고, 클라이언트의 `RaidParties`가 자기가 불러온 던전의 `PlayResultOnly(클리어 여부)`를 부른다 (`place-scenes.md` 「결과 화면 전달」)

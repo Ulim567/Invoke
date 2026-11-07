@@ -7,17 +7,18 @@ using UnityEngine.Serialization;
 /// <summary>
 /// 레이드 보스 Gateway의 페이즈 전환과 기믹. 기본 공격은 같은 오브젝트의 GatewayAI가 하고, 이 컴포넌트는 페이즈와 기믹만 맡는다.
 /// <para>
-/// 페이즈 (체력 비율)<br/>
-/// - 1페이즈 100~70%: 플레이어를 처음 발견하고 First Gimmick Delay초 뒤 기믹 1(기둥 파괴)을 한 번<br/>
-/// - 2페이즈 70% 이하: 들어오는 순간 Transition Pause초 멈췄다가 기믹 2(전체 공격)를 한 번<br/>
-/// - 3페이즈 40% 이하: 같은 방식으로 기믹 3(진짜 찾기)을 한 번<br/>
+/// 페이즈 (체력 비율, Phase Thresholds)<br/>
+/// - 1페이즈 100~70%: 기본 공격만<br/>
+/// - 2페이즈 70% 이하: 들어오는 순간 Transition Pause초 멈췄다가 기믹 1(기둥 파괴)을 한 번<br/>
+/// - 3페이즈 50% 이하: 같은 방식으로 기믹 2(전체 공격)를 한 번<br/>
+/// - 4페이즈 30% 이하: 같은 방식으로 기믹 3(진짜 찾기)을 한 번<br/>
 /// - 기믹은 페이즈마다 한 번만 나온다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다.
 /// </para>
 /// <para>
 /// 기믹 1: 기둥 파괴<br/>
 /// - 보스 기준 Pillar Offsets(X) 위치의 땅에 기둥(Monster)을 세운다. 기둥은 스킬로 때려 부술 수 있다. 보스는 그동안 기본 공격을 계속한다.<br/>
-/// - Pillar Time Limit초 안에 모두 부수면 성공: 보스에게 기절 Groggy Duration초(그로기, StatusEffects). GroggyEffectPlayed(연출).<br/>
-/// - 시간이 다 되면 실패: 남은 기둥이 터지고 기믹 2(전체 공격)로 이어진다.
+/// - Pillar Time Limit초(20초) 안에 모두 부수면 성공: 보스에게 기절 Groggy Duration초(그로기, StatusEffects). GroggyEffectPlayed(연출).<br/>
+/// - 시간이 다 되면 실패: 남은 기둥이 터지고, 보스가 패킷 던지기와 웜 소환을 한 번씩 한다 (GatewayAI.PunishAttack).
 /// </para>
 /// <para>
 /// 기믹 2: 전체 공격<br/>
@@ -40,14 +41,11 @@ using UnityEngine.Serialization;
 public class GatewayPhases : NetworkBehaviour
 {
 	[Header("페이즈")]
-	[SerializeField, Tooltip("다음 페이즈로 넘어가는 체력 비율. 큰 값부터 (2페이즈 0.7, 3페이즈 0.4)")]
-	float[] phaseThresholds = { 0.7f, 0.4f };
+	[SerializeField, Tooltip("다음 페이즈로 넘어가는 체력 비율. 큰 값부터 3개 (기둥 0.7, 전체 공격 0.5, 진짜 찾기 0.3)")]
+	float[] phaseThresholds = { 0.7f, 0.5f, 0.3f };
 
 	[SerializeField, Min(0f), Tooltip("페이즈가 바뀔 때 보스가 멈추는 시간(초)")]
 	float transitionPause = 1.5f;
-
-	[SerializeField, Min(0f), Tooltip("플레이어를 처음 발견하고 기믹 1을 시작하기까지 시간(초)")]
-	float firstGimmickDelay = 15f;
 
 	[Header("기믹 1: 기둥 파괴")]
 	[SerializeField, Tooltip("세울 기둥 프리팹 (Monster). NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다")]
@@ -57,7 +55,7 @@ public class GatewayPhases : NetworkBehaviour
 	float[] pillarOffsets = { -15f, -8f, 15f };
 
 	[SerializeField, Min(1f), Tooltip("기둥을 모두 부숴야 하는 제한 시간(초)")]
-	float pillarTimeLimit = 15f;
+	float pillarTimeLimit = 20f;
 
 	[SerializeField, Min(0f), Tooltip("성공했을 때 보스 그로기(기절) 시간(초)")]
 	float groggyDuration = 6f;
@@ -100,10 +98,8 @@ public class GatewayPhases : NetworkBehaviour
 	StatusEffects status;
 
 	int phase = 1;
-	// 페이즈마다 기믹을 이미 했으면 true (인덱스 = 페이즈 - 1)
+	// 기믹을 이미 했으면 true (0 기둥, 1 전체 공격, 2 진짜 찾기. 2페이즈부터 하나씩)
 	readonly bool[] gimmickDone = new bool[3];
-	bool engaged;
-	float firstGimmickTime;
 	// 페이즈 전환으로 멈춘 뒤 기믹을 시작할 시각. 0이면 기다리는 기믹 없음
 	float pendingGimmickTime;
 
@@ -124,9 +120,14 @@ public class GatewayPhases : NetworkBehaviour
 	float pillarEndTime;
 
 	/// <summary>
-	/// 지금 페이즈 (1, 2, 3).
+	/// 지금 페이즈 (1~4).
 	/// </summary>
 	public int Phase => phase;
+
+	/// <summary>
+	/// 다음 페이즈로 넘어가는 체력 비율 (큰 값부터). 보스 체력 바가 구분선을 놓을 때 읽는다.
+	/// </summary>
+	public IReadOnlyList<float> PhaseThresholds => phaseThresholds;
 
 	/// <summary>
 	/// [로직] 페이즈가 바뀐 순간 불린다. 새 페이즈 번호를 넘긴다.
@@ -172,19 +173,11 @@ public class GatewayPhases : NetworkBehaviour
 		if (!IsAuthority() || monster.IsDead) return;
 		float now = Time.time;
 
-		// 1페이즈 기믹: 처음 발견하고 일정 시간 뒤 한 번
-		if (!engaged && ai.Target != null)
-		{
-			engaged = true;
-			firstGimmickTime = now + firstGimmickDelay;
-		}
-		if (engaged && phase == 1 && !gimmickDone[0] && now >= firstGimmickTime) StartGimmick(1);
-
 		// 페이즈 전환으로 멈춘 뒤 그 페이즈 기믹
 		if (pendingGimmickTime > 0f && now >= pendingGimmickTime)
 		{
 			pendingGimmickTime = 0f;
-			if (!gimmickDone[phase - 1]) StartGimmick(phase);
+			StartGimmick(phase);
 		}
 
 		if (pillarsActive) UpdatePillars(now);
@@ -215,20 +208,23 @@ public class GatewayPhases : NetworkBehaviour
 
 	void EnterPhase(int next)
 	{
-		phase = Mathf.Min(next, gimmickDone.Length);
+		phase = Mathf.Min(next, gimmickDone.Length + 1);
 		ai.Pause(transitionPause);
 		pendingGimmickTime = Time.time + transitionPause;
 		PhaseChanged?.Invoke(phase);
 	}
 
+	// 2페이즈 기둥, 3페이즈 전체 공격, 4페이즈 진짜 찾기. 1페이즈는 기믹 없음
 	void StartGimmick(int forPhase)
 	{
-		gimmickDone[forPhase - 1] = true;
-		switch (forPhase)
+		int gimmick = forPhase - 2;
+		if (gimmick < 0 || gimmick >= gimmickDone.Length || gimmickDone[gimmick]) return;
+		gimmickDone[gimmick] = true;
+		switch (gimmick)
 		{
-			case 1: StartPillars(); break;
-			case 2: StartOverload(); break;
-			case 3: StartClones(); break;
+			case 0: StartPillars(); break;
+			case 1: StartOverload(); break;
+			case 2: StartClones(); break;
 		}
 	}
 
@@ -271,8 +267,8 @@ public class GatewayPhases : NetworkBehaviour
 		{
 			pillarsActive = false;
 			BreakRemainingPillars();
-			// 실패하면 전체 공격으로 이어진다
-			StartOverload();
+			// 실패하면 보스가 패킷 던지기와 웜 소환을 한 번씩 한다
+			ai.PunishAttack();
 		}
 	}
 

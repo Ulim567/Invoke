@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// - 내 캐릭터와 같은 씬에 살아 있는 보스(Monster.IsBoss)가 있을 때만 보인다. 여러 마리면 최대 체력이 가장 큰 보스를 보여 준다.<br/>
 ///   레이드 던전에 들어가면 저절로 나타나고, 보스가 죽거나 씬을 나가면 사라진다. 보스는 Search Interval초마다 한 번 찾는다.<br/>
 /// - 빨간 막대(Fill)는 지금 체력. 흰 막대(Trail)는 맞은 뒤 Trail Delay초 기다렸다가 천천히 따라 줄어서 얼마나 깎였는지 보여 준다.<br/>
-/// - 페이즈 구분선(Phase Marks)을 Phase Thresholds 비율 위치(예: 70%, 40%)에 놓는다.<br/>
+/// - 페이즈 구분선(Phase Marks)을 보스의 GatewayPhases.PhaseThresholds 비율 위치(70%, 50%, 30%)에 놓는다. 보스에 GatewayPhases가 없으면 Inspector의 Phase Thresholds를 쓴다.<br/>
 /// - 이름은 보스 오브젝트 이름에서 "(Clone)"을 뗀 것, 숫자는 "지금 / 최대"로 보여 준다.
 /// </para>
 /// <para>
@@ -40,8 +40,8 @@ public class BossHealthBar : MonoBehaviour
 	[SerializeField, Tooltip("페이즈 구분선. Phase Thresholds와 같은 순서로 넣는다")]
 	RectTransform[] phaseMarks;
 
-	[SerializeField, Tooltip("페이즈가 바뀌는 체력 비율. Gateway는 0.7, 0.4")]
-	float[] phaseThresholds = { 0.7f, 0.4f };
+	[SerializeField, Tooltip("보스에 GatewayPhases가 없을 때 쓸 페이즈 비율. Gateway는 보스의 값을 읽는다")]
+	float[] phaseThresholds = { 0.7f, 0.5f, 0.3f };
 
 	[Header("움직임")]
 	[SerializeField, Min(0.05f), Tooltip("보스를 찾는 간격(초)")]
@@ -103,7 +103,17 @@ public class BossHealthBar : MonoBehaviour
 		if (best == boss) return;
 		boss = best;
 		shownHp = -1; // 새 보스면 막대를 처음부터 맞춘다
-		if (boss != null) SetName(boss.name);
+		if (boss != null)
+		{
+			SetName(boss.name);
+			// 구분선은 보스의 페이즈 비율에 맞춘다 (Gateway 70%, 50%, 30%)
+			if (boss.TryGetComponent(out GatewayPhases phases) && phases.PhaseThresholds.Count > 0)
+			{
+				phaseThresholds = new float[phases.PhaseThresholds.Count];
+				for (int i = 0; i < phaseThresholds.Length; i++) phaseThresholds[i] = phases.PhaseThresholds[i];
+			}
+			PlacePhaseMarks();
+		}
 	}
 
 	// 내 캐릭터가 있는 씬. 네트워크를 켜지 않은 테스트처럼 내 캐릭터가 없으면 아무 씬이나 본다(IsValid false)

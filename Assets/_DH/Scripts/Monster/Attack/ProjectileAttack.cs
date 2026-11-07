@@ -51,6 +51,12 @@ public class ProjectileAttack : NetworkBehaviour
 	/// </summary>
 	public bool IsCharging => pending;
 
+	/// <summary>Fire를 부른 뒤 투사체가 나가기까지 모으는 시간(초). 경고 표시(ThrowWarning)가 이만큼 보인다</summary>
+	public float FireDelay => fireDelay;
+
+	/// <summary>몬스터 위치에서 투사체가 나오는 곳까지의 거리 (오른쪽 기준). 왼쪽으로 쏘면 x가 뒤집힌다</summary>
+	public Vector2 FirePointOffset => firePointOffset;
+
 	Monster monster;
 	// 상태 이상. 몬스터에 붙어 있지 않으면 null이고, 상태 이상에 반응하지 않는다
 	StatusEffects status;

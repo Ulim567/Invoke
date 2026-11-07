@@ -79,13 +79,42 @@ public class Monster : MonoBehaviour, IDamageable
 	/// </summary>
 	public event Action DeathEffectPlayed;
 
+	/// <summary>
+	/// [로직] 최대 체력이 바뀐 순간 불린다 (TrySetMaxHpRate). 서버에서만. MonsterNetwork가 클라이언트에 전한다.
+	/// </summary>
+	public event Action MaxHpChanged;
+
 	// 사망 연출을 이미 했으면 true. 클라이언트에서 서버의 사망 알림이 늦게 와도 한 번만 부르기 위함
 	bool deathPlayed;
+	// Inspector의 최대 체력. 인원에 따라 바꿀 때 이 값에 비율을 곱한다
+	int baseMaxHp;
 
 	void Awake()
 	{
+		baseMaxHp = maxHp;
 		Hp = maxHp;
 	}
+
+	/// <summary>
+	/// [서버] 최대 체력을 Inspector 값의 rate배로 바꾸고 체력을 가득 채운다. 레이드 보스를 인원에 맞출 때 RaidJudge가 부른다.<br/>
+	/// 한 번도 맞지 않아 체력이 가득 찬 동안만 바꾼다 (싸움 중에 체력이 갑자기 늘거나 줄지 않게). 바꿨거나 이미 그 값이면 true.
+	/// </summary>
+	public bool TrySetMaxHpRate(float rate)
+	{
+		if (IsDead || Hp != maxHp) return false;
+		int value = Mathf.Max(1, Mathf.RoundToInt(baseMaxHp * rate));
+		if (value == maxHp) return true;
+
+		maxHp = value;
+		Hp = value;
+		MaxHpChanged?.Invoke();
+		return true;
+	}
+
+	/// <summary>
+	/// [클라이언트] 서버가 보낸 최대 체력을 넣는다. MonsterNetwork만 부른다.
+	/// </summary>
+	public void ApplyServerMaxHp(int value) => maxHp = Mathf.Max(1, value);
 
 	/// <summary>
 	/// damage만큼 체력을 줄인다. 0 이하이거나 이미 죽었으면 무시한다. 체력이 0이 되면 사망한다.

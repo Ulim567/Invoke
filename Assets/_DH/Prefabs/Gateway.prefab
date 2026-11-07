@@ -279,9 +279,9 @@ MonoBehaviour:
   syncInterval: 0
   attack: {fileID: 11400000, guid: d42fd5a0f3990d74c927c43678b86779, type: 2}
   projectilePrefab: {fileID: 4266484544849432736, guid: a918335594367b94f8d49ffadd2c5af3, type: 3}
-  speed: 7
+  speed: 5
   firePointOffset: {x: 3.5, y: -2.5}
-  fireDelay: 0.58
+  fireDelay: 1
 --- !u!114 &8018174992941989125
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -298,8 +298,8 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   patterns: 00000000010000000200000003000000i
-  attackInterval: 3
-  firstAttackDelay: 2
+  attackInterval: 5
+  firstAttackDelay: 3
   targetLayers:
     serializedVersion: 2
     m_Bits: 256
@@ -368,15 +368,15 @@ MonoBehaviour:
   syncInterval: 0
   phaseThresholds:
   - 0.7
-  - 0.4
+  - 0.5
+  - 0.3
   transitionPause: 1.5
-  firstGimmickDelay: 15
   pillarPrefab: {fileID: 2811848839569070, guid: aa4e0ed7bce3d4d4aaf572ab71233cd9, type: 3}
   pillarOffsets:
   - -15
   - -8
   - 15
-  pillarTimeLimit: 15
+  pillarTimeLimit: 20
   groggyDuration: 6
   overloadAttack: {fileID: 11400000, guid: 17a8e43cb4e81a34ab1a3c26eae2493d, type: 2}
   safeZonePrefab: {fileID: 8694663767195707958, guid: 18c19a4f2ec281748bc28be998d79614, type: 3}

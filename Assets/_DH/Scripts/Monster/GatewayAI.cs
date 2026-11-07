@@ -7,13 +7,15 @@ using UnityEngine;
 /// 레이드 보스 Gateway의 패턴. 제자리에 서서 가장 가까운 플레이어를 바라보고, 일정 간격마다 공격 하나를 랜덤으로 고른다.
 /// <para>
 /// 공격 (같은 공격은 연속 두 번 고르지 않는다)<br/>
-/// - 패킷 던지기(Throw): 같은 오브젝트의 ProjectileAttack으로 가장 가까운 플레이어 쪽으로 수평으로 던진다. 연출은 ProjectileAttack.FireEffectPlayed.<br/>
+/// - 패킷 던지기(Throw): 같은 오브젝트의 ProjectileAttack으로 가장 가까운 플레이어 쪽으로 수평으로 던진다. 연출은 ProjectileAttack.FireEffectPlayed.
+///   모으는 동안(Fire Delay) 날아갈 줄을 빨간 띠로 보여 준다 (ThrowWarning, 시작할 때 이 오브젝트에 붙인다).<br/>
 /// - 패킷 낙하(Drop): 살아 있는 플레이어마다 그 발밑 땅에, 그리고 Drop Area 안 랜덤한 땅 Extra Drops곳에 FallingPacket을 만든다.
 ///   SlamEffectPlayed(연출)가 먼저 나가고, Slam Delay초 뒤에 그림자가 나타난다.<br/>
 /// - 웜 소환(Summon): SummonEffectPlayed(연출, Throw 모션)가 먼저 나가고 Summon Delay초 뒤 보스 양옆 땅 위에 웜을 만든다.
 ///   웜은 땅을 기어 플레이어를 쫓는 몬스터(GroundChaseAI + ContactDamage)다. 살아 있는 웜이 Max Worms 이상이면 고르지 않는다.<br/>
 /// - 때리기(Smash): 바라보는 쪽 Smash Range 안에 플레이어가 있을 때만 고른다. SlamEffectPlayed(연출)가 먼저 나가고 Smash Delay초 뒤 몸 앞 구역(Smash Size, 아래 변은 보스 아래 땅)의 플레이어에게 Smash Attack을 적용한다.<br/>
-/// - 공격 범위(Detect Range) 안에 살아 있는 플레이어가 없으면 공격하지 않는다.
+/// - 공격 범위(Detect Range) 안에 살아 있는 플레이어가 없으면 공격하지 않는다.<br/>
+/// - 벌칙 공격(PunishAttack): 기둥 기믹 실패 때 GatewayPhases가 부른다. 던지기와 웜 소환을 한 번씩 바로 한다 (웜 수 제한 무시).
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster(Is Boss 체크), ProjectileAttack과 함께 붙인다. 움직이지 않으므로 Rigidbody2D는 필요 없다.<br/>
@@ -41,10 +43,10 @@ public class GatewayAI : NetworkBehaviour
 	Pattern[] patterns = { Pattern.Throw, Pattern.Drop, Pattern.Summon, Pattern.Smash };
 
 	[SerializeField, Min(0.1f), Tooltip("공격 하나를 시작하고 다음 공격을 고르기까지 시간(초)")]
-	float attackInterval = 3f;
+	float attackInterval = 5f;
 
 	[SerializeField, Min(0f), Tooltip("플레이어를 처음 발견하고 첫 공격까지 기다리는 시간(초)")]
-	float firstAttackDelay = 2f;
+	float firstAttackDelay = 3f;
 
 	[SerializeField, Tooltip("공격할 대상 레이어. Player로 둔다")]
 	LayerMask targetLayers;
@@ -127,6 +129,8 @@ public class GatewayAI : NetworkBehaviour
 	// 모으는 중인 웜 소환·때리기
 	bool summonPending;
 	float summonTime;
+	// 이번 소환이 벌칙 공격이면 true. 웜 수 제한을 무시한다
+	bool summonIgnoresLimit;
 	bool smashPending;
 	float smashTime;
 	int smashDir;
@@ -164,6 +168,25 @@ public class GatewayAI : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// 벌칙 공격: 패킷 던지기와 웜 소환을 지금 한 번씩 한다. 웜 수 제한(Max Worms)은 무시한다.
+	/// 기둥 기믹을 실패했을 때 GatewayPhases가 부른다. 서버에서만 부른다. 다음 기본 공격은 한 간격 뒤.
+	/// </summary>
+	public void PunishAttack()
+	{
+		if (!IsAuthority() || monster.IsDead) return;
+
+		if (!thrower.IsCharging) thrower.Fire(new Vector2(facing, 0f));
+		if (wormPrefab != null)
+		{
+			PlaySummonEffect();
+			summonPending = true;
+			summonIgnoresLimit = true;
+			summonTime = Time.time + summonDelay;
+		}
+		nextAttackTime = Mathf.Max(nextAttackTime, Time.time + attackInterval);
+	}
+
+	/// <summary>
 	/// 지금 바라보는(던질) 플레이어. 공격 범위 안에 아무도 없으면 null.
 	/// </summary>
 	public PlayerHealth Target => target;
@@ -180,6 +203,8 @@ public class GatewayAI : NetworkBehaviour
 		thrower = GetComponent<ProjectileAttack>();
 		bodyCollider = GetComponent<Collider2D>();
 		spriteRenderer = GetComponent<SpriteRenderer>();
+		// 던지기 경고 표시. 프리팹을 고치지 않고 모든 화면에서 붙인다 (연출만, 네트워크 없음)
+		if (!TryGetComponent(out ThrowWarning _)) gameObject.AddComponent<ThrowWarning>();
 
 		targetFilter.SetLayerMask(targetLayers);
 		targetFilter.useTriggers = false;
@@ -204,7 +229,7 @@ public class GatewayAI : NetworkBehaviour
 		if (summonPending && now >= summonTime)
 		{
 			summonPending = false;
-			SpawnWorms();
+			SpawnWorms(summonIgnoresLimit);
 		}
 		if (smashPending && now >= smashTime)
 		{
@@ -314,6 +339,7 @@ public class GatewayAI : NetworkBehaviour
 			case Pattern.Summon:
 				PlaySummonEffect();
 				summonPending = true;
+				summonIgnoresLimit = false;
 				summonTime = Time.time + summonDelay;
 				break;
 
@@ -329,11 +355,11 @@ public class GatewayAI : NetworkBehaviour
 
 	// ── 웜 소환 ──
 
-	// 보스 양옆에 번갈아, 그 아래 땅 위에 웜을 만든다 (웜 그림 Pivot은 발밑)
-	void SpawnWorms()
+	// 보스 양옆에 번갈아, 그 아래 땅 위에 웜을 만든다 (웜 그림 Pivot은 발밑). 벌칙 공격이면 웜 수 제한을 무시한다
+	void SpawnWorms(bool ignoreLimit)
 	{
 		Vector2 boss = transform.position;
-		for (int i = 0; i < wormsPerSummon && AliveWorms() < maxWorms; i++)
+		for (int i = 0; i < wormsPerSummon && (ignoreLimit || AliveWorms() < maxWorms); i++)
 		{
 			int side = i % 2 == 0 ? 1 : -1;
 			Vector2 from = new Vector2(boss.x + side * wormSpawnDistance, boss.y + 5f);

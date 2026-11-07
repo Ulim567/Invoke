@@ -20,14 +20,18 @@
   - 땅에 있을 때만 Shift 상태를 읽는다. 공중에서는 땅을 떠난 순간(점프, 발판 내려가기, 낭떠러지)의 달리기 여부를 착지할 때까지 유지한다. 공중에서 Shift를 누르거나 떼도 속도가 바뀌지 않는다. 방향(←→)은 공중에서도 바꿀 수 있다.
   - 슬롯을 누르고 있는 동안(대상 고르는 중)은 Player 맵이 꺼져 `RunHeld`가 false라 달리지 않는다.
   - 대시는 달리기와 별개로 스킬(`common.dash`)이다.
-- 입력은 `PlayerInputReader`의 `MoveX`, `JumpPressed`, `DropPressed`, `RunHeld`만 읽는다. 내 캐릭터(`isLocalPlayer`)에서만 동작한다.
+- 입력은 `PlayerInputReader`의 `MoveX`, `MoveY`(검 타기 중에만, #317), `JumpPressed`, `DropPressed`, `RunHeld`만 읽는다. 내 캐릭터(`isLocalPlayer`)에서만 동작한다.
 - 이동 스킬 (#256)
   - 대시(`StartDash`): 그 방향으로 `Dash Distance`(임시 4칸)를 `Dash Duration`(0.15초)에 간다. 공중 가능. 대시 중에는 중력·좌우 입력·점프가 없다. 벽에 막히면 멈춘다.
   - 더블점프: 스킬 트리에서 `common.double_jump`를 해금했으면(`PlayerProgress.Unlocked`) 공중에서 Space로 한 번 더 뛴다. 땅에 닿으면 다시 쓸 수 있다. `PlayerProgress`가 없는 테스트 씬은 `Allow Double Jump Without Progress`를 따른다. 블록코딩의 더블점프는 `RequestAirJump`로 같은 공중 점프를 한다 (해금 검사 없음).
-  - 검 타기(`StartRide` / `StopRide`): 중력 없이 그 높이에 떠서 ←→로 `Ride Speed`(임시 9)로 `Ride Seconds`(임시 30초) 동안 난다. 시간이 다 되면 스스로 내려온다. 위아래는 입력(MoveY, 이우림)이 생기면 붙인다.
+  - 검 타기(`StartRide` / `StopRide`): 중력 없이 떠서 ←→로 `Ride Speed`(임시 9), ↑↓(`MoveY`, #317)로 `Ride Vertical Speed`(임시 6)로 `Ride Seconds`(임시 30초) 동안 난다. 키를 떼면 그 자리에 멈춘다(중력 없음). 시간이 다 되면 스스로 내려온다.
+    - ↓로 내려갈 때는 발밑의 발판(Platform)과 내 콜라이더의 충돌을 꺼서 뚫고 내려간다. ↓ + Space 내려가기와 같은 방식(`IsDropping`, 다른 플레이어는 그대로 섬)이고, 땅(Ground)에서는 멈춘다. 위로는 발판 설정(One Way)으로 원래 뚫린다.
+    - 가로·세로 속도는 따로 정한다. 대각선(→ + ↑)은 두 속도를 그대로 합친다.
+    - 위치는 소유 클라이언트가 정하고 `NetworkRigidbodyReliable2D`로 맞춰지므로, 위아래 이동도 다른 플레이어 화면에 그대로 보인다.
+    - ↑는 상호작용(`InteractPressed`)과 같은 키지만, 검 타는 중에는 장소 입구가 ↑를 무시한다 (#285, `PlaceInteractable`).
     - 나는 시간은 스킬 시간(20틱 = 0.4초)과 따로다. 스킬은 타기를 시작만 하고 먼저 끝난다.
     - 남은 시간은 `SwordRideTimerView`(임시 표시)가 머리 위 작은 바로 그린다. 왼쪽 끝 고정, 오른쪽 끝이 왼쪽으로 줄어든다.
-    - 슬롯 키를 누르고 있는 동안은 `MoveX`가 0이다(대상 고르기용, player-input.md). 슬롯 키를 떼고 ←→로 난다.
+    - 슬롯 키를 누르고 있는 동안은 `MoveX`·`MoveY`가 0이다(대상 고르기용, player-input.md). 그동안 그 자리에 떠 있고, 슬롯 키를 떼면 다시 ←→↑↓로 난다.
   - 대시·검 타기 동안은 중력을 0으로 두고 끝나면 처음 중력으로 되돌린다. 움직임을 잠그면(#207) 먼저 끝낸다.
   - 서버에서 다른 컴퓨터의 플레이어에 부르면 `[TargetRpc]`로 소유 클라이언트에서 한다 (돌진과 같은 방식, #223).
 - 바닥 판정
@@ -42,6 +46,7 @@
 - 발판 내려가기
   - 바닥에 서 있을 때 ↓ + Space(`DropPressed`)를 누르면, 발밑에 겹친 발판과 **내 콜라이더 사이의 충돌만** 끈다(`Physics2D.IgnoreCollision`). 발판 자체를 끄지 않으므로 다른 플레이어는 그대로 서 있다.
   - 발밑에 땅(Ground)이 하나라도 걸쳐 있으면 내려가지 않는다. 땅에서 ↓ + Space는 아무 일도 없다(점프도 하지 않는다).
+  - 검 타기 중 ↓도 같은 방식으로 발판을 뚫는다 (#317, 위 「검 타기」).
   - 내려가는 중(`IsDropping`)에는 발판을 바닥으로 치지 않는다. 그래서 발판을 지나는 동안 점프할 수 없다.
   - 충돌은 `Drop Duration`(기본 0.3초)이 지나고, **몸이 발판에서 완전히 빠져나온 뒤에** 다시 켠다. 몸이 걸친 채로 켜면 발판 속에 끼기 때문이다. 발판 바로 아래가 땅이라 몸이 걸친 채 서 있으면, 옆으로 걸어 나올 때까지 그 발판을 통과하는 상태로 둔다.
   - 위로 뚫고 오르기는 코드가 아니라 발판 설정(`PlatformEffector2D` One Way)이 한다. 아래 「발판 설정」을 지켜야 한다.
@@ -81,6 +86,9 @@
 | Run Speed Multiplier | 1.5 (임시) | PlayerMovement |
 | Platform Layers | Platform | PlayerMovement |
 | Drop Duration | 0.3 (초) | PlayerMovement |
+| Ride Speed | 9 (유닛/초, 임시) | PlayerMovement |
+| Ride Vertical Speed | 6 (유닛/초, 임시, #317) | PlayerMovement |
+| Ride Seconds | 30 (초, 임시) | PlayerMovement |
 
 ### 발판 설정 (맵을 만드는 사람이 지킬 것)
 - 발판 타일맵은 `Platform` 레이어에 둔다. 땅·벽은 `Ground`.
@@ -103,7 +111,7 @@
 | `IsGrounded` | - | `bool` | 지금 바닥(Ground·Platform)에 서 있으면 `true`. 올라가는 중, 발판을 내려가는 중에는 `false`. 읽을 때마다 새로 검사하므로 저장해 두지 않고 필요할 때 읽는다. 점프·착지 애니메이션, 이동 스킬에서 쓴다. |
 | `IsRunning` | - | `bool` | 달리는 속도로 좌우로 움직이고 있으면 `true` (멈춰 있으면 `false`). 공중에서는 땅을 떠난 순간의 값을 유지. 달리기 애니메이션에서 읽는다. |
 | `RunSpeedMultiplier` | - | `float` | 달리기 속도 배율. 달릴 때 이동 속도 = `PlayerStats.MoveSpeed` × 이 값 |
-| `IsDropping` | - | `bool` | 발판 아래로 내려가는 중이면 `true`. 내려가는 애니메이션이 필요하면 읽는다. |
+| `IsDropping` | - | `bool` | 발판 아래로 내려가는 중이면 `true` (↓ + Space, 검 타기 중 ↓로 발판을 뚫을 때 #317). 내려가는 애니메이션이 필요하면 읽는다. |
 | `SetMovementLocked(bool locked)` | 잠그기 / 풀기 | - | (#207) 잠근 동안 속도 0, 중력 없음(그 자리에 떠 있음), 진행 중인 돌진·내려가기 중단, 좌우·점프·내려가기 입력과 `StartLunge` 무시. 풀면 원래 중력으로 돌아가고 속도 0에서 시작. 장소 이동(`PlaceTravelClient`)이 씬을 바꾸는 동안 쓴다 |
 | `IsMovementLocked` | - | `bool` | (#207) 잠겨 있으면 `true` |
 | `StartLunge(float targetX)` | 돌진할 x 위치 | - | 그 x까지 좌우로 돌진한다 (`Lunge Speed` 30, 최대 `Lunge Max Time` 0.35초, 임시). 돌진하는 쪽을 바라본다. 돌진 중에는 좌우 입력을 무시하고, 닿거나 시간이 지나거나 경직·사망하면 멈춘다. 찌르기 스킬이 부른다 (#152). 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다 (#223) |
@@ -123,7 +131,7 @@
 | --- | --- |
 | `PlayerRunSimTest` | Test_JW의 RunTest. 켜고 Play → Host, Game 창을 한 번 클릭. 가짜 키로 걷기·달리기 속도, 달리다 점프 후 공중에서 Shift 떼기(달리는 속도 유지), 걷다 점프 후 공중에서 Shift 누르기(걷는 속도 유지)를 확인. 「[RunTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `MovementLockSimTest` | (#207) Test_JW의 LockTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 4초). 공중에서 잠그면 안 떨어짐, 잠근 동안 → + Space·돌진으로 안 움직임, 돌진 중에 잠그면 돌진이 멈춤, 풀면 다시 떨어짐을 확인. 「[LockTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
-| `MovementSkillSimTest` | (#256) Test_JW의 MoveSkillTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키, 약 8초). 대시(3칸 넘게, 높이 그대로), 더블점프(공중에서 다시 올라감, 세 번째 안 됨, 착지하면 다시 됨), 검 타기(소환검 없으면 실패, 타는 중 상태, 안 떨어짐, → 로 이동, 끝나면 내려오고 검 돌아옴)를 확인. 「[MoveSkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `MovementSkillSimTest` | (#256) Test_JW의 MoveSkillTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키). 대시(3칸 넘게, 높이 그대로), 더블점프(공중에서 다시 올라감, 세 번째 안 됨, 착지하면 다시 됨. 해금 안 됐으면 `RequestAirJump`로 확인, #317), 검 타기(소환검 없으면 실패, 타는 중 상태, 안 떨어짐, → 로 이동, 끝나면 내려오고 검 돌아옴), 위아래 검 타기(#317: ↑로 올라감, 떼면 멈춤, ↓로 내려감·발판 뚫기, 빈 슬롯 키를 누른 채 ↑면 `MoveY` 0이고 높이 그대로. 빈 슬롯이 하나는 있어야 함)를 확인. 약 10초. 「[MoveSkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
 - 이우림과 정한 것

@@ -79,12 +79,12 @@ public class CommonDoubleJump : MovementSkill
 }
 
 /// <summary>
-/// 검 타기 (#256). 사용 가능한 소환검 하나가 발밑에 붙고, PlayerMovement.RideSeconds(임시 30초) 동안 중력 없이 그 높이에서 ←→로 날아다닌다 (대상 없음, 소환검 필요).
+/// 검 타기 (#256). 사용 가능한 소환검 하나가 발밑에 붙고, PlayerMovement.RideSeconds(임시 30초) 동안 중력 없이 ←→↑↓로 날아다닌다 (대상 없음, 소환검 필요).
 /// <para>
 /// - 가장 먼저 소환한 사용 가능한 검을 쓴다 (SummonedSwords.Ride, Riding 상태). 소환검이 없으면 시작 전에 NoSummonedSwordError.<br/>
 /// - 스킬(20틱)은 타기를 시작만 하고 먼저 끝난다. 나는 시간은 스킬 시간과 따로다. 시간이 다 되면 내려오고(중력이 돌아옴) 검은 곁으로 돌아온다 (PlayerMovement, SummonedSwords가 각자 시간을 잼).<br/>
 /// - 스킬이 시작 직후 끊기면(실행 중단 등) 바로 내려오고 검도 돌아온다.<br/>
-/// - 위아래 조작은 입력(MoveY, 이우림)이 생기면 붙인다.
+/// - 위아래(↑↓, MoveY)는 PlayerMovement가 검 타기 중에 직접 읽는다 (#317). 이 스킬은 타기를 시작·끝내기만 한다.
 /// </para>
 /// </summary>
 public class CSwordRide : MovementSkill

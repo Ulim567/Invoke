@@ -13,7 +13,7 @@ using UnityEngine.UI;
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 줄고 남은 초) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
 ///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks. 거부: CastRejected.<br/>
-/// - 오른쪽 아래: 스킬 트리 · 레벨업 바로가기. 누르면 SkillTreeRequested / LevelUpRequested를 알린다 (화면 연결은 다음 이슈).<br/>
+/// - 오른쪽 아래: 스킬 트리 · 레벨업 바로가기. 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비에서만, 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
 /// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. 창(InputBlockingPanel)이 열린 동안에도 숨긴다. HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
 /// </para>
 /// </summary>
@@ -109,6 +109,7 @@ public class HudView : MonoBehaviour
 		RefreshTop();
 		RefreshBars();
 		RefreshSlots();
+		RefreshShortcuts();
 	}
 
 	// 연결 ---------------------------------------------------------------------
@@ -169,6 +170,23 @@ public class HudView : MonoBehaviour
 			SetText(bossCoreText, $"보스 코어 {progress.GetMaterialCount(BossCore)}");
 		}
 		SetText(placeText, "> " + PlaceName(player.scene.name));
+	}
+
+	// 받는 화면이 없으면 버튼을 끈다. 스킬 트리 창은 로비에만 있으므로 내 캐릭터가 로비에 있을 때만 켠다
+	// (호스트는 모든 장소 씬을 띄워 두어 다른 장소에서도 창이 살아 있으므로, 받는 쪽이 있는지만으로는 안 됨)
+	void RefreshShortcuts()
+	{
+		SetUsable(skillTreeButton, SkillTreeRequested != null && player.scene.name == PlaceScenes.Lobby);
+		SetUsable(levelUpButton, LevelUpRequested != null);
+	}
+
+	// 버튼 바탕이 투명해서 색 전환으로는 꺼진 게 안 보이므로 아이콘·글자를 함께 흐리게 한다
+	static void SetUsable(Button button, bool usable)
+	{
+		if (button == null || button.interactable == usable) return;
+		button.interactable = usable;
+		if (!button.TryGetComponent(out CanvasGroup group)) group = button.gameObject.AddComponent<CanvasGroup>();
+		group.alpha = usable ? 1f : 0.35f;
 	}
 
 	void RefreshBars()

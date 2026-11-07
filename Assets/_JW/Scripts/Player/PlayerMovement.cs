@@ -477,8 +477,38 @@ public class PlayerMovement : NetworkBehaviour
 	void FixedUpdate()
 	{
 		if (!isLocalPlayer || movementLocked) return;
+		PassThroughPlatformsWhileRising();
 		ApplyFallGravity();
 	}
+
+	// 위로 올라가는 동안(점프, 검 타기 ↑) 몸이 걸쳤거나 이번 물리 단계에 걸칠 발판과의 충돌을 끈다 (#372).
+	// One Way 발판은 반쯤 지나간 몸의 위로 가는 속도가 0에 가까워지면 겹친 것을 위에서 밟은 것으로 보고 밀어 올려서, 한 번 더 튕긴 것처럼 보인다.
+	// 충돌은 ↓ + Space 내려가기와 같이 몸이 발판에서 완전히 빠져나오면 Update가 다시 켠다. 다 올라갔으면 떨어지며 윗면에 착지하고, 못 올라갔으면 그대로 떨어진다
+	void PassThroughPlatformsWhileRising()
+	{
+		float vy = body.linearVelocity.y;
+		if (vy <= 0.01f) return;
+		Bounds bounds = bodyCollider.bounds;
+		// 이번 물리 단계에 올라갈 만큼 위로 늘린 상자
+		float rise = vy * Time.fixedDeltaTime;
+		Vector2 center = new Vector2(bounds.center.x, bounds.center.y + rise * 0.5f);
+		Vector2 size = new Vector2(bounds.size.x, bounds.size.y + rise);
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(platformLayers);
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		risingCheck.Clear();
+		if (ScenePhysics().OverlapBox(center, size, 0f, filter, risingCheck) == 0) return;
+		foreach (Collider2D platform in risingCheck)
+		{
+			if (droppedPlatforms.Contains(platform)) continue;
+			Physics2D.IgnoreCollision(bodyCollider, platform, true);
+			droppedPlatforms.Add(platform);
+		}
+		// 최소 시간 없이, 몸이 빠져나오는 대로 다시 켠다 (↓ + Space로 이미 정한 시간이 남아 있으면 그대로 둔다)
+		dropEndTime = Mathf.Max(dropEndTime, Time.time);
+	}
+
+	readonly List<Collider2D> risingCheck = new List<Collider2D>();
 
 	void Move()
 	{

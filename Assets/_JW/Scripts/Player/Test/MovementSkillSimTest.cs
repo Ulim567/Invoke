@@ -5,13 +5,13 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
 /// <summary>
-/// 이동 스킬 테스트 (#256). Test_JW의 MoveSkillTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 10초). 캐릭터가 바닥에 서 있고 좌우에 4칸 넘게 빈 공간이 있어야 한다.
+/// 이동 스킬 테스트 (#256). Test_JW의 MoveSkillTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 12초). 캐릭터가 바닥에 서 있고 좌우에 4칸 넘게 빈 공간이 있어야 한다.
 /// <para>
 /// 1. 대시: 바라보는 쪽으로 3칸 넘게 빠르게 가고, 대시 중 높이가 그대로<br/>
 /// 2. 더블점프: 점프 뒤 공중에서 한 번 더 뛰면 다시 올라감, 세 번째는 안 됨, 땅에 닿으면 다시 쓸 수 있음.
 /// 더블점프를 해금했으면(또는 PlayerProgress가 없으면) Space로, 아니면 블록코딩 경로(RequestAirJump)로 확인한다. 공용 Player에 PlayerProgress가 붙어 테스트 씬도 해금 목록을 따르기 때문 (#303)<br/>
 /// 3. 검 타기: 소환검이 없으면 NoSummonedSwordError. 있으면 검이 타는 중 상태, 떨어지지 않고 → 키로 옆으로 이동, 스킬이 끝나도 계속 탐(30초), 내리면 검이 돌아옴<br/>
-/// 4. 위아래 검 타기 (#317): ↑로 올라가고 떼면 그 높이에 멈춤, ↓로 내려감 (발판이 있으면 뚫고), 빈 슬롯 키를 누른 채 ↑를 누르면 MoveY가 0이고 높이 그대로 (슬롯 8칸이 다 차 있으면 이 항목은 실패로 알림)<br/>
+/// 4. 위아래 검 타기 (#317): ↑로 올라가고 떼면 그 높이에 멈춤, ↓로 내려가다 아래 바닥과 Ride Clearance만큼 떠서 멈춤(바닥에 선 것이 아님), ↓ + Space로 아래 발판을 뚫음(땅이면 그대로), 빈 슬롯 키를 누른 채 ↑를 누르면 MoveY가 0이고 높이 그대로 (슬롯 8칸이 다 차 있으면 이 항목은 실패로 알림)<br/>
 /// 「[MoveSkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다.
 /// </para>
 /// </summary>
@@ -109,9 +109,26 @@ public class MovementSkillSimTest : MonoBehaviour
 		yield return Keys(0.3f);
 		float yHold = player.transform.position.y;
 		Check($"위아래: 떼면 그 높이에 멈춤 (y {yStop:0.00} → {yHold:0.00})", Mathf.Abs(yHold - yStop) < 0.1f);
-		yield return Keys(0.3f, Key.DownArrow);
+		// ↓ 를 오래 눌러도 아래 바닥(땅·발판)과 Ride Clearance만큼 떠서 멈춘다 (소환검이 바닥에 묻히지 않음)
+		yield return Keys(1.2f, Key.DownArrow);
 		float yDown = player.transform.position.y;
-		Check($"위아래: ↓ 로 내려감, 발판이 있으면 뚫고 (y {yHold:0.0} → {yDown:0.0})", yHold - yDown > 1f);
+		float gap = movement.RideGapBelow(10f);
+		float clearance = movement.RideClearance;
+		Check($"위아래: ↓ 로 내려감 (y {yHold:0.0} → {yDown:0.0})", yHold - yDown > 0.3f || gap < clearance + 0.2f);
+		Check($"위아래: ↓ 를 계속 눌러도 바닥 위 Ride Clearance에서 멈춤 (높이 {gap:0.00} / {clearance:0.00})", float.IsInfinity(gap) || Mathf.Abs(gap - clearance) < 0.15f);
+		Check("위아래: 바닥에 선 것으로 보지 않음 (걷기 모션 안 나옴)", !movement.IsGrounded);
+		yield return Keys(0.05f);
+
+		// ↓ + Space: 아래가 발판이면 뚫고 내려가고, 땅이면 그대로 (평소 발판 내려가기와 같은 키, ↓ 먼저)
+		Bounds feet = player.GetComponent<Collider2D>().bounds;
+		bool platformBelow = player.scene.GetPhysicsScene2D().Raycast(new Vector2(feet.center.x, feet.min.y), Vector2.down, clearance + 0.3f, LayerMask.GetMask("Platform")).collider != null;
+		float yBeforeDrop = player.transform.position.y;
+		yield return Keys(0.05f, Key.DownArrow);
+		yield return Keys(0.05f, Key.DownArrow, Key.Space);
+		yield return Keys(0.6f, Key.DownArrow);
+		float yAfterDrop = player.transform.position.y;
+		if (platformBelow) Check($"위아래: ↓ + Space 로 아래 발판을 뚫고 내려감 (y {yBeforeDrop:0.0} → {yAfterDrop:0.0})", yBeforeDrop - yAfterDrop > 1f);
+		else Check($"위아래: 아래가 땅이면 ↓ + Space 로도 안 내려감 (y {yBeforeDrop:0.00} → {yAfterDrop:0.00})", Mathf.Abs(yBeforeDrop - yAfterDrop) < 0.15f);
 		yield return Keys(0.05f);
 
 		// 빈 슬롯을 눌러야 떼는 순간 아무것도 시전되지 않는다

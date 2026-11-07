@@ -222,7 +222,7 @@
 - 이동은 소유 클라이언트가 하므로 스킬은 `PlayerMovement`에 요청만 한다 (서버에서는 `[TargetRpc]`, player-movement.md 「이동 스킬」).
 - 대시 (`common.dash`): 바라보는 쪽으로 4칸 / 0.15초 (임시). 공중 가능, 맨손 가능.
 - 더블점프 (`common.double_jump`): 해금하면 공중에서 Space로 한 번 더 (패시브, `PlayerMovement`가 함). **슬롯에는 넣지 못한다** (`SlotLoadout.IsEquippableSkill`이 false). 블록코딩에서 부르면 공중 점프 한 번.
-- 검 타기 (`c.sword_ride`): 사용 가능한 소환검 1개가 발밑에 붙고(`SummonedSwords.Ride`, `Riding` 상태), 스킬 동안 중력 없이 ←→↑↓로 난다. `PlayerMovement.RideSeconds`(임시 30초) 동안 날고, 스킬(20틱)은 시작만 하고 먼저 끝난다. 시간이 다 되면 내려오고 검은 곁으로 (끊기면 바로). 대시·장소 이동·경직·사망으로 타기가 먼저 끝나도 검은 바로 곁으로 돌아와 다른 스킬에 쓸 수 있다 (#325, `PlayerMovement`가 서버에 알림). 이미 타는 중(`SummonedSwords.HasRidingSword`)에 다시 시전하면 두 번째 검을 쓰지 않는다. 머리 위 작은 바로 남은 시간 표시(`SwordRideTimerView`, 임시). 슬롯 키를 뗀 뒤 ←→↑↓로 난다. ↑↓는 `MoveY`(#271)를 `PlayerMovement`가 읽는다 (#317, player-movement.md). 키를 떼면 그 높이에 멈추고, ↓는 발판을 뚫고 내려간다(땅에서는 멈춤).
+- 검 타기 (`c.sword_ride`): 사용 가능한 소환검 1개가 발밑에 붙고(`SummonedSwords.Ride`, `Riding` 상태), 스킬 동안 중력 없이 ←→↑↓로 난다. `PlayerMovement.RideSeconds`(임시 30초) 동안 날고, 스킬(20틱)은 시작만 하고 먼저 끝난다. 시간이 다 되면 내려오고 검은 곁으로 (끊기면 바로). 대시·장소 이동·경직·사망으로 타기가 먼저 끝나도 검은 바로 곁으로 돌아와 다른 스킬에 쓸 수 있다 (#325, `PlayerMovement`가 서버에 알림). 이미 타는 중(`SummonedSwords.HasRidingSword`)에 다시 시전하면 두 번째 검을 쓰지 않는다. 머리 위 작은 바로 남은 시간 표시(`SwordRideTimerView`, 임시). 슬롯 키를 뗀 뒤 ←→↑↓로 난다. ↑↓는 `MoveY`(#271)를 `PlayerMovement`가 읽는다 (#317, player-movement.md). 키를 떼면 그 높이에 멈추고, 아래 바닥과는 `Ride Clearance`만큼 떠 있어 ↓로도 바닥에 닿지 않는다. 발판 아래로는 ↓ + Space로 내려간다(땅은 못 뚫음, #351).
 
 ### 검 소환·해제 (#102, #220)
 - 검 소환 (`c.summon_sword`, malloc)

@@ -58,6 +58,8 @@ public class PlayerMovement : NetworkBehaviour
 	[SerializeField, Min(0.1f)] private float rideSpeed = 9f;
 	[Tooltip("검을 타고 위아래(↑↓)로 나는 속도 (유닛/초, 임시, #317)")]
 	[SerializeField, Min(0.1f)] private float rideVerticalSpeed = 6f;
+	[Tooltip("검을 타는 동안 발밑과 아래 바닥(땅·발판) 사이에 남겨 둘 높이 (유닛, 임시, #351). 발밑의 소환검이 바닥에 묻히지 않고, 바닥에 선 것으로 보지 않게 한다")]
+	[SerializeField, Min(0.1f)] private float rideClearance = 0.6f;
 	[Tooltip("검을 타고 나는 시간 (초, 임시). 스킬이 끝나도 이 시간 동안 계속 난다")]
 	[SerializeField, Min(0.1f)] private float rideSeconds = 30f;
 
@@ -288,7 +290,8 @@ public class PlayerMovement : NetworkBehaviour
 
 	/// <summary>
 	/// 검 타기 시작 (#256): 중력 없이 그 높이에 떠서 ←→로 Ride Speed(임시 9), ↑↓로 Ride Vertical Speed(임시 6, #317)로 Ride Seconds(임시 30초) 동안 난다.<br/>
-	/// ↑↓를 떼면 그 높이에 멈춘다. ↓로 내려갈 때는 발판(Platform)을 뚫고 내려가고 땅(Ground)에서 멈춘다. 시간이 다 되거나 StopRide를 부르면 내려온다. 검 타기 스킬이 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
+	/// ↑↓를 떼면 그 높이에 멈춘다. 아래 바닥(땅·발판)과는 Ride Clearance만큼 띄워 두어 ↓로도 바닥에 닿지 않는다 (#351).
+	/// 발판 아래로 내려가려면 평소처럼 ↓ + Space를 누른다(발판만, 땅은 못 뚫음). 시간이 다 되거나 StopRide를 부르면 내려온다. 검 타기 스킬이 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
 	/// </summary>
 	public void StartRide()
 	{
@@ -517,9 +520,11 @@ public class PlayerMovement : NetworkBehaviour
 		{
 			float rideX = input.MoveX;
 			float rideY = input.MoveY;
-			body.linearVelocity = new Vector2(rideX * rideSpeed, rideY * rideVerticalSpeed);
-			// ↓로 내려가는 동안은 발판을 뚫고 내려간다 (#317). 위로는 발판 설정(One Way)으로 원래 뚫린다. 땅(Ground)에서는 멈춘다
-			if (rideY < 0f) PassThroughPlatformsUnderFeet();
+			// ↓ + Space: 발밑(Ride Clearance 안)의 발판을 뚫고 내려간다. 땅(Ground)은 뚫지 않는다. 위로는 발판 설정(One Way)으로 원래 뚫린다 (#351)
+			if (input.DropPressed) PassThroughPlatformsBelow(rideClearance + 0.2f);
+			// 아래 바닥과 Ride Clearance만큼 띄운다. 소환검이 바닥에 묻히지 않고, 바닥에 선 것(IsGrounded)으로 보지 않아 걷기 모션이 나오지 않는다 (#351)
+			float rideVy = KeepRideClearance(rideY * rideVerticalSpeed);
+			body.linearVelocity = new Vector2(rideX * rideSpeed, rideVy);
 			UpdateFacing(rideX);
 			return;
 		}
@@ -589,11 +594,26 @@ public class PlayerMovement : NetworkBehaviour
 		PassThroughPlatformsUnderFeet();
 	}
 
-	// 발밑에 겹친 발판(Platform)과 내 콜라이더의 충돌을 끄고 내려가는 중(IsDropping)으로 둔다. 땅(Ground)은 끄지 않는다.
-	// ↓ + Space 내려가기와, 검 타기 중 ↓로 발판을 뚫고 내려갈 때(#317) 쓴다. 다시 켜는 것은 Update가 한다 (Drop Duration이 지나고 몸이 빠져나오면)
+	// 발밑에 겹친 발판(Platform)을 뚫는다 (↓ + Space 내려가기)
 	void PassThroughPlatformsUnderFeet()
 	{
 		GetGroundCheckBox(out Vector2 center, out Vector2 size);
+		PassThroughPlatforms(center, size);
+	}
+
+	// 발밑에서 depth 아래까지 걸친 발판을 뚫는다 (검 타기 중 ↓ + Space, #351). 검을 타면 바닥과 Ride Clearance만큼 떠 있어서 발밑 상자로는 안 닿는다
+	void PassThroughPlatformsBelow(float depth)
+	{
+		Bounds bounds = bodyCollider.bounds;
+		Vector2 center = new Vector2(bounds.center.x, bounds.min.y - depth * 0.5f);
+		Vector2 size = new Vector2(bounds.size.x * groundCheckWidthRatio, depth);
+		PassThroughPlatforms(center, size);
+	}
+
+	// 상자에 겹친 발판(Platform)과 내 콜라이더의 충돌을 끄고 내려가는 중(IsDropping)으로 둔다. 땅(Ground)은 끄지 않는다.
+	// 다시 켜는 것은 Update가 한다 (Drop Duration이 지나고 몸이 빠져나오면)
+	void PassThroughPlatforms(Vector2 center, Vector2 size)
+	{
 		ContactFilter2D filter = new ContactFilter2D();
 		filter.SetLayerMask(platformLayers);
 		filter.useTriggers = Physics2D.queriesHitTriggers;
@@ -609,6 +629,57 @@ public class PlayerMovement : NetworkBehaviour
 		}
 		dropEndTime = Time.time + dropDuration;
 	}
+
+	// 검 타기 세로 속도를 아래 바닥과 Ride Clearance만큼 떨어지게 고친다 (#351).
+	// 내려가다 가까워지면 그 높이에서 멈추고, 이미 가까우면(바닥에서 타기 시작 등) 그 높이까지 밀어 올린다
+	float KeepRideClearance(float vy)
+	{
+		float gap = RideGapBelow(rideClearance + rideVerticalSpeed * 0.2f + 0.5f);
+		if (float.IsInfinity(gap)) return vy;
+		// 속도는 물리 단계(FixedUpdate)에서 쓰이므로 프레임 간격과 물리 간격 중 긴 쪽으로 계산해 넘어가지 않게 한다
+		float dt = Mathf.Max(Time.deltaTime, Time.fixedDeltaTime);
+		if (gap < rideClearance) return Mathf.Max(vy, Mathf.Min(rideVerticalSpeed, (rideClearance - gap) / dt));
+		if (vy < 0f) return Mathf.Max(vy, -(gap - rideClearance) / dt);
+		return vy;
+	}
+
+	readonly RaycastHit2D[] rideHits = new RaycastHit2D[8];
+
+	/// <summary>
+	/// 발밑에서 아래 바닥(땅·발판)까지의 높이 (유닛). maxDistance 안에 없으면 무한대. 뚫고 내려가는 중인 발판(IsDropping)은 뺀다 (#351).<br/>
+	/// 검 타기가 바닥과 띄울 높이를 정할 때 쓴다. 테스트(MovementSkillSimTest)도 읽는다.
+	/// </summary>
+	internal float RideGapBelow(float maxDistance)
+	{
+		Bounds bounds = bodyCollider.bounds;
+		// 발밑에서 조금 위에서 쏴서, 이미 바닥에 묻혀 있어도 그 바닥을 찾게 한다
+		const float lift = 0.05f;
+		Vector2 origin = new Vector2(bounds.center.x, bounds.min.y + lift);
+		Vector2 size = new Vector2(bounds.size.x * groundCheckWidthRatio, 0.02f);
+		int count = ScenePhysics().BoxCast(origin, size, 0f, Vector2.down, maxDistance + lift, rideHits, groundLayers);
+		float best = float.PositiveInfinity;
+		for (int i = 0; i < count; i++)
+		{
+			Collider2D hit = rideHits[i].collider;
+			if (hit == null || hit.isTrigger || droppedPlatforms.Contains(hit)) continue;
+			// 발이 발판 안에 있으면(아래에서 뚫고 올라오다 멈춤 등) 그 발판은 바닥으로 치지 않는다. 치면 발판 안쪽 밑변 위에 떠 버린다
+			if (((1 << hit.gameObject.layer) & platformLayers) != 0 && IsFeetInsidePlatform(hit)) continue;
+			best = Mathf.Min(best, rideHits[i].distance - lift);
+		}
+		return best;
+	}
+
+	// 발 바로 위(발판 한 칸 두께 안)에 같은 발판의 선이 있으면 발이 그 발판 안에 있는 것이다.
+	// 발판 타일맵은 덩어리마다 테두리 선(Outline)이라, 안에서 아래로 쏘면 밑변이, 위로 쏘면 윗변이 걸린다
+	bool IsFeetInsidePlatform(Collider2D platform)
+	{
+		Bounds bounds = bodyCollider.bounds;
+		RaycastHit2D up = ScenePhysics().Raycast(new Vector2(bounds.center.x, bounds.min.y), Vector2.up, 1.1f, platformLayers);
+		return up.collider == platform;
+	}
+
+	/// <summary>검 타기 중 아래 바닥과 띄워 두는 높이 (Inspector Ride Clearance). 테스트가 읽는다</summary>
+	internal float RideClearance => rideClearance;
 
 	// 내가 속한 장소 씬의 물리 세계에 묻는다. 서버는 씬마다 물리 세계가 따로 있어서 Physics2D로는 못 찾는다 (place-scenes.md). 씬이 바뀔 수 있어 저장하지 않고 매번 가져온다
 	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();

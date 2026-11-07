@@ -65,6 +65,10 @@ public class AccountFlow : MonoBehaviour
 	AccountFailure kickedReason;
 	// 지난 프레임에 클라이언트가 켜져 있었는지. 클라이언트가 꺼지는 순간을 알아내기 위함
 	bool wasClientActive;
+	// 스스로 로그아웃하려고 접속을 끊는 중인지. 이때는 「연결이 끊겼습니다」 팝업을 띄우지 않는다
+	bool loggingOut;
+	// SettingsView.LogoutRequested를 받고 있는지. 받는 쪽이 없으면 설정 창의 로그아웃 버튼이 꺼지므로, 로그아웃할 수 있을 때만 받는다
+	bool listeningLogout;
 
 	/// <summary>Base 씬 NetworkManager에 붙은 AccountFlow. 없으면 null.</summary>
 	public static AccountFlow Current { get; private set; }
@@ -105,6 +109,12 @@ public class AccountFlow : MonoBehaviour
 
 	/// <summary>서버 주소 칸을 고칠 수 있으면 true. 접속한 뒤에는 바꿔도 소용이 없으므로 false.</summary>
 	public bool CanEditServerAddress => !NetworkClient.active;
+
+	/// <summary>
+	/// 로그아웃할 수 있으면 true. 게임에 들어간 상태이고 이 컴퓨터가 서버를 켜지 않았을 때만.
+	/// 서버를 켠 컴퓨터(에디터 Host)가 로그아웃하면 서버도 꺼져 다른 접속자가 모두 끊기므로 막는다.
+	/// </summary>
+	public bool CanLogout => Page == AccountPage.Hidden && NetworkClient.active && !NetworkServer.active;
 
 	/// <summary>에디터 전용 Host 버튼을 보여 줄지. 빌드에서는 늘 false.</summary>
 	public bool CanStartHost => Application.isEditor && !NetworkClient.active && !NetworkServer.active;
@@ -156,6 +166,7 @@ public class AccountFlow : MonoBehaviour
 	void OnDestroy()
 	{
 		if (Current == this) Current = null;
+		SetListeningLogout(false);
 		if (authenticator == null) return;
 		authenticator.AuthResultReceived -= OnAuthResult;
 		authenticator.CreateCharacterResultReceived -= OnCreateCharacterResult;
@@ -169,6 +180,8 @@ public class AccountFlow : MonoBehaviour
 		bool clientActive = NetworkClient.active;
 		if (wasClientActive && !clientActive) OnClientStopped();
 		wasClientActive = clientActive;
+
+		SetListeningLogout(CanLogout);
 	}
 
 	#region 버튼이 부르는 함수
@@ -238,6 +251,17 @@ public class AccountFlow : MonoBehaviour
 		Notify();
 	}
 
+	/// <summary>
+	/// 설정 창의 「로그아웃」(SettingsView.LogoutRequested). 서버와 접속을 끊고 로그인 화면으로 돌아간다.
+	/// 스스로 끊는 것이므로 팝업은 띄우지 않는다. CanLogout이 false이면 아무것도 하지 않는다.
+	/// </summary>
+	public void Logout()
+	{
+		if (!CanLogout) return;
+		loggingOut = true;
+		NetworkManager.singleton.StopClient();
+	}
+
 	/// <summary>[에디터 전용] Host 버튼. 서버와 클라이언트를 함께 켠다. Skip Login In Editor가 켜져 있으면 로그인을 건너뛴다.</summary>
 	public void StartHost()
 	{
@@ -297,7 +321,8 @@ public class AccountFlow : MonoBehaviour
 		if (wasLoggedIn)
 		{
 			// 캐릭터 화면이나 게임 중에 끊기면 한 줄 문장은 놓치기 쉬우므로 팝업으로 알리고 로그인 화면으로 돌아간다
-			PopupMessage = kickedReason != AccountFailure.None ? kickedReason.ToMessage() : DisconnectedMessage;
+			// 스스로 로그아웃했을 때는 알릴 것이 없으므로 팝업 없이 돌아간다
+			if (!loggingOut) PopupMessage = kickedReason != AccountFailure.None ? kickedReason.ToMessage() : DisconnectedMessage;
 			Page = AccountPage.Login;
 			SetMessage("", AccountField.None);
 		}
@@ -305,9 +330,19 @@ public class AccountFlow : MonoBehaviour
 		else SetMessage(DisconnectedMessage, AccountField.None);
 
 		kickedReason = AccountFailure.None;
+		loggingOut = false;
 	}
 
 	#endregion
+
+	// 로그아웃할 수 있는 동안만 SettingsView.LogoutRequested를 받는다 (CanLogout 설명 참고)
+	void SetListeningLogout(bool listen)
+	{
+		if (listen == listeningLogout) return;
+		listeningLogout = listen;
+		if (listen) SettingsView.LogoutRequested += Logout;
+		else SettingsView.LogoutRequested -= Logout;
+	}
 
 	void ShowPage(AccountPage page)
 	{

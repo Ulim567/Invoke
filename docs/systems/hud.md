@@ -4,7 +4,7 @@
 
 ## 하는 일
 - 우림이 시안 8(사냥터)·8-1(로비)대로 게임 중 HUD를 그린다 (#324). 값은 읽기만 한다.
-- 하지 않는 일: 레이드 HUD(시안 8-3: 남은 시간, 보스 체력, 파티원), 스킬 트리 화면 열기 (다음 이슈). 설정 창은 settings.md, 레벨업 창은 level-up.md가 이벤트를 받아서 연다
+- 하지 않는 일: 레이드 HUD(시안 8-3: 남은 시간, 보스 체력, 파티원) (다음 이슈). 설정 창은 settings.md, 레벨업 창은 level-up.md, 스킬 트리 창은 `SkillTreePanel`(로비에만 있음)이 이벤트를 받아서 연다
 
 ## 동작 규칙
 - 프리팹 `Assets/_HW/UI/Hud/HudCanvas`를 **Base 씬**에 둔다. 정렬 순서 5 (게임 화면 바로 위, 다른 창보다 아래)
@@ -19,7 +19,7 @@
 | 아래 가운데 | HP 막대·숫자 | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
 | | 슬롯 8칸 Q W E R A S D F | 아래 「슬롯 상태」 |
-| 오른쪽 아래 | 스킬 트리 · 레벨업 바로가기 | 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested` |
+| 오른쪽 아래 | 스킬 트리 · 레벨업 바로가기 | 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비에 있을 때만, 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게) |
 
 ### 슬롯 상태
 | 상태 | 모습 | 읽는 곳 |

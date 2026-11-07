@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 using Mirror;
 
 /// <summary>
@@ -530,6 +531,8 @@ public class PlayerMovement : NetworkBehaviour
 		}
 
 		bool grounded = IsGrounded;
+		// 옆면으로 발판 안에 들어가 안쪽 밑변 위에 서 있으면, 그 발판을 뚫어 떨어뜨린다 (#357). 발판은 위에서만 밟혀야 한다
+		if (grounded && DropOutOfPlatformIfInside()) grounded = false;
 		// 땅에 닿으면 더블점프를 다시 쓸 수 있다 (#256)
 		if (grounded) airJumpUsed = false;
 		// 땅에 있을 때만 Shift를 읽는다. 공중에서는 땅을 떠난 순간(점프, 내려가기, 낭떠러지)의 값을 그대로 쓴다
@@ -669,14 +672,52 @@ public class PlayerMovement : NetworkBehaviour
 		return best;
 	}
 
-	// 발 바로 위(발판 한 칸 두께 안)에 같은 발판의 선이 있으면 발이 그 발판 안에 있는 것이다.
-	// 발판 타일맵은 덩어리마다 테두리 선(Outline)이라, 안에서 아래로 쏘면 밑변이, 위로 쏘면 윗변이 걸린다
+	// 발이 그 발판 안에 있는지 (#357). 발판 타일맵은 덩어리마다 테두리 선(Outline)이라 선만으로는 안과 밖을 알 수 없다.
+	// 발밑 바로 위 칸에 발판 타일이 있으면, 그 칸 윗변에서 아래로 쏴서 발보다 위에 발판 선(윗면)이 있는지 본다.
+	// 윗면에 제대로 서 있으면 그 칸이 비었거나(한 칸짜리 타일) 선이 발 높이에 있다(칸 가운데에 얹힌 얇은 판자 그림).
+	// 타일맵이 아닌 발판이면 발 바로 위(발판 한 칸 두께 안)에 같은 발판의 선이 있는지로 본다
 	bool IsFeetInsidePlatform(Collider2D platform)
 	{
 		Bounds bounds = bodyCollider.bounds;
-		RaycastHit2D up = ScenePhysics().Raycast(new Vector2(bounds.center.x, bounds.min.y), Vector2.up, 1.1f, platformLayers);
-		return up.collider == platform;
+		const float lift = 0.1f;
+		Vector2 feet = new Vector2(bounds.center.x, bounds.min.y + lift);
+		Tilemap tilemap = platform.GetComponentInParent<Tilemap>();
+		if (tilemap == null)
+		{
+			RaycastHit2D up = ScenePhysics().Raycast(feet, Vector2.up, 1f, platformLayers);
+			return up.collider == platform;
+		}
+		Vector3Int cell = tilemap.WorldToCell(feet);
+		if (!tilemap.HasTile(cell)) return false;
+		float cellTop = tilemap.CellToWorld(cell + Vector3Int.up).y;
+		Vector2 from = new Vector2(feet.x, cellTop + 0.02f);
+		float length = from.y - feet.y;
+		if (length <= 0f) return false;
+		RaycastHit2D down = ScenePhysics().Raycast(from, Vector2.down, length, platformLayers);
+		return down.collider == platform;
 	}
+
+	// 발밑의 발판 중 발이 그 안에 있는 것(안쪽 밑변을 밟고 있음)이 있으면 뚫고 내려가게 하고 true (#357).
+	// 발판 콜라이더(Outline)는 테두리 선이라, One Way가 옆면을 통과시켜 몸이 안으로 들어가면 밑변을 「위에서 밟는 선」으로 처리한다
+	bool DropOutOfPlatformIfInside()
+	{
+		if (IsDropping) return false;
+		GetGroundCheckBox(out Vector2 center, out Vector2 size);
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(platformLayers);
+		filter.useTriggers = Physics2D.queriesHitTriggers;
+		insideCheck.Clear();
+		if (ScenePhysics().OverlapBox(center, size, 0f, filter, insideCheck) == 0) return false;
+		foreach (Collider2D platform in insideCheck)
+		{
+			if (!IsFeetInsidePlatform(platform)) continue;
+			PassThroughPlatformsUnderFeet();
+			return true;
+		}
+		return false;
+	}
+
+	readonly List<Collider2D> insideCheck = new List<Collider2D>();
 
 	/// <summary>검 타기 중 아래 바닥과 띄워 두는 높이 (Inspector Ride Clearance). 테스트가 읽는다</summary>
 	internal float RideClearance => rideClearance;

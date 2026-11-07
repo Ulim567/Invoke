@@ -10364,6 +10364,114 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
   m_BlendShapeWeights: []
+--- !u!1001 &780216482
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 4843949838513889891, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_Name
+      value: RaidLobbyCanvas
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_Pivot.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8867010288392232194, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+--- !u!114 &780216483 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3893006232473182845, guid: 2c52d8dd9f4534b7eb9bc38a40dee791, type: 3}
+  m_PrefabInstance: {fileID: 780216482}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6dcca16b2856da41aea7377bcffc059, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RaidLobbyUI
 --- !u!1 &941525126
 GameObject:
   m_ObjectHideFlags: 0
@@ -10655,22 +10763,15 @@ PrefabInstance:
       propertyPath: m_Name
       value: RaidLobby
       objectReference: {fileID: 0}
+    - target: {fileID: 7151583236565215435, guid: 8d12b27bf3732544dbd3e161d7266ea4, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 8d12b27bf3732544dbd3e161d7266ea4, type: 3}
---- !u!114 &1000009344 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 8161353432152625319, guid: 8d12b27bf3732544dbd3e161d7266ea4, type: 3}
-  m_PrefabInstance: {fileID: 1000009343}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b6dcca16b2856da41aea7377bcffc059, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RaidLobbyUI
 --- !u!224 &1000009345 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 938136426138758776, guid: 8d12b27bf3732544dbd3e161d7266ea4, type: 3}
@@ -12153,7 +12254,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5cd2c675bd957f043be991fa50899800, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RaidLobbyOpener
-  raidLobby: {fileID: 1000009344}
+  raidLobby: {fileID: 780216483}
 --- !u!4 &1782920191
 Transform:
   m_ObjectHideFlags: 0
@@ -12642,3 +12743,4 @@ SceneRoots:
   - {fileID: 1720150803}
   - {fileID: 152179265}
   - {fileID: 1782920191}
+  - {fileID: 780216482}

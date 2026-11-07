@@ -202,7 +202,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\uB808\uC774\uB4DC \uC131\uACF5"
+  m_text: "\uB808\uC774\uB4DC \uD074\uB9AC\uC5B4"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
   m_sharedMaterial: {fileID: 6593387878686915224, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
@@ -212,7 +212,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 1, g: 0.84313726, b: 0.47843137, a: 1}
+  m_fontColor: {r: 0.36862746, g: 0.9490196, b: 0.8392157, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -339,7 +339,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\uBCF4\uC2A4\uB97C \uC4F0\uB7EC\uB728\uB838\uC5B4\uC694!"
+  m_text: "\uBCF4\uC2A4\uB97C \uC4F0\uB7EC\uB728\uB838\uC5B4\uC694"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
   m_sharedMaterial: {fileID: 6593387878686915224, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
@@ -731,9 +731,9 @@ MonoBehaviour:
   - {fileID: 6718865521059884725}
   - {fileID: 1423444888931262305}
   rewardText: {fileID: 6335104439316730672}
-  clearTitle: "\uB808\uC774\uB4DC \uC131\uACF5"
-  clearSubtitle: "\uBCF4\uC2A4\uB97C \uC4F0\uB7EC\uB728\uB838\uC5B4\uC694!"
-  clearColor: {r: 1, g: 0.84313726, b: 0.47843137, a: 1}
+  clearTitle: "\uB808\uC774\uB4DC \uD074\uB9AC\uC5B4"
+  clearSubtitle: "\uBCF4\uC2A4\uB97C \uC4F0\uB7EC\uB728\uB838\uC5B4\uC694"
+  clearColor: {r: 0.36862746, g: 0.9490196, b: 0.8392157, a: 1}
   failTitle: "\uB808\uC774\uB4DC \uC2E4\uD328"
   failSubtitle: "\uD30C\uD2F0\uAC00 \uBAA8\uB450 \uC4F0\uB7EC\uC84C\uC5B4\uC694"
   failColor: {r: 0.8784314, g: 0.3137255, b: 0.3764706, a: 1}

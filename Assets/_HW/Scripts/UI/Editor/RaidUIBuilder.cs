@@ -54,9 +54,9 @@ public static class RaidUIBuilder
 		Image top = Accent(banner, "AccentTop", true);
 		Image bottom = Accent(banner, "AccentBottom", false);
 
-		TMP_Text title = Text(banner, "Title", "레이드 성공", 22, font, new Color32(0xFF, 0xD7, 0x7A, 0xFF));
+		TMP_Text title = Text(banner, "Title", "레이드 클리어", 22, font, new Color32(0x5E, 0xF2, 0xD6, 0xFF));
 		Place(title.rectTransform, 0, 26, 400, 30);
-		TMP_Text subtitle = Text(banner, "Subtitle", "보스를 쓰러뜨렸어요!", 11, font, new Color32(0xE8, 0xEC, 0xFF, 0xFF));
+		TMP_Text subtitle = Text(banner, "Subtitle", "보스를 쓰러뜨렸어요", 11, font, new Color32(0xE8, 0xEC, 0xFF, 0xFF));
 		Place(subtitle.rectTransform, 0, 2, 400, 16);
 		// 보상 줄 (시안 12): 클리어일 때만 RaidResultView가 채운다
 		TMP_Text reward = Text(banner, "Reward", "보스 코어 +1    버그 조각 +5    경험치 +200", 10, font, new Color32(0xE8, 0xEC, 0xFF, 0xFF));

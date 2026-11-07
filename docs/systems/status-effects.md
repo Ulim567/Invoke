@@ -76,7 +76,7 @@
 
 - `StatusApplied` / `StatusRemoved`를 받아 걸린 상태마다 아이콘 하나를 띄운다. 값은 바꾸지 않는다 (표시 전용).
 - 아이콘은 몬스터의 자식으로 만들어져 몬스터를 따라다니고, 몬스터가 사라지면 같이 사라진다.
-- 위치: 콜라이더 윗변에서 `heightAboveTop`(0.6) 위. 여러 개면 걸린 순서대로 `spacing`(1.1) 간격으로 가로로 놓고, 몸 가운데에 맞춰 정렬한다.
+- 위치: 콜라이더 윗변에서 `heightAboveTop`(1.4) 위(그 아래에 몬스터 체력 바가 뜬다, monster-health-bar.md). 여러 개면 걸린 순서대로 `spacing`(1.1) 간격으로 가로로 놓고, 몸 가운데에 맞춰 정렬한다.
 - 같은 상태를 다시 걸어도 아이콘은 늘지 않는다. 풀리면 그 아이콘만 사라지고 남은 것이 다시 가운데 정렬된다.
 - 아이콘 프리팹: `Assets/_JW/Resources/StatusIcon.prefab` (SpriteRenderer, Sorting Layer `WorldUI`). 인스펙터 `iconPrefab`이 비어 있으면 이걸 불러온다.
 - 그림: 임혜원 #114 `StatusIcons_0..4`를 `StatusType` 순서(출혈, 표식, 기절, 실명, 이속 감소)로 쓴다. 그림을 바꾸려면 StatusIcon 프리팹의 `sprites`만 바꾸면 된다.

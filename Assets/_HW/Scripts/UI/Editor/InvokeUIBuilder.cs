@@ -29,6 +29,13 @@ public static class InvokeUIBuilder
 
 	static TMP_FontAsset font;
 
+	// 편집 화면 칸 크기 (960×540 기준, 시안 6 비율)
+	const float LayoutLeft = 180;    // 왼쪽 함수 목록
+	const float LayoutTop = 39;      // 위 줄
+	const float LayoutPalette = 207; // 오른쪽 블록 목록
+	const float LayoutStrip = 33;    // 오른쪽 끝 세로 탭
+	const float LayoutStatus = 22;   // 아래 줄
+
 	[MenuItem("Invoke/UI/편집·장착 화면 새 디자인으로 만들기")]
 	public static void BuildAll()
 	{
@@ -39,8 +46,8 @@ public static class InvokeUIBuilder
 		ListItemView item = BuildListItem("ListItem", "ui_item");
 		ListItemView equipItem = BuildListItem("EquipItem", "ui_card");
 		ListHeaderView header = BuildListHeader();
-		Button save = BuildTopButton("SaveButton", "ui_button", "저장", Color.white);
-		Button compile = BuildTopButton("CompileButton", "ui_button_accent", "컴파일", Hex("1A1E3A"));
+		Button save = BuildTopButton("SaveButton", "Assets/_HW/UI/Settings/set_button.png", "저장", Color.white); // 시안 6: 테두리 버튼 (설정·레이드 화면과 같은 그림)
+		Button compile = BuildTopButton("CompileButton", "Assets/_HW/UI/Account/acc_button.png", "컴파일", Hex("1A1E3A")); // 시안 6: 주황 (접속·레이드 화면 버튼과 같은 그림)
 		RectTransform paletteGroup = BuildPaletteGroup();
 		RectTransform dropdown = BuildDropdownPopup();
 		RectTransform marker = BuildInsertMarker();
@@ -73,7 +80,7 @@ public static class InvokeUIBuilder
 		row.childForceExpandHeight = true;
 		// 높이를 늘리지 않는다 (Horizontal Layout Group이 세로로 늘어나고 싶다고 알리는 것을 막음)
 		LayoutElement itemSize = root.AddComponent<LayoutElement>();
-		itemSize.preferredHeight = 16;
+		itemSize.preferredHeight = 21; // 시안 6: 한 줄 14 (640 기준) = 21 (960 기준)
 		itemSize.flexibleHeight = 0;
 
 		GameObject tag = NewUI("Tag", root.transform);
@@ -89,6 +96,8 @@ public static class InvokeUIBuilder
 		nameLayout.preferredWidth = 1;
 		nameLayout.flexibleWidth = 1;
 		TMP_Text detail = Text(root.transform, "Detail", "Q", 9, Hex("8890C0"), TextAlignmentOptions.Right);
+		// 시안 6: 편집 화면 함수 목록에는 오른쪽 글자(키, 코드 크기)가 없다. 장착 화면(EquipItem)은 그대로
+		if (prefabName == "ListItem") detail.gameObject.SetActive(false);
 
 		ListItemView view = root.AddComponent<ListItemView>();
 		Set(view, "button", button);
@@ -145,8 +154,8 @@ public static class InvokeUIBuilder
 	{
 		Button button = NewButton(null, prefabName, sprite, label, 10, textColor);
 		LayoutElement layout = button.gameObject.AddComponent<LayoutElement>();
-		layout.preferredWidth = 38;
-		layout.preferredHeight = 16;
+		layout.preferredWidth = 58;
+		layout.preferredHeight = 24;
 		return SavePrefab(button.gameObject, prefabName).GetComponent<Button>();
 	}
 
@@ -155,7 +164,11 @@ public static class InvokeUIBuilder
 	{
 		GameObject root = NewUI("PaletteGroup", null);
 		FlowLayoutGroup flow = root.AddComponent<FlowLayoutGroup>();
-		flow.padding = new RectOffset(2, 2, 0, 4);
+		flow.padding = new RectOffset(2, 2, 0, 6);
+		// 시안 6: 블록 목록의 칩은 편집 영역 블록보다 조금 작다 (0.85배)
+		var so = new SerializedObject(flow);
+		so.FindProperty("childScale").floatValue = 0.85f;
+		so.ApplyModifiedPropertiesWithoutUndo();
 		return SavePrefab(root, "PaletteGroup").GetComponent<RectTransform>();
 	}
 
@@ -421,6 +434,10 @@ public static class InvokeUIBuilder
 		GameObject root = PrefabUtility.LoadPrefabContents(EditorCanvasPath);
 		try
 		{
+			// 시안 6처럼 촘촘하게: 기준 해상도를 960×540으로 (640×360의 1.5배). 창은 화면에 꽉 찬 채로 글자·블록·칸이 2/3 크기가 되고 코드 칸이 넓어진다
+			CanvasScaler scaler = root.GetComponent<CanvasScaler>();
+			if (scaler != null) scaler.referenceResolution = new Vector2(960, 540);
+
 			Transform window = root.transform.Find("Window");
 			SetImage(window.gameObject, "ui_window", Image.Type.Sliced);
 
@@ -431,18 +448,19 @@ public static class InvokeUIBuilder
 			if (oldTitle != null) Object.DestroyImmediate(oldTitle.gameObject);
 
 			// 왼쪽 함수 목록 (전체 높이)
-			Transform functionPanel = Panel(window, "FunctionPanel", "함수", 22, 11);
-			LeftStretch(Rect(functionPanel), 0, 136, 0, 0);
+			// 크기는 시안 6 비율 (640 기준 → 960 기준 1.5배): 왼쪽 120 → 180, 위 줄 26 → 39, 블록 목록 138 → 207, 세로 탭 22 → 33
+			Transform functionPanel = Panel(window, "FunctionPanel", "함수", LayoutTop, 13);
+			LeftStretch(Rect(functionPanel), 0, LayoutLeft, 0, 0);
 			RectTransform functionList = Child(functionPanel, "List");
-			Stretch(functionList, 4, 4, 26, 4);
+			Stretch(functionList, 6, 6, LayoutTop + 6, 6);
 			VerticalList(functionList.gameObject, 1);
 
 			// 위쪽 줄: 함수 이름, 저장 상태, 컴파일, 저장
 			RectTransform topBar = (RectTransform)window.Find("TopBar");
-			TopStretch(topBar, 136, 0, 0, 22);
+			TopStretch(topBar, LayoutLeft, 0, 0, LayoutTop);
 			SetImage(topBar.gameObject, "ui_titlebar", Image.Type.Sliced);
 			HorizontalLayoutGroup topRow = GetOrAdd<HorizontalLayoutGroup>(topBar.gameObject);
-			topRow.padding = new RectOffset(8, 24, 3, 3);
+			topRow.padding = new RectOffset(12, 36, 7, 7);
 			topRow.spacing = 6;
 			topRow.childAlignment = TextAnchor.MiddleLeft;
 			topRow.childControlWidth = topRow.childControlHeight = true;
@@ -459,18 +477,18 @@ public static class InvokeUIBuilder
 			if (close != null)
 			{
 				SetImage(close.gameObject, "ui_close", Image.Type.Simple);
-				Place(Rect(close), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-4, -4), new Vector2(14, 14));
+				Place(Rect(close), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-8, -10), new Vector2(18, 18));
 			}
 
 			// 오른쪽 블록 목록
 			RectTransform palette = (RectTransform)window.Find("Palette");
-			RightStretch(palette, 14, 110, 22, 0);
+			RightStretch(palette, LayoutStrip, LayoutPalette, LayoutTop, 0);
 			SetImage(palette.gameObject, "ui_panel", Image.Type.Sliced);
 			Transform content = palette.Find("Content");
 			if (content != null)
 			{
 				VerticalLayoutGroup list = GetOrAdd<VerticalLayoutGroup>(content.gameObject);
-				list.padding = new RectOffset(4, 4, 4, 4);
+				list.padding = new RectOffset(8, 8, 8, 8);
 				list.spacing = 2;
 				list.childControlWidth = list.childControlHeight = true;
 				list.childForceExpandWidth = true;
@@ -478,8 +496,8 @@ public static class InvokeUIBuilder
 			}
 
 			// 오류 창 (블록 목록과 같은 자리. 오른쪽 세로 막대로 바꾼다)
-			Transform errorPanel = Panel(window, "ErrorView", "오류", 16, 9);
-			RightStretch(Rect(errorPanel), 14, 110, 22, 0);
+			Transform errorPanel = Panel(window, "ErrorView", "오류", 22, 11);
+			RightStretch(Rect(errorPanel), LayoutStrip, LayoutPalette, LayoutTop, 0);
 			TMP_Text errorText = GetOrText(errorPanel, "ErrorText", "", 9, Muted, TextAlignmentOptions.TopLeft);
 			errorText.textWrappingMode = TextWrappingModes.Normal;
 			errorText.overflowMode = TextOverflowModes.Overflow;
@@ -490,10 +508,10 @@ public static class InvokeUIBuilder
 
 			// 오른쪽 끝 세로 막대: 블록 / 오류
 			RectTransform strip = Child(window, "TabStrip");
-			RightStretch(strip, 0, 14, 22, 0);
+			RightStretch(strip, 0, LayoutStrip, LayoutTop, 0);
 			SetImage(strip.gameObject, "ui_titlebar", Image.Type.Sliced).raycastTarget = false;
-			Button blockTab = Tab(strip, "BlockTab", "블\n록", 4, 40);
-			Button errorTab = Tab(strip, "ErrorTab", "오\n류", 48, 54);
+			Button blockTab = Tab(strip, "BlockTab", "블\n록", 6, 54);
+			Button errorTab = Tab(strip, "ErrorTab", "오\n류", 66, 66);
 			// 오류 수 빨간 동그라미 (오류 탭 아래쪽)
 			RectTransform tabBadge = Child(errorTab.transform, "Badge");
 			Place(tabBadge, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 3), new Vector2(10, 10));
@@ -505,7 +523,7 @@ public static class InvokeUIBuilder
 
 			// 컴파일 성공 알림: 편집 영역 위 가운데 초록 알약
 			RectTransform okBadge = Child(window, "CompileOk");
-			Place(okBadge, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(6, -28), new Vector2(84, 16));
+			Place(okBadge, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(6, -(LayoutTop + 8)), new Vector2(100, 20));
 			Image okImage = GetOrAdd<Image>(okBadge.gameObject);
 			okImage.sprite = LoadShape("blk_value");
 			okImage.type = Image.Type.Sliced;
@@ -518,7 +536,7 @@ public static class InvokeUIBuilder
 
 			// 휴지통: 놓인 블록을 끄는 동안 블록 목록 위에 보인다
 			RectTransform trash = Child(window, "TrashZone");
-			RightStretch(trash, 0, 124, 22, 0);
+			RightStretch(trash, 0, LayoutPalette + LayoutStrip, LayoutTop, 0);
 			Image trashImage = GetOrAdd<Image>(trash.gameObject);
 			trashImage.sprite = LoadSprite("ui_panel");
 			trashImage.type = Image.Type.Sliced;
@@ -530,7 +548,7 @@ public static class InvokeUIBuilder
 
 			// 가운데 편집 영역 (블록은 자기 너비만큼)
 			RectTransform workspace = (RectTransform)window.Find("Workspace");
-			Stretch(workspace, 136, 124, 22, 16);
+			Stretch(workspace, LayoutLeft, LayoutPalette + LayoutStrip, LayoutTop, LayoutStatus);
 			SetImage(workspace.gameObject, "ui_grid", Image.Type.Tiled);
 			VerticalLayoutGroup blocks = GetOrAdd<VerticalLayoutGroup>(workspace.gameObject);
 			blocks.padding = new RectOffset(12, 12, 12, 12);
@@ -540,7 +558,7 @@ public static class InvokeUIBuilder
 
 			// 아래 줄: 블록 수·코드 크기
 			RectTransform statusBar = Child(window, "StatusBar");
-			BottomStretch(statusBar, 136, 124, 0, 16);
+			BottomStretch(statusBar, LayoutLeft, LayoutPalette + LayoutStrip, 0, LayoutStatus);
 			SetImage(statusBar.gameObject, "ui_bar", Image.Type.Sliced);
 			TMP_Text info = GetOrText(statusBar, "InfoText", "", 9, Muted, TextAlignmentOptions.MidlineRight);
 			Stretch(info.rectTransform, 4, 6, 0, 0);
@@ -690,7 +708,7 @@ public static class InvokeUIBuilder
 	{
 		Transform found = strip.Find(name);
 		Button tab = found != null ? found.GetComponent<Button>() : NewButton(strip, name, "ui_button", label, 9, Color.white);
-		Place(Rect(tab.gameObject), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -y), new Vector2(12, height));
+		Place(Rect(tab.gameObject), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -y), new Vector2(22, height));
 		TMP_Text text = tab.transform.Find("Text").GetComponent<TMP_Text>();
 		Stretch(text.rectTransform, 0, 0, 2, 14); // 아래 14는 오류 수 동그라미 자리
 		text.text = label;
@@ -709,7 +727,8 @@ public static class InvokeUIBuilder
 		SetImage(header.gameObject, "ui_panel_header", Image.Type.Sliced).raycastTarget = false;
 		TMP_Text text = GetOrText(header, "Title", title, fontSize, Gold, TextAlignmentOptions.MidlineLeft);
 		text.text = title;
-		Stretch(text.rectTransform, 5, 4, 0, 1);
+		text.fontStyle = FontStyles.Bold; // 시안 6: 「함수」 굵게
+		Stretch(text.rectTransform, 12, 4, 0, 1);
 		return panel;
 	}
 
@@ -801,8 +820,10 @@ public static class InvokeUIBuilder
 
 	static Sprite LoadSprite(string name)
 	{
-		Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(FrameDir + name + ".png");
-		if (sprite == null) Debug.LogWarning($"[InvokeUIBuilder] {FrameDir}{name}.png 스프라이트를 찾지 못함");
+		// "Assets/"로 시작하면 그 경로 그대로 (다른 화면의 그림을 같이 쓸 때)
+		string path = name.StartsWith("Assets/") ? name : FrameDir + name + ".png";
+		Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+		if (sprite == null) Debug.LogWarning($"[InvokeUIBuilder] {path} 스프라이트를 찾지 못함");
 		return sprite;
 	}
 

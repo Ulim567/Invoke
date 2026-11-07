@@ -66,6 +66,9 @@
 ## 머리 위 닉네임 (#362)
 - `NameTagView`(HudCanvas 안): 이 화면의 플레이어(`PlayerRoster`) 중 내 캐릭터와 같은 장소(`IsInMyPlace`)에 있는 플레이어 머리 위에 `PlayerPublicInfo.Nickname`을 띄운다. 내 이름은 청록, 다른 플레이어는 흰색
 - 위치: 콜라이더 윗변 + 0.35칸을 화면 좌표로. 숨겨진(쓰러진 뒤) 플레이어, 닉네임이 빈 플레이어는 띄우지 않는다
+  - 기준 (#426): 보간된 캐릭터 위치(`transform.position`) + 몸 기준점에서 콜라이더 윗변까지의 거리. 콜라이더 `bounds`는 물리 단계마다만 바뀌어 그대로 쓰면 끊김
+  - 시점 (#426): 카메라 이동(`PlayerCameraFollow`, `CameraBounds`)이 끝난 뒤 UI를 그리기 직전(`Canvas.willRenderCanvases`)
+  - 화면 좌표 (#426): `Camera.WorldToScreenPoint`를 쓰지 않고 카메라 `transform` 위치(`PixelPerfectCamera.RoundToPixel`로 맞춤)로 직접 계산. Pixel Perfect Camera가 카메라 행렬을 그리기 직전에만 넣어서 `WorldToScreenPoint`는 지난 프레임 카메라 위치로 계산됨
 - 이름표는 프리팹에 8개 미리 만들어 둔다. HUD와 같이 창이 열리면 숨는다
 - 플레이어 프리팹은 고치지 않는다
 

@@ -15,7 +15,7 @@
 
 | 애니메이션 | 읽는 것 | 담당 |
 | --- | --- | --- |
-| Run | Rigidbody2D 가로 속도가 `Run Threshold`(0.1)보다 크면 | - |
+| Run | 가로 속도(`PlayerAnimator.HorizontalSpeed`)가 `Run Threshold`(0.1)보다 크면. 내 캐릭터는 Rigidbody2D 가로 속도, 다른 플레이어의 캐릭터는 위치 변화로 계산한 값 (아래 「다른 플레이어의 이동 속도」) | 이우림 (#356) |
 | Jump | `PlayerMovement.IsGrounded`가 false면. PlayerMovement가 없으면 Ground·Platform에 닿아 있는지로 임시 판단. 클립의 25% 지점(웅크림 다음)부터 튼다. 더블점프(`PlayerMovement.AirJumped`, #256)면 처음부터 다시 튼다 | 박진우 |
 | 스킬 상태 (`c_wide_slash` 등) | `SkillEffectEvents.Started`(스킬 ID)를 받으면 그 스킬의 상태를 `SkillMotionTable`의 시간 동안 (아래 「스킬 모션」) | 박진우 |
 | Cast | `SkillEffectEvents`가 없는 시험용 플레이어는 예전처럼 `FunctionExecutorNetwork.TaskStarted`(없으면 `FunctionExecutor.TaskStarted`)에 `Cast Duration`(0.5초) 동안 | 이우림 |
@@ -27,6 +27,18 @@
 - 컴포넌트가 없으면 그 상태는 건너뛴다. 예: `PlayerHealth`가 없으면 피격·사망 애니메이션이 나오지 않을 뿐 에러는 나지 않는다.
 - Animator Controller에는 위 상태만 두고 Transition은 만들지 않는다. Slash·Throw·Summon·Lunge 상태와 클립은 메뉴 Invoke → 플레이어 → 스킬 모션 붙이기(`PlayerMotionBuilder`)가 만든다. 상태 이름은 위 표의 영어 이름과 같아야 한다.
 - 클립은 12fps로 만들고, 상태의 Speed로 길이를 맞춘다.
+
+### 다른 플레이어의 이동 속도 (#356)
+- 문제: 다른 플레이어의 캐릭터는 내 화면에서 Kinematic이고 `NetworkRigidbodyReliable2D`가 위치만 옮겨서 Rigidbody2D 가로 속도가 늘 0 → Run이 나오지 않음 (점프는 `PlayerMovement.IsGrounded`가 발밑 물리 검사라 정상)
+- 계산: 다른 플레이어의 캐릭터일 때만 `PlayerAnimator`가 프레임마다 `(이번 x - 지난 x) / Time.deltaTime`로 가로 속도를 계산 (`HorizontalSpeed`)
+  - 다른 플레이어인지: 네트워크가 켜져 있고(`NetworkClient.active` 또는 `NetworkServer.active`), `NetworkIdentity.isLocalPlayer`가 false이고 `NetworkTransformBase`가 있을 때. 그 밖(내 캐릭터, 네트워크를 켜지 않은 시험용 플레이어)은 Rigidbody2D 가로 속도
+  - 네트워크로 보내는 값 없음. 각 화면이 보이는 위치로 계산
+- 순간이동 거르기: 장소 이동(`ServerTeleport`)이나 처음 나타난 직후의 위치 변화는 이동이 아니므로 속도를 0으로 둠
+  - 기준: Mirror가 순간이동과 생성 때 보간 목록을 비움. 목록이 1개 이하인 프레임은 계산하지 않음 (호스트는 `serverSnapshots`, 클라이언트는 `clientSnapshots`)
+  - 거리 기준으로 가르지 않은 이유: 빠른 낙하나 검 타기와 구분이 흐려짐
+- `HorizontalSpeed`: `PlayerAnimator`의 읽기 속성. 시험이 읽음
+- 시험: `RemoteMotionTest` ([place-scenes.md](place-scenes.md) 「시험」). 에디터 호스트와 빌드 클라이언트가 서로의 캐릭터를 걷게 하고, 구경하는 쪽에서 `Animator`가 `Run`을 재생하는지와 `SpriteRenderer` 그림이 바뀌는지 확인
+  - 못 한 것: 순간이동으로 위치가 뛰는 장면이 시험에서 관측되지 않아, 순간이동 거르기가 일한 것은 확인하지 못함. 키 입력(`PlayerMovement`)으로 걷는 경로는 사람이 두 창에서 눈으로 확인
 
 ### 스킬 모션 (#288)
 - 스킬마다 Animator 상태가 하나 있다. 이름은 스킬 ID의 점을 밑줄로 바꾼 것 (`c.wide_slash` → `c_wide_slash`).

@@ -45,6 +45,7 @@ GameObject:
   - component: {fileID: 8456120021185903775}
   - component: {fileID: 5657045320687703192}
   - component: {fileID: 640899364796495694}
+  - component: {fileID: -8803756257136009029}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -326,6 +327,7 @@ MonoBehaviour:
   allowDoubleJumpWithoutProgress: 1
   rideSpeed: 9
   rideVerticalSpeed: 6
+  rideClearance: 0.6
   rideSeconds: 30
   body: {fileID: 6317378190948175376}
   bodyCollider: {fileID: 1304864832004228049}
@@ -521,6 +523,7 @@ MonoBehaviour:
   input: {fileID: 3376740816470663825}
   sword: {fileID: 4021862485252956600}
   summoned: {fileID: 873190046994748258}
+  health: {fileID: 0}
 --- !u!114 &873190046994748258
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -764,6 +767,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerLevelStats
   maxHpPerLevel: 10
   attackPowerPerLevel: 2
+  memoryLevelInterval: 3
+  memoryPerStep: 1
 --- !u!114 &640899364796495694
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -780,3 +785,18 @@ MonoBehaviour:
   danceSlashPrefab: {fileID: 5339375805470253114, guid: 774a20ce3628f4698b5312c123033d14, type: 3}
   parryFlashPrefab: {fileID: 464610274196922111, guid: 0ae8a9df098184bc88c9fd1e59225783, type: 3}
   logEffects: 0
+--- !u!114 &-8803756257136009029
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51bcaf4f417e04b41acd77a249318221, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerPublicInfo
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0

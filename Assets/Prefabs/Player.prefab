@@ -212,17 +212,17 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 2}
+  m_Offset: {x: 0, y: 1.33}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0}
-    oldSize: {x: 4, y: 4}
+    oldSize: {x: 2.6666667, y: 2.6666667}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 1, y: 3.75}
+  m_Size: {x: 0.7, y: 2.5}
   m_EdgeRadius: 0
 --- !u!50 &6317378190948175376
 Rigidbody2D:
@@ -320,7 +320,7 @@ MonoBehaviour:
   fallGravityMultiplier: 1.5
   runSpeedMultiplier: 1.5
   lungeSpeed: 30
-  lungeMaxTime: 0.35
+  lungeMaxTime: 0.25
   dashDistance: 4
   dashDuration: 0.15
   allowDoubleJumpWithoutProgress: 1
@@ -502,7 +502,7 @@ MonoBehaviour:
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
-  handOffset: {x: 0.5, y: 2}
+  handOffset: {x: 0.33, y: 1.33}
   throwSpeed: 20
   maxFlightTime: 1
   pickUpRange: 1.5
@@ -541,8 +541,12 @@ MonoBehaviour:
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
-  followOffset: {x: 0.6, y: 3.2}
-  followSpacing: 0.45
+  orbitBehind: 0.8
+  orbitBelowHeadTop: 0.4
+  orbitRadius: 0.7
+  orbitAngleStep: 30
+  bobHeight: 0.06
+  bobSpeed: 2.5
   rideOffset: {x: 0, y: -0.15}
   pickUpRange: 1.5
 --- !u!114 &482365706407519612
@@ -641,7 +645,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VitalStrikeMinigameView
   radius: 48
-  worldOffset: {x: 0, y: 3.2, z: 0}
+  worldOffset: {x: 0, y: 2.13, z: 0}
   resultSeconds: 0.6
 --- !u!114 &2643627262021628322
 MonoBehaviour:

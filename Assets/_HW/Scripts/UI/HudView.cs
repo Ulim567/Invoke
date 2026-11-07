@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Mirror;
 using TMPro;
 using UnityEngine;
@@ -55,6 +56,7 @@ public class HudView : MonoBehaviour
 	[Header("슬롯 (Q W E R A S D F 순서)")]
 	[SerializeField] Image[] slotFrames;
 	[SerializeField] TMP_Text[] slotKeys;
+	[SerializeField, Tooltip("슬롯에 장착된 스킬 이름 (마우스를 올리면 보이는 말풍선 글자). 슬롯 함수 안의 C 스킬, 여러 개면 「검 찌르기 +1」")] TMP_Text[] slotNames;
 	[SerializeField, Tooltip("쿨타임 덮개 (Filled, Radial 360, 시계 방향)")] Image[] slotCooldowns;
 	[SerializeField, Tooltip("실행 중 덮개 (밝은 색 50%)")] Image[] slotRunning;
 	[SerializeField] Sprite slotSprite;
@@ -274,6 +276,9 @@ public class HudView : MonoBehaviour
 				frame.color = empty ? new Color(1f, 1f, 1f, 0.55f) : noCast ? slotDisabledColor : Color.white;
 			}
 
+			TMP_Text slotName = At(slotNames, i);
+			if (slotName != null) slotName.text = SlotLabel(i); // 마우스를 올리면 칸 위 말풍선으로 보임 (SlotHoverTip)
+
 			TMP_Text key = At(slotKeys, i);
 			if (key != null)
 			{
@@ -293,6 +298,49 @@ public class HudView : MonoBehaviour
 			if (runningCover != null) runningCover.enabled = isRunning;
 		}
 	}
+
+	// 슬롯 이름 -----------------------------------------------------------------
+
+	readonly string[] slotLabels = new string[SlotCount];
+	float slotLabelsTime = -1f;
+
+	// 슬롯에 보일 스킬 이름. 1초마다 다시 센다 (장착·저장이 바뀌면 따라감)
+	string SlotLabel(int slot)
+	{
+		if (Time.unscaledTime - slotLabelsTime > 1f || slotLabelsTime < 0f)
+		{
+			slotLabelsTime = Time.unscaledTime;
+			for (int i = 0; i < SlotCount; i++) slotLabels[i] = ComputeSlotLabel(i);
+		}
+		return slotLabels[slot] ?? "";
+	}
+
+	// 슬롯 내용 → 「검 찌르기」. C 스킬을 바로 넣었으면 그 이름, 함수를 넣었으면 그 안의 C 스킬(스킬 트리에 있는 것) 이름
+	string ComputeSlotLabel(int slot)
+	{
+		if (loadout == null) return "";
+		SlotLoadout.Entry entry = loadout.GetEntry(slot);
+		if (entry.IsEmpty) return "";
+		if (entry.Kind == SlotLoadout.EntryKind.Skill) return SkillName(entry.Id);
+
+		FunctionData function = FindFunction(entry.Id);
+		if (function == null) return "";
+		List<string> skills = function.AllBlocks()
+			.Where(b => b.Kind == BlockKind.Function && !b.IsUserFunction && !string.IsNullOrEmpty(b.FunctionId) && SkillTree.TryGet(b.FunctionId, out _))
+			.Select(b => b.FunctionId).Distinct().ToList();
+		if (skills.Count == 0) return function.CountBlocks() > 0 && !function.Name.StartsWith("slot") ? function.Name : "";
+		return skills.Count == 1 ? SkillName(skills[0]) : $"{SkillName(skills[0])} +{skills.Count - 1}";
+	}
+
+	// 실제 계정은 서버가 보낸 함수 목록, 임시 계정은 이 컴퓨터의 함수 파일에서 찾는다
+	FunctionData FindFunction(string guid)
+	{
+		if (network != null && network.UsesServerData && network.ReceivedFunctions != null)
+			return network.ReceivedFunctions.FirstOrDefault(f => f.Guid == guid);
+		return FunctionStorage.Load(guid);
+	}
+
+	static string SkillName(string id) => SkillTree.TryGet(id, out SkillTreeNode node) ? node.DisplayName : id;
 
 	// 도구 ---------------------------------------------------------------------
 

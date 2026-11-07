@@ -12,6 +12,9 @@ public class FlowLayoutGroup : LayoutGroup
 	[SerializeField, Tooltip("칩 사이 간격 (가로, 세로)")]
 	Vector2 spacing = new Vector2(3, 3);
 
+	[SerializeField, Range(0.3f, 1f), Tooltip("자식 크기 배율. 블록 목록 칩을 편집 영역 블록보다 작게 보일 때 쓴다 (시안 6)")]
+	float childScale = 1f;
+
 	float height; // 줄 수만큼의 전체 높이 (CalculateLayoutInputVertical에서 계산)
 
 	// 너비는 부모가 정하고(늘어남), 높이는 줄 수만큼
@@ -39,9 +42,12 @@ public class FlowLayoutGroup : LayoutGroup
 
 		foreach (RectTransform child in rectChildren)
 		{
-			float w = Mathf.Min(LayoutUtility.GetPreferredWidth(child), Mathf.Max(0, width - padding.horizontal));
+			float scale = Mathf.Max(0.01f, childScale);
+			// 자식 크기는 원래 크기, 자리는 배율을 곱한 크기로 계산한다
+			float w = Mathf.Min(LayoutUtility.GetPreferredWidth(child), Mathf.Max(0, width - padding.horizontal) / scale);
 			float h = LayoutUtility.GetPreferredHeight(child);
-			if (x > padding.left && x + w > right)
+			float sw = w * scale, sh = h * scale;
+			if (x > padding.left && x + sw > right)
 			{
 				x = padding.left;
 				y += rowHeight + spacing.y;
@@ -49,11 +55,12 @@ public class FlowLayoutGroup : LayoutGroup
 			}
 			if (apply)
 			{
-				SetChildAlongAxis(child, 0, x, w);
-				SetChildAlongAxis(child, 1, y, h);
+				child.localScale = new Vector3(scale, scale, 1);
+				SetChildAlongAxisWithScale(child, 0, x, w, scale);
+				SetChildAlongAxisWithScale(child, 1, y, h, scale);
 			}
-			x += w + spacing.x;
-			rowHeight = Mathf.Max(rowHeight, h);
+			x += sw + spacing.x;
+			rowHeight = Mathf.Max(rowHeight, sh);
 		}
 		return y + rowHeight + padding.bottom;
 	}

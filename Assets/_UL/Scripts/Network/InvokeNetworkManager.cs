@@ -201,7 +201,7 @@ public class InvokeNetworkManager : NetworkManager
 		// 여러 플레이어를 Hierarchy에서 구분하기 위해 연결 번호를 붙인다
 		player.name = $"{playerPrefab.name} [connId={conn.connectionId}]";
 		// 부활할 때 부활 목적지로 옮긴다 (#310). 플레이어가 없어지면 이벤트도 함께 사라지므로 떼지 않는다
-		if (player.TryGetComponent(out PlayerHealth health)) health.LobbyReturnRequested += () => OnPlayerRespawned(conn, player);
+		if (player.TryGetComponent(out PlayerHealth health)) health.RespawnDue += () => OnPlayerRespawnDue(conn, player, health);
 
 		// 씬을 불러오라는 알림이 플레이어 생성보다 먼저 가야, 클라이언트에 바닥이 생긴 뒤에 플레이어가 나타난다
 		PutPlayerInScene(conn, player, lobby);
@@ -329,6 +329,9 @@ public class InvokeNetworkManager : NetworkManager
 		if (player.TryGetComponent(out SummonedSwords summonedSwords)) summonedSwords.MoveToScene(target);
 		if (player.TryGetComponent(out PhysicalSword physicalSword)) physicalSword.Recall();
 
+		// 죽은 채로 옮겨진 플레이어(PlayerHealth.DeferRespawn으로 부활을 미뤘음)는 도착한 뒤, 로딩 화면이 걷히기 전에 살린다 (#391)
+		if (player.TryGetComponent(out PlayerHealth arrivedHealth)) arrivedHealth.CompleteRespawn();
+
 		// 클라이언트는 받은 메시지를 보낸 순서대로 처리하므로, 이 메시지를 받으면 새 씬 로드와 teleport까지 끝난 것이다
 		conn.Send(new TravelEndedMessage());
 
@@ -338,19 +341,29 @@ public class InvokeNetworkManager : NetworkManager
 		if (InstanceScenes.IsRaidScene(previous)) RaidParties.OnLeftDungeon(conn, previous);
 	}
 
-	// [서버] 플레이어가 부활하는 순간(PlayerHealth.LobbyReturnRequested). 부활 목적지가 있으면 로딩 화면을 덮은 뒤 그곳으로 옮긴다 (#310)
-	void OnPlayerRespawned(NetworkConnectionToClient conn, GameObject player)
+	// [서버] 플레이어가 부활할 때가 된 순간(PlayerHealth.RespawnDue). 옮길 곳이 있으면 죽은 채로 두고, 로딩 화면이 덮인 뒤 옮기고 나서 살린다 (#310, #391)
+	// 죽은 자리에서 먼저 살아나 보이지 않게 하기 위함이다. TravelPlayer가 TravelEndedMessage를 보내기 직전에 미뤄 둔 부활을 실행한다
+	void OnPlayerRespawnDue(NetworkConnectionToClient conn, GameObject player, PlayerHealth health)
 	{
 		if (player == null || conn.identity == null || conn.identity.gameObject != player) return;
-		// 서버가 알린 다른 이동(레이드 끝에 로비로 등)을 기다리는 중이면 그 이동에 맡긴다
-		if (ServerTravel.IsWaiting(conn) || RaidParties.IsWaitingForTravel(conn)) return;
+		// 서버가 알린 다른 이동(레이드 끝에 로비로 등)을 기다리는 중이면 그 이동이 끝날 때 살린다
+		if (ServerTravel.IsWaiting(conn) || RaidParties.IsWaitingForTravel(conn))
+		{
+			health.DeferRespawn();
+			return;
+		}
 		if (!TryGetRespawnDestination(player, out Scene target)) return;
 
+		health.DeferRespawn();
 		ServerTravel.Begin(conn, () =>
 		{
-			// 기다리는 사이에 플레이어가 없어졌거나 이미 그 장소면 옮기지 않고 로딩 화면만 걷는다
+			// 기다리는 사이에 플레이어가 없어졌거나 이미 그 장소면 옮기지 않고 그 자리에서 살린 뒤 로딩 화면만 걷는다
 			if (conn.identity != null && conn.identity.gameObject == player && player.scene != target) TravelPlayer(conn, player, target);
-			else conn.Send(new TravelEndedMessage());
+			else
+			{
+				if (health != null) health.CompleteRespawn();
+				conn.Send(new TravelEndedMessage());
+			}
 		});
 	}
 

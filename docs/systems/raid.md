@@ -58,7 +58,7 @@
 ### 클리어·실패 판정 (`RaidJudge`)
 - 클리어: 보스(`RaidBossSpawner`가 만든 보스)가 죽으면
 - 실패: 던전 안 플레이어가 한 명 이상 있고 모두 죽었으면 (`PlayerHealth.IsDead`)
-- 관전: 던전에 들어온 플레이어는 `SetAutoRespawn(false)`로 죽어도 부활하지 않는다. 던전을 나가거나 레이드가 끝나면 `SetAutoRespawn(true)`로 되돌린다 (죽어 있던 파티원은 이때 부활한다)
+- 관전: 던전에 들어온 플레이어는 `SetAutoRespawn(false)`로 죽어도 부활하지 않는다. 던전을 나가거나 레이드가 끝나면 `SetAutoRespawn(true)`로 되돌린다 (죽어 있던 파티원은 이때 `RespawnDue`가 나지만, 레이드 끝 이동을 기다리는 중이라 부활을 미루고 죽은 채로 로비에 도착한 뒤 부활한다 (#391))
 - 플레이어는 `Check Interval`(0.25초)마다 이 씬의 최상위 오브젝트 중 `PlayerHealth`가 붙은 것을 다시 센다
 - 끝나면 `ResultEffectPlayed(클리어 여부)`(결과 화면용)를 부르고, `Result Delay`(3초) 뒤 `RaidFlow.ReportEnd(던전 씬, 클리어 여부)`를 부른다. 한 던전에서 한 번만 끝난다
 - 클리어 보상은 Gateway의 `MonsterReward`(Whole Scene)가 준다 (`monster.md`)

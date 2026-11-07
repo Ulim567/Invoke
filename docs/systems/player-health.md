@@ -10,7 +10,7 @@
   - 이동·시전을 직접 막지 않는다. 이동(`PlayerMove`)과 시전 담당이 `CanAct`를 읽어 막는다.
   - 피격·사망 애니메이션을 재생하지 않는다(임혜원 「플레이어 상태에 맞춰 애니메이션 재생하기」).
   - 관전 카메라를 움직이지 않는다. 카메라 담당(박진우)이 `HideEffectPlayed`, `RespawnEffectPlayed`를 받아 움직인다.
-  - 로비로 씬을 옮기지 않는다. `LobbyReturnRequested`로 요청만 하고, 씬 이동 담당(이우림)이 옮긴다.
+  - 로비로 씬을 옮기지 않는다. `RespawnDue`로 부활할 때가 됐다고 알리기만 하고, 씬 이동 담당(이우림)이 옮긴다.
   - 실제 HUD를 만들지 않는다. 지금 체력 바(`TempHealthBar`)는 확인용 임시다.
 
 ## 동작 규칙
@@ -25,7 +25,10 @@
   - 사망 페널티는 알파에서 없다.
 - 부활
   - 사망 3초(`Respawn Delay`) 뒤 최대 체력으로 부활하고, 무적 1초 동안 깜빡인다. 부활 전용 모션은 없다.
-  - 부활할 때 `LobbyReturnRequested`로 로비(마을)로 보내 달라고 요청한다. 서버에서는 씬 이동 담당(이우림, `InvokeNetworkManager`)이 받아 레이드 밖이면 로비로 옮긴다 (#310, place-scenes.md 「부활 이동」). 네트워크를 켜지 않은 테스트에서는 처음 나타난 위치(씬의 시작 위치)에서 부활한다.
+  - 부활 시각이 되면 먼저 `RespawnDue`로 알린다. 서버에서는 씬 이동 담당(이우림, `InvokeNetworkManager`)이 받아, 옮길 곳(레이드 밖은 로비)이 있으면 `DeferRespawn()`으로 부활을 미룬다 (#310, #391, place-scenes.md 「부활 이동」).
+  - 미룬 동안은 죽은 채(`IsDead`, `IsHidden` 유지)로 있다가, 씬 이동 담당이 옮긴 직후 `CompleteRespawn()`을 부르면 그 자리에서 부활한다. 다른 플레이어 화면에서 죽은 자리에서 먼저 살아나 보이지 않게 하기 위함.
+  - 안전장치: 미뤄진 채 `Max Defer Time`(10초)이 지나면 그 자리에서 부활한다. 옮기기가 끝내 안 돼도 죽은 채로 갇히지 않게 하기 위함.
+  - 아무도 미루지 않으면(로비에서 죽음 등) 바로 부활한다. 네트워크를 켜지 않은 테스트에서는 처음 나타난 위치(씬의 시작 위치)에서 바로 부활한다.
   - `AutoRespawn`이 false면(레이드) 부활하지 않고 숨긴 채 관전만 한다.
 - event는 몬스터와 같이 로직용과 연출용으로 나뉜다. 로직용은 서버에서만, 표시·연출용은 모든 화면에서 불린다.
 - 네트워크 (#310): `PlayerHealth`는 `NetworkBehaviour`다
@@ -33,10 +36,10 @@
   - 상태: 체력, 최대 체력, 죽음, 숨김을 `[SyncVar]`로 보낸다. 나중에 그 장소에 들어와 처음 본 클라이언트도 받는다(이미 죽어 있거나 숨겨졌으면 그때 사망·숨김 연출을 한 번 부름)
   - 연출: 피격(데미지, 맞은 뒤 체력)·사망·숨김·부활을 `[ClientRpc]`로 보낸다. 받은 클라이언트는 상태를 맞추고 같은 이벤트를 부른다. 경직·무적은 받은 순간부터 센다
   - 그래서 클라이언트에서도 `Hp`, `MaxHp`(서버의 값), `IsDead`, `IsHidden`, `CanAct`가 서버와 같다. 내 캐릭터가 서버에서 죽으면 내 화면에서도 이동·시전이 막힌다
-  - 로직 이벤트(`Damaged`, `Died`, `Respawned`, `LobbyReturnRequested`)와 `SetAutoRespawn`은 서버에서만 의미가 있다
+  - 로직 이벤트(`Damaged`, `Died`, `Respawned`, `RespawnDue`)와 `SetAutoRespawn`, `DeferRespawn`, `CompleteRespawn`은 서버에서만 의미가 있다
   - 순서(피격): `Damaged` → `HpChanged` → `HitEffectPlayed`
   - 순서(사망): `Damaged` → `HpChanged` → `Died` → `DeathEffectPlayed` → (1초 뒤) `HideEffectPlayed`
-  - 순서(부활): `LobbyReturnRequested` → `Respawned` → `HpChanged` → `RespawnEffectPlayed`
+  - 순서(부활): `RespawnDue`(부활 시각, 죽음마다 한 번) → (미뤘으면 `CompleteRespawn()`까지 죽은 채 대기) → `Respawned` → `HpChanged` → `RespawnEffectPlayed`
 
 ## 다른 시스템이 쓰는 것
 
@@ -60,7 +63,9 @@
 | `Damaged` (event) | `int` | - | [로직] 체력이 줄었을 때 |
 | `Died` (event) | - | - | [로직] 체력이 0이 된 순간 한 번 |
 | `Respawned` (event) | - | - | [로직] 부활한 순간 |
-| `LobbyReturnRequested` (event) | - | - | [로직] 부활할 때 로비로 보내 달라는 요청. 씬 이동 담당이 받는다. |
+| `RespawnDue` (event) | - | - | [로직] 부활할 때가 됐을 때 죽음마다 한 번. 받은 쪽이 안에서 `DeferRespawn()`을 부르면 죽은 채로 기다리고, 안 부르면 바로 부활한다. 씬 이동 담당이 받는다. |
+| `DeferRespawn()` | - | - | 부활을 미룬다. 죽어 있지 않으면 무시한다. `Max Defer Time`(10초)이 지나면 그 자리에서 부활한다. |
+| `CompleteRespawn()` | - | - | 미뤄 둔 부활을 실행한다. 옮기기가 끝난 직후 씬 이동 담당이 부른다. 죽어 있지 않으면 무시한다. |
 | `HpChanged` (event) | `int`, `int` (지금 체력, 최대 체력) | - | [표시] 체력 바에 쓴다. |
 | `HitEffectPlayed` (event) | `int` | - | [연출] 피격 모션, 무적 깜빡임 시작 |
 | `DeathEffectPlayed` (event) | - | - | [연출] 사망 모션 시작 (1초짜리, 1회 재생 후 마지막 장면 유지) |
@@ -92,6 +97,6 @@
   - 변형 프리팹에 따로 붙어 있던 것은 각 담당자가 지운다 (`Player_DH`: 김도훈, `Player_JW`: 박진우, `Player_HW`: 임혜원)
   - 체력은 아직 네트워크로 동기화하지 않는다. 판정은 서버에서만 하고, 다른 플레이어 화면의 체력·사망 연출은 「플레이어 상태를 네트워크로 동기화하기」에서 맞춘다 → #310에서 맞춤 (이우림, 김도훈 합의. 위 「동작 규칙」의 네트워크)
 - 이우림과 정해야 할 것
-  - 씬 이동이 생기면 `LobbyReturnRequested`를 받아 로비로 옮기는지 → #310에서 옮김 (레이드 밖에서 부활하면 로비로, 레이드는 관전 뒤 `RaidParties`가 옮김)
+  - 씬 이동이 생기면 부활 알림을 받아 로비로 옮기는지 → #310에서 옮김 (레이드 밖에서 부활하면 로비로, 레이드는 관전 뒤 `RaidParties`가 옮김). #391에서 `LobbyReturnRequested`를 `RespawnDue`로 바꾸고, 옮긴 뒤에 부활하도록 고침
 - 박진우와 정해야 할 것
   - 관전 카메라가 `HideEffectPlayed`에 다른 파티원으로, `RespawnEffectPlayed`에 내 캐릭터로 돌아오는지

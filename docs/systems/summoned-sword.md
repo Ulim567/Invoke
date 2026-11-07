@@ -42,6 +42,7 @@
 - 소환검 오브젝트는 `SpawnSword` / `DespawnSword`로만 만들고 없앤다 (CLAUDE.md 코드 작성 규칙 3). 캐릭터가 사라지면 같이 없앤다.
   - 안에서 `NetworkSpawner.Spawn(프리팹, 위치, 회전, gameObject.scene)` / `NetworkSpawner.Despawn`을 부른다 (place-scenes.md, #125). 플레이어가 있는 장소 씬에 생기고, 서버면 모든 클라이언트에 보인다. 서버에서만 부른다.
   - 소환검 프리팹: `NetworkIdentity`, `Base` 씬과 Test_JW의 NetworkManager Registered Spawnable Prefabs에 등록
+  - 그림 순서: SpriteRenderer Sorting Layer `Projectile`, Order 5 (#341). `Default`면 맵 배경 뒤에 그려져 안 보인다
   - 만들지 못하면(프리팹 설정 오류, 클라이언트에서 부름) `SpawnSword`가 `null`을 돌려주고 검 소환은 아무것도 만들지 않는다
 - 떨어질 땅 찾기는 소환검이 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다 (place-scenes.md, #125).
 

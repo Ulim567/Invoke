@@ -177,7 +177,7 @@
 
 ### 휘두르기 1: 검 휘두르기·검 크게베기 (#163)
 - 공통(`SwordWaveSkill`): 검기(투사체)를 몸 가운데에서 날린다.
-  - 검기는 플레이어의 `SwordWaveLauncher.SpawnWave` / `DespawnWave`로만 만들고 없앤다 (`NetworkSpawner`). 프리팹 `SwordWave`, `SwordWave_Wide`는 NetworkManager에 등록한다.
+  - 검기는 플레이어의 `SwordWaveLauncher.SpawnWave` / `DespawnWave`로만 만들고 없앤다 (`NetworkSpawner`). 프리팹 `SwordWave`, `SwordWave_Wide`는 NetworkManager에 등록한다. 그림 순서는 Sorting Layer `Projectile` (#341).
   - 네트워크 (#229): 판정은 서버의 검기만 한다. `Launch`할 때 `[ClientRpc]`로 출발 위치·방향·속도·사거리를 보내고, 클라이언트는 같은 길로 그림만 날린다(판정 없음). 그래서 검기 프리팹에는 `NetworkTransform`을 붙이지 않는다.
   - heap: 날릴 때 검기를 heap에 올리고(`Malloc`, 표의 heap 크기 1), 검기가 끝나면(사거리 끝, 첫 대상에서 멈춤) 그 틱에 검기를 없애고 `Free`. 스킬이 끝날 때 아직 날고 있어도 같다. 플레이어가 해제할 필요 없음.
   - heap이 모자라면 검기를 날리지 않는다 (에러 아님). 끊기면(실행 중단, 취소) 검기는 없애고 heap은 누수.
@@ -269,7 +269,7 @@
 - 네트워크 (#223, network.md 「경우별 처리 방법」 2번): `SkillEffectEvents`는 `NetworkBehaviour`다. 서버에서 `Raise...`를 부르면 서버(Host 포함)에서 바로 event를 내고, `[ClientRpc]`로 다른 클라이언트에서도 같은 event를 낸다. 받는 쪽은 바꿀 것 없음.
   - `Hit`의 대상은 `NetworkIdentity`가 있는 오브젝트만 클라이언트에 전해진다. 없으면 클라이언트에서는 `null` (맞은 위치는 옴).
   - 네트워크 없는 테스트에서는 그 자리에서만 낸다.
-- 찌르기 섬광: `ThrustEffectView`(플레이어)가 `Fired`를 받아 `ThrustFlash`(검 찌르기·집중찌르기) / `SkewerFlash`(꼬챙이) 프리팹을 찌르는 방향으로 만든다. 그림은 임혜원 #114 (`_HW/Effects/Thrust_Flash`, `Skewer_Flash`). 보여 주기만 하는 오브젝트라 `OneShotEffect`가 0.25초 뒤 스스로 없앤다.
+- 찌르기 섬광: `ThrustEffectView`(플레이어)가 `Fired`를 받아 `ThrustFlash`(검 찌르기·집중찌르기) / `SkewerFlash`(꼬챙이) 프리팹을 찌르는 방향으로 만든다. 그림은 임혜원 #114 (`_HW/Effects/Thrust_Flash`, `Skewer_Flash`). 보여 주기만 하는 오브젝트라 `OneShotEffect`가 0.25초 뒤 스스로 없앤다. 그림 순서는 Sorting Layer `Effect` (#341).
 
 ### 새 스킬 효과 만들기 (`DataDrivenSkill`)
 - 스킬 클래스는 `DataDrivenSkill`을 상속하고 `Id`만 정한다. 이름, 틱 수, 쿨타임, 파라미터는 표에서 읽는다.

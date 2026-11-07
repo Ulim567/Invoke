@@ -31,6 +31,9 @@
 | 시전 거부 | 0.5초 빨간 테두리 (쿨타임 거부는 제외) | `CastRejected` |
 | 공격할 수 없는 장소 (로비) | 모든 칸 무채색 | `PlaceScenes.IsPlayerInNoCastPlace` |
 
+- 장착된 스킬 이름 (#411): 슬롯에 마우스를 올린 동안 칸 위 말풍선에 스킬 이름 (`SlotHoverTip`). C 스킬을 넣은 칸은 그 스킬, 함수를 넣은 칸은 그 안의 C 스킬(스킬 트리에 있는 것), 여러 개면 「검 찌르기 +1」. 1초마다 다시 셈
+  - 읽는 곳: `SlotLoadout.GetEntry(i)`, 실제 계정은 `FunctionExecutorNetwork.ReceivedFunctions`, 임시 계정은 `FunctionStorage.Load(GUID)`. 이름은 `SkillTree` 노드 이름
+
 - Esc: 열린 창이 없으면 설정 열기 (`UIShortcut`이 HUD에 붙어 있음, 맨 위 창만 반응). `HudView.SettingsRequested`를 알린다
 - 창(`InputBlockingPanel`을 물려받은 로비 입구, 스킬 트리, 편집, 장착, 레이드 방)은 ESC로 닫힌다. 로비 입구 창은 Enter로 들어간다. 창마다 바꾸려면 `OnCancelKey()` / `OnSubmitKey()`를 덮어쓴다
 - 시안의 버프·디버프 칸은 아직 기획 전이라 넣지 않음

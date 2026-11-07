@@ -158,6 +158,7 @@ public static class HudUIBuilder
 		// 슬롯 8칸
 		var frames = new Image[8];
 		var keys = new TMP_Text[8];
+		var names = new TMP_Text[8];
 		var cooldowns = new Image[8];
 		var running = new Image[8];
 		for (int i = 0; i < 8; i++)
@@ -191,6 +192,28 @@ public static class HudUIBuilder
 			keys[i].alignment = TextAlignmentOptions.Center;
 			keys[i].fontStyle = FontStyles.Bold;
 			Stretch(keys[i].rectTransform);
+
+			// 장착된 스킬 이름: 마우스를 올렸을 때만 칸 위에 말풍선으로 (SlotHoverTip)
+			frames[i].raycastTarget = true;
+			RectTransform tip = NewUI("Tip", slot);
+			Place(tip, new Vector2(0.5f, 1), new Vector2(0.5f, 0), new Vector2(0, 3), new Vector2(0, 11));
+			Image tipImage = SetImage(tip.gameObject, "hud_gauge"); // 불투명 바탕 + 테두리 (뒤의 Memory 글자가 비치지 않게)
+			tipImage.raycastTarget = false;
+			HorizontalLayoutGroup tipLayout = tip.gameObject.AddComponent<HorizontalLayoutGroup>();
+			tipLayout.padding = new RectOffset(4, 4, 1, 1);
+			tipLayout.childControlWidth = tipLayout.childControlHeight = true;
+			tipLayout.childForceExpandWidth = tipLayout.childForceExpandHeight = false;
+			ContentSizeFitter tipFit = tip.gameObject.AddComponent<ContentSizeFitter>();
+			tipFit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+			names[i] = Text(tip, "Name", "", 6, Color.white);
+			names[i].alignment = TextAlignmentOptions.Center;
+			names[i].textWrappingMode = TextWrappingModes.NoWrap;
+			SlotHoverTip hover = slot.gameObject.AddComponent<SlotHoverTip>();
+			var hoverSo = new SerializedObject(hover);
+			hoverSo.FindProperty("tip").objectReferenceValue = tip.gameObject;
+			hoverSo.FindProperty("label").objectReferenceValue = names[i];
+			hoverSo.ApplyModifiedPropertiesWithoutUndo();
+			tip.gameObject.SetActive(false);
 		}
 
 		// 오른쪽 아래: 스킬 트리 · 레벨업
@@ -220,6 +243,7 @@ public static class HudUIBuilder
 		Set(so, "memoryText", memoryText);
 		Array(so, "slotFrames", frames);
 		Array(so, "slotKeys", keys);
+		Array(so, "slotNames", names);
 		Array(so, "slotCooldowns", cooldowns);
 		Array(so, "slotRunning", running);
 		Set(so, "slotSprite", LoadSprite("hud_slot"));

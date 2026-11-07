@@ -84,6 +84,8 @@
 
 ### 발판 설정 (맵을 만드는 사람이 지킬 것)
 - 발판 타일맵은 `Platform` 레이어에 둔다. 땅·벽은 `Ground`.
+- 발판은 **한 줄(타일 1칸) 두께**로 칠한다. 아래로 두꺼운 블록이 필요하면 맨 윗줄만 `Platform`에 두고, 나머지 몸통은 `Ground` 타일맵이나 충돌 없는 장식 타일맵에 칠한다 (#322).
+  - 이유: 발판의 `CompositeCollider2D`(Geometry Type Outline)는 타일 덩어리 테두리를 선으로 만든다. One Way(Surface Arc 170)는 옆면을 통과시키므로, 두꺼운 발판은 옆면을 비비면 몸이 안으로 들어가 **안쪽 밑변 위에 설 수 있다**. 한 줄 두께면 안에 설 공간이 없다.
 - 발판 타일맵에 `PlatformEffector2D`를 붙이고 `Use One Way` 켬, `Surface Arc` 170 (#152). 180이면 발판 옆면도 막혀서, 몸 높이에 걸린 발판 옆을 걸어가거나 돌진할 때 벽처럼 막힌다. 170이면 위에서만 밟히고 옆·아래에서는 통과한다.
 - 발판의 `CompositeCollider2D`(또는 Tilemap Collider)에서 `Used By Effector`를 켠다. 이것이 꺼져 있으면 아래에서 뚫고 오르지 못한다.
 - 발판 높이: 지금 점프 높이는 4유닛이다. 땅(또는 아래 발판) 윗면에서 다음 발판 윗면까지 4유닛보다 낮아야 올라갈 수 있다.
@@ -114,7 +116,7 @@
 | `IsDashing` | - | `bool` | (#256) 대시 중 |
 | `RequestAirJump()` | - | - | (#256) 공중이고 이번 공중에서 안 썼으면 한 번 더 점프. 블록코딩 더블점프가 부른다 |
 | `DoubleJumpUnlocked`, `AirJumpUsed` | - | `bool` | (#256) 더블점프 해금 여부, 이번 공중에서 썼는지 |
-| `AirJumped` (event) | - | - | [연출] (#256) 더블점프를 한 순간. 이미 공중이라 「공중 상태로 바뀜」으로는 알 수 없어서 따로 알린다. 점프 모션을 다시 틀 때 (PlayerAnimator, 임혜원). 내 화면에서만 불림 |
+| `AirJumped` (event) | - | - | [연출] (#256) 더블점프를 한 순간. 이미 공중이라 「공중 상태로 바뀜」으로는 알 수 없어서 따로 알린다. 점프 모션을 다시 틀 때 (PlayerAnimator, 임혜원). 모든 화면에서 한 번씩 불림 (#322): 내 화면은 뛴 순간, 서버·Host와 다른 클라이언트는 `[Command]` → `[ClientRpc]`로 조금 늦게 |
 | `StartRide()`, `StopRide()`, `IsRiding` | - | - / `bool` | (#256) 검 타기 시작·끝, 타는 중 |
 | `RideSeconds`, `RideRemaining` | - | `float` | (#256) 검 타기 시간(Inspector), 남은 시간(타는 중이 아니면 0). 타이머 표시가 읽는다 |
 

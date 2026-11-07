@@ -9,7 +9,7 @@
 - 하지 않는 일
   - 이동·시전을 직접 막지 않는다. 이동(`PlayerMove`)과 시전 담당이 `CanAct`를 읽어 막는다.
   - 피격·사망 애니메이션을 재생하지 않는다(임혜원 「플레이어 상태에 맞춰 애니메이션 재생하기」).
-  - 관전 카메라를 움직이지 않는다. 카메라 담당(박진우)이 `HideEffectPlayed`, `RespawnEffectPlayed`를 받아 움직인다.
+  - 관전 카메라를 움직이지 않는다. 카메라 담당(박진우)의 `PlayerCameraFollow`가 `IsHidden`을 매 프레임 읽어 움직인다 (#419, player-movement.md 「관전」).
   - 로비로 씬을 옮기지 않는다. `RespawnDue`로 부활할 때가 됐다고 알리기만 하고, 씬 이동 담당(이우림)이 옮긴다.
   - 실제 HUD를 만들지 않는다. 지금 체력 바(`TempHealthBar`)는 확인용 임시다.
 
@@ -99,4 +99,4 @@
 - 이우림과 정해야 할 것
   - 씬 이동이 생기면 부활 알림을 받아 로비로 옮기는지 → #310에서 옮김 (레이드 밖에서 부활하면 로비로, 레이드는 관전 뒤 `RaidParties`가 옮김). #391에서 `LobbyReturnRequested`를 `RespawnDue`로 바꾸고, 옮긴 뒤에 부활하도록 고침
 - 박진우와 정해야 할 것
-  - 관전 카메라가 `HideEffectPlayed`에 다른 파티원으로, `RespawnEffectPlayed`에 내 캐릭터로 돌아오는지
+  - 관전 카메라가 `HideEffectPlayed`에 다른 파티원으로, `RespawnEffectPlayed`에 내 캐릭터로 돌아오는지 → #419에서 함. 이벤트 대신 `IsHidden`을 읽고, 레이드 던전에서만 관전한다

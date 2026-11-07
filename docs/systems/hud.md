@@ -54,6 +54,8 @@
 - 파티원 목록 (`RaidPartyView`): 장소 이름 아래 「파티」와 줄. 나를 뺀 같은 장소의 플레이어 (`PlayerRoster.Players`에서 `IsLocal`이 아니고 `IsInMyPlace`인 것). 레이드 던전이고 파티원이 있을 때만 보임
   - 줄마다 이름, HP 막대 (`PlayerHealth.Hp / MaxHp`). 쓰러지면(`IsDead`) 어두운 줄, 이름 흐리게, 「사망」, 막대 비움
   - 줄은 2개 (레이드 최대 3명). 이름은 `PlayerPublicInfo.Nickname` (비어 있으면 「[파티원 1]」)
+  - 관전 중 표시 (#419): 내 카메라가 따라가는 파티원(`PlayerCameraFollow.SpectateTarget`, 박진우)의 이름 뒤에 「관전 중」. 예: 「[파티원 1] 관전 중」. 관전 중이 아니면 붙이지 않음
+    - 따라가는 대상은 죽지 않은 파티원만 되므로 「사망」 표시와 겹치지 않음
 - 보스 체력 바: 위쪽 가운데. 움직임은 김도훈의 `BossHealthBar` 컴포넌트를 HUD 프리팹 안에 붙여 그대로 씀 (보스가 있을 때만, 빨강 = 지금, 흰색 = 따라 줄어듦, 구분선 70%, 40%). 이름은 빨간 글자, 오른쪽 위 퍼센트는 `BossBarPercent`가 빨간 막대 비율을 읽어 씀
   - Base 씬의 `BossHealthBar` 프리팹(임시 색 막대)은 꺼 둠 (두 개가 겹치지 않게)
 

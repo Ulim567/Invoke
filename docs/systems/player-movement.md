@@ -88,7 +88,7 @@
 | Jump Height | 4 (유닛) | PlayerMovement |
 | Fall Gravity Multiplier | 1.5 | PlayerMovement |
 | Gravity Scale | 3 | Rigidbody2D |
-| Box Collider 2D | Size (1, 3.75), Offset (0, 2) | 64×64 그림, 캐릭터 60px 기준 |
+| Box Collider 2D | Size (0.7, 2.5), Offset (0, 1.33) | 64×64 그림, 캐릭터 60px, PPU 24 기준 (캐릭터 2/3 축소, 임혜원) |
 | Material | PlayerNoFriction | Box Collider 2D |
 | Run Speed Multiplier | 1.5 (임시) | PlayerMovement |
 | Platform Layers | Platform | PlayerMovement |
@@ -104,7 +104,7 @@
 - 발판의 `CompositeCollider2D`(또는 Tilemap Collider)에서 `Used By Effector`를 켠다. 이것이 꺼져 있으면 아래에서 뚫고 오르지 못한다.
 - 발판 높이: 지금 점프 높이는 4유닛이다. 땅(또는 아래 발판) 윗면에서 다음 발판 윗면까지 4유닛보다 낮아야 올라갈 수 있다.
   - Test_JW: 가운데 발판(땅에서 3유닛)은 점프로 올라갈 수 있다. 왼쪽(5유닛)·오른쪽(7유닛) 발판은 점프로 못 올라간다.
-- 주의: 캐릭터 키(3.75유닛)가 점프 높이(4유닛)와 비슷해서, 점프로 닿는 발판은 항상 캐릭터 몸 높이에 걸린다. `Surface Arc` 170이면 그런 발판 밑을 옆으로 지나갈 수 있다 (몸이 발판을 통과). 180이면 턱(벽)처럼 막힌다 (#152에서 Test_JW를 170으로 바꿈).
+- 주의: 캐릭터 키(2.5유닛)보다 높고 점프 높이(4유닛)보다 낮은 발판(3유닛 등)은 점프로 닿지만, 그보다 낮은 발판은 캐릭터 몸 높이에 걸린다. `Surface Arc` 170이면 그런 발판 밑을 옆으로 지나갈 수 있다 (몸이 발판을 통과). 180이면 턱(벽)처럼 막힌다 (#152에서 Test_JW를 170으로 바꿈).
 - 타일맵 콜라이더를 코드나 YAML로 바꾸면 Composite Collider 모양이 갱신되지 않을 수 있다. 타일은 Tile Palette로 칠한다.
 
 ## 다른 시스템이 쓰는 것
@@ -122,7 +122,7 @@
 | `IsDropping` | - | `bool` | 발판 아래로 내려가는 중이면 `true` (↓ + Space. 검 타기 중에도 ↓ + Space, #351). 내려가는 애니메이션이 필요하면 읽는다. |
 | `SetMovementLocked(bool locked)` | 잠그기 / 풀기 | - | (#207) 잠근 동안 속도 0, 중력 없음(그 자리에 떠 있음), 진행 중인 돌진·내려가기 중단, 좌우·점프·내려가기 입력과 `StartLunge` 무시. 풀면 원래 중력으로 돌아가고 속도 0에서 시작. 장소 이동(`PlaceTravelClient`)이 씬을 바꾸는 동안 쓴다 |
 | `IsMovementLocked` | - | `bool` | (#207) 잠겨 있으면 `true` |
-| `StartLunge(float targetX)` | 돌진할 x 위치 | - | 그 x까지 좌우로 돌진한다 (`Lunge Speed` 30, 최대 `Lunge Max Time` 0.35초, 임시). 돌진하는 쪽을 바라본다. 돌진 중에는 좌우 입력을 무시하고, 닿거나 시간이 지나거나 경직·사망하면 멈춘다. 찌르기 스킬이 부른다 (#152). 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다 (#223) |
+| `StartLunge(float targetX)` | 돌진할 x 위치 | - | 그 x까지 좌우로 돌진한다 (`Lunge Speed` 30, 최대 `Lunge Max Time` 0.25초 = 7.5칸, 임시. 캐릭터 2/3 축소 때 0.35에서 줄임). 돌진하는 쪽을 바라본다. 돌진 중에는 좌우 입력을 무시하고, 닿거나 시간이 지나거나 경직·사망하면 멈춘다. 찌르기 스킬이 부른다 (#152). 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다 (#223) |
 | `StopLunge()` | - | - | 돌진을 멈춘다. 스킬이 끝나거나 끊길 때 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다 (#223) |
 | `IsLunging` | - | `bool` | 돌진 중이면 `true`. 돌진 애니메이션(임혜원 `C_Lunge`)에서 읽는다 |
 | `FaceTowards(float x)` | x 위치 | - | 그 x 쪽을 바라본다. 스킬이 대상 쪽으로 돌아설 때 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 서버 값을 바로 바꾸고 소유 클라이언트에도 알린다 (#223) |

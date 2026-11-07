@@ -106,6 +106,9 @@ public class SummonedSword : NetworkBehaviour
 	/// <summary>사용 가능 상태에서 따라갈 위치. SummonedSwords가 매 프레임 정한다.</summary>
 	internal Vector2 FollowPoint { get; set; }
 
+	/// <summary>사용 가능 상태에서 맞출 각도 (도, 0 = 칼끝 오른쪽). SummonedSwords가 매 프레임 정한다 (#399).</summary>
+	internal float FollowAngle { get; set; }
+
 	// 아래 함수는 SummonedSwords만 부른다. 상태는 이 함수들로만 바뀐다
 	internal void Init(SummonedSwords owner, int pointer, LayerMask groundLayers)
 	{
@@ -124,7 +127,7 @@ public class SummonedSword : NetworkBehaviour
 	{
 		falling = false;
 		stuckTo = null;
-		transform.rotation = Quaternion.identity;
+		// 각도는 Update가 FollowAngle(바라보는 쪽)로 천천히 돌린다
 		SetState(SummonedSwordState.Ready);
 	}
 
@@ -266,7 +269,9 @@ public class SummonedSword : NetworkBehaviour
 		switch (State)
 		{
 			case SummonedSwordState.Ready:
-				transform.position = Vector2.Lerp(transform.position, FollowPoint, 1f - Mathf.Exp(-followSharpness * Time.deltaTime));
+				float follow = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
+				transform.position = Vector2.Lerp(transform.position, FollowPoint, follow);
+				transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(0f, 0f, FollowAngle), follow);
 				break;
 			case SummonedSwordState.Flying:
 				if (falling) Fall(); else Fly();

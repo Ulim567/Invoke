@@ -48,7 +48,7 @@ public class PhysicalSword : NetworkBehaviour
 
 	[Header("던지기")]
 	[Tooltip("던지는 위치. 캐릭터 발밑 기준, x는 바라보는 방향으로 뒤집는다")]
-	[SerializeField] Vector2 handOffset = new Vector2(0.5f, 2f);
+	[SerializeField] Vector2 handOffset = new Vector2(0.33f, 1.33f);
 	[Tooltip("날아가는 속도 (유닛/초)")]
 	[SerializeField, Min(0.1f)] float throwSpeed = 20f;
 	[Tooltip("이 시간 안에 대상에 닿지 못하면 빗나간 것으로 보고 떨어진다 (초)")]

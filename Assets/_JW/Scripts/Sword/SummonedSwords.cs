@@ -25,9 +25,19 @@ public class SummonedSwords : MonoBehaviour
 	[SerializeField] SummonedSword swordPrefab;
 	[Tooltip("떨어진 소환검이 멈출 바닥 레이어 (Ground, Platform)")]
 	[SerializeField] LayerMask groundLayers;
-	[Tooltip("사용 가능한 소환검이 떠 있는 자리: 발밑 기준. x는 바라보는 반대쪽으로, 검마다 X Spacing씩 벌어진다")]
-	[SerializeField] Vector2 followOffset = new Vector2(0.6f, 3.2f);
-	[SerializeField, Min(0f)] float followSpacing = 0.45f;
+	[Header("사용 가능한 검: 몸 둘레 반원 (#399)")]
+	[Tooltip("반원 가운데가 머리에서 뒤로 떨어진 거리 (유닛). 뒤통수 뒤")]
+	[SerializeField] float orbitBehind = 0.8f;
+	[Tooltip("반원 가운데가 머리 꼭대기(콜라이더 윗변)에서 내려온 거리 (유닛). 캐릭터 크기가 바뀌어도 머리 높이를 따라간다")]
+	[SerializeField] float orbitBelowHeadTop = 0.4f;
+	[Tooltip("반원 반지름: 가운데에서 검 가운데까지 (유닛)")]
+	[SerializeField, Min(0f)] float orbitRadius = 0.7f;
+	[Tooltip("검 사이 각도 (도). 가운데 검은 바로 앞, 위아래로 이만큼씩 벌어진다")]
+	[SerializeField, Range(0f, 60f)] float orbitAngleStep = 30f;
+	[Tooltip("둥둥 떠 있는 높이 (유닛)")]
+	[SerializeField, Min(0f)] float bobHeight = 0.06f;
+	[Tooltip("둥둥 떠 있는 빠르기 (라디안/초)")]
+	[SerializeField, Min(0f)] float bobSpeed = 2.5f;
 	[Tooltip("검 타기에서 검이 붙는 자리: 발밑 기준 (유닛, #256)")]
 	[SerializeField] Vector2 rideOffset = new Vector2(0f, -0.15f);
 	[Tooltip("떨어진 소환검과 이 거리 안이면 주울 수 있다 (유닛)")]
@@ -35,6 +45,7 @@ public class SummonedSwords : MonoBehaviour
 
 	ProcessMemory memory;
 	PlayerMovement movement;
+	Collider2D body;
 	// 소환한 순서(포인터 순서). 해제하면 빠지고, 누수돼도 남는다
 	readonly List<SummonedSword> swords = new List<SummonedSword>();
 
@@ -82,6 +93,7 @@ public class SummonedSwords : MonoBehaviour
 	{
 		memory = GetComponent<ProcessMemory>();
 		movement = GetComponent<PlayerMovement>();
+		body = GetComponent<Collider2D>();
 	}
 
 	// heap은 ProcessMemory.Awake에서 만들어지므로 Start에서 구독한다 (컴포넌트 순서와 상관없게)
@@ -101,7 +113,7 @@ public class SummonedSwords : MonoBehaviour
 	/// </summary>
 	public SummonedSword SpawnSword()
 	{
-		Vector2 at = (Vector2)transform.position + followOffset;
+		Vector2 at = ReturnPoint;
 		GameObject obj = NetworkSpawner.Spawn(swordPrefab.gameObject, at, Quaternion.identity, gameObject.scene);
 		return obj != null ? obj.GetComponent<SummonedSword>() : null;
 	}
@@ -292,7 +304,7 @@ public class SummonedSwords : MonoBehaviour
 			if (s.State == SummonedSwordState.Leaked)
 			{
 				// 누수 검은 멈춰 있으므로 겹치지 않게 따로 놓는다
-				place += new Vector2(followSpacing * (leakedCount + 1), -followOffset.y);
+				place = new Vector2(place.x + LeakedSpacing * (leakedCount + 1), transform.position.y);
 				leakedCount++;
 			}
 			else
@@ -349,15 +361,25 @@ public class SummonedSwords : MonoBehaviour
 		NotifyChanged();
 	}
 
-	// 돌아오는 소환검이 향할 곳: 머리 뒤쪽 첫 자리
+	// 돌아오는 소환검이 향할 곳: 반원 가운데 앞 자리
 	internal Vector2 ReturnPoint
 	{
 		get
 		{
 			int facing = movement != null ? movement.Facing : 1;
-			return (Vector2)transform.position + new Vector2(-facing * followOffset.x, followOffset.y);
+			return OrbitCenter(facing) + new Vector2(facing * orbitRadius, 0f);
 		}
 	}
+
+	// 반원 가운데: 뒤통수 뒤. 높이는 콜라이더 윗변(머리 꼭대기) 기준이라 캐릭터 크기를 따라간다
+	Vector2 OrbitCenter(int facing)
+	{
+		float headTop = body != null ? body.bounds.max.y : transform.position.y + 2.5f;
+		return new Vector2(transform.position.x - facing * orbitBehind, headTop - orbitBelowHeadTop);
+	}
+
+	// 장소를 옮길 때 누수 검끼리 겹치지 않게 벌리는 간격 (유닛)
+	const float LeakedSpacing = 0.5f;
 
 	// 찌르고 돌아온 소환검을 다시 사용 가능으로
 	internal void NotifyStabReturned(SummonedSword sword)
@@ -410,14 +432,21 @@ public class SummonedSwords : MonoBehaviour
 			SummonedSword s = swords[i];
 			if (s != null && s.State == SummonedSwordState.Riding && Time.time >= s.RideEndTime) EndRide(s);
 		}
-		// 사용 가능한 검을 머리 뒤쪽에 순서대로 줄 세운다
+		// 사용 가능한 검을 뒤통수 둘레 반원(앞쪽으로 열림)에 띄우고 칼끝은 모두 바라보는 쪽을 향한다 (#399, 제트 궁극기 느낌). 소환한 순서대로 위에서부터
 		int facing = movement != null ? movement.Facing : 1;
+		Vector2 center = OrbitCenter(facing);
+		float tipAngle = facing > 0 ? 0f : 180f;
+		int readyCount = ReadyCount;
 		int slot = 0;
 		foreach (SummonedSword s in swords)
 		{
 			if (s == null || s.State != SummonedSwordState.Ready) continue;
-			float x = -facing * (followOffset.x + followSpacing * slot);
-			s.FollowPoint = (Vector2)transform.position + new Vector2(x, followOffset.y);
+			// 가운데 검은 바로 앞(0°), 첫 검이 가장 위
+			float fromCenter = (readyCount - 1) * 0.5f - slot;
+			float rad = orbitAngleStep * fromCenter * Mathf.Deg2Rad;
+			float bob = Mathf.Sin(Time.time * bobSpeed + slot * 1.3f) * bobHeight;
+			s.FollowPoint = center + new Vector2(facing * Mathf.Cos(rad) * orbitRadius, Mathf.Sin(rad) * orbitRadius + bob);
+			s.FollowAngle = tipAngle;
 			slot++;
 		}
 	}

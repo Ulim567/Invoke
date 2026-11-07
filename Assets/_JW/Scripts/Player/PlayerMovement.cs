@@ -42,7 +42,7 @@ public class PlayerMovement : NetworkBehaviour
 	[Tooltip("스킬이 대상 앞까지 돌진할 때 속도 (유닛/초, 임시)")]
 	[SerializeField, Min(0.1f)] private float lungeSpeed = 30f;
 	[Tooltip("돌진 최대 시간(초). 벽 등에 막혀 못 닿아도 이 시간이 지나면 멈춘다")]
-	[SerializeField, Min(0.05f)] private float lungeMaxTime = 0.35f;
+	[SerializeField, Min(0.05f)] private float lungeMaxTime = 0.25f;
 
 	[Header("대시 (이동 스킬, #256)")]
 	[Tooltip("대시로 가는 거리 (유닛, 임시)")]

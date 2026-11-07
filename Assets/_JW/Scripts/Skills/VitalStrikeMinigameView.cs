@@ -12,7 +12,7 @@ using UnityEngine;
 public class VitalStrikeMinigameView : MonoBehaviour
 {
 	[SerializeField, Min(10f)] float radius = 48f;
-	[SerializeField] Vector3 worldOffset = new Vector3(0f, 3.2f, 0f);
+	[SerializeField] Vector3 worldOffset = new Vector3(0f, 2.13f, 0f);
 	[Tooltip("끝난 뒤 다이얼과 결과를 보여 주는 시간 (초)")]
 	[SerializeField, Min(0f)] float resultSeconds = 0.6f;
 

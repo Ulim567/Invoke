@@ -17,7 +17,7 @@
   - 대상이 있으면 대상의 콜라이더 가운데를 향해 포물선으로 날아간다 (#167. 날아가는 시간 = 거리 / `Throw Speed`(기본 20유닛/초), 높이 = 거리 × 0.25, 최대 2). 닿으면 `Hit`을 알리고 그 자리에서 아래로 떨어진다.
   - 대상이 없거나(빗나감), 날아가는 사이 대상이 사라지거나, `Max Flight Time`(기본 1초) 안에 닿지 못하면 그 자리에서 바로 떨어진다.
   - 검 던지기는 대상을 골라야 쓸 수 있다 (slot-caster.md). 빗나감은 검 던지기 스킬이 확률로 정하고, 빗나가면 `Throw(null)`을 부른다 (던지기 스킬 이슈).
-  - 던지는 위치: 발밑 + `Hand Offset`(기본 (0.5, 2)). x는 바라보는 방향(`PlayerMovement.Facing`)으로 뒤집는다.
+  - 던지는 위치: 발밑 + `Hand Offset`(기본 (0.33, 1.33)). x는 바라보는 방향(`PlayerMovement.Facing`)으로 뒤집는다.
   - 떨어진 검은 아래로 `Ground Layers`(Ground, Platform)를 찾아 그 윗면에 멈춘다. 플레이어·몬스터와 부딪히지 않는다(물리를 쓰지 않고 직접 움직임).
 - 손에 없으면(날아가는 중, 땅에 떨어짐) 맨손이다 (`IsUnarmed`).
   - 맨손이면 공격 스킬은 `UnarmedError`로 끝난다. 검 돌아오기, 소환(검 소환·해제), 이동 계열은 쓸 수 있다 (c-skills.md 표의 `usableUnarmed`).
@@ -38,7 +38,7 @@
 | --- | --- |
 | Dropped Sword Prefab | `Assets/_JW/DroppedSword.prefab` (임시 그림: 흰 막대) |
 | Ground Layers | Ground, Platform |
-| Hand Offset | (0.5, 2) |
+| Hand Offset | (0.33, 1.33) (캐릭터 2/3 축소, 임혜원) |
 | Throw Speed | 20 |
 | Max Flight Time | 1초 |
 | Pick Up Range | 1.5 |

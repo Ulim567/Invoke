@@ -102,7 +102,7 @@ public class HudView : MonoBehaviour
 		GameObject me = NetworkClient.localPlayer != null ? NetworkClient.localPlayer.gameObject : null;
 		if (me != player) Bind(me);
 		// 창(편집, 장착, 스킬 트리, 레이드 방 등)이 열린 동안은 HUD를 숨겨서 창 뒤로 겹쳐 보이지 않게 한다
-		bool show = player != null && !InputBlockingPanel.AnyOpen;
+		bool show = player != null && !InputBlockingPanel.HudHidden;
 		if (root != null && root.activeSelf != show) root.SetActive(show);
 		if (!show) return;
 

@@ -10,7 +10,7 @@
 - 프리팹 `Assets/_HW/UI/Hud/HudCanvas`를 **Base 씬**에 둔다. 정렬 순서 5 (게임 화면 바로 위, 다른 창보다 아래)
   - 메뉴 Invoke → UI → 게임 HUD 만들기(`HudUIBuilder`, 에디터 전용)가 만든다
 - 내 캐릭터(`NetworkClient.localPlayer`)가 생기면 보이고, 없으면 숨긴다
-- 창이 열린 동안 숨긴다: `InputBlockingPanel.AnyOpen` (로비 입구, 스킬 트리, 블록 편집, 스킬 장착, 레이드 방). 창 뒤로 HUD가 겹쳐 보이지 않게
+- 창이 열린 동안 숨긴다: `InputBlockingPanel.HudHidden` (로비 입구, 스킬 트리, 블록 편집, 스킬 장착, 레이드 방). 창 뒤로 HUD가 겹쳐 보이지 않게. 설정 창은 숨기지 않고 어둡게 덮는다 (settings.md)
 
 | 자리 | 보여 주는 것 | 읽는 곳 |
 | --- | --- | --- |

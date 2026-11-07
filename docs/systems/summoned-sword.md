@@ -61,7 +61,7 @@
 - 위치·회전: 소환검 프리팹의 `NetworkTransform`(Sync Direction: Server To Client, 위치·회전)이 맞춘다.
 - 포인터, 상태, 주인 플레이어: `SummonedSword`의 `[SyncVar]`. 클라이언트에서도 `Pointer`, `State`가 맞고 `StateChanged`가 불린다 (누수 반투명).
 - 목록: 클라이언트에는 heap이 없어서, 소환검 오브젝트가 주인의 `SummonedSwords` 목록에 스스로 들어가고 나간다(포인터 순서). 그래서 클라이언트에서도 `Swords`, `Count`, `ReadyCount`, `Changed`를 그대로 읽는다 (HUD, 여러 명 선택 최대 인원).
-- 줍기: `SwordPickUpInput`이 Z를 `[Command]`로 서버에 요청한다 (network.md 경우 4).
+- 줍기: `SwordPickUpInput`이 Z를 `[Command]`로 서버에 요청한다 (network.md 경우 4). 죽은 동안·경직 중(`PlayerHealth.CanAct`가 false)에는 서버가 요청을 무시한다 (#325).
 - 스킬이 부르는 함수(`Throw`, `Stab`, `Recall` 등)는 서버에서만 부른다. 클라이언트에서 부르면 클라이언트 목록만 보고 아무 일도 하지 않는다.
 
 ## 다른 시스템이 쓰는 것

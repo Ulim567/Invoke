@@ -7,7 +7,7 @@ using UnityEngine;
 /// - 두 맵을 다 끄는 이유 (이우림과 정함): 슬롯 키가 눌리지 않아야 SlotCaster가 대상 고르기를 끝내면서 Player 맵을 다시 켜는 일이 생기지 않는다.<br/>
 /// - 닫을 때 다시 켠다. 창이 꺼지거나 사라질 때도 켠다 (꺼진 채로 남지 않게).<br/>
 /// - 창 그림은 panelRoot 아래에 둔다. 이 컴포넌트가 붙은 오브젝트는 늘 켜 둔다.<br/>
-/// - 열린 창이 하나라도 있으면 AnyOpen이 true. 게임 HUD가 이것을 보고 창이 열린 동안 숨는다 (#324).<br/>
+/// - 열린 창이 하나라도 있으면 AnyOpen이 true. 게임 HUD는 HudHidden을 보고 창이 열린 동안 숨는다 (#324). 설정 창처럼 HUD를 덮기만 하는 창은 HidesHud를 false로 덮어쓴다.<br/>
 /// - ESC·Enter (#324): panelRoot에 UIShortcut이 없으면 시작할 때 붙인다. ESC는 OnCancelKey(기본: 닫기), Enter는 OnSubmitKey(기본: 아무것도 안 함).
 ///   창마다 다르게 하려면 덮어쓴다 (예: 로비 입구 창의 Enter = 들어가기). 맨 위 창 하나만 반응한다 (UIShortcut 규칙).
 /// </para>
@@ -35,6 +35,21 @@ public abstract class InputBlockingPanel : MonoBehaviour
 			return openPanels.Count > 0;
 		}
 	}
+
+	/// <summary>[표시] HUD를 숨기는 창(HidesHud)이 하나라도 열려 있으면 true. 게임 HUD가 읽는다.</summary>
+	public static bool HudHidden
+	{
+		get
+		{
+			if (!AnyOpen) return false;
+			foreach (InputBlockingPanel panel in openPanels)
+				if (panel.HidesHud) return true;
+			return false;
+		}
+	}
+
+	/// <summary>열려 있는 동안 게임 HUD를 숨기는지. 기본 true (창 뒤로 HUD가 비쳐 보이지 않게). 설정 창은 false</summary>
+	protected virtual bool HidesHud => true;
 
 	/// <summary>창이 열려 있으면 true.</summary>
 	public bool IsOpen => panelRoot != null && panelRoot.activeSelf;

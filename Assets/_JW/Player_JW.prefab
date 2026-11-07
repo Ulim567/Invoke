@@ -59,7 +59,7 @@ PrefabInstance:
     - target: {fileID: 4077358799134688539, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       propertyPath: health
       value: 
-      objectReference: {fileID: 877132152123956791}
+      objectReference: {fileID: 0}
     - target: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       propertyPath: m_Name
       value: Player_JW
@@ -71,33 +71,9 @@ PrefabInstance:
     - target: {fileID: 9058111638273282288, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
       propertyPath: health
       value: 
-      objectReference: {fileID: 877132152123956791}
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-      insertIndex: 15
-      addedObject: {fileID: 877132152123956791}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
---- !u!1 &933170754771805909 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4136478383384515981, guid: 09c2eec655528d2468b5207a3d11a90d, type: 3}
-  m_PrefabInstance: {fileID: 3860975724450263896}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &877132152123956791
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 933170754771805909}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1c6fab3c7c6687a43a66a28de95b5e68, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
-  hitStunTime: 0.3
-  invincibleTime: 1
-  hideDelay: 1
-  respawnDelay: 3

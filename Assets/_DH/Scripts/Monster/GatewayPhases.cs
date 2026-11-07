@@ -32,11 +32,12 @@ using UnityEngine.Serialization;
 /// </para>
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster, GatewayAI, StatusEffects와 함께 붙인다. 기둥 프리팹은 NetworkIdentity가 있고 NetworkManager에 등록돼 있어야 한다.<br/>
-/// 네트워크를 붙이면 서버에서만 돈다. 땅 찾기는 보스가 속한 씬의 물리 세계에 한다.
+/// 페이즈·기믹은 서버(또는 네트워크 없는 테스트)에서만 돈다. 땅 찾기는 보스가 속한 씬의 물리 세계에 한다.<br/>
+/// 연출 이벤트(ChargeEffectPlayed, OverloadEffectPlayed, GroggyEffectPlayed)는 [ClientRpc]로 이 보스를 보는 모든 화면(호스트 포함)에서 불린다. 전용 서버에서는 불리지 않는다 (#310).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster), typeof(GatewayAI), typeof(StatusEffects))]
-public class GatewayPhases : MonoBehaviour
+public class GatewayPhases : NetworkBehaviour
 {
 	[Header("페이즈")]
 	[SerializeField, Tooltip("다음 페이즈로 넘어가는 체력 비율. 큰 값부터 (2페이즈 0.7, 3페이즈 0.4)")]
@@ -374,8 +375,7 @@ public class GatewayPhases : MonoBehaviour
 			Vector3 pos = new Vector3(center.x + cloneSlots[i], center.y, center.z);
 			if (i == realSlot)
 			{
-				// 진짜는 랜덤한 자리로 순간이동한다 (움직이지 않는 보스라 위치를 바로 바꾼다)
-				transform.position = pos;
+				TeleportTo(pos);
 				continue;
 			}
 
@@ -386,8 +386,36 @@ public class GatewayPhases : MonoBehaviour
 			clone.Damaged += OnCloneDamaged;
 			clones.Add(clone);
 			// 진짜와 같은 쪽을 보게 한다 (연출)
-			if (obj.TryGetComponent(out SpriteRenderer cloneSr)) cloneSr.flipX = flip;
+			ShowCloneFacing(obj, flip);
 		}
+	}
+
+	// 진짜는 랜덤한 자리로 순간이동한다 (움직이지 않는 보스라 위치를 바로 바꾼다).
+	// 서버에서는 NetworkTransform의 ServerTeleport를 쓴다. 위치만 바꾸면 클라이언트 화면에서 보스가 미끄러지듯 옮겨 가기 때문이다 (#310)
+	void TeleportTo(Vector3 pos)
+	{
+		if (NetworkServer.active && TryGetComponent(out NetworkTransformBase networkTransform))
+		{
+			networkTransform.ServerTeleport(pos, transform.rotation);
+			return;
+		}
+		transform.position = pos;
+	}
+
+	// 분신에는 방향을 맞춰 주는 GatewayAI가 없어서, 만든 직후 [ClientRpc]로 모든 화면에 방향을 알린다.
+	// 레이드는 시작 뒤에 새로 들어오는 사람이 없으므로 한 번 알리면 된다
+	void ShowCloneFacing(GameObject clone, bool flipX)
+	{
+		SetCloneFlip(clone, flipX);
+		if (NetworkServer.active) RpcCloneFacing(clone, flipX);
+	}
+
+	[ClientRpc]
+	void RpcCloneFacing(GameObject clone, bool flipX) => SetCloneFlip(clone, flipX);
+
+	static void SetCloneFlip(GameObject clone, bool flipX)
+	{
+		if (clone != null && clone.TryGetComponent(out SpriteRenderer sr)) sr.flipX = flipX;
 	}
 
 	// 분신을 때리면 같은 씬의 모든 플레이어가 반사 피해를 받는다 (TakeDamage에는 때린 사람 정보가 없어서 파티 전체)
@@ -443,12 +471,34 @@ public class GatewayPhases : MonoBehaviour
 		ClearClones();
 	}
 
-	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
-	void PlayGroggyEffect() => GroggyEffectPlayed?.Invoke(groggyDuration);
+	// 연출만 한다 (코드 작성 규칙 1). 서버에서 부르면 [ClientRpc]로 이 보스를 보는 모든 화면(호스트 포함)에서 연출한다.
+	// 서버에서 따로 부르지 않아 호스트에서 두 번 불리지 않는다. 네트워크를 켜지 않은 테스트는 그 자리에서 부른다
+	void PlayGroggyEffect()
+	{
+		if (!NetworkServer.active) { GroggyEffectPlayed?.Invoke(groggyDuration); return; }
+		RpcGroggyEffect(groggyDuration);
+	}
 
-	void PlayChargeEffect() => ChargeEffectPlayed?.Invoke(chargeTime);
+	void PlayChargeEffect()
+	{
+		if (!NetworkServer.active) { ChargeEffectPlayed?.Invoke(chargeTime); return; }
+		RpcChargeEffect(chargeTime);
+	}
 
-	void PlayOverloadEffect() => OverloadEffectPlayed?.Invoke();
+	void PlayOverloadEffect()
+	{
+		if (!NetworkServer.active) { OverloadEffectPlayed?.Invoke(); return; }
+		RpcOverloadEffect();
+	}
+
+	[ClientRpc]
+	void RpcGroggyEffect(float duration) => GroggyEffectPlayed?.Invoke(duration);
+
+	[ClientRpc]
+	void RpcChargeEffect(float duration) => ChargeEffectPlayed?.Invoke(duration);
+
+	[ClientRpc]
+	void RpcOverloadEffect() => OverloadEffectPlayed?.Invoke();
 
 	// 서버이거나 네트워크를 켜지 않은 테스트면 true
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;

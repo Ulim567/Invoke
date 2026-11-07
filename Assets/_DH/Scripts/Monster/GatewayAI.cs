@@ -18,11 +18,12 @@ using UnityEngine;
 /// <para>
 /// 사용법: Gateway 프리팹 최상위에 Monster(Is Boss 체크), ProjectileAttack과 함께 붙인다. 움직이지 않으므로 Rigidbody2D는 필요 없다.<br/>
 /// 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 공격을 고르지 않는다. Pause(초)를 부르면 그동안 공격을 멈추고, Resume()으로 바로 풀 수 있다(페이즈 전환, 분신 기믹).<br/>
-/// 네트워크를 붙이면 패턴은 서버에서만 돌린다. 판정은 보스가 속한 씬의 물리 세계에 한다.
+/// 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다. 판정은 보스가 속한 씬의 물리 세계에 한다.<br/>
+/// 연출 이벤트(SlamEffectPlayed, SummonEffectPlayed)는 [ClientRpc]로 이 보스를 보는 모든 화면(호스트 포함)에서 불린다. 전용 서버에서는 불리지 않는다 (#310).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster), typeof(ProjectileAttack))]
-public class GatewayAI : MonoBehaviour
+public class GatewayAI : NetworkBehaviour
 {
 	/// <summary>
 	/// Gateway의 공격 종류. 기믹은 GatewayPhases가 맡는다.
@@ -118,6 +119,8 @@ public class GatewayAI : MonoBehaviour
 	// 모으는 중인 낙하. Slam 연출 뒤 시간이 되면 그림자를 만든다
 	bool dropPending;
 	float dropTime;
+	// 바라보는 방향. 서버가 바꾸면 클라이언트에서도 그림을 뒤집는다 (#310)
+	[SyncVar(hook = nameof(OnFacingChanged))]
 	int facing = 1;
 	// 이 시각까지 공격을 멈춘다 (페이즈 전환 등)
 	float pausedUntil;
@@ -425,16 +428,37 @@ public class GatewayAI : MonoBehaviour
 		ShowFacing();
 	}
 
-	// 아래 함수들은 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
+	// 처음 받은 방향으로 그림을 맞춘다 (생성 때 함께 온 값)
+	public override void OnStartClient() => ShowFacing();
+
+	void OnFacingChanged(int _, int __) => ShowFacing();
+
+	// 아래 함수들은 연출만 한다 (코드 작성 규칙 1)
 	// 그림은 오른쪽을 보고 그린다고 정하고, 왼쪽이면 뒤집는다
 	void ShowFacing()
 	{
 		if (spriteRenderer != null) spriteRenderer.flipX = facing < 0;
 	}
 
-	void PlaySlamEffect() => SlamEffectPlayed?.Invoke();
+	// 서버에서 부르면 [ClientRpc]로 이 보스를 보는 모든 화면(호스트 포함)에서 연출한다. 서버에서 따로 부르지 않아 호스트에서 두 번 불리지 않는다.
+	// 네트워크를 켜지 않은 테스트는 [ClientRpc]를 보낼 수 없으므로 그 자리에서 부른다
+	void PlaySlamEffect()
+	{
+		if (!NetworkServer.active) { SlamEffectPlayed?.Invoke(); return; }
+		RpcSlamEffect();
+	}
 
-	void PlaySummonEffect() => SummonEffectPlayed?.Invoke();
+	void PlaySummonEffect()
+	{
+		if (!NetworkServer.active) { SummonEffectPlayed?.Invoke(); return; }
+		RpcSummonEffect();
+	}
+
+	[ClientRpc]
+	void RpcSlamEffect() => SlamEffectPlayed?.Invoke();
+
+	[ClientRpc]
+	void RpcSummonEffect() => SummonEffectPlayed?.Invoke();
 
 	void OnDrawGizmosSelected()
 	{

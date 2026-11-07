@@ -45,8 +45,12 @@ using UnityEngine;
 public class FunctionExecutorNetwork : NetworkBehaviour
 {
 	FunctionExecutor executor;
+	// 시전자의 체력. 죽었거나 경직 중이면 시전을 거부하고, 죽으면 실행 중인 함수를 끊는다 (#310). 없으면(시험용 오브젝트) 검사하지 않는다
+	PlayerHealth health;
 	SlotLoadout loadout;
 	ProcessMemory memory;
+	// 해금 목록을 읽는 곳. 저장 요청의 해금 검사에 쓴다
+	PlayerProgress progress;
 
 	// [서버] 슬롯마다 시전할 원본. ApplyPlayerData만 바꾼다. 빈 슬롯이나 실행할 수 없는 함수는 null
 	// 같은 슬롯은 같은 원본을 계속 써야 쿨타임, 실행 중 검사, 취소가 이어진다(function-executor.md)
@@ -173,6 +177,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor = GetComponent<FunctionExecutor>();
 		loadout = GetComponent<SlotLoadout>();
 		memory = GetComponent<ProcessMemory>();
+		progress = GetComponent<PlayerProgress>();
+		health = GetComponent<PlayerHealth>();
 	}
 
 	// 실행기의 event는 실행기가 돌고 있는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불린다. 받아서 화면들에 전한다
@@ -182,6 +188,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded += OnExecutorTaskEnded;
 		executor.InputRequested += OnExecutorInputRequested;
 		executor.CooldownStarted += OnExecutorCooldownStarted;
+		if (health != null) health.Died += OnPlayerDied;
 	}
 
 	void OnDisable()
@@ -190,7 +197,12 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded -= OnExecutorTaskEnded;
 		executor.InputRequested -= OnExecutorInputRequested;
 		executor.CooldownStarted -= OnExecutorCooldownStarted;
+		if (health != null) health.Died -= OnPlayerDied;
 	}
+
+	// 죽은 캐릭터가 시전해 둔 함수가 관전하는 동안 계속 돌지 않도록 모두 끊는다 (이우림 결정 #310).
+	// Died는 판정하는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불리므로 서버의 실행기가 끊는다. 끊긴 작업은 EndReason Interrupted
+	void OnPlayerDied() => executor.InterruptAll();
 
 	public override void OnStartClient()
 	{
@@ -342,7 +354,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// [소유 클라이언트] 함수 하나를 서버에 저장하라고 요청한다. 같은 GUID의 함수가 있으면 덮어쓴다. 결과는 PlayerDataRequestAnswered.<br/>
 	/// 슬롯 함수(ReceivedSlots의 GUID)와 페이지 함수 모두 이 요청으로 저장한다. 슬롯 함수를 저장하면 그 슬롯은 새 내용으로 시전된다.<br/>
 	/// 새 GUID는 페이지 함수로 세고, 이미 ProgressRules.MaxPageFunctions개면 TooManyFunctions.<br/>
-	/// 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 바뀌어 있으면 SlotFunctionLocked.
+	/// 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 바뀌어 있으면 SlotFunctionLocked.<br/>
+	/// 해금하지 않은 블록이나 C 스킬을 쓰면 BlockLocked, SkillLocked. 저장한 뒤 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘으면 CodeSizeExceeded (CheckFunctionContent).
 	/// </summary>
 	public void RequestSaveFunction(FunctionData function)
 	{
@@ -397,6 +410,22 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		}
 
 		int index = serverFunctions.FindIndex(f => f.Guid == function.Guid);
+
+		// 해금하지 않은 블록·스킬과 코드 영역 한도를 검사한다. 해금 목록은 서버의 PlayerProgress가 원본이다
+		// 해금 목록을 읽을 수 없으면 검사할 수 없으므로 통과시키지 않는다
+		var slotGuids = new List<string>();
+		foreach (SlotLoadout.Entry entry in serverSlots)
+		{
+			if (entry.Kind == SlotLoadout.EntryKind.UserFunction) slotGuids.Add(entry.Id);
+		}
+		PlayerDataRequestResult contentResult = progress != null
+			? CheckFunctionContent(function, serverFunctions, slotGuids, new HashSet<string>(progress.Unlocked))
+			: PlayerDataRequestResult.NotAllowed;
+		if (contentResult != PlayerDataRequestResult.Saved)
+		{
+			TargetAnswer(PlayerDataRequest.SaveFunction, contentResult);
+			return;
+		}
 #if UNITY_SERVER || UNITY_EDITOR
 		// 새 GUID는 페이지 함수다. 슬롯 함수 8개는 캐릭터를 만들 때 서버가 만들고, 그 GUID는 바뀌지 않기 때문
 		bool isNew = !store.HasFunction(characterKey, function.Guid);
@@ -424,6 +453,39 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		if (function.Parameters != null && function.Parameters.Count > 0) return false;
 		if (function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void) return false;
 		return !function.IsAsync;
+	}
+
+	/// <summary>
+	/// 저장하려는 함수의 내용을 검사한다. 통과하면 Saved, 아니면 거부 이유를 돌려준다. 네트워크와 상관없어서 서버 없이 부를 수 있다.<br/>
+	/// - BlockLocked: 해금하지 않은 문법의 블록(SkillTree.IsBlockUnlocked)을 씀. <br/>
+	/// - SkillLocked: 해금하지 않은 C 스킬을 부름. 스킬 트리에 노드가 있는 사전 정의 함수만 본다(입력 함수 input.*, 테스트 함수 test.*는 노드가 없어 통과)<br/>
+	/// - CodeSizeExceeded: function을 반영한 함수 목록으로 센 슬롯의 코드 영역 크기가 ProgressRules.MaxCodeSize보다 큼.
+	///   슬롯과 이어지지 않은 함수는 크기에 들어가지 않으므로, 그런 함수 자체가 커도 거부하지 않는다
+	/// </summary>
+	/// <param name="function">저장하려는 함수</param>
+	/// <param name="ownedFunctions">서버가 가진 캐릭터의 모든 함수. function은 아직 반영되지 않은 상태여도 된다</param>
+	/// <param name="slotFunctionGuids">슬롯에 걸린 사용자 정의 함수(슬롯 함수)들의 GUID. 코드 영역 크기를 세는 출발점이다</param>
+	/// <param name="unlocked">해금한 스킬 트리 노드 ID</param>
+	public static PlayerDataRequestResult CheckFunctionContent(FunctionData function, IEnumerable<FunctionData> ownedFunctions,
+		IEnumerable<string> slotFunctionGuids, ICollection<string> unlocked)
+	{
+		foreach (BlockData block in function.AllBlocks())
+		{
+			if (!SkillTree.IsBlockUnlocked(block.Kind, unlocked)) return PlayerDataRequestResult.BlockLocked;
+
+			// 함수 블록은 블록 종류(순차 실행 노드)와 별개로, 부르는 C 스킬 자체의 해금을 따로 본다
+			if (block.Kind == BlockKind.Function && !block.IsUserFunction
+				&& SkillTree.TryGet(block.FunctionId, out _) && !unlocked.Contains(block.FunctionId))
+				return PlayerDataRequestResult.SkillLocked;
+		}
+
+		// 저장할 함수로 바꾼 목록에서 센다. 이미 있는 함수를 고쳐 저장하는 경우에도 새 내용으로 센다
+		var owned = new List<FunctionData>();
+		foreach (FunctionData f in ownedFunctions) owned.Add(f.Guid == function.Guid ? function : f);
+		if (!owned.Contains(function)) owned.Add(function);
+
+		int size = CodeSizeCalculator.Calculate(slotFunctionGuids, new string[0], owned);
+		return size > ProgressRules.MaxCodeSize ? PlayerDataRequestResult.CodeSizeExceeded : PlayerDataRequestResult.Saved;
 	}
 
 	[Command]
@@ -714,6 +776,20 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// 나중에 보안 검사(그 몬스터들을 정말 고를 수 있었는지)를 넣을 곳이다
 	void ServerCast(int slot, GameObject target, GameObject[] targets)
 	{
+		// 죽었거나 경직 중이면 시전하지 않는다. 클라이언트의 SlotCaster도 막지만, 서버에서 죽은 순간과 클라이언트가 그 사실을 받는 순간 사이에 보낸 요청을 막기 위함 (#310)
+		if (health != null && !health.CanAct)
+		{
+			ReplyCastRejected(slot, CastRejection.CannotAct);
+			return;
+		}
+
+		// 공격할 수 없는 장소(로비 등)에서는 시전하지 않는다. 클라이언트가 막지 않아도 서버가 거부하므로, 요청을 조작해도 시전되지 않는다 (#313)
+		if (PlaceScenes.IsPlayerInNoCastPlace(gameObject))
+		{
+			ReplyCastRejected(slot, CastRejection.InNoCastPlace);
+			return;
+		}
+
 		FunctionBlock original = GetSlotOriginal(slot);
 		if (original == null)
 		{

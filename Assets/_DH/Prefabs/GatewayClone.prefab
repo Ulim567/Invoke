@@ -11,15 +11,16 @@ GameObject:
   - component: {fileID: 4902768607694268183}
   - component: {fileID: 5972525450976547224}
   - component: {fileID: 7521124168250020241}
+  - component: {fileID: 1943609364542148088}
+  - component: {fileID: 80712808310328760}
   - component: {fileID: 6873335778508936988}
   - component: {fileID: 4016514634107478264}
   - component: {fileID: 5295062813357478743}
   - component: {fileID: 6799774217667225612}
   - component: {fileID: 6609799144334986822}
-  - component: {fileID: 80712808310328760}
-  - component: {fileID: 1943609364542148088}
   - component: {fileID: 8070256063379822715}
   - component: {fileID: 5215030849072714163}
+  - component: {fileID: 2196677328986459233}
   m_Layer: 9
   m_Name: GatewayClone
   m_TagString: Untagged
@@ -148,6 +149,45 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 6, y: 7}
   m_EdgeRadius: 0
+--- !u!95 &1943609364542148088
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8747900183796829505}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 58c3bee88cb1f42eb99f8c9e2e74d84f, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &80712808310328760
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8747900183796829505}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 0
+  _assetId: 3475081849
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!114 &6873335778508936988
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -225,45 +265,6 @@ MonoBehaviour:
   iconPrefab: {fileID: 0}
   heightAboveTop: 0.6
   spacing: 1.1
---- !u!114 &80712808310328760
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8747900183796829505}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
-  sceneId: 0
-  _assetId: 3475081849
-  serverOnly: 0
-  visibility: 0
-  hasSpawned: 0
---- !u!95 &1943609364542148088
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8747900183796829505}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 58c3bee88cb1f42eb99f8c9e2e74d84f, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &8070256063379822715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -300,3 +301,18 @@ MonoBehaviour:
   - {fileID: -6299283752425237753, guid: 22a8650aefa3648d4a8d2bd1c6f31fba, type: 3}
   - {fileID: -4605192099577636400, guid: 22a8650aefa3648d4a8d2bd1c6f31fba, type: 3}
   fps: 12
+--- !u!114 &2196677328986459233
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8747900183796829505}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dabd2c308ade4db4794d046aaefaa2f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterNetwork
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0

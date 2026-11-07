@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -13,11 +14,13 @@ using UnityEngine;
 /// - 탐지·낭떠러지·장애물 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.
 /// </para>
 /// <para>
-/// 네트워크를 붙이면 AI는 서버에서만 돌린다(FixedUpdate에 [ServerCallback]). 위치는 Rigidbody 동기화로 각 화면에 보인다.
+/// AI(순찰·탐지·추적)는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 클라이언트의 복사본이 따로 돌면 그 화면의 몬스터가 서버와 다른 곳으로 걷기 때문이다 (#310).<br/>
+/// 네트워크를 켜지 않은 테스트에서도 돌아야 해서 [ServerCallback] 대신 IsAuthority()로 확인한다.<br/>
+/// 클라이언트 화면: 위치는 프리팹의 NetworkRigidbodyReliable2D가, 바라보는 방향과 IsMoving은 [SyncVar]가 서버 값으로 맞춘다 (#310).
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster), typeof(Rigidbody2D), typeof(Collider2D))]
-public class GroundChaseAI : MonoBehaviour
+public class GroundChaseAI : NetworkBehaviour
 {
 	[Header("이동")]
 	[SerializeField, Min(0f), Tooltip("순찰 속도 (초당 유닛)")]
@@ -82,8 +85,12 @@ public class GroundChaseAI : MonoBehaviour
 
 	PlayerHealth target;
 	float nextDetectTime;
-	// 바라보는 방향. 오른쪽 1, 왼쪽 -1
+	// 바라보는 방향. 오른쪽 1, 왼쪽 -1. 서버가 바꾸면 클라이언트에서도 그림을 뒤집는다 (#310)
+	[SyncVar(hook = nameof(OnFacingChanged))]
 	int facing = 1;
+	// 서버에서 좌우로 움직이고 있으면 true. 클라이언트의 Rigidbody 속도는 서버와 다를 수 있어서 서버 값을 받는다 (#310)
+	[SyncVar]
+	bool moving;
 	// 순찰 상태. true면 멈추기, false면 걷기. patrolStateEndTime이 지나면 다음 상태를 뽑는다
 	bool isIdle;
 	float patrolStateEndTime;
@@ -94,9 +101,9 @@ public class GroundChaseAI : MonoBehaviour
 	public PlayerHealth Target => target;
 
 	/// <summary>
-	/// 지금 좌우로 움직이고 있으면 true. 이동·대기 애니메이션을 바꿀 때 읽는다.
+	/// 지금 좌우로 움직이고 있으면 true. 이동·대기 애니메이션을 바꿀 때 읽는다. 클라이언트에서는 서버의 값이다.
 	/// </summary>
-	public bool IsMoving => Mathf.Abs(body.linearVelocity.x) > 0.01f;
+	public bool IsMoving => IsAuthority() ? Mathf.Abs(body.linearVelocity.x) > 0.01f : moving;
 
 	/// <summary>
 	/// 바라보는 방향. 오른쪽 1, 왼쪽 -1. 공격 방향을 정할 때 읽는다.
@@ -117,6 +124,8 @@ public class GroundChaseAI : MonoBehaviour
 
 	void Start()
 	{
+		// 처음 방향도 서버가 정한다. 클라이언트에서 따로 랜덤으로 정하면 그림 방향이 서버와 달라진다
+		if (!IsAuthority()) return;
 		// 처음 방향과 상태를 랜덤으로 정해, 같은 프리팹 여러 마리가 똑같이 움직이지 않게 한다
 		Face(Random.value < 0.5f ? 1 : -1);
 		isIdle = Random.value < idleChance;
@@ -125,6 +134,8 @@ public class GroundChaseAI : MonoBehaviour
 
 	void FixedUpdate()
 	{
+		if (!IsAuthority()) return;
+
 		// 죽었거나 기절했으면 그 자리에 멈춘다 (기절: 행동 불가)
 		if (monster.IsDead || (status != null && status.IsStunned))
 		{
@@ -250,7 +261,15 @@ public class GroundChaseAI : MonoBehaviour
 	// 내가 속한 장소 씬의 물리 세계. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 검사할 때마다 가져온다
 	PhysicsScene2D ScenePhysics() => gameObject.scene.GetPhysicsScene2D();
 
-	void SetVelocityX(float x) => body.linearVelocity = new Vector2(x, body.linearVelocity.y);
+	// 서버이거나 네트워크를 켜지 않은 테스트면 true
+	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
+
+	// 속도는 서버에서 여기서만 바꾸므로, 움직이는지도 여기서 함께 맞춘다 (SyncVar는 값이 바뀔 때만 보낸다)
+	void SetVelocityX(float x)
+	{
+		body.linearVelocity = new Vector2(x, body.linearVelocity.y);
+		moving = Mathf.Abs(x) > 0.01f;
+	}
 
 	void Face(int dir)
 	{
@@ -258,6 +277,11 @@ public class GroundChaseAI : MonoBehaviour
 		facing = dir;
 		ShowFacing();
 	}
+
+	// 처음 받은 방향으로 그림을 맞춘다 (생성 때 함께 온 값)
+	public override void OnStartClient() => ShowFacing();
+
+	void OnFacingChanged(int _, int __) => ShowFacing();
 
 	// 연출만 한다. 그림은 오른쪽을 보고 그린다고 정하고(플레이어와 같음), 왼쪽이면 뒤집는다
 	void ShowFacing()

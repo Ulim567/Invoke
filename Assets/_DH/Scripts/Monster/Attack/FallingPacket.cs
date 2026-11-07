@@ -15,7 +15,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 착지 판정은 그림자가 덮는 자리(Hit Size)에서 한 번만 한다. 그림자 밖으로 피하면 맞지 않는다.
-/// 판정은 이 오브젝트가 속한 씬의 물리 세계에 한다. 네트워크를 붙이면 판정은 서버에서만 한다.
+/// 판정은 이 오브젝트가 속한 씬의 물리 세계에 한다. 판정과 삭제는 서버(또는 네트워크 없는 테스트)에서만 하고, 그림자·낙하·착지 연출은 각 화면이 생성된 순간부터 스스로 한다 (#310).
 /// </para>
 /// </summary>
 public class FallingPacket : MonoBehaviour
@@ -106,7 +106,7 @@ public class FallingPacket : MonoBehaviour
 	// 서버이거나 네트워크를 켜지 않은 테스트면 true. 클라이언트에서는 판정·삭제를 하지 않는다
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 
-	// 착지 순간 그림자 위 상자 안의 대상에게 한 번씩 효과를 준다. 네트워크를 붙이면 서버에서만 한다
+	// 착지 순간 그림자 위 상자 안의 대상에게 한 번씩 효과를 준다. 서버(또는 네트워크 없는 테스트)에서만 부른다
 	void Land()
 	{
 		Vector2 center = (Vector2)transform.position + new Vector2(0f, hitSize.y * 0.5f);
@@ -121,7 +121,8 @@ public class FallingPacket : MonoBehaviour
 		}
 	}
 
-	// 아래 함수들은 연출만 한다. 네트워크를 붙이면 각 화면에서 시각으로 계산하거나 [ClientRpc]를 단다 (코드 작성 규칙 1)
+	// 아래 함수들은 연출만 한다 (코드 작성 규칙 1). 각 화면이 생성된 순간(Start)부터 자기 시계로 계산하므로 따로 보내지 않는다.
+	// 클라이언트는 생성 알림이 도착한 순간부터 세므로 서버보다 핑만큼 늦게 착지한다 (#310)
 	void PlayWarnEffect()
 	{
 		if (shadow != null) shadow.SetActive(true);

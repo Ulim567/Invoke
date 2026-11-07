@@ -16,7 +16,7 @@ using UnityEngine.UI;
 /// <para>
 /// 사용법: Canvas(Screen Space - Overlay) 아래 바 오브젝트에 붙이고 Inspector에 부품을 넣는다.
 /// Fill·Trail Image는 Image Type을 Filled, Fill Method를 Horizontal, Fill Origin을 Left로 둔다.<br/>
-/// 네트워크: 체력은 아직 동기화되지 않아서 Host 화면에서만 정확하다 (몬스터 서버 동기화 이슈에서 SyncVar로 맞춘다).
+/// 네트워크: 보스의 체력은 MonsterNetwork가 서버 값으로 맞춰 주므로 클라이언트 화면에서도 정확하다 (#310).
 /// </para>
 /// </summary>
 public class BossHealthBar : MonoBehaviour

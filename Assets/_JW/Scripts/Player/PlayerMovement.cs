@@ -14,7 +14,7 @@ using Mirror;
 /// - 경직·사망 중(PlayerHealth.CanAct가 false)에는 움직이거나 점프하지 않는다.<br/>
 /// - 발판(Platform) 위에서 ↓ + Space(DropPressed)를 누르면 잠깐 그 발판과 부딪히지 않게 해서 아래로 내려간다. 내 캐릭터만 통과한다.<br/>
 /// - 발판을 아래에서 뚫고 오르는 것은 발판 타일맵의 Platform Effector 2D가 한다 (docs/systems/player-movement.md 「발판 설정」).<br/>
-/// - 입력은 PlayerInputReader에서만 읽는다.<br/>
+/// - 입력은 PlayerInputReader에서만 읽는다. 위아래(MoveY)는 검 타기 중에만 쓴다 (#317).<br/>
 /// - 움직임 잠그기(SetMovementLocked, #207): 장소 이동처럼 씬을 바꾸는 동안 그 자리에 멈춰 둔다. 잠근 동안 속도 0, 중력 없음, 입력·돌진 무시.
 /// </para>
 /// <para>
@@ -56,6 +56,8 @@ public class PlayerMovement : NetworkBehaviour
 	[Header("검 타기 (#256)")]
 	[Tooltip("검을 타고 좌우로 나는 속도 (유닛/초, 임시)")]
 	[SerializeField, Min(0.1f)] private float rideSpeed = 9f;
+	[Tooltip("검을 타고 위아래(↑↓)로 나는 속도 (유닛/초, 임시, #317)")]
+	[SerializeField, Min(0.1f)] private float rideVerticalSpeed = 6f;
 	[Tooltip("검을 타고 나는 시간 (초, 임시). 스킬이 끝나도 이 시간 동안 계속 난다")]
 	[SerializeField, Min(0.1f)] private float rideSeconds = 30f;
 
@@ -208,7 +210,8 @@ public class PlayerMovement : NetworkBehaviour
 
 	/// <summary>
 	/// [연출] 더블점프(공중 점프)를 한 순간 (#256). 점프 모션을 처음부터 다시 틀 때 쓴다 (PlayerAnimator, 임혜원).<br/>
-	/// 첫 점프는 공중 상태로 바뀌는 것으로 알 수 있지만, 더블점프는 이미 공중이라 따로 알린다. 내 화면(소유 클라이언트)에서 불린다.
+	/// 첫 점프는 공중 상태로 바뀌는 것으로 알 수 있지만, 더블점프는 이미 공중이라 따로 알린다.<br/>
+	/// 모든 화면에서 한 번씩 불린다 (#322): 내 화면은 뛴 순간 바로, 서버·Host와 다른 클라이언트는 [Command] → [ClientRpc]로 조금 늦게 불린다.
 	/// </summary>
 	public event System.Action AirJumped;
 
@@ -284,8 +287,8 @@ public class PlayerMovement : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// 검 타기 시작 (#256): 중력 없이 그 높이에 떠서 ←→로 Ride Speed(임시 9)로 Ride Seconds(임시 30초) 동안 난다. 시간이 다 되거나 StopRide를 부르면 내려온다. 검 타기 스킬이 부른다.<br/>
-	/// 위아래 조작은 입력(MoveY)이 생기면 붙인다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
+	/// 검 타기 시작 (#256): 중력 없이 그 높이에 떠서 ←→로 Ride Speed(임시 9), ↑↓로 Ride Vertical Speed(임시 6, #317)로 Ride Seconds(임시 30초) 동안 난다.<br/>
+	/// ↑↓를 떼면 그 높이에 멈춘다. ↓로 내려갈 때는 발판(Platform)을 뚫고 내려가고 땅(Ground)에서 멈춘다. 시간이 다 되거나 StopRide를 부르면 내려온다. 검 타기 스킬이 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
 	/// </summary>
 	public void StartRide()
 	{
@@ -334,7 +337,32 @@ public class PlayerMovement : NetworkBehaviour
 		airJumpUsed = true;
 		Jump();
 		AirJumped?.Invoke();
+		ShareAirJumped();
 		return true;
+	}
+
+	// [소유 클라이언트] 더블점프를 다른 화면에도 알린다 (#322). 내 화면은 이미 AirJumped를 불렀다.
+	// Host의 내 캐릭터는 서버이므로 바로 Rpc를 보내고, 원격 클라이언트는 Command로 서버에 알린다. 네트워크 없는 테스트는 아무것도 하지 않는다
+	void ShareAirJumped()
+	{
+		if (isServer) RpcAirJumped();
+		else if (isClient) CmdAirJumped();
+	}
+
+	// [서버] 원격 클라이언트가 더블점프를 했다. 서버·Host 화면에서 부르고, 다른 클라이언트에 보낸다
+	[Command]
+	void CmdAirJumped()
+	{
+		AirJumped?.Invoke();
+		RpcAirJumped();
+	}
+
+	// [다른 클라이언트] 더블점프 연출. 뛴 주인 화면은 이미 불렀으므로 빼고(includeOwner = false), 서버·Host는 위에서 불렀으므로 건너뛴다
+	[ClientRpc(includeOwner = false)]
+	void RpcAirJumped()
+	{
+		if (isServer) return;
+		AirJumped?.Invoke();
 	}
 
 	// 대시·검 타기 동안 중력을 끈다. 처음 중력은 한 번만 기억한다
@@ -460,12 +488,16 @@ public class PlayerMovement : NetworkBehaviour
 			return;
 		}
 
-		// 검 타기 중: 그 높이에서 ←→로 난다 (#256). 위아래는 입력(MoveY)이 생기면 붙인다
+		// 검 타기 중: 중력 없이 ←→, ↑↓(MoveY, #317)로 난다 (#256). 키를 떼면 그 자리에 멈춘다.
+		// 슬롯 키를 누르는 동안은 MoveX·MoveY가 0이라(player-input.md) 대상을 고르는 동안 그 자리에 떠 있다
 		if (riding && Time.time >= rideEndTime) EndRideLocal();
 		if (riding)
 		{
 			float rideX = input.MoveX;
-			body.linearVelocity = new Vector2(rideX * rideSpeed, 0f);
+			float rideY = input.MoveY;
+			body.linearVelocity = new Vector2(rideX * rideSpeed, rideY * rideVerticalSpeed);
+			// ↓로 내려가는 동안은 발판을 뚫고 내려간다 (#317). 위로는 발판 설정(One Way)으로 원래 뚫린다. 땅(Ground)에서는 멈춘다
+			if (rideY < 0f) PassThroughPlatformsUnderFeet();
 			UpdateFacing(rideX);
 			return;
 		}
@@ -532,6 +564,14 @@ public class PlayerMovement : NetworkBehaviour
 		LayerMask solidGround = groundLayers & ~platformLayers;
 		if (ScenePhysics().OverlapBox(center, size, 0f, solidGround) != null) return;
 
+		PassThroughPlatformsUnderFeet();
+	}
+
+	// 발밑에 겹친 발판(Platform)과 내 콜라이더의 충돌을 끄고 내려가는 중(IsDropping)으로 둔다. 땅(Ground)은 끄지 않는다.
+	// ↓ + Space 내려가기와, 검 타기 중 ↓로 발판을 뚫고 내려갈 때(#317) 쓴다. 다시 켜는 것은 Update가 한다 (Drop Duration이 지나고 몸이 빠져나오면)
+	void PassThroughPlatformsUnderFeet()
+	{
+		GetGroundCheckBox(out Vector2 center, out Vector2 size);
 		ContactFilter2D filter = new ContactFilter2D();
 		filter.SetLayerMask(platformLayers);
 		filter.useTriggers = Physics2D.queriesHitTriggers;
@@ -541,6 +581,7 @@ public class PlayerMovement : NetworkBehaviour
 		// 발판 전체를 끄지 않고 내 콜라이더와의 충돌만 끈다. 다른 플레이어는 그대로 발판 위에 선다
 		foreach (Collider2D platform in platforms)
 		{
+			if (droppedPlatforms.Contains(platform)) continue;
 			Physics2D.IgnoreCollision(bodyCollider, platform, true);
 			droppedPlatforms.Add(platform);
 		}

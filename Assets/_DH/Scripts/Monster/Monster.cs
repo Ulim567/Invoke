@@ -14,6 +14,10 @@ using UnityEngine;
 /// - 게임 로직(드롭, 스포너, 보스 페이즈, 레이드 판정): Damaged, Died. 서버에서만 불린다.<br/>
 /// - 연출(이펙트, 소리, 애니메이션, 데미지 숫자): HitEffectPlayed, DeathEffectPlayed. 각 플레이어 화면에서 불린다.
 /// </para>
+/// <para>
+/// 네트워크 (#310): 이 컴포넌트는 Mirror 없이 둔다. 네트워크 몬스터 프리팹에는 MonsterNetwork를 함께 붙여, 서버의 체력과 연출을 클라이언트에 전한다.
+/// 클라이언트에서는 MonsterNetwork가 ApplyServerHp, PlayHitFromServer, PlayDeathFromServer를 부른다.
+/// </para>
 /// </summary>
 public class Monster : MonoBehaviour, IDamageable
 {
@@ -75,6 +79,9 @@ public class Monster : MonoBehaviour, IDamageable
 	/// </summary>
 	public event Action DeathEffectPlayed;
 
+	// 사망 연출을 이미 했으면 true. 클라이언트에서 서버의 사망 알림이 늦게 와도 한 번만 부르기 위함
+	bool deathPlayed;
+
 	void Awake()
 	{
 		Hp = maxHp;
@@ -103,12 +110,45 @@ public class Monster : MonoBehaviour, IDamageable
 		Despawn();
 	}
 
-	// 아래 두 함수는 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
-	// 로직 이벤트(Damaged, Died)를 여기서 부르면 [ClientRpc]가 서버에서 실행되지 않아 드롭·스폰이 빠지므로 따로 둔다
+	/// <summary>
+	/// [클라이언트] 서버가 보낸 체력을 넣는다. MonsterNetwork만 부른다. 로직 이벤트(Damaged, Died)는 부르지 않는다.
+	/// </summary>
+	public void ApplyServerHp(int hp) => Hp = Mathf.Clamp(hp, 0, maxHp);
+
+	/// <summary>
+	/// [클라이언트] 서버에서 맞았다는 알림을 받았을 때 MonsterNetwork가 부른다. 맞은 뒤 체력을 넣고 HitEffectPlayed만 부른다.
+	/// 체력을 먼저 넣는 이유: 연출 쪽(기둥 금 가는 그림 등)이 이벤트 안에서 Hp를 읽기 때문이다.
+	/// </summary>
+	public void PlayHitFromServer(int damage, int hpAfter)
+	{
+		ApplyServerHp(hpAfter);
+		PlayHitEffect(damage);
+	}
+
+	/// <summary>
+	/// [클라이언트] 서버에서 죽었다는 알림을 받았을 때 MonsterNetwork가 부른다. 체력을 0으로 두고 DeathEffectPlayed만 부른다.
+	/// 오브젝트는 서버가 없애면 Mirror가 클라이언트에서도 없앤다.
+	/// </summary>
+	public void PlayDeathFromServer()
+	{
+		ApplyServerHp(0);
+		PlayDeathEffect();
+	}
+
+	// 아래 두 함수는 연출만 한다. 클라이언트에는 MonsterNetwork가 [ClientRpc]로 전한다 (코드 작성 규칙 1)
+	// 로직 이벤트(Damaged, Died)를 여기서 부르면 클라이언트에서도 드롭·스폰이 돌므로 따로 둔다
 	void PlayHitEffect(int damage) => HitEffectPlayed?.Invoke(damage);
 
-	void PlayDeathEffect() => DeathEffectPlayed?.Invoke();
+	void PlayDeathEffect()
+	{
+		if (deathPlayed) return;
+		deathPlayed = true;
+		DeathEffectPlayed?.Invoke();
+	}
 
-	// 몬스터를 없애는 곳은 여기 하나다. 네트워크를 붙이면 NetworkServer.Destroy로 바꾼다 (코드 작성 규칙 3)
-	void Despawn() => Destroy(gameObject, despawnDelay);
+	// 몬스터를 없애는 곳은 여기 하나다 (코드 작성 규칙 3). 사망 연출이 보일 시간을 기다린 뒤 NetworkSpawner로 없앤다.
+	// 서버에서 없애면 Mirror가 모든 클라이언트에서도 없앤다. 네트워크를 켜지 않은 테스트에서는 Destroy와 같다
+	void Despawn() => Invoke(nameof(DespawnNow), despawnDelay);
+
+	void DespawnNow() => NetworkSpawner.Despawn(gameObject);
 }

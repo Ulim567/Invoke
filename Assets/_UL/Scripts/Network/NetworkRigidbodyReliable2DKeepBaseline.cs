@@ -1,5 +1,6 @@
 using Mirror;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 텔레포트해도 위치 동기화 기준값(차이 압축의 기준)을 지우지 않는 NetworkRigidbodyReliable2D.
@@ -17,6 +18,29 @@ using UnityEngine;
 /// </summary>
 public class NetworkRigidbodyReliable2DKeepBaseline : NetworkRigidbodyReliable2D
 {
+	/// <summary>
+	/// [서버] 이 플레이어를 다른 씬으로 옮기면서 위치 동기화 기준값을 지우지 않는다. 플레이어를 장소 씬으로 옮길 때는 SceneManager.MoveGameObjectToScene 대신 이 함수를 쓴다 (InvokeNetworkManager.PutPlayerInScene).<br/>
+	/// 왜 필요한가: MoveGameObjectToScene은 오브젝트를 껐다 켜는데(OnDisable, OnEnable), 이때 Mirror가 ResetState()를 불러 서버의 기준값만 0으로 지운다.
+	/// 클라이언트는 장소를 이동해도 기준값을 지우지 않으므로, 서버가 클라이언트의 위치를 옛 위치만큼 어긋나게 풀어 다른 화면에서 캐릭터가 어긋나 보인다 (#134 이후 장소를 오가는 플레이어).
+	/// </summary>
+	public void MoveToScene(Scene scene)
+	{
+		// ResetState가 지우는 값을 미리 저장했다가 되돌린다 (OnTeleport와 같은 방식)
+		Vector3Long serializedPosition = lastSerializedPosition;
+		Vector3Long deserializedPosition = lastDeserializedPosition;
+		Vector3Long serializedScale = lastSerializedScale;
+		Vector3Long deserializedScale = lastDeserializedScale;
+		TransformSnapshot lastSnapshot = last;
+
+		SceneManager.MoveGameObjectToScene(gameObject, scene);
+
+		lastSerializedPosition = serializedPosition;
+		lastDeserializedPosition = deserializedPosition;
+		lastSerializedScale = serializedScale;
+		lastDeserializedScale = deserializedScale;
+		last = lastSnapshot;
+	}
+
 	protected override void OnTeleport(Vector3 destination)
 	{
 		// base.OnTeleport가 지우는 값을 미리 저장했다가 되돌린다.

@@ -68,6 +68,7 @@
   4. `NetworkTransformBase.ServerTeleport`: 서버·클라이언트의 플레이어 위치를 도착 위치로 변경
      - 이유: Player 위치는 소유 클라이언트가 정함(Client To Server). 서버 위치만 바꾸면 클라이언트가 덮어씀
      - 공용 `Player.prefab`의 위치 동기화 컴포넌트는 `NetworkRigidbodyReliable2DKeepBaseline`(#387). Mirror 96.0.1의 `NetworkTransformReliable`은 텔레포트 때 차이 압축 기준값을 0으로 지움. 서버는 바로 지우고 클라이언트는 알림을 늦게 받아, 그 사이 클라이언트가 옛 기준으로 보낸 위치를 서버가 잘못 풀어 다른 화면에서 캐릭터가 어긋나 보였음
+     - 같은 이유로 서버가 플레이어를 씬으로 옮기는 `PutPlayerInScene`도 `NetworkRigidbodyReliable2DKeepBaseline.MoveToScene`을 씀. `SceneManager.MoveGameObjectToScene`은 오브젝트를 껐다 켜서(`OnDisable`, `OnEnable`) 서버의 기준값만 0으로 지웠고, 클라이언트는 장소를 옮겨도 기준값을 유지해 서버가 위치를 이전 위치만큼 어긋나게 풀었음 (#134 이후 이동한 플레이어)
      - 씬 메시지 뒤에 보내는 이유: 클라이언트가 새 씬을 다 로드한 뒤에 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아옴
   5. 검 정리 (#325): `SummonedSwords.MoveToScene(새 씬)`으로 소환검을 모두 새 씬으로 옮기고(누수 검도 같이, 누수는 장소를 옮겨도 개수를 차지함), `PhysicalSword.Recall()`로 던져서 떨어진 물리 검을 손으로 돌려받음
      - 이유: 소환검과 떨어진 검은 `NetworkSpawner`로 만든 네트워크 오브젝트라 플레이어만 옮기면 이전 씬에 남아 새 씬 화면에서 사라짐. 이전 씬이 연습장·레이드이면 씬이 내려가며 `Destroy`되어 물리 검은 영영 맨손, 소환검은 `Destroy`된 채 heap에 남음

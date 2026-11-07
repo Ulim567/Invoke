@@ -222,7 +222,9 @@ public class InvokeNetworkManager : NetworkManager
 	/// </summary>
 	public void PutPlayerInScene(NetworkConnectionToClient conn, GameObject player, Scene scene)
 	{
-		SceneManager.MoveGameObjectToScene(player, scene);
+		// 씬을 옮기면 오브젝트가 꺼졌다 켜지며 위치 동기화 기준값이 서버에서만 0으로 지워진다. 그러면 클라이언트의 위치가 어긋나 보이므로, 기준값을 지키는 MoveToScene으로 옮긴다
+		if (player.TryGetComponent(out NetworkRigidbodyReliable2DKeepBaseline keepBaseline)) keepBaseline.MoveToScene(scene);
+		else SceneManager.MoveGameObjectToScene(player, scene);
 
 		// 클라이언트의 플레이어는 늘 기준 씬(Base)에 있어서 씬 이름으로는 장소를 알 수 없으므로, 장소 이름을 값으로 보내 준다
 		if (player.TryGetComponent(out PlayerPublicInfo info)) info.ServerSetPlace(scene.name);

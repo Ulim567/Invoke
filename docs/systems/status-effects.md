@@ -86,17 +86,47 @@
 | `ShownStatuses` | - | `IReadOnlyList<StatusType>` | 지금 띄운 아이콘들 (왼쪽부터) |
 | `TryGetIconPosition(StatusType type, out Vector3 position)` | 상태 | `bool` | 그 아이콘의 월드 위치. 없으면 `false` (테스트용) |
 
+### `StatusEffectView` (상태 이상 몸 효과, #353)
+
+몬스터 프리팹 최상위 오브젝트(`StatusEffects`와 같은 곳)에 붙인다. `StatusEffects`가 없으면 자동으로 붙는다 (RequireComponent).
+
+- `StatusApplied` / `StatusRemoved`를 받아 그린다 (모든 화면, 위 「네트워크」). 값은 바꾸지 않는다 (표시 전용). 네트워크 오브젝트가 아니다.
+- 색 효과 (그림 없이 됨, 값은 임시)
+  - 실명: SpriteRenderer 색에 `Blind Tint`(어두운 회색)를 곱한다
+  - 이속 감소: `Slow Tint`(파란색)를 곱한다. 실명과 같이 걸리면 둘 다 곱한다
+  - 출혈: 데미지가 들어갈 때마다 `Bleed Flash Seconds`(0.15초) 동안 `Bleed Flash Color`(빨강)로 번쩍인다. 서버·Host는 `BleedTicked`(실제 데미지)에 맞추고, 클라이언트는 걸린 순간부터 `BleedInterval`(1초)마다 번쩍인다
+  - 색은 상태가 걸린 동안만 `LateUpdate`에서 칠하고, 모두 풀리면 처음 색(`Awake` 때 색)으로 한 번 되돌린다. 그 뒤로는 색을 건드리지 않는다
+- 그림 효과: Inspector 칸에 프리팹을 넣으면 걸린 동안 대상의 자식으로 띄우고, 풀리면 없앤다. 비어 있으면 그 상태는 색 효과만 낸다
+  | 칸 | 상태 | 자리 |
+  | --- | --- | --- |
+  | `Bleed Effect` | 출혈 (핏방울) | 몸 가운데 |
+  | `Mark Effect` | 표식 (표적 링) | 몸 가운데 |
+  | `Stun Effect` | 기절 (머리 위 도는 별) | 콜라이더 윗면 + `Head Effect Height`(0.2). 아이콘보다 낮게 |
+  | `Blind Effect` | 실명 (검은 연기) | 머리 쪽 (윗면에서 몸 높이의 20% 아래) |
+  | `Slow Effect` | 이속 감소 (발밑 기운) | 발밑 |
+  - 그림(PixelLab, 16 PPU)이 생기면 각 그림을 프리팹(SpriteRenderer, Sorting Layer `Effect`, 움직이면 Animator)으로 만들어 칸에 넣는다. 코드는 고치지 않는다
+- 같은 상태를 다시 걸어도 효과는 늘지 않는다. 대상이 죽으면 `StatusEffects`가 모두 풀어서 효과도 모두 사라진다
+- 한계: 색을 바꾸는 다른 코드(김도훈 `CloneGlitch` 등)와 같은 SpriteRenderer를 쓰면, 상태가 걸린 동안은 이 컴포넌트의 색이 덮는다
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `ShownStatuses` | - | `IReadOnlyCollection<StatusType>` | 지금 몸 효과를 보여 주는 상태 (테스트용) |
+| `BleedFlashCount`, `IsFlashing` | - | `int` / `bool` | 출혈 번쩍임 횟수, 지금 번쩍이는 중 (테스트용) |
+| `HasEffectObject(StatusType type)` | 상태 | `bool` | 그 상태의 그림 효과가 떠 있는지 (테스트용) |
+
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
 | `StatusIconSimTest` | Test_JW의 StatusIconTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 4초). 몬스터에 `StatusEffects`가 미리 붙어 있어야 한다 (네트워크 컴포넌트라 실행 중에 붙이지 않음, #325. 없으면 실패). `StatusIconView`는 없으면 테스트 동안 붙인다. 머리 위 1개, 알맞은 그림, 3개 순서·가운데 정렬, 다시 걸어도 3개, 기절이 풀리면 2개로 다시 정렬, 몬스터가 죽으면 모두 사라짐을 확인. 「[StatusIconTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `StatusIconPlayTest` | (임시) Test_JW의 StatusPlayTest. 상태 이상 거는 스킬이 아직 없어서 만든 직접 해 보는 테스트. 켜고 Play → Host, Q(찌르기)로 몬스터를 맞힐 때마다 출혈 → 표식 → 기절 → 실명 → 이속 감소를 하나씩 8초 동안 건다. 상태 이상 스킬이 생기면 없앤다. 평소에는 꺼 둔다. |
 | `StatusEffectsTest` | Test_JW의 StatusTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 6초). 몬스터에 `StatusEffects`가 미리 붙어 있어야 한다 (없으면 실패). 출혈 총 데미지, 표식 2배, 기절·이속 감소·실명의 지속과 풀림, 다시 걸면 시간 새로 시작을 확인. 「[StatusTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `StatusEffectViewSimTest` | (#353) Test_JW의 StatusViewTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 4초). 실명 어두운 틴트·풀리면 처음 색, 이속 감소 파란 틴트, 둘 다 섞임, 출혈 1초마다 빨간 번쩍임(약 2.3초에 2번 이상), 다시 걸어도 하나, 그림 칸이 비면 그림 없음, 모두 풀리면 처음 색. `StatusEffectView`가 없으면 테스트 동안 붙인다. 「[StatusViewTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 - Test_JW의 `TestMonster`(김도훈 프리팹)에는 `StatusEffects`·`StatusIconView`가 없어서, Test_JW 씬의 TestMonster 세 마리에 씬에서 붙여 둔다 (#348). 실제 몬스터 프리팹(Leak, Loop, Worm, Pillar, Gateway, 허수아비)에는 이미 붙어 있다.
 
 ## 맞춘 결과
 - 김도훈과 정할 것
+  - 몬스터 프리팹(Leak, Loop, Worm, Pillar, Gateway, GatewayClone)에 `StatusEffectView`를 붙여 주기 (#353). 붙이기만 하면 색 효과가 나오고, 그림 효과 칸은 그림이 생기면 박진우가 채운다
   - 기절·이속 감소·실명 반응은 형 이슈에서 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 처리
   - 몬스터 프리팹(Leak, Loop 등)에 `StatusEffects`, `StatusIconView` 붙이기 (형 폴더)
 - 정한 것

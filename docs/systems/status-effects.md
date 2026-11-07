@@ -89,9 +89,11 @@
 ### 테스트
 | 이름 | 설명 |
 | --- | --- |
-| `StatusIconSimTest` | Test_JW의 StatusIconTest. 켜고 Play (Host 필요 없음, 약 4초). 몬스터에 `StatusEffects`/`StatusIconView`가 없으면 테스트 동안 붙인다. 머리 위 1개, 알맞은 그림, 3개 순서·가운데 정렬, 다시 걸어도 3개, 기절이 풀리면 2개로 다시 정렬, 몬스터가 죽으면 모두 사라짐을 확인. 「[StatusIconTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `StatusIconSimTest` | Test_JW의 StatusIconTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 4초). 몬스터에 `StatusEffects`가 미리 붙어 있어야 한다 (네트워크 컴포넌트라 실행 중에 붙이지 않음, #325. 없으면 실패). `StatusIconView`는 없으면 테스트 동안 붙인다. 머리 위 1개, 알맞은 그림, 3개 순서·가운데 정렬, 다시 걸어도 3개, 기절이 풀리면 2개로 다시 정렬, 몬스터가 죽으면 모두 사라짐을 확인. 「[StatusIconTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `StatusIconPlayTest` | (임시) Test_JW의 StatusPlayTest. 상태 이상 거는 스킬이 아직 없어서 만든 직접 해 보는 테스트. 켜고 Play → Host, Q(찌르기)로 몬스터를 맞힐 때마다 출혈 → 표식 → 기절 → 실명 → 이속 감소를 하나씩 8초 동안 건다. 상태 이상 스킬이 생기면 없앤다. 평소에는 꺼 둔다. |
-| `StatusEffectsTest` | Test_JW의 StatusTest. 켜고 Play (Host 필요 없음, 약 6초). 몬스터에 `StatusEffects`가 없으면 테스트 동안 붙인다. 출혈 총 데미지, 표식 2배, 기절·이속 감소·실명의 지속과 풀림, 다시 걸면 시간 새로 시작을 확인. 「[StatusTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `StatusEffectsTest` | Test_JW의 StatusTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 6초). 몬스터에 `StatusEffects`가 미리 붙어 있어야 한다 (없으면 실패). 출혈 총 데미지, 표식 2배, 기절·이속 감소·실명의 지속과 풀림, 다시 걸면 시간 새로 시작을 확인. 「[StatusTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+
+- Test_JW의 `TestMonster`(김도훈 프리팹)에는 `StatusEffects`·`StatusIconView`가 없어서, Test_JW 씬의 TestMonster 세 마리에 씬에서 붙여 둔다 (#348). 실제 몬스터 프리팹(Leak, Loop, Worm, Pillar, Gateway, 허수아비)에는 이미 붙어 있다.
 
 ## 맞춘 결과
 - 김도훈과 정할 것

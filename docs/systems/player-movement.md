@@ -6,7 +6,7 @@
 - 내 캐릭터의 좌우 이동과 점프를 맡는다. 바닥에 서 있을 때만 점프한다.
 - 발판(Platform) 위에서 ↓ + Space로 발판 아래로 내려간다. 발판은 아래에서 뚫고 올라갈 수 있다.
 - 바라보는 방향(`Facing`)을 정하고, 그림을 그 방향으로 뒤집는다(`PlayerFacingView`).
-- 메인 카메라가 내 캐릭터를 따라가게 한다(`PlayerCameraFollow`).
+- 메인 카메라가 내 캐릭터를 따라가게 한다(`PlayerCameraFollow`). 레이드에서 관전 중에는 살아 있는 파티원을 따라간다 (#419).
 - 다른 시스템이 "지금 바닥에 서 있는지", "어느 쪽을 보는지"를 읽을 수 있게 `IsGrounded`, `Facing`을 알려 준다.
 - 하지 않는 일
   - 대시·더블점프·검 타기를 언제 쓸지는 이동 스킬(c-skills.md 「이동 스킬」)이 정한다. 이 컴포넌트는 움직임만 한다 (#256).
@@ -79,6 +79,17 @@
     - Y 6: 땅은 화면 아래 4~5칸만 보이고 하늘·건물, 위쪽 발판이 더 보이게 (임혜원 요청, 맵 꾸미기)
   - 위치를 `PixelPerfectCamera.RoundToPixel`로 픽셀 격자에 맞춰 픽셀이 떨리지 않게 한다.
   - 공용 카메라 프리팹은 고치지 않는다.
+  - 관전 (#419)
+    - 조건: 내 캐릭터가 숨겨졌고(`PlayerHealth.IsHidden`) 내 장소가 레이드 던전(`PlayerPlace.Mine == PlaceScenes.RaidDungeon`)일 때. 일반 장소에서는 숨겨져도 내 캐릭터에 머문다.
+    - 이벤트(`HideEffectPlayed`, `RespawnEffectPlayed`)를 구독하지 않고 매 프레임 `IsHidden`을 읽는다. 구독 순서와 해제를 신경 쓰지 않기 위함.
+    - 대상 후보: `PlayerRoster.Players` 중 내가 아니고, 죽지 않았고(`IsDead`가 false), 같은 장소(`PlayerRoster.IsInMyPlace`)인 플레이어.
+    - 처음 대상: 내가 죽은 자리에서 가장 가까운 후보. 따라가던 플레이어가 죽거나 장소를 떠나면 가장 가까운 후보로 바뀐다.
+    - 후보가 없으면(전멸) 내가 죽은 자리에 머문다. 부활하면(`IsHidden`이 false) 내 캐릭터로 돌아온다.
+    - ← → 로 대상 바꾸기: `PlayerInputReader.MoveX`가 0에서 ±1로 바뀐 프레임만 눌림으로 본다. 순서는 `netId` 오름차순, ←는 이전, →는 다음, 끝에서는 반대쪽 끝으로. 후보가 하나면 그대로.
+      - 숨겨지는 순간 이미 누르고 있던 키, 누르고 있는 동안의 반복은 대상을 바꾸지 않는다.
+      - 죽은 동안 `PlayerMovement`는 `CanAct`가 false라 `MoveX`를 쓰지 않으므로 이동과 겹치지 않는다. 슬롯 키를 누르고 있으면 `MoveX`가 0이라 바뀌지 않는다.
+    - 네트워크 작업 없음: 다른 플레이어의 위치와 `IsDead`, `IsHidden`은 이미 모든 화면에 맞춰져 있다(#310). 각 화면의 카메라만 바꾼다.
+    - 한계: 레이드 던전 맵이 화면보다 좁아 `CameraBounds`(임혜원)가 카메라를 맵 가운데에 고정하므로, 대상이 바뀌어도 가로 이동이 거의 보이지 않는다.
 - 벽 마찰: 플레이어 콜라이더에 마찰 0 재질(`PlayerNoFriction`, Friction Combine = Minimum)을 쓴다. 공중에서 벽 쪽으로 키를 눌러도 벽에 붙지 않는다.
 
 ### 지금 값 (공용 Player, #268)
@@ -133,6 +144,14 @@
 | `AirJumped` (event) | - | - | [연출] (#256) 더블점프를 한 순간. 이미 공중이라 「공중 상태로 바뀜」으로는 알 수 없어서 따로 알린다. 점프 모션을 다시 틀 때 (PlayerAnimator, 임혜원). 모든 화면에서 한 번씩 불림 (#322): 내 화면은 뛴 순간, 서버·Host와 다른 클라이언트는 `[Command]` → `[ClientRpc]`로 조금 늦게 |
 | `StartRide()`, `StopRide()`, `IsRiding` | - | - / `bool` | (#256) 검 타기 시작·끝, 타는 중 |
 | `RideSeconds`, `RideRemaining` | - | `float` | (#256) 검 타기 시간(Inspector), 남은 시간(타는 중이 아니면 0). 타이머 표시가 읽는다 |
+
+### `PlayerCameraFollow`
+
+플레이어 프리팹 최상위 오브젝트에 붙어 있다. 내 캐릭터의 것을 `NetworkClient.localPlayer.GetComponent<PlayerCameraFollow>()`로 가져온다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `SpectateTarget` | - | `PlayerHealth` | (#419) 관전 중 카메라가 따라가는 플레이어. 관전 중이 아니거나 따라갈 후보가 없으면 `null`. 값은 이 컴포넌트가 `LateUpdate`에서 정한다. 파티원 목록(`RaidPartyView`, 임혜원)이 「관전 중」 표시에 읽는다 |
 
 ### 테스트
 | 이름 | 설명 |

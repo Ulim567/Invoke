@@ -95,6 +95,12 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	/// <summary>경직 뒤 무적 시간(초). 연출이 깜빡임 길이를 맞출 때 읽는다.</summary>
 	public float InvincibleTime => invincibleTime;
 
+	/// <summary>
+	/// 사망 후 부활하기까지 시간(초). 레이드처럼 부활하지 않는 곳에서도 「부활했을 시간」을 맞출 때 읽는다.<br/>
+	/// 사망 화면 효과(DeathScreenEffect, #424)가 레이드에서 죽었을 때 효과를 끝낼 시각으로 쓴다.
+	/// </summary>
+	public float RespawnDelay => respawnDelay;
+
 	/// <summary>[로직] 피해를 받아 체력이 줄었을 때 불린다. 받은 데미지를 넘긴다.</summary>
 	public event Action<int> Damaged;
 

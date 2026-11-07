@@ -103,6 +103,16 @@ Inspector: `Boss Prefab`(Gateway), `Ground Layers`(Ground), `Hover Height`(0)
 
 Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
 
+### `RaidResultView` (결과 화면 그림, 임혜원)
+
+레이드 던전 씬의 `RaidResultCanvas` 프리팹에 붙는다. `RaidJudge.ResultEffectPlayed`를 받아 「레이드 클리어」 / 「레이드 실패」를 3초 띄운다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `MyFailureShowing` (static) | - | `bool` | [표시] 내 던전의 「레이드 실패」 결과 화면이 떠 있으면 `true`. 클리어일 때는 `false` (#424). 사망 화면 효과(`DeathScreenEffect`, 이우림)가 매 프레임 읽어, 실패 결과 화면 동안 파티원 모두의 화면을 무채색으로 하고 「사망했습니다」 글자를 숨긴다 |
+
+- 내 던전의 결과만 띄운다 (#424): Host는 모든 파티의 던전 씬을 띄워 두므로, 결과 화면이 놓인 씬이 내 캐릭터의 씬과 같을 때만 띄운다. 클라이언트는 자기 던전만 불러오므로 그대로
+
 ### `RaidRooms`
 
 화면(클라이언트)이 쓰는 것

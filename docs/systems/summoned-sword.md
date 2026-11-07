@@ -109,7 +109,7 @@
 
 ### 임시 표시
 - `SummonedSwordView`(소환검 프리팹): `StateChanged`를 받아서 누수면 반투명(`Leaked Alpha` 0.35)으로 바꾼다.
-- `SummonedSwordHud`: 내 캐릭터 화면 왼쪽 위에 「소환검 n/5 (사용 가능 m)」과 포인터별 상태를 그린다. 실제 HUD는 임혜원 이슈에서 `Swords`와 `Changed`를 읽어 바꾼다.
+- `SummonedSwordHud`(임시, OnGUI): 내 캐릭터 화면 왼쪽 위에 「소환검 n/5 (사용 가능 m)」과 포인터별 상태를 그린다. 게임 HUD(`HudView`, 임혜원 #366)에 소환검 칸이 생겨서, 공용 `Player.prefab`에서는 뺐다 (#376). HUD가 없는 Test_JW에서 보려고 `Player_JW`에만 붙여 둔다.
 
 ### 테스트
 | 이름 | 설명 |

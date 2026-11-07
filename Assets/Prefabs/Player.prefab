@@ -30,7 +30,6 @@ GameObject:
   - component: {fileID: 4021862485252956600}
   - component: {fileID: 5165889841206390109}
   - component: {fileID: 873190046994748258}
-  - component: {fileID: 6690701171801099636}
   - component: {fileID: 482365706407519612}
   - component: {fileID: 8753741767301125166}
   - component: {fileID: 1360294273205492275}
@@ -544,21 +543,6 @@ MonoBehaviour:
   followSpacing: 0.45
   rideOffset: {x: 0, y: -0.15}
   pickUpRange: 1.5
---- !u!114 &6690701171801099636
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4136478383384515981}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: df0633b94e76c44858a2c48f5c270cb5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SummonedSwordHud
-  syncDirection: 0
-  syncMode: 0
-  syncInterval: 0
 --- !u!114 &482365706407519612
 MonoBehaviour:
   m_ObjectHideFlags: 0

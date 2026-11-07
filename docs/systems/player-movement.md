@@ -69,7 +69,8 @@
   - 한계: 방향을 바꾼 거의 같은 순간에 시전하면 서버가 바뀌기 전 방향을 읽을 수 있다 (network.md).
 - 경직·사망 중(`PlayerHealth.CanAct`가 false)에는 좌우로 움직이지 않고 점프하지 않는다. 떨어지는 것은 그대로다. 대시·검 타기 중이었으면 끝낸다 (#325). `PlayerHealth`가 없는 플레이어는 검사하지 않는다.
 - 붙는 곳 (#268): 공용 `Assets/Prefabs/Player.prefab` 최상위. 공용 PlayerMove(`_UL`) 자리를 대신한다. `Player_JW` 등 변형 프리팹은 물려받는다.
-  - 박진우 컴포넌트와 실행기 묶음이 함께 붙어 있다: `PlayerMovement`, `PlayerFacingView`, `SwordRideTimerView` / `FunctionExecutor`, `ProcessMemory`, `LanguageRule`, `FunctionExecutorLogger`, `SlotLoadout`, `FunctionExecutorNetwork` / `SlotCaster`, `SlotTargetMarker` / `PhysicalSword`, `SwordPickUpInput`, `SummonedSwords`, `SummonedSwordHud`, `SwordWaveLauncher` / `SkillEffectEvents`, `ThrustEffectView`, `VitalStrikeMinigame`, `VitalStrikeMinigameView`, `ParryGuard`
+  - 박진우 컴포넌트와 실행기 묶음이 함께 붙어 있다: `PlayerMovement`, `PlayerFacingView`, `SwordRideTimerView` / `FunctionExecutor`, `ProcessMemory`, `LanguageRule`, `FunctionExecutorLogger`, `SlotLoadout`, `FunctionExecutorNetwork` / `SlotCaster`, `SlotTargetMarker` / `PhysicalSword`, `SwordPickUpInput`, `SummonedSwords`, `SwordWaveLauncher` / `SkillEffectEvents`, `ThrustEffectView`, `VitalStrikeMinigame`, `VitalStrikeMinigameView`, `ParryGuard`
+  - `SummonedSwordHud`(임시 소환검 표시)는 게임 HUD가 대신해서 공용 프리팹에서 뺐다. Test_JW용 `Player_JW`에만 붙어 있다 (#376)
   - 이어서 붙일 것: `PlayerHealth`·`PlayerHealthEffects`(김도훈), `PlayerProgress`·`PlayerLevelStats`(이우림). 각 변형 프리팹의 중복 컴포넌트는 각 담당자가 지운다.
 - 카메라 추적(`PlayerCameraFollow`)
   - 내 캐릭터(`isLocalPlayer`)에서만 메인 카메라(MainCamera 태그)를 움직인다. 다른 플레이어가 접속해도 카메라를 빼앗지 않는다.

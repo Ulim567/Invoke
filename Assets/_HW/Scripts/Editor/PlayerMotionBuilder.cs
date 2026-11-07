@@ -11,6 +11,7 @@ using UnityEngine;
 /// - C_Player.controller에 같은 이름의 상태를 더한다 (Transition 없음, PlayerAnimator가 고른다. player-animation.md).<br/>
 /// - 스킬마다 상태(예: c_wide_slash)를 하나씩 더하고, SkillMotionTable의 임시 모션 클립을 넣는다 (#288). 전용 그림이 있는 스킬(Dedicated: 패링 C_Guard, 다중베기 C_MultiSlash, 전장 휩쓸기 C_Sweep)은 전용 클립 (#295).
 ///   이미 Motion이 들어 있는 스킬 상태는 건드리지 않는다. 사람이 전용 클립으로 바꿔 둔 것을 지키기 위해서다.
+///   단, 다른 임시 모션 클립(Cast, Slash, Throw, Summon, Lunge)이 들어 있으면 표가 바뀐 것이므로 표의 임시 모션으로 바꾼다 (#373).
 /// </para>
 /// </summary>
 public static class PlayerMotionBuilder
@@ -53,6 +54,10 @@ public static class PlayerMotionBuilder
 	{
 		AnimatorStateMachine machine = controller.layers[0].stateMachine;
 		int added = 0, index = 0;
+		// 임시 모션 클립들. 스킬 상태에 이 중 하나가 들어 있으면 사람이 바꾼 게 아니라 임시 모션이다
+		var tempClips = new System.Collections.Generic.HashSet<Motion>(
+			new[] { SkillMotionTable.Cast, SkillMotionTable.Slash, SkillMotionTable.Throw, SkillMotionTable.Summon, SkillMotionTable.Lunge }
+				.Select(n => Find(machine, n)?.motion).Where(m => m != null));
 		foreach (SkillMotionTable.Entry entry in SkillMotionTable.All)
 		{
 			if (entry.Base == null) continue;
@@ -81,7 +86,9 @@ public static class PlayerMotionBuilder
 					state.speed = 1f;
 				}
 			}
-			if (state.motion == null)
+			// 표에서 임시 모션을 바꿨으면 (예: 표식 남기기 Cast → Summon) 새 임시 모션으로 바꾼다. 전용 클립은 임시 모션 목록에 없어서 지켜진다
+			bool staleTemp = state.motion != null && state.motion != baseState.motion && tempClips.Contains(state.motion) && !Dedicated.ContainsKey(entry.Id);
+			if (state.motion == null || staleTemp)
 			{
 				state.motion = baseState.motion;
 				state.speed = baseState.speed;

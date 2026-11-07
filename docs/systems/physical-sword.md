@@ -54,7 +54,7 @@
 | `Dropped` | - | `DroppedSword` | 던진 검 오브젝트. 손에 있으면 `null`. 위치 표시에 쓴다 |
 | `Throw(GameObject target)` | 대상 (없으면 `null` = 빗나감) | `bool` | 검을 던진다. 손에 없으면 `false`. 검 던지기 스킬이 부른다 |
 | `TryPickUp()` | - | `bool` | 근처의 떨어진 검을 줍는다. 주울 수 없으면 `false`. 줍기 키를 눌렀을 때 부른다 |
-| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false`. 스킬은 쓰지 않음 (테스트·시스템용, #232) |
+| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false`. 스킬은 쓰지 않음 (테스트·시스템용, #232). 장소 이동 때 `InvokeNetworkManager.TravelPlayer`가 부른다 (#325, place-scenes.md) |
 | `HandPosition` | - | `Vector2` | 던지는 손 위치 |
 | `StateChanged` (event) | `SwordState` | - | [표시] 상태가 바뀔 때. 손 그림, 맨손 표시 |
 | `Hit` (event) | `GameObject` 맞은 대상 | - | [로직] 던진 검이 대상에 닿았을 때. 데미지·처형은 이 이벤트를 받는 쪽(검 던지기 스킬)이 준다 |

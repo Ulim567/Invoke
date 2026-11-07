@@ -64,8 +64,11 @@
   4. `NetworkTransformBase.ServerTeleport`: 서버·클라이언트의 플레이어 위치를 도착 위치로 변경
      - 이유: Player 위치는 소유 클라이언트가 정함(Client To Server). 서버 위치만 바꾸면 클라이언트가 덮어씀
      - 씬 메시지 뒤에 보내는 이유: 클라이언트가 새 씬을 다 로드한 뒤에 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아옴
-  5. `TravelEndedMessage`
-  6. 이전 씬이 연습장이면 그 씬을 내림
+  5. 검 정리 (#325): `SummonedSwords.MoveToScene(새 씬)`으로 소환검을 모두 새 씬으로 옮기고(누수 검도 같이, 누수는 장소를 옮겨도 개수를 차지함), `PhysicalSword.Recall()`로 던져서 떨어진 물리 검을 손으로 돌려받음
+     - 이유: 소환검과 떨어진 검은 `NetworkSpawner`로 만든 네트워크 오브젝트라 플레이어만 옮기면 이전 씬에 남아 새 씬 화면에서 사라짐. 이전 씬이 연습장·레이드이면 씬이 내려가며 `Destroy`되어 물리 검은 영영 맨손, 소환검은 `Destroy`된 채 heap에 남음
+     - 이전 씬을 내리기 전(아래 6번)에 해야 함
+  6. `TravelEndedMessage`
+  7. 이전 씬이 연습장이면 그 씬을 내림
   7. 이전 씬이 레이드 던전이면 `RaidParties`에 그 파티원이 빠졌다고 알림 (던전을 내릴지는 `RaidParties`가 정함)
 - 클라이언트의 처리 순서: 요청(움직임 잠금) → 이전 씬 언로드 → 새 씬 로드 → teleport → `TravelEndedMessage`(움직임 잠금 해제, 로딩 화면 페이드 아웃, 액션 맵 활성화)
 - 이동하는 동안 움직임 잠금 (#216): `PlaceTravelClient`가 `RequestTravel`에서 로컬 플레이어의 `PlayerMovement.SetMovementLocked(true)`, `TravelEndedMessage`를 받으면 `SetMovementLocked(false)` 호출

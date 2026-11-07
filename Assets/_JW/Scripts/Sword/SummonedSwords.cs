@@ -271,6 +271,40 @@ public class SummonedSwords : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 플레이어가 다른 장소 씬으로 옮겨질 때 소환검을 모두 같이 새 씬으로 옮긴다 (#325). InvokeNetworkManager.TravelPlayer가 도착 위치로 순간이동시킨 뒤, 이전 씬을 내리기 전에 서버에서 부른다.<br/>
+	/// 소환검은 NetworkSpawner로 만든 네트워크 오브젝트라 플레이어만 옮기면 이전 씬에 남아 새 씬 화면에서 사라지고 개수만 차지한다. 이전 씬이 연습장·레이드면 씬이 내려가며 Destroy되기도 한다.<br/>
+	/// - 누수가 아닌 소환검: 던지기·꽂힘·찌르기·검무·검 타기 중이던 것도 모두 사용 가능(Ready)으로 돌리고 곁의 자리에 놓는다.<br/>
+	/// - 누수된 소환검: 상태는 Leaked 그대로 두고 곁에 놓는다. 누수는 장소를 옮겨도 개수를 계속 차지한다 (누수를 없애는 방법은 영역 비우기뿐).<br/>
+	/// 서버에서만 부른다.
+	/// </summary>
+	public void MoveToScene(UnityEngine.SceneManagement.Scene scene)
+	{
+		if (IsClientOnly || !scene.IsValid()) return;
+
+		int leakedCount = 0;
+		foreach (SummonedSword s in swords)
+		{
+			if (s == null) continue;
+			// 씬마다 물리 세계와 클라이언트에 보이는 범위가 따로 있으므로 오브젝트를 새 씬으로 옮긴다
+			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(s.gameObject, scene);
+
+			Vector2 place = ReturnPoint;
+			if (s.State == SummonedSwordState.Leaked)
+			{
+				// 누수 검은 멈춰 있으므로 겹치지 않게 따로 놓는다
+				place += new Vector2(followSpacing * (leakedCount + 1), -followOffset.y);
+				leakedCount++;
+			}
+			else
+			{
+				s.SetReady();
+			}
+			s.transform.position = place;
+		}
+		NotifyChanged();
+	}
+
+	/// <summary>
 	/// 던진 검 중 가장 먼저 소환한 것을 되돌린다. 검 돌아오기 스킬이 쓴다.
 	/// </summary>
 	public bool RecallFirstThrown()

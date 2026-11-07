@@ -318,6 +318,11 @@ public class InvokeNetworkManager : NetworkManager
 		Vector3 position = PlaceOnGround(target, FindArrivalPosition(target, previous.name), player);
 		player.GetComponent<NetworkTransformBase>().ServerTeleport(position, player.transform.rotation);
 
+		// 소환검은 플레이어를 따라 새 씬으로 옮기고, 던져서 떨어진 물리 검은 손으로 돌려받는다 (#325)
+		// 이전 씬을 내리기(아래 OnLeftRoom, OnLeftDungeon) 전에 해야 연습장·레이드를 나올 때 검이 같이 Destroy되지 않는다
+		if (player.TryGetComponent(out SummonedSwords summonedSwords)) summonedSwords.MoveToScene(target);
+		if (player.TryGetComponent(out PhysicalSword physicalSword)) physicalSword.Recall();
+
 		// 클라이언트는 받은 메시지를 보낸 순서대로 처리하므로, 이 메시지를 받으면 새 씬 로드와 teleport까지 끝난 것이다
 		conn.Send(new TravelEndedMessage());
 

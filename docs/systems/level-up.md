@@ -21,10 +21,11 @@
   - 접속해서 불러온 레벨은 레벨업으로 치지 않는다 (서버가 플레이어를 만든 직후 불러온 값을 넣어 첫 동기화에 들어 있음, progress-store.md).
 - 경험치: `Exp` / `LevelRules.ExpToNext(Level)`. 최대 레벨이면 막대를 꽉 채우고 「MAX」.
 - 능력치 표기: 공격 속도 `1.0`, 쿨타임 감소 `0%`, 이동 속도 `5`, 나머지 정수. 늘어난 값은 초록 `+10`, 그대로면 `-`.
-- 상태 창의 「다음 레벨」 칸: 레벨당 오르는 값을 읽을 곳이 아직 없어 `-`로 둔다 (「맞춘 결과」).
+- 상태 창의 「다음 레벨」 칸: `PlayerLevelStats`(김도훈 #340)의 `MaxHpPerLevel`, `AttackPowerPerLevel`, 메모리는 `MemoryBonusAt(레벨 + 1) - MemoryBonusAt(레벨)`. 나머지와 최대 레벨은 `-`.
+- 결과 창이 뜨는 조건의 「로비」는 `PlayerPublicInfo.Place`로 본다 (#362).
 
 ## 다른 시스템이 쓰는 것
 - 없음
 
 ## 맞춘 결과
-- 김도훈에게 요청: `PlayerLevelStats`에 레벨당 오르는 값을 읽는 속성(예: `MaxHpPerLevel`, `AttackPowerPerLevel`). 생기면 상태 창의 「다음 레벨」 칸에 `+10`, `+2`를 보여 준다
+- 김도훈이 `PlayerLevelStats`에 레벨당 오르는 값을 열어 줌 (#340). 상태 창 「다음 레벨」에 씀

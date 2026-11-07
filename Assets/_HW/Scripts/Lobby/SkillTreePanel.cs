@@ -23,8 +23,8 @@ public class SkillTreePanel : InputBlockingPanel
 	// HUD의 「스킬 트리」 버튼: 내 캐릭터로 연다
 	void OpenForLocalPlayer()
 	{
-		// 호스트는 모든 장소 씬을 띄워 두므로, 내 캐릭터가 이 창과 같은 씬(로비)에 있을 때만 연다
-		if (IsOpen || NetworkClient.localPlayer == null || NetworkClient.localPlayer.gameObject.scene != gameObject.scene) return;
+		// 내 캐릭터가 로비에 있을 때만 연다 (호스트는 모든 장소 씬을 띄워 둠. 장소는 PlayerPublicInfo.Place, #362)
+		if (IsOpen || NetworkClient.localPlayer == null || PlayerPlace.Mine != PlaceScenes.Lobby) return;
 		Show(NetworkClient.localPlayer.GetComponentInChildren<PlayerInputReader>());
 	}
 }

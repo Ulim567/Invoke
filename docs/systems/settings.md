@@ -14,7 +14,7 @@
 - 키: 방향키 위·아래로 줄 고르기, 왼쪽·오른쪽으로 음량 10%씩, Enter로 버튼 누르기 (EventSystem 이동). 열 때 「돌아가기」를 고른다.
 - 아래 버튼
   - 로비·사냥터·연습장: 「로그아웃」. `SettingsView.LogoutRequested`를 알린다. 받는 쪽이 없으면 버튼이 꺼진다 (로그아웃은 아직 계정 쪽에 없음, account.md)
-  - 레이드 던전 (내 캐릭터가 `PlaceScenes.RaidDungeon`에 있을 때): 「레이드 포기」. `RaidParties.RequestGiveUp()` (place-scenes.md)
+  - 레이드 던전 (내 캐릭터의 `PlayerPublicInfo.Place`가 `PlaceScenes.RaidDungeon`일 때, #362): 「레이드 포기」. `RaidParties.RequestGiveUp()` (place-scenes.md)
 - `SettingsCanvas` 프리팹(`Assets/_HW/UI/Settings`)은 **Base 씬**에 둔다. Base 씬은 계속 떠 있어서 로비·사냥터·레이드 어디서나 열 수 있다. 정렬 순서 40 (편집 화면 10, 레이드 결과 30보다 위).
 - 프리팹은 메뉴 Invoke → UI → 설정 화면 만들기(`SettingsUIBuilder`, 에디터 전용)가 만든다. 여러 번 눌러도 된다.
 - 음량

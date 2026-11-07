@@ -98,11 +98,8 @@ public class SettingsView : InputBlockingPanel
 
 	static bool InRaid
 	{
-		get
-		{
-			GameObject me = NetworkClient.localPlayer != null ? NetworkClient.localPlayer.gameObject : null;
-			return me != null && me.scene.name == PlaceScenes.RaidDungeon;
-		}
+		// 장소는 PlayerPublicInfo.Place로 본다 (#362)
+		get => PlayerPlace.Mine == PlaceScenes.RaidDungeon;
 	}
 
 	void OnExit()

@@ -171,9 +171,11 @@ public class HudView : MonoBehaviour
 			SetText(bugFragmentText, $"버그 조각 {progress.GetMaterialCount(BugFragment)}");
 			SetText(bossCoreText, $"보스 코어 {progress.GetMaterialCount(BossCore)}");
 		}
-		SetText(placeText, "> " + PlaceName(player.scene.name));
+		// 장소는 PlayerPublicInfo.Place로 본다 (클라이언트에서는 플레이어가 늘 Base 씬에 있어 scene.name으로는 모름, #362)
+		string place = PlayerPlace.Of(player);
+		SetText(placeText, place.Length > 0 ? "> " + PlaceName(place) : "");
 
-		bool raid = player.scene.name == PlaceScenes.RaidDungeon;
+		bool raid = place == PlaceScenes.RaidDungeon;
 		if (hideInRaid != null)
 			foreach (GameObject item in hideInRaid)
 				if (item != null && item.activeSelf == raid) item.SetActive(!raid);
@@ -183,7 +185,7 @@ public class HudView : MonoBehaviour
 	// (호스트는 모든 장소 씬을 띄워 두어 다른 장소에서도 창이 살아 있으므로, 받는 쪽이 있는지만으로는 안 됨)
 	void RefreshShortcuts()
 	{
-		SetUsable(skillTreeButton, SkillTreeRequested != null && player.scene.name == PlaceScenes.Lobby);
+		SetUsable(skillTreeButton, SkillTreeRequested != null && PlayerPlace.Of(player) == PlaceScenes.Lobby);
 		SetUsable(levelUpButton, LevelUpRequested != null);
 	}
 

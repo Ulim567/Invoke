@@ -104,6 +104,7 @@ public static class HudUIBuilder
 		place.fontStyle = FontStyles.Bold;
 		Place(place.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(14, -38), new Vector2(200, 18));
 
+		BuildNameTags(root);
 		BuildRaidParty(root);
 		BuildBossBar(root);
 
@@ -241,6 +242,45 @@ public static class HudUIBuilder
 		SetImage(icon.gameObject, "hud_icon").raycastTarget = false;
 		Layout(icon.gameObject, 9, 9);
 		return icon.gameObject;
+	}
+
+	// 머리 위 닉네임 이름표 (#362): 화면 전체 크기 영역 + 이름표 8개 (작은 어두운 바탕 + 글자)
+	static void BuildNameTags(RectTransform root)
+	{
+		RectTransform area = NewUI("NameTags", root);
+		Stretch(area);
+		area.SetAsFirstSibling(); // 다른 HUD 아래에 그린다
+		NameTagView view = area.gameObject.AddComponent<NameTagView>();
+
+		const int count = 8;
+		var tags = new RectTransform[count];
+		var texts = new TMP_Text[count];
+		for (int i = 0; i < count; i++)
+		{
+			RectTransform tag = NewUI("Tag" + (i + 1), area);
+			tag.anchorMin = tag.anchorMax = new Vector2(0.5f, 0.5f);
+			tag.pivot = new Vector2(0.5f, 0f);
+			Image back = tag.gameObject.AddComponent<Image>();
+			back.sprite = LoadSprite("hud_white");
+			back.color = new Color(0.04f, 0.03f, 0.08f, 0.55f);
+			back.raycastTarget = false;
+			HorizontalLayoutGroup layout = tag.gameObject.AddComponent<HorizontalLayoutGroup>();
+			layout.padding = new RectOffset(3, 3, 1, 1);
+			layout.childControlWidth = layout.childControlHeight = true;
+			layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+			ContentSizeFitter fitter = tag.gameObject.AddComponent<ContentSizeFitter>();
+			fitter.horizontalFit = fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+			texts[i] = Text(tag, "Text", "닉네임", 6, Color.white);
+			texts[i].alignment = TextAlignmentOptions.Center;
+			tags[i] = tag;
+			tag.gameObject.SetActive(false);
+		}
+
+		var so = new SerializedObject(view);
+		Array(so, "tags", tags);
+		Array(so, "texts", texts);
+		so.ApplyModifiedPropertiesWithoutUndo();
 	}
 
 	// 레이드 파티원 목록 (시안 8-3): 장소 이름 아래, 「파티」 + 2줄 (레이드 최대 3명에서 나를 뺀 수)

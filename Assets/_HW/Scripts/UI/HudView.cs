@@ -10,6 +10,7 @@ using UnityEngine.UI;
 /// <para>
 /// - 왼쪽 위: 설정(Esc) · Lv · 버그 조각 · 보스 코어 (PlayerProgress). 그 아래 지금 장소 이름 (내 캐릭터가 있는 씬).<br/>
 /// - 아래 가운데: HP(PlayerHealth), Memory(ProcessMemory: 왼쪽부터 Data·Heap, 오른쪽부터 Stack), 슬롯 8칸(Q W E R A S D F).<br/>
+/// - 레이드 던전 (시안 8-3): 왼쪽 위는 설정만, 바로가기 숨김. 파티원 목록(RaidPartyView)과 보스 체력 바(김도훈의 BossHealthBar + BossBarPercent)가 같은 프리팹에 있다.<br/>
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 줄고 남은 초) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
 ///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks. 거부: CastRejected.<br/>
@@ -40,6 +41,7 @@ public class HudView : MonoBehaviour
 	[SerializeField] TMP_Text bugFragmentText;
 	[SerializeField] TMP_Text bossCoreText;
 	[SerializeField] TMP_Text placeText;
+	[SerializeField, Tooltip("레이드 던전에서 숨기는 것 (시안 8-3: Lv, 재료, 스킬 트리·레벨업 바로가기)")] GameObject[] hideInRaid;
 
 	[Header("아래")]
 	[SerializeField] Image hpFill;
@@ -170,6 +172,11 @@ public class HudView : MonoBehaviour
 			SetText(bossCoreText, $"보스 코어 {progress.GetMaterialCount(BossCore)}");
 		}
 		SetText(placeText, "> " + PlaceName(player.scene.name));
+
+		bool raid = player.scene.name == PlaceScenes.RaidDungeon;
+		if (hideInRaid != null)
+			foreach (GameObject item in hideInRaid)
+				if (item != null && item.activeSelf == raid) item.SetActive(!raid);
 	}
 
 	// 받는 화면이 없으면 버튼을 끈다. 스킬 트리 창은 로비에만 있으므로 내 캐릭터가 로비에 있을 때만 켠다

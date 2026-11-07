@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 레이드 결과 화면 (「레이드 성공」 / 「레이드 실패」). 연출만 한다. RaidResultCanvas 프리팹 최상위에 붙이고 레이드 던전 씬(RaidDungeon)에 둔다.
+/// 레이드 결과 화면 (「레이드 클리어」 / 「레이드 실패」). 연출만 한다. RaidResultCanvas 프리팹 최상위에 붙이고 레이드 던전 씬(RaidDungeon)에 둔다.
 /// <para>
 /// - <c>RaidJudge.ResultEffectPlayed</c>(클리어면 true, 김도훈)를 받아서 띄운다. 비워 두면 같은 씬의 RaidJudge를 찾는다.<br/>
 /// - RaidJudge는 결과를 부르고 Result Delay(3초) 뒤 레이드 끝 처리로 넘어가므로, 이 화면도 Show Time(3초) 동안 보인 뒤 사라진다 (raid.md 「클리어·실패 판정」).<br/>
@@ -44,9 +44,9 @@ public class RaidResultView : MonoBehaviour
 	TMP_Text rewardText;
 
 	[Header("글자·색")]
-	[SerializeField] string clearTitle = "레이드 성공";
-	[SerializeField] string clearSubtitle = "보스를 쓰러뜨렸어요!";
-	[SerializeField] Color clearColor = new Color32(0xFF, 0xD7, 0x7A, 0xFF);
+	[SerializeField] string clearTitle = "레이드 클리어"; // 시안 12
+	[SerializeField] string clearSubtitle = "보스를 쓰러뜨렸어요";
+	[SerializeField] Color clearColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF); // 민트 (시안 12)
 	[SerializeField] string failTitle = "레이드 실패";
 	[SerializeField] string failSubtitle = "파티가 모두 쓰러졌어요";
 	[SerializeField] Color failColor = new Color32(0xE0, 0x50, 0x60, 0xFF);
@@ -131,10 +131,10 @@ public class RaidResultView : MonoBehaviour
 		foreach (var (id, label) in RewardMaterials)
 		{
 			int gained = tracked.GetMaterialCount(id) - (startMaterials.TryGetValue(id, out int start) ? start : 0);
-			if (gained > 0) parts.Add($"{label} <color=#FFD77A>+{gained}</color>");
+			if (gained > 0) parts.Add($"{label} <color=#5EF2D6>+{gained}</color>");
 		}
 		int exp = TotalExp(tracked) - startTotalExp;
-		if (exp > 0) parts.Add($"경험치 <color=#FFD77A>+{exp}</color>");
+		if (exp > 0) parts.Add($"경험치 <color=#5EF2D6>+{exp}</color>");
 		rewardText.text = string.Join("    ", parts);
 		rewardText.gameObject.SetActive(parts.Count > 0);
 	}

@@ -44,6 +44,7 @@ GameObject:
   - component: {fileID: 5499647203975102261}
   - component: {fileID: 8456120021185903775}
   - component: {fileID: 5657045320687703192}
+  - component: {fileID: 640899364796495694}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -324,6 +325,7 @@ MonoBehaviour:
   dashDuration: 0.15
   allowDoubleJumpWithoutProgress: 1
   rideSpeed: 9
+  rideVerticalSpeed: 6
   rideSeconds: 30
   body: {fileID: 6317378190948175376}
   bodyCollider: {fileID: 1304864832004228049}
@@ -762,3 +764,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerLevelStats
   maxHpPerLevel: 10
   attackPowerPerLevel: 2
+--- !u!114 &640899364796495694
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 43d18e8b6f0a4c92a4da31ebbd454bff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillHitEffectView
+  markFlashPrefab: {fileID: 3533002814683282074, guid: a4bd12a8a921b4983aee191c0305de13, type: 3}
+  danceSlashPrefab: {fileID: 5339375805470253114, guid: 774a20ce3628f4698b5312c123033d14, type: 3}
+  parryFlashPrefab: {fileID: 464610274196922111, guid: 0ae8a9df098184bc88c9fd1e59225783, type: 3}
+  logEffects: 0

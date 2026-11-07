@@ -43,22 +43,24 @@ public class SkillTreeView : MonoBehaviour
 	[SerializeField] Button unlockButton;
 
 	// 크기 (LobbyUI Canvas 1920×1080 기준) -----------------------------------------
-	const float NodeWidth = 184f, NodeHeight = 52f, ColumnGap = 32f, RowGap = 12f; // 스킬 탭 전체 약 1208×732 (스크롤 없이 창 안에 들어감)
+	const float NodeWidth = 170f, NodeHeight = 48f, ColumnGap = 28f, RowGap = 10f; // 스킬 탭 전체 약 1122×668. 시안 9 창의 트리 칸(1158×702)에 스크롤 없이 들어감
 	const float LaneLabelWidth = 120f, Padding = 20f, LineWidth = 4f;
 
 	// 색 -----------------------------------------------------------------------
-	static readonly Color TabColor = new Color32(0x2A, 0x2F, 0x45, 0xFF);
-	static readonly Color TabSelectedColor = new Color32(0x6A, 0x5A, 0xC9, 0xFF);
-	static readonly Color SyntaxUnlockedColor = new Color32(0x2F, 0x8F, 0x86, 0xFF); // BlockLabels 변수 색
-	static readonly Color SkillUnlockedColor = new Color32(0x6A, 0x5A, 0xC9, 0xFF);  // BlockLabels 함수 색
-	static readonly Color AvailableFill = new Color32(0x2A, 0x2F, 0x45, 0xFF);
-	static readonly Color AvailableOutline = new Color32(0xF2, 0xC1, 0x4E, 0xFF);
-	static readonly Color LockedFill = new Color32(0x22, 0x25, 0x2F, 0xFF);
-	static readonly Color LockedOutline = new Color32(0x3A, 0x3F, 0x52, 0xFF);
-	static readonly Color LockedText = new Color32(0x9A, 0xA0, 0xB8, 0xFF); // 잠긴 노드 글자. 어두운 바탕에서도 읽히는 밝은 회색
-	static readonly Color LineOn = new Color32(0x9A, 0xA3, 0xC7, 0xFF);
-	static readonly Color LineOff = new Color32(0x3A, 0x3F, 0x52, 0xFF);
-	const string Good = "#7CE0A0", Bad = "#E07070", Dim = "#8A90A8";
+	// 시안 9 색: 해금됨 민트 바탕, 해금할 수 있음 주황 테두리, 잠김 회색 테두리, 고른 노드 흰 테두리
+	static readonly Color TabColor = new Color32(0x1D, 0x0A, 0x28, 0xFF);
+	static readonly Color TabSelectedColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+	static readonly Color TabOutline = new Color32(0x46, 0x3C, 0x55, 0xFF);
+	static readonly Color SyntaxUnlockedColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+	static readonly Color SkillUnlockedColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+	static readonly Color AvailableFill = new Color32(0x1A, 0x12, 0x28, 0xFF);
+	static readonly Color AvailableOutline = new Color32(0xE8, 0xA8, 0x67, 0xFF);
+	static readonly Color LockedFill = new Color32(0x1A, 0x12, 0x28, 0xFF);
+	static readonly Color LockedOutline = new Color32(0x3A, 0x35, 0x50, 0xFF);
+	static readonly Color LockedText = new Color32(0x8A, 0x84, 0xA8, 0xFF); // 잠긴 노드 글자
+	static readonly Color LineOn = new Color32(0x8A, 0x84, 0xA8, 0xFF);
+	static readonly Color LineOff = new Color32(0x3A, 0x35, 0x50, 0xFF);
+	const string Good = "#5EF2D6", Bad = "#E07070", Dim = "#8A84A8", Warn = "#E8A867", UnlockedText = "#1A1E3A";
 
 	// 노드 위치: (계열, 칸, 줄). 줄은 위에서부터 --------------------------------------
 	static readonly string[] SkillLanes = { "소환", "찌르기", "던지기", "휘두르기", "이동" };
@@ -144,6 +146,7 @@ public class SkillTreeView : MonoBehaviour
 		if (progress != null)
 		{
 			unlocked = new HashSet<string>(progress.Unlocked);
+			if (unlocked.Count == 0) unlocked = null; // 임시 계정: Unlocked가 처음 노드로 채운다
 			progress.Changed += OnProgressChanged;
 			progress.UnlockAnswered += OnUnlockAnswered;
 		}
@@ -188,6 +191,12 @@ public class SkillTreeView : MonoBehaviour
 	public void SetUnlocked(ICollection<string> unlockedIds)
 	{
 		unlocked = new HashSet<string>(unlockedIds ?? Array.Empty<string>());
+		// 해금 목록이 비어 있으면(로그인 건너뛰기 임시 계정) 처음부터 해금된 노드를 보여 준다. 실제 계정은 늘 처음 노드가 들어 있다
+		if (unlocked.Count == 0)
+		{
+			foreach (string id in SkillTree.StartingNodes()) unlocked.Add(id);
+			foreach (string id in SkillTree.AutoUnlockedBy(unlocked)) unlocked.Add(id);
+		}
 		Refresh();
 	}
 
@@ -360,10 +369,13 @@ public class SkillTreeView : MonoBehaviour
 			// 다른 계열의 선행은 이름 아래에 작게
 			var others = node.Prerequisites
 				.Where(id => !placed.TryGetValue(id, out Placed w) || w.Lane != p.Lane)
-				.Select(id => $"<color={(have.Contains(id) ? Good : Dim)}>+ {NameOf(id)}</color>")
+				.Select(id => $"<color={(isUnlocked ? UnlockedText : have.Contains(id) ? Good : Dim)}>+ {NameOf(id)}</color>")
 				.ToList();
 			// 글자 기본색은 흰색(SkillTreeNodeView). 잠긴 노드만 회색
-			string title = isUnlocked || available ? node.DisplayName : $"<color=#{ColorUtility.ToHtmlStringRGB(LockedText)}>{node.DisplayName}</color>";
+			// 해금된 노드는 민트 바탕이라 어두운 글자 (시안 9)
+			string title = isUnlocked ? $"<color={UnlockedText}><b>{node.DisplayName}</b></color>"
+				: available ? node.DisplayName
+				: $"<color=#{ColorUtility.ToHtmlStringRGB(LockedText)}>{node.DisplayName}</color>";
 			string text = others.Count == 0 ? title : $"{title}\n<size=60%>{string.Join(" ", others)}</size>";
 
 			if (p.View != null) p.View.Show(fill, border, selected ? 2f : 1f, text);
@@ -386,24 +398,31 @@ public class SkillTreeView : MonoBehaviour
 		ICollection<string> have = Unlocked;
 		bool isUnlocked = have.Contains(node.Id);
 		bool available = !isUnlocked && SkillTree.CanUnlock(node.Id, have);
+		// 선행은 채웠지만 재료가 모자라면 해금 버튼을 막는다 (서버도 MaterialShort로 거부함)
+		bool enough = HasMaterials(node);
 
 		detailTitle.text = node.DisplayName;
+		// 시안 9: 왼쪽 회색 이름표, 오른쪽 값 (표처럼 줄 맞춤)
+		string Row(string label, string value) => $"<color={Dim}>{label}</color><pos=46%>{value}";
 		var lines = new List<string>
 		{
-			$"<color={Dim}>{(node.Kind == SkillTreeNodeKind.Syntax ? "문법" : "스킬")}</color>  " +
-			(isUnlocked ? $"<color={Good}>해금됨</color>" : available ? "<color=#F2C14E>해금할 수 있음</color>" : $"<color={Dim}>잠김</color>"),
+			Row("종류", node.Kind == SkillTreeNodeKind.Syntax ? "문법" : "스킬"),
+			Row("상태", isUnlocked ? $"<color={Good}>해금됨</color>"
+				: available && enough ? $"<color={Warn}>해금할 수 있음</color>"
+				: available ? $"<color={Bad}>재료가 모자라요</color>"
+				: $"<color={Dim}>잠김</color>"),
+			Row("선행", node.Prerequisites.Count == 0 ? "없음"
+				: string.Join(", ", node.Prerequisites.Select(id => $"<color={(have.Contains(id) ? Good : Bad)}>{NameOf(id)}</color>"))),
 		};
-		if (node.Prerequisites.Count > 0)
-			lines.Add("선행  " + string.Join(", ", node.Prerequisites.Select(id => $"<color={(have.Contains(id) ? Good : Bad)}>{NameOf(id)}</color>")));
 		if (!isUnlocked)
 		{
-			lines.Add(node.Cost.Count == 0
-				? (node.AutoUnlock ? "재료  없음 (선행을 열면 같이 열림)" : "재료  없음")
-				: "재료  " + string.Join(", ", node.Cost.Select(CostText)));
+			lines.Add(Row("재료", node.Cost.Count == 0
+				? (node.AutoUnlock ? "없음 (선행을 열면 같이 열림)" : "없음")
+				: string.Join(", ", node.Cost.Select(CostText))));
 		}
 		var together = SkillTree.Instance.Nodes.Where(n => n.AutoUnlock && n.Prerequisites.Contains(node.Id)).Select(n => n.DisplayName).ToList();
-		if (together.Count > 0) lines.Add("같이 열림  " + string.Join(", ", together));
-		if (node.UnlocksBlocks.Count > 0) lines.Add("여는 블록  " + string.Join(", ", node.UnlocksBlocks.Select(BlockName)));
+		lines.Add(Row("같이 열리는 노드", together.Count > 0 ? string.Join(", ", together) : "없음"));
+		if (node.UnlocksBlocks.Count > 0) lines.Add(Row("여는 블록", string.Join(", ", node.UnlocksBlocks.Select(BlockName))));
 		if (failedId == node.Id && !isUnlocked) lines.Add($"<color={Bad}>해금하지 못했어요. {FailText(failedResult)}</color>");
 		detailBody.text = string.Join("\n", lines);
 
@@ -411,9 +430,9 @@ public class SkillTreeView : MonoBehaviour
 		{
 			// 선행을 열면 저절로 같이 열리는 노드(해제 등)는 버튼이 없다
 			unlockButton.gameObject.SetActive(!(node.AutoUnlock && node.Cost.Count == 0));
-			unlockButton.interactable = available;
+			unlockButton.interactable = available && enough;
 			TMP_Text label = unlockButton.GetComponentInChildren<TMP_Text>();
-			if (label != null) label.text = isUnlocked ? "해금됨" : available ? "해금" : "선행 노드를 먼저 해금";
+			if (label != null) label.text = isUnlocked ? "해금됨" : !available ? "선행 노드를 먼저 해금" : enough ? "해금" : "재료가 모자라요";
 		}
 	}
 
@@ -425,13 +444,20 @@ public class SkillTreeView : MonoBehaviour
 		Refresh();
 	}
 
-	// 재료 한 줄. 내 캐릭터가 있으면 「버그 조각 3/5」처럼 가진 개수를 같이 (모자라면 빨강)
+	// 재료 한 줄. 시안 9: 「버그 조각 4 (보유 34)」. 모자라면 빨강
 	string CostText(MaterialCost cost)
 	{
 		string name = MaterialName(cost.MaterialId);
 		if (progress == null) return $"{name} {cost.Count}";
 		int have = progress.GetMaterialCount(cost.MaterialId);
-		return $"<color={(have >= cost.Count ? Good : Bad)}>{name} {have}/{cost.Count}</color>";
+		return $"<color={(have >= cost.Count ? "#FFFFFF" : Bad)}>{name} {cost.Count}</color> <color={Dim}>(보유 {have})</color>";
+	}
+
+	// 노드의 재료를 다 가졌는가. 내 캐릭터를 모르면(서버 접속 전) 막지 않는다
+	bool HasMaterials(SkillTreeNode node)
+	{
+		if (progress == null) return true;
+		return node.Cost.All(cost => progress.GetMaterialCount(cost.MaterialId) >= cost.Count);
 	}
 
 	void RequestUnlock()
@@ -443,11 +469,16 @@ public class SkillTreeView : MonoBehaviour
 		if (progress != null) progress.RequestUnlock(selectedId);
 	}
 
+	// 시안 9: 고른 탭은 민트 바탕 + 어두운 글자, 안 고른 탭은 어두운 바탕 + 테두리 + 흰 글자
 	static void SetTabColor(Button tabButton, bool selected)
 	{
 		if (tabButton == null) return;
 		Image image = tabButton.GetComponent<Image>();
 		if (image != null) image.color = selected ? TabSelectedColor : TabColor;
+		Outline outline = tabButton.GetComponent<Outline>();
+		if (outline != null) outline.effectColor = selected ? TabSelectedColor : TabOutline;
+		TMP_Text label = tabButton.GetComponentInChildren<TMP_Text>();
+		if (label != null) label.color = selected ? new Color32(0x1A, 0x1E, 0x3A, 0xFF) : Color.white;
 	}
 
 	// 이름 -----------------------------------------------------------------------

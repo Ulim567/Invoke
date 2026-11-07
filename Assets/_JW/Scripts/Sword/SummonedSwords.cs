@@ -440,7 +440,14 @@ public class SummonedSwords : MonoBehaviour
 		int slot = 0;
 		foreach (SummonedSword s in swords)
 		{
-			if (s == null || s.State != SummonedSwordState.Ready) continue;
+			if (s == null) continue;
+			if (s.State != SummonedSwordState.Ready)
+			{
+				s.SetDrawBehind(false);
+				continue;
+			}
+			// 위에서부터 하나 걸러 하나씩 캐릭터 뒤에 그려서 캐릭터를 덜 가리고 깊이감을 준다 (#415): 첫째·셋째·다섯째가 뒤
+			s.SetDrawBehind(slot % 2 == 0);
 			// 가운데 검은 바로 앞(0°), 첫 검이 가장 위
 			float fromCenter = (readyCount - 1) * 0.5f - slot;
 			float rad = orbitAngleStep * fromCenter * Mathf.Deg2Rad;

@@ -90,6 +90,12 @@ public class SummonedSword : NetworkBehaviour
 	[SyncVar(hook = nameof(OnSyncedPointer))] int syncedPointer;
 	[SyncVar(hook = nameof(OnSyncedState))] SummonedSwordState syncedState = SummonedSwordState.Ready;
 	[SyncVar(hook = nameof(OnSyncedOwner))] NetworkIdentity syncedOwner;
+	// [SyncVar] 사용 가능 상태에서 캐릭터 뒤에 그릴지 (#415). 서버의 SummonedSwords가 자리마다 정한다
+	[SyncVar] bool syncedDrawBehind;
+	bool drawBehind;
+
+	/// <summary>[표시] 캐릭터 뒤에 그릴지. 사용 가능 상태에서 반원 자리에 따라 서버가 정하고, 클라이언트는 서버 값을 받는다 (#415). SummonedSwordView가 읽는다.</summary>
+	public bool DrawBehind => isClientOnly ? syncedDrawBehind : drawBehind;
 
 	// [클라이언트] 들어가 있는 주인 목록
 	SummonedSwords clientOwner;
@@ -121,6 +127,14 @@ public class SummonedSword : NetworkBehaviour
 			syncedPointer = pointer;
 			syncedOwner = owner.GetComponent<NetworkIdentity>();
 		}
+	}
+
+	// 서버(또는 네트워크 없는 테스트)에서만 부른다. 값이 바뀔 때만 써서 SyncVar를 매 프레임 보내지 않는다
+	internal void SetDrawBehind(bool behind)
+	{
+		if (drawBehind == behind) return;
+		drawBehind = behind;
+		if (isServer) syncedDrawBehind = behind;
 	}
 
 	internal void SetReady()

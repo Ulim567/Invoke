@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 /// - MonsterReward.RewardEffectPlayed(이도훈)를 받아서, 받은 플레이어마다 재료 개수만큼 아이콘(MaterialDropFlight)을 만든다. 재료 값은 바꾸지 않는다 (코드 작성 규칙 1).<br/>
 /// - 아이콘 프리팹은 재료 ID로 찾는다: Overrides에 있으면 그것, 없으면 Resources/MaterialDrops/{재료 ID}. 둘 다 없는 재료는 띄우지 않는다.<br/>
 /// - 한 재료가 많이 나와도 Max Per Material 개까지만 띄운다. 아이콘은 몬스터가 아니라 몬스터의 씬에 만들어서, 몬스터가 먼저 없어져도 끝까지 날아간다.<br/>
-/// - RewardEffectPlayed는 지금 서버(Host)에서만 불린다. 그래서 호스트 화면에서만 보인다 (다른 플레이어 화면은 MonsterReward 네트워크 작업 뒤).
+/// - RewardEffectPlayed는 받은 플레이어의 화면(호스트 포함)에서만 불린다 (#408, TargetRpc). 그래서 각 화면에서는 내 캐릭터로 날아오는 아이콘만 보인다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(MonsterReward))]

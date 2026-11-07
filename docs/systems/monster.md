@@ -85,8 +85,8 @@
 
 - 보스 Gateway (`GatewayAI`, #128)
   - `Monster`(Is Boss 체크) + `ContactDamage` + `ProjectileAttack` + `GatewayAI` + `StatusEffects` + `StatusIconView`. 제자리에 서 있고 움직이지 않는다. 체력 3000, 접촉 피해 10, 사망 대기 1.5초 (전부 임시)
-  - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(2초) 뒤, 그다음엔 `Attack Interval`(3초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
-  - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 0.58초 = Throw 모션 8번째 장면에 손을 떠남. 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
+  - `Detect Range`(20) 안의 살아 있는 플레이어 중 가장 가까운 쪽을 바라본다(최상위 SpriteRenderer `flipX`). 처음 발견하면 `First Attack Delay`(3초) 뒤, 그다음엔 `Attack Interval`(5초)마다 공격 하나를 랜덤으로 고른다. 같은 공격은 연속 두 번 고르지 않는다. 범위 안에 아무도 없으면 공격하지 않는다.
+  - 패킷 던지기(`Throw`): `ProjectileAttack.Fire`로 바라보는 쪽 수평으로 큰 패킷 덩어리(`Packet_Throw`, 체력 피해 15, 패링 가능)를 던진다. `Fire Delay` 1초, 속도 5 (#380: 피하기 어려워 0.58초·7에서 늘림). 모으는 동안 날아갈 줄을 빨간 띠로 깜빡여 보여 준다(`ThrowWarning`, `GatewayAI`가 시작할 때 붙임, 연출만). 관통(`Pierce`)이라 한 줄의 플레이어를 모두 맞히고 계속 날아간다. 높이는 `Fire Point Offset`으로 바닥 근처에 맞춘다.
   - 패킷 낙하(`Drop`): 연출 `SlamEffectPlayed`가 먼저 나가고 `Slam Delay`(0.42초 = Slam 모션 6번째 장면에 내려침) 뒤, 살아 있는 플레이어마다 그 발밑 땅에 하나, `Drop Area`(38×12, 보스방 가로 40칸에 맞춤) 안 랜덤한 땅에 `Extra Drops`(2)개 `FallingPacket`을 만든다.
   - 웜 소환(`Summon`, #203): 연출 `SummonEffectPlayed`(Throw 모션) 뒤 `Summon Delay`(0.58초)에 보스 양옆 `Worm Spawn Distance`(4.5칸) 아래 땅 위에 웜 2마리를 만든다. 살아 있는 웜이 `Max Worms`(4) 이상이면 고르지 않는다
   - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 맞은 플레이어가 실행 중이던 함수가 모두 끊긴다
@@ -103,20 +103,19 @@
     - 새 몬스터 부품의 연출 이벤트: 그 부품이 네트워크 프리팹에만 쓰이면 `GatewayAI`처럼 직접 `[ClientRpc]`, `NetworkIdentity` 없는 오브젝트도 쓰면 `Monster`처럼 네트워크 컴포넌트를 따로 둔다
     - `Monster`만 따로 두는 이유는 연습장 허수아비(`NetworkIdentity` 없는 씬 오브젝트). 허수아비를 네트워크 프리팹으로 바꾸면 `MonsterNetwork`를 `Monster`로 합친다
 - 페이즈와 기믹 (`GatewayPhases`)
-  - 1페이즈 100~70%, 2페이즈 70% 이하, 3페이즈 40% 이하 (`Phase Thresholds`). 기믹은 **페이즈마다 한 번**만 나온다.
-  - 1페이즈 기믹: 플레이어를 처음 발견하고 `First Gimmick Delay`(15초) 뒤 기믹 1
-  - 2·3페이즈: 문턱을 넘는 순간 보스가 `Transition Pause`(1.5초) 멈췄다가(`GatewayAI.Pause`) 그 페이즈 기믹. 연출은 없다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다
+  - 1페이즈 100~70%(기믹 없음), 2페이즈 70% 이하(기둥), 3페이즈 50% 이하(전체 공격), 4페이즈 30% 이하(진짜 찾기) (`Phase Thresholds`, #380에서 시간 대신 체력으로). 기믹은 **페이즈마다 한 번**만 나온다.
+  - 2~4페이즈: 문턱을 넘는 순간 보스가 `Transition Pause`(1.5초) 멈췄다가(`GatewayAI.Pause`) 그 페이즈 기믹. 연출은 없다. 한 번에 여러 문턱을 넘으면 가장 낮은 페이즈로 바로 간다
   - 기믹 1 기둥 파괴: 보스 기준 X -15, -8, +15의 땅에 기둥(`Pillar`, `Monster`, 체력 150) 3개를 세운다. 스킬로 부술 수 있다. 보스는 그동안 기본 공격을 계속한다
-    - `Pillar Time Limit`(15초) 안에 모두 부수면 성공: 보스에게 기절 `Groggy Duration`(6초) = 그로기. 연출 `GroggyEffectPlayed`
-    - 시간이 다 되면 실패: 남은 기둥이 터지고(체력 0) 기믹 2(전체 공격)로 이어진다
+    - `Pillar Time Limit`(20초) 안에 모두 부수면 성공: 보스에게 기절 `Groggy Duration`(6초) = 그로기. 연출 `GroggyEffectPlayed`
+    - 시간이 다 되면 실패: 남은 기둥이 터지고(체력 0) 보스가 패킷 던지기와 웜 소환을 한 번씩 한다(`GatewayAI.PunishAttack`, 웜 수 제한 무시)
     - 보스가 죽으면 남은 기둥도 터진다
-  - 기믹 2 전체 공격: 2페이즈 기믹이자 기믹 1 실패 결과
+  - 기믹 2 전체 공격: 3페이즈(50%) 기믹
     - 보스가 `Charge Time`(3초) 동안 기를 모은다(연출 `ChargeEffectPlayed`). 그동안 기본 공격은 멈춘다(`GatewayAI.Pause`, 모으는 시간 + 0.5초)
     - 보스 왼쪽·오른쪽에 하나씩, 보스에서 가로 `Safe Zone Distance`(6~15칸) 랜덤 거리의 땅 위에 안전지대(`SafeZone`, 가로 4 × 높이 5)를 만든다. 이동 속도 5라 3초면 어느 쪽이든 닿는다
     - 시간이 되면 안전지대 밖의 같은 씬 살아 있는 플레이어 모두에게 `Gateway_Overload`(체력 피해 60)를 적용하고(연출 `OverloadEffectPlayed`), 안전지대를 없앤다. 안전 여부는 플레이어 발 위치로 본다
     - 플레이어 무적(1초) 중이면 기존 피격 규칙대로 무시된다. 모으는 동안 보스가 기본 공격을 하지 않아 겹칠 일이 거의 없다
     - 보스가 죽으면 모으던 전체 공격은 취소하고 안전지대를 없앤다
-  - 기믹 3 진짜 찾기: 3페이즈 기믹
+  - 기믹 3 진짜 찾기: 4페이즈(30%) 기믹
     - 보스 기준 `Clone Slots`(X -10, 0, +10)에 진짜 1 + 분신 2를 세운다. 진짜는 그중 랜덤한 자리로 순간이동한다. 분신은 본체와 그림·크기가 같고 진짜와 같은 쪽을 본다
     - 구분 힌트: 분신만 2~3초마다 0.1초 색이 바뀐다(`CloneGlitch`, 연출 전용, 위치는 안 바꿈)
     - 기믹 동안 진짜도 공격하지 않는다(`GatewayAI.Pause`)
@@ -136,7 +135,7 @@
 - 보스 체력 바 (`BossHealthBar`, #188)
   - 위치는 임시로 화면 위쪽 가운데(프리팹의 Panel 위치만 바꾸면 옮겨진다. 그림·UI 배치 때 확정). 내 캐릭터와 같은 씬에 살아 있는 보스(`Monster.IsBoss`)가 있을 때만 보인다. 여러 마리면 최대 체력이 가장 큰 보스. `Search Interval`(0.5초)마다 찾는다.
   - 빨간 막대 = 지금 체력, 흰 막대 = 맞은 뒤 `Trail Delay`(0.4초) 기다렸다가 천천히 따라 줄어듦, 숫자 = 지금 / 최대, 이름 = 보스 오브젝트 이름("(Clone)" 뗌)
-  - 페이즈 구분선을 70%, 40% 위치에 놓는다 (`Phase Thresholds`)
+  - 페이즈 구분선을 보스의 `GatewayPhases.PhaseThresholds`(70%, 50%, 30%) 위치에 놓는다. 구분선(`Phase Marks`)은 3개 필요
   - 체력은 `MonsterNetwork`로 동기화되어 클라이언트 화면에서도 정확하다 (#310)
   - 지금은 색 막대(임시). 그림은 임혜원(테두리, 빨간 채움, 흰 채움, 구분선)
   - UI 프리팹 `BossHealthBar`(`_DH`). Base 씬(공용) 화면 UI에 놓는 일은 이우림과 정한다
@@ -269,7 +268,9 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 쏜다. 몬스터 AI가 부른다. 연출이 바로 나가고 `Fire Delay`초 뒤 투사체가 나간다. 죽었거나 기절했거나 방향이 (0, 0)이거나 모으는 중이면 쏘지 않는다. 실명 중에 나간 투사체는 빗나간다. |
-| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` || `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
+| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` |
+| `FireDelay` | - | `float` | 모으는 시간(초). `ThrowWarning`이 이만큼 띠를 보여 준다 |
+| `FirePointOffset` | - | `Vector2` | 발사 위치 (오른쪽 기준) || `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
 
 ### `FlyingShooterAI`
 
@@ -303,6 +304,7 @@ Gateway 프리팹 최상위에 `Monster`(Is Boss), `ProjectileAttack`과 함께 
 | `SlamEffectPlayed` (event) | - | - | [연출] 패킷 낙하·때리기를 시작할 때. Slam 모션에 쓴다. 그림자는 `Slam Delay`초 뒤, 때리기 판정은 `Smash Delay`초 뒤 |
 | `SummonEffectPlayed` (event) | - | - | [연출] 웜 소환을 시작할 때. Throw 모션에 쓴다. 웜은 `Summon Delay`초 뒤 |
 | `Pause(float seconds)` | 멈출 시간(초) | - | 그동안 공격을 멈춘다. 모으는 중인 낙하는 취소. `GatewayPhases`가 페이즈 전환 때 부른다 |
+| `PunishAttack()` | - | - | 패킷 던지기와 웜 소환을 지금 한 번씩 (웜 수 제한 무시). 기둥 기믹 실패 때 `GatewayPhases`가 부른다. 서버에서만 |
 | `Resume()` | - | - | `Pause`를 바로 풀고 한 간격 뒤부터 다시 공격한다 (분신 기믹이 일찍 끝날 때) |
 | 던지기 연출 | - | - | 같은 오브젝트의 `ProjectileAttack.FireEffectPlayed`를 받는다 (Throw 모션) |
 
@@ -312,7 +314,8 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `Phase` | - | `int` | 지금 페이즈 (1, 2, 3) |
+| `Phase` | - | `int` | 지금 페이즈 (1~4) |
+| `PhaseThresholds` | - | `IReadOnlyList<float>` | 페이즈 비율 (0.7, 0.5, 0.3). 보스 체력 바가 읽는다 |
 | `PhaseChanged` (event) | `int` (새 페이즈) | - | [로직] 페이즈가 바뀐 순간 |
 | `GroggyEffectPlayed` (event) | `float` (그로기 시간) | - | [연출] 기둥을 모두 부숴 그로기에 들어갈 때. Groggy 모션에 쓴다 |
 | `ChargeEffectPlayed` (event) | `float` (모으는 시간) | - | [연출] 전체 공격을 모으기 시작할 때. Charge 모션에 쓴다 |

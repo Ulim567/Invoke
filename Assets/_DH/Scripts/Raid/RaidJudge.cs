@@ -10,6 +10,7 @@ using UnityEngine;
 /// - 실패: 던전 안 플레이어가 한 명 이상 있고, 모두 죽었으면(PlayerHealth.IsDead).<br/>
 /// - 던전에 들어온 플레이어는 죽어도 부활하지 않고 관전한다(SetAutoRespawn(false)). 던전을 나가거나 레이드가 끝나면 다시 켠다.<br/>
 /// - 끝나면 ResultEffectPlayed(결과 화면용)를 부르고, Result Delay초 뒤 RaidFlow.ReportEnd(레이드 끝)를 부른다. 한 던전에서 한 번만 끝난다.<br/>
+/// - 보스 체력은 던전 안 인원에 맞춘다 (Hp Rate By Players: 1명 40%, 2명 70%, 3명 100%). 보스가 한 번도 맞지 않은 동안만 다시 맞추고, 처음 맞으면 그대로 둔다.<br/>
 /// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다. 플레이어는 이 씬의 최상위 오브젝트 중 PlayerHealth가 붙은 것이다.<br/>
 /// - 바깥에서 부르는 함수: FailByServer(서버, 파티원 이탈·레이드 포기로 실패), PlayResultOnly(클라이언트, 서버가 보낸 결과로 결과 화면만). 둘 다 RaidParties(이우림)가 부른다.
 /// </para>
@@ -24,6 +25,9 @@ public class RaidJudge : MonoBehaviour
 	[SerializeField, Min(0f), Tooltip("결과를 보여 준 뒤 레이드 끝을 알리기까지 시간(초). 결과 화면이 보일 시간")]
 	float resultDelay = 3f;
 
+	[SerializeField, Tooltip("던전 안 인원별 보스 체력 비율 (Inspector 최대 체력 기준). 0번이 1명. 인원이 더 많으면 마지막 값")]
+	float[] hpRateByPlayers = { 0.4f, 0.7f, 1f };
+
 	// 이 씬 최상위 오브젝트 목록. 모든 던전이 함께 쓴다 (메인 스레드라 겹치지 않음)
 	static readonly List<GameObject> roots = new List<GameObject>(32);
 
@@ -36,6 +40,8 @@ public class RaidJudge : MonoBehaviour
 	bool cleared;
 	float reportTime;
 	bool reported;
+	// 보스가 처음 맞아서 체력을 더는 인원에 맞추지 않으면 true
+	bool hpFitLocked;
 	// 결과 화면 이벤트를 이미 불렀으면 true (한 던전에서 한 번만)
 	bool resultPlayed;
 
@@ -107,6 +113,7 @@ public class RaidJudge : MonoBehaviour
 		nextCheckTime = now + checkInterval;
 
 		RefreshPlayers();
+		FitBossHp();
 		if (players.Count > 0 && AllDead()) End(false);
 	}
 
@@ -131,6 +138,15 @@ public class RaidJudge : MonoBehaviour
 			players.Add(p);
 		}
 		roots.Clear();
+	}
+
+	// 보스 체력을 지금 인원에 맞춘다. 파티원은 몇 초 차이로 들어오므로, 보스가 처음 맞기 전까지 계속 맞춘다
+	void FitBossHp()
+	{
+		if (hpFitLocked || boss == null || players.Count == 0 || hpRateByPlayers == null || hpRateByPlayers.Length == 0) return;
+		float rate = hpRateByPlayers[Mathf.Clamp(players.Count - 1, 0, hpRateByPlayers.Length - 1)];
+		// 이미 맞았으면 TrySetMaxHpRate가 false를 돌려준다. 그 뒤로는 바꾸지 않는다
+		if (!boss.TrySetMaxHpRate(rate)) hpFitLocked = true;
 	}
 
 	bool AllDead()

@@ -167,7 +167,7 @@
 - 플레이어 프리팹 루트에 붙음. 레벨, 경험치, 돈, 재료, 해금 목록을 가짐
   - 지금 붙은 곳: `Player_UL` (Base 씬 NetworkManager의 Player Prefab). 공용 `Player.prefab`에는 실행기 컴포넌트가 없고, `Player_JW`·`Player_HW`가 실행기 컴포넌트를 따로 더해 두어 공용에 붙이면 중복됨 → 공용으로 합치기는 별도 이슈
 - `Changed`: 서버(호스트 포함)는 값을 바꾼 함수가, 클라이언트 전용은 동기화 콜백이 부름 (한 번만 불림)
-- 「노드 해금」(`TryUnlock`)은 아직 없음
+- 「노드 해금」(`TryUnlock`): 임혜원이 「재료 써서 스킬 트리 해금하기」(#294)에서 더함 (이우림 허락)
 - 이 값들은 `PlayerProgress`만 바꿈 (레포 규칙 2). 다른 시스템은 아래 함수를 부름
 - 값을 바꾸는 함수는 서버에서만 동작. 값을 바꾼 직후 `ProgressStore`로 DB에 씀
 - 임시 계정은 DB에 쓰지 않음 (값은 메모리에만)
@@ -179,7 +179,7 @@
 | `LeveledUp` (event) | [로직] 레벨이 오른 순간 (새 레벨). 서버에서만. 여러 레벨이 오르면 레벨마다 | 레벨업 연출·알림 |
 | `AddMoney(int)`, `TrySpendMoney(int)` | 돈 더하기, 빼기. 모자라면 빼지 않고 `false` | 드롭 (김도훈), 상점 |
 | `AddMaterial(string, int)` | 재료 더함 | 드롭 (김도훈) |
-| `TryUnlock(string 노드 ID)` | 선행 조건·재료 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가를 한 트랜잭션으로 | 스킬 트리 해금 (임혜원, 「재료 써서 스킬 트리 해금하기」) |
+| `TryUnlock(string 노드 ID)` → `bool` | 선행 조건(`SkillTree.CanUnlock`)·재료(`SkillTreeNode.Cost`) 검사 → 재료 빼기 + 노드·같이 열리는 노드(`SkillTree.AutoUnlockedBy`) 추가 → `SaveUnlock`으로 한 트랜잭션. 안 되면 아무것도 안 바꾸고 `false` | 스킬 트리 해금 (`SkillTreeUnlocker`, 임혜원 #294) |
 | `Level`, `Exp`, `Money`, `GetMaterialCount(string)`, `Unlocked` | 값 읽기 | 화면, 스킬 트리 |
 
 - 레벨업 (김도훈, 이우림 허락): `AddExp` 안에서 `LevelRules`(경험치 표, 최대 레벨)로 레벨을 올린다. 레벨에 따른 능력치는 `PlayerLevelStats`(김도훈)가 `PlayerStats.AddBonus`로 준다

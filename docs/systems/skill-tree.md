@@ -95,6 +95,15 @@
 - 노드를 누르면 설명 칸에 종류, 상태, 선행(열었으면 초록, 아니면 빨강), 재료, 같이 열리는 노드, 여는 블록
 - 해금 목록은 `SetUnlocked`로 받는다. 받기 전에는 처음부터 해금된 노드(`StartingNodes` + 같이 열리는 노드)만 해금됨
 - 「해금」 버튼은 `UnlockRequested`만 알린다. 재료 확인·해금·저장은 「재료 써서 스킬 트리 해금하기」에서 받는다
+- 창이 열리면 내 캐릭터의 `PlayerProgress`에서 해금 목록과 재료를 읽고, `PlayerProgress.Changed`마다 다시 그린다. 재료는 「버그 조각 3/5」처럼 가진 개수/필요 개수 (모자라면 빨강)
+
+### 재료 써서 해금하기 (#294)
+1. 「해금」 버튼 → `SkillTreeView.UnlockRequested`(노드 ID)
+2. `SkillTreeUnlocker`(공용 `Player.prefab` 최상위, 내 캐릭터만)가 받아 서버로 보냄 (`[Command]`)
+3. 서버: `PlayerProgress.TryUnlock(노드 ID)` (이우림 허락). 선행·재료를 다시 검사하고, 되면 재료를 빼고 노드와 같이 열리는 노드를 해금 목록에 넣은 뒤 DB에 한 번에 저장
+4. 결과를 요청한 클라이언트에만 `SkillTreeUnlocker.UnlockAnswered(노드 ID, 성공)`로 알림. 실패하면 설명 칸에 「해금하지 못했어요. 재료가 모자라요」
+5. 해금 목록·재료는 `PlayerProgress` 동기화로 와서 화면이 바로 「해금됨」으로 바뀐다
+- 블록 목록·슬롯 장착이 해금 목록을 읽는 것은 각 화면에서 `PlayerProgress.Unlocked`와 `SkillTree.IsBlockUnlocked`로 한다 (이우림, 박진우)
 
 ## 다른 시스템이 쓰는 것
 - 코드 위치: `Assets/_HW/Scripts/SkillTree/`
@@ -113,7 +122,12 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `UnlockRequested` (static event) | `string` 노드 ID | - | [로직] 「해금」 버튼을 눌렀을 때. 선행을 채운 노드만. 재료는 보지 않음. 내 화면에서만 불린다 |
-| `SetUnlocked(ICollection<string> unlocked)` | 해금한 노드 ID들 | - | 화면을 그 해금 목록으로 다시 그린다. 창을 열 때와 해금한 뒤에 부른다 |
+| `SetUnlocked(ICollection<string> unlocked)` | 해금한 노드 ID들 | - | 화면을 그 해금 목록으로 다시 그린다. 내 캐릭터가 있으면 창이 알아서 부르므로, 네트워크 없는 시험에서만 쓴다 |
+
+### `SkillTreeUnlocker` (#294)
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `UnlockAnswered` (static event) | `string` 노드 ID, `bool` 성공 | - | [표시] 내 해금 요청의 결과. 내 화면에서만 불린다 |
 
 ### `SkillTreeNode`
 | 이름 | 설명 |

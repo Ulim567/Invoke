@@ -13,7 +13,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 「로그인 건너뛰기」 임시 계정과 네트워크를 켜지 않은 테스트는 DB에 쓰지 않고 값을 메모리에만 둔다.<br/>
-/// 레벨업: AddExp가 LevelRules(김도훈)의 경험치 표로 레벨을 올린다. 노드 해금(재료 빼기)은 「재료 써서 스킬 트리 해금하기」에서 더한다.
+/// 레벨업: AddExp가 LevelRules(김도훈)의 경험치 표로 레벨을 올린다. 노드 해금(재료 빼기): TryUnlock (「재료 써서 스킬 트리 해금하기」, 임혜원, 이우림 허락).
 /// </para>
 /// </summary>
 public class PlayerProgress : NetworkBehaviour
@@ -157,6 +157,46 @@ public class PlayerProgress : NetworkBehaviour
 		store?.SetMaterialCount(characterKey, materialId, newCount);
 #endif
 		Changed?.Invoke();
+	}
+
+	/// <summary>
+	/// [서버] 스킬 트리 노드를 해금한다 (「재료 써서 스킬 트리 해금하기」, 임혜원). 선행 조건(SkillTree.CanUnlock)과 재료(SkillTreeNode.Cost)를 검사하고,
+	/// 되면 재료를 빼고 노드와 같이 열리는 노드(SkillTree.AutoUnlockedBy)를 해금 목록에 넣은 뒤 DB에 한 트랜잭션으로 쓴다(ProgressStore.SaveUnlock). 안 되면 아무것도 바꾸지 않고 false.
+	/// </summary>
+	public bool TryUnlock(string nodeId)
+	{
+		if (string.IsNullOrEmpty(nodeId) || !CanChange(nameof(TryUnlock))) return false;
+		if (!SkillTree.TryGet(nodeId, out SkillTreeNode node) || !SkillTree.CanUnlock(nodeId, unlocked)) return false;
+		foreach (MaterialCost cost in node.Cost)
+		{
+			if (GetMaterialCount(cost.MaterialId) < cost.Count) return false;
+		}
+
+		// 재료 빼기 (0개가 되면 지운다)
+		var newCounts = new Dictionary<string, int>();
+		foreach (MaterialCost cost in node.Cost)
+		{
+			int left = GetMaterialCount(cost.MaterialId) - cost.Count;
+			if (left > 0) materials[cost.MaterialId] = left;
+			else materials.Remove(cost.MaterialId);
+			newCounts[cost.MaterialId] = left;
+		}
+
+		// 노드 + 같이 열리는 노드
+		var added = new List<string> { nodeId };
+		unlocked.Add(nodeId);
+		foreach (string id in SkillTree.AutoUnlockedBy(unlocked))
+		{
+			if (unlocked.Contains(id)) continue;
+			unlocked.Add(id);
+			added.Add(id);
+		}
+
+#if UNITY_SERVER || UNITY_EDITOR
+		store?.SaveUnlock(characterKey, added, newCounts);
+#endif
+		Changed?.Invoke();
+		return true;
 	}
 
 	// 값은 서버에서만 바꾼다. 클라이언트 전용에서 바꾸면 서버·DB와 달라지기 때문

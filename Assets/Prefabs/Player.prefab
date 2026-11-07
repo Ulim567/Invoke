@@ -42,6 +42,7 @@ GameObject:
   - component: {fileID: 5743095526360772754}
   - component: {fileID: 7930981262655194856}
   - component: {fileID: 5499647203975102261}
+  - component: {fileID: 8266242461447349182}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -728,3 +729,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealthEffects
   spriteRenderer: {fileID: 0}
   blinkInterval: 0.1
+--- !u!114 &8266242461447349182
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa78b40ca179433897b99ec745e79d79, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillTreeUnlocker
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0

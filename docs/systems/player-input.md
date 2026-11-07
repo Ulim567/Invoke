@@ -11,6 +11,7 @@
 - 하지 않는 일
   - 액션 맵을 언제 활성화·비활성화할지 정하지 않는다. 언제 부를지(UI 열기, 공격 불가 지역, 슬롯 키를 누르는 동안 등)와 여러 이유가 겹칠 때 언제 다시 활성화할지는 부르는 쪽이 정한다.
   - `UIShortcut`은 화면을 직접 열고 닫지 않는다. 연결된 함수가 연다.
+  - 코드에서 붙일 때는 `OnSubmit` / `OnCancel` (UnityEvent)에 `AddListener` 한다 (#324, `InputBlockingPanel`이 창마다 붙임)
 
 ## GameInput 동작 규칙
 - 액션 맵 이름과 같은 묶음: `GameInput.Player`, `GameInput.Attack`, `GameInput.UI`

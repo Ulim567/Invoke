@@ -6,7 +6,8 @@ using UnityEngine;
 /// <para>
 /// 버튼 연결 (Inspector의 On Click())<br/>
 /// - 들어가기: LobbyEntrancePanel.Enter<br/>
-/// - 닫기: LobbyEntrancePanel.Close
+/// - 닫기: LobbyEntrancePanel.Close<br/>
+/// 키: Enter = 들어가기, ESC = 닫기
 /// </para>
 /// </summary>
 public class LobbyEntrancePanel : InputBlockingPanel
@@ -27,6 +28,8 @@ public class LobbyEntrancePanel : InputBlockingPanel
 		if (descriptionText != null) descriptionText.text = entrance.Description;
 		Show(player);
 	}
+
+	protected override void OnSubmitKey() => Enter();
 
 	/// <summary>
 	/// 「들어가기」 버튼. 이동 요청을 알리고 창을 닫는다.

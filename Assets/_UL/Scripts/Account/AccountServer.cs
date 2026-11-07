@@ -153,6 +153,13 @@ public class AccountServer : IDisposable
 	/// </summary>
 	public void ApplyProgress(NetworkConnectionToClient conn, GameObject player)
 	{
+		// 닉네임은 임시 계정(진행도 없음)도 있으므로 진행도 검사보다 먼저 넣는다
+		if (conn.authenticationData is AccountSession account)
+		{
+			if (player.TryGetComponent(out PlayerPublicInfo info)) info.ServerSetNickname(account.Nickname);
+			else Debug.LogError($"[AccountServer] {player.name}에 PlayerPublicInfo가 없어서 닉네임을 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
+		}
+
 		if (!(conn.authenticationData is AccountSession session) || session.LoadedProgress == null) return;
 
 		CharacterProgressData data = session.LoadedProgress;

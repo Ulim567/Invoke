@@ -224,6 +224,10 @@ public class InvokeNetworkManager : NetworkManager
 	{
 		SceneManager.MoveGameObjectToScene(player, scene);
 
+		// 클라이언트의 플레이어는 늘 기준 씬(Base)에 있어서 씬 이름으로는 장소를 알 수 없으므로, 장소 이름을 값으로 보내 준다
+		if (player.TryGetComponent(out PlayerPublicInfo info)) info.ServerSetPlace(scene.name);
+		else Debug.LogError($"[InvokeNetworkManager] {player.name}에 PlayerPublicInfo가 없어서 현재 장소를 넣지 못했습니다. 플레이어 프리팹에 붙입니다.", player);
+
 		// 호스트의 클라이언트는 서버와 씬을 같이 쓰므로 이미 불러와 있다. 알리면 Mirror가 "이미 불러왔다"는 경고를 남긴다
 		if (conn is LocalConnectionToClient) return;
 		conn.Send(new SceneMessage { sceneName = scene.name, sceneOperation = SceneOperation.LoadAdditive });

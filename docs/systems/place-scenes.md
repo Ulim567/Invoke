@@ -24,6 +24,10 @@
   - 서버의 `FunctionExecutorNetwork.ServerCast`가 `CanAct` 검사 다음에 `PlaceScenes.IsPlayerInNoCastPlace`를 확인해 `CastRejection.InNoCastPlace`로 거부 (클라이언트가 막지 않아도 거부되므로 조작된 요청도 막힘)
   - 장소 판단: 서버(호스트 포함)·네트워크를 켜지 않은 테스트는 플레이어가 속한 씬의 이름, 클라이언트는 불러온 씬 중에 목록의 장소가 있는지 (클라이언트의 플레이어는 늘 `Base` 씬에 있으므로)
   - 하지 않는 일: 슬롯 HUD 회색 표시(UI는 별도 이슈), `SlotCaster`가 요청을 보내지 않게 하기
+- 플레이어의 현재 장소와 닉네임 동기화 (#356): `PlayerPublicInfo`
+  - 서버의 `PutPlayerInScene`이 장소 이름을, `AccountServer.ApplyProgress`가 닉네임을 `[SyncVar]`에 넣음. 이 플레이어를 보는 모든 클라이언트가 받음
+  - 이유: 클라이언트에서는 Mirror가 플레이어를 늘 `Base` 씬에 만들어 `player.scene.name`으로는 장소를 알 수 없음
+  - 하지 않는 일: 이 값을 쓰는 화면 교체(`SettingsView.InRaid`, `HudView`, `RaidPartyView`, `LevelUpView`)와 머리 위 이름표 (임혜원)
 
 ## 동작 규칙
 
@@ -271,10 +275,30 @@ static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파�
 - 클라이언트에서는 Mirror가 다른 플레이어 오브젝트를 `Base` 씬에 만들므로, 씬 이름으로 같은 장소인지 거르지 않는다
 - 정한 것 (이우림 #310): 「파티원」은 같은 장소에 있는 플레이어. 실제 파티원 명단은 보내지 않음
 
+### `PlayerPublicInfo` (#356)
+
+플레이어 프리팹 루트에 붙은 컴포넌트. `player.GetComponent<PlayerPublicInfo>()`로 가져온다. 모든 플레이어의 화면이 알아야 하는 값을 가진다. Sync Mode는 Observers (소유 클라이언트에만 보내는 `PlayerProgress`와 다름). 값은 서버만 바꾸고, 화면은 읽기만 한다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `Place` | - | `string` | 그 플레이어가 지금 있는 장소의 씬 이름 (`PlaceScenes.Lobby` 등). 연습장·레이드 던전은 씬이 여러 개 열려도 이름은 같음. 서버가 정하기 전에는 빈 문자열. 서버·호스트·클라이언트 어디서든 같은 값 |
+| `Nickname` | - | `string` | 그 플레이어가 로그인한 계정의 닉네임. 계정 없이 만든 플레이어(시험용)는 빈 문자열 |
+| `ServerSetPlace(string sceneName)` | 씬 이름 | - | [서버] 현재 장소를 정함. `InvokeNetworkManager.PutPlayerInScene`만 부름 |
+| `ServerSetNickname(string value)` | 닉네임 | - | [서버] 닉네임을 정함. `AccountServer.ApplyProgress`만 부름 |
+
+- 내 캐릭터의 장소 읽기: `NetworkClient.localPlayer.GetComponent<PlayerPublicInfo>().Place`
+  - 레이드 던전인지: `Place == PlaceScenes.RaidDungeon`
+  - `player.scene.name`은 서버(호스트 포함)에서만 맞음. 클라이언트에서는 쓰지 않음
+- 아직 값이 바뀔 때 알리는 이벤트는 없음. 화면은 그릴 때마다 읽음
+- 정한 것 (이우림 #356): 다른 컴포넌트에 합치지 않고 따로 둠
+  - `PlayerProgress`: Owner에게만 보내므로 다른 플레이어의 값이 도착하지 않음
+  - `PlayerHealth`, `PlayerStats`: 김도훈의 파일
+
 ### 시험
 
 | 이름 | 설명 |
 | --- | --- |
+| `PlayerPublicInfoTest` | 현재 장소와 닉네임(#356). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `PlayerPublicInfoTest.StartInEditor()`(호스트 혼자). 처음 `Lobby` → 닉네임이 계정의 닉네임 → 사냥터로 옮기면 `HuntingGround`, 닉네임 그대로 → 로비로 돌아오면 `Lobby`. 호스트의 클라이언트는 서버와 같은 오브젝트라 다른 클라이언트가 받는 값은 확인하지 못함. 「[PlayerPublicInfoTest] 전체 통과」면 통과 |
 | `TrainingRoomTest` | 연습장 입장마다 열기(#301). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `TrainingRoomTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-trainingRoomTest member`로 실행(호스트 + 클라이언트). 입장 전 연습장 없음 → 입장하면 하나 열림 → (클라이언트가 있으면) 둘이 입장해 연습장이 둘, 서로 다른 씬, 서로의 observer가 아님 → 나가면 내 연습장만 내림 → 클라이언트가 접속을 끊으면 그 연습장도 내림 → 다시 입장하면 새 씬 → 플레이어가 없어지면(`DespawnPlayer`) 내림. 「[TrainingRoomTest][역할] 전체 통과」면 통과 |
 | `NoCastPlaceTest` | 공격할 수 없는 장소(#313). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `NoCastPlaceTest.StartInEditor()`(호스트 혼자). 로비에서 시전 → `InNoCastPlace` 거부 → 사냥터에서는 `InNoCastPlace`로 거부되지 않음 → 로비로 돌아와 다시 거부. 「[NoCastPlaceTest] 전체 통과」면 통과 |
 | `RaidPartyTest` | 파티 레이드(#300). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RaidPartyTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-raidPartyTest member`로 실행(호스트 + 클라이언트). 직접 던전 요청 거절, 로비에서 보낸 레이드 포기 무시, 시작 → 같은 던전 도착 → 보스 처치 → 클리어 결과 화면(클라이언트는 서버가 보낸 결과) → 로비 복귀·던전 내림, 다시 시작해 레이드 포기(호스트 혼자면 호스트, 아니면 클라이언트) → 실패 결과 화면 3초 뒤 모두 로비, 클라이언트가 던전에서 접속을 끊으면 호스트가 실패 결과 화면 3초 뒤 로비로 돌아옴. 결과 화면은 `RaidJudge.ResultEffectPlayed`로 확인. 「[RaidPartyTest][역할] 전체 통과」면 통과 |

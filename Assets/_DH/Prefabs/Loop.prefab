@@ -26,6 +26,7 @@ GameObject:
   - component: {fileID: 2646029998434878842}
   - component: {fileID: 6935348868150230616}
   - component: {fileID: -47089953546891509}
+  - component: {fileID: -3806910749003926192}
   m_Layer: 9
   m_Name: Loop
   m_TagString: Untagged
@@ -466,3 +467,19 @@ MonoBehaviour:
   heightAboveTop: 0.6
   trailDelay: 0.3
   trailSpeed: 30
+--- !u!114 &-3806910749003926192
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ee9727e965244944b9c732135d1bfd0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialDropView
+  overrides: []
+  maxPerMaterial: 10
+  popSpeedX: {x: -2.5, y: 2.5}
+  popSpeedY: {x: 6, y: 8}

@@ -148,7 +148,7 @@
 - 김도훈과 정한 것
   - 경직·사망 중에는 `PlayerHealth.CanAct`를 읽어 이동·점프를 막는다 (PlayerHealth 주석 「이동과 시전 담당이 이 값을 읽어 막는다」)
 - 이우림·임혜원에게 알릴 것
-  - 맵의 발판은 위 「발판 설정」대로 만들어야 뚫고 오르기·내려가기가 된다. SceneTemplate(공용)의 Platform에는 아직 `PlatformEffector2D`가 없다 (Test_JW에만 붙였다).
+  - 맵의 발판은 위 「발판 설정」대로 만들어야 뚫고 오르기·내려가기가 된다. #369에서 Lobby, HuntingGround, TrainingRoom, RaidDungeon, SceneTemplate의 Platform에 `PlatformEffector2D`를 붙이고 `Used By Effector`를 켰다 (그 전에는 Test_JW에만 있어서 실제 맵의 발판이 옆·아래에서 막혔다). 새 맵은 SceneTemplate을 복사하면 그대로 따라온다.
   - 발판 높이는 점프 높이(4유닛)보다 낮게. 점프 높이와 캐릭터 키가 비슷해서 생기는 문제(위 「주의」)도 같이 정해야 한다.
 - 임혜원과 정해야 할 것
   - 점프·착지 애니메이션이 `IsGrounded`를 읽어서 바뀌는지

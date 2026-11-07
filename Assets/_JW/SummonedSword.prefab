@@ -81,8 +81,8 @@ SpriteRenderer:
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: 1295403851
+  m_SortingLayer: 8
   m_SortingOrder: 5
   m_MaskInteraction: 0
   m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
@@ -119,6 +119,9 @@ MonoBehaviour:
   stabSpeed: 35
   maxThrowDistance: 14
   returnSpeed: 30
+  stabSideDistance: 1.5
+  danceRadius: 1.2
+  danceDegreesPerSecond: 540
   returnHitRadius: 0.6
 --- !u!114 &6521655442384775308
 MonoBehaviour:

@@ -25,7 +25,12 @@
   - 플레이어가 장소를 옮겨도 누수 검은 같이 옮겨지고 개수를 계속 차지한다 (`MoveToScene`).
   - 5개거나 heap이 모자라면 검 소환 스킬이 만들지 않는다 (C의 malloc처럼 에러로 끝내지 않음).
 - 상태
-  - 사용 가능(`Ready`): 플레이어 머리 뒤쪽에 줄 서서 따라다닌다 (`Follow Offset`, `Follow Spacing`).
+  - 사용 가능(`Ready`): 플레이어 뒤통수 부근에 반원으로 떠서 따라다니고, 칼끝은 모두 바라보는 쪽을 향한다 (#399, 발로란트 제트 궁극기 느낌).
+    - 반원 가운데 = 머리 뒤로 `Orbit Behind`, 머리 꼭대기(플레이어 콜라이더 윗변)에서 `Orbit Below Head Top`만큼 아래. 높이가 콜라이더 기준이라 캐릭터 크기가 바뀌어도 머리를 따라간다. 검 가운데는 거기서 `Orbit Radius`만큼 떨어진다.
+    - 가운데 검이 바로 앞, 위아래로 검마다 `Orbit Angle Step`(30°)씩 벌어진다. 소환한 순서대로 위에서부터.
+    - 검마다 조금씩 다른 박자로 위아래로 둥둥 뜬다 (`Bob Height`, `Bob Speed`).
+    - 방향을 바꾸면 반원이 앞쪽으로 따라오고 칼끝도 돌아간다. 다른 상태에서 돌아오면 자리와 각도로 부드럽게 돌아간다.
+    - 돌아오는 검(`Recall`, 찌르기 뒤)은 반원 가운데 앞 자리로 먼저 온다.
   - 던져짐(`Flying`): 대상을 향해 날아가 닿으면 `Hit`을 알리고 그 자리에서 떨어진다. 대상이 없거나 `Max Flight Time` 안에 못 닿으면 바로 떨어진다.
   - 떨어짐(`Dropped`): 땅(Ground, Platform) 윗면에 멈춘다. 회수해야 다시 쓴다.
   - 누수(`Leaked`): 포인터를 잃은 소환검. 그 자리에 멈추고 반투명해진다(`SummonedSwordView`). 회수·해제할 수 없고 개수만 차지한다.
@@ -53,8 +58,10 @@
 | --- | --- |
 | Sword Prefab | `Assets/_JW/SummonedSword.prefab` (임시 그림: 하늘색 막대) |
 | Ground Layers | Ground, Platform |
-| Follow Offset | (0.6, 3.2) |
-| Follow Spacing | 0.45 |
+| Orbit Behind / Orbit Below Head Top | 0.8 / 0.4 (#399) |
+| Orbit Radius | 0.7 |
+| Orbit Angle Step | 30° |
+| Bob Height / Bob Speed | 0.06 / 2.5 |
 | Pick Up Range | 1.5 |
 | 소환검 Throw Speed / Max Flight Time | 22 / 1.2초 (프리팹) |
 

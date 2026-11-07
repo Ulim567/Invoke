@@ -2,12 +2,12 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// 상태 이상 몸 효과 테스트 (#353). Test_JW의 StatusViewTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 4초). 콘솔에 「[StatusViewTest] … 통과/실패」가 찍힌다.
+/// 상태 이상 몸 효과 테스트 (#353). Test_JW의 StatusViewTest. 켜고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 8초). 콘솔에 「[StatusViewTest] … 통과/실패」가 찍힌다.
 /// <para>
 /// 1. 실명 → 어두운 틴트, 풀리면 처음 색<br/>
 /// 2. 이속 감소 → 파란 틴트 / 실명 + 이속 감소 → 둘을 곱한 색<br/>
 /// 3. 출혈 → 1초마다 빨갛게 번쩍임 (약 2.3초에 2번 이상), 다시 걸어도 효과가 늘지 않음<br/>
-/// 4. 그림 칸이 비어 있으면 그림 효과 없이 색만 (오류 없음)<br/>
+/// 4. 그림 효과: 기본 그림(Resources/StatusEffects, #363)이 있으면 걸린 동안 뜨고 풀리면 사라짐. 없으면 색만 (오류 없음)<br/>
 /// 5. 모두 풀리면 처음 색
 /// </para>
 /// 몬스터에 StatusEffects가 미리 붙어 있어야 한다 (#348). StatusEffectView는 없으면 테스트 동안 붙인다. 평소에는 꺼 둔다.
@@ -15,6 +15,8 @@ using UnityEngine;
 public class StatusEffectViewSimTest : MonoBehaviour
 {
 	const string Tag = "[StatusViewTest]";
+	// 그림 효과 5개를 눈으로 볼 시간 (초)
+	const float ShowSeconds = 4f;
 	int failures;
 
 	IEnumerator Start()
@@ -49,9 +51,11 @@ public class StatusEffectViewSimTest : MonoBehaviour
 		yield return null;
 		Color blind = view.TargetRenderer.color;
 		Check($"실명 → 어두워짐 ({Fmt(baseColor)} → {Fmt(blind)})", Brightness(blind) < Brightness(baseColor) - 0.1f);
-		Check("실명 → 그림 칸이 비어 있으면 그림 효과 없음 (오류 없음)", !view.HasEffectObject(StatusType.Blind));
+		bool hasBlindArt = Resources.Load<GameObject>("StatusEffects/Blind") != null;
+		Check($"실명 → 그림 효과 {(hasBlindArt ? "뜸" : "없음 (기본 그림 없음, 색만)")}", view.HasEffectObject(StatusType.Blind) == hasBlindArt);
 		status.Clear(StatusType.Blind);
 		yield return null;
+		Check("실명 풀림 → 그림 효과 사라짐", !view.HasEffectObject(StatusType.Blind));
 		Check($"실명 풀림 → 처음 색 ({Fmt(view.TargetRenderer.color)})", Same(view.TargetRenderer.color, baseColor));
 
 		// 2. 이속 감소, 둘 다
@@ -86,10 +90,26 @@ public class StatusEffectViewSimTest : MonoBehaviour
 		Check($"출혈 → 1초마다 번쩍임 (약 2.3초에 {flashes}번)", flashes >= 2);
 		Check("번쩍일 때 빨간색", sawRed);
 
+		// 4. 그림 효과 5개 (#363): 기본 그림이 있는 상태는 걸린 동안 뜨고, 모두 풀리면 사라진다
+		StatusType[] all = { StatusType.Bleed, StatusType.Mark, StatusType.Stun, StatusType.Blind, StatusType.Slow };
+		foreach (StatusType type in all) if (type != StatusType.Bleed) status.Apply(type, 10f);
+		yield return null;
+		foreach (StatusType type in all)
+		{
+			bool hasArt = Resources.Load<GameObject>($"StatusEffects/{type}") != null;
+			Check($"{type} 그림 효과 {(hasArt ? "뜸" : "없음 (기본 그림 없음)")}", view.HasEffectObject(type) == hasArt);
+		}
+		// 눈으로 볼 수 있게 5개를 모두 건 채로 잠깐 둔다 (별은 머리 위, 표식·피는 몸 가운데, 연기는 머리 쪽, 얼음은 발밑에서 자라남)
+		Debug.Log($"{Tag} 상태 이상 5개를 {ShowSeconds}초 동안 보여 줌 ({monster.name})");
+		yield return new WaitForSeconds(ShowSeconds);
+
 		// 5. 모두 풀림
 		status.ClearAll();
 		yield return new WaitForSeconds(0.3f);
 		Check($"모두 풀림 → 처음 색 ({Fmt(view.TargetRenderer.color)})", Same(view.TargetRenderer.color, baseColor) && view.ShownStatuses.Count == 0);
+		bool anyLeft = false;
+		foreach (StatusType type in all) anyLeft |= view.HasEffectObject(type);
+		Check("모두 풀림 → 그림 효과 모두 사라짐", !anyLeft);
 
 		if (failures == 0) Debug.Log($"{Tag} 전체 통과");
 		else Debug.LogError($"{Tag} 실패 {failures}개");

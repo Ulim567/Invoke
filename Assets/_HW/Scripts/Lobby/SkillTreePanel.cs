@@ -5,7 +5,7 @@ using Mirror;
 /// <para>
 /// 열린 동안 내 캐릭터의 Player·Attack 액션 맵이 꺼진다.
 /// 닫기 버튼의 On Click()에 SkillTreePanel.Close를 연결한다.<br/>
-/// 여는 법: 로비의 스킬 트리 단말(SkillTreeStation), HUD의 「스킬 트리」 버튼(HudView.SkillTreeRequested).
+/// 여는 법: HUD의 「스킬 트리」 버튼(HudView.SkillTreeRequested). 로비의 스킬 트리 장소는 없앴다 (#378).
 /// 이 창은 Lobby 씬에 있으므로 HUD 버튼은 내 캐릭터가 로비에 있을 때만 켜진다.
 /// </para>
 /// </summary>
@@ -16,7 +16,7 @@ public class SkillTreePanel : InputBlockingPanel
 	void OnDestroy() => HudView.SkillTreeRequested -= OpenForLocalPlayer;
 
 	/// <summary>
-	/// 스킬 트리 창을 연다. SkillTreeStation이 부른다.
+	/// 플레이어를 정해서 스킬 트리 창을 연다.
 	/// </summary>
 	public void Open(PlayerInputReader player) => Show(player);
 

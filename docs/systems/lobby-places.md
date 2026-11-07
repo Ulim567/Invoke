@@ -1,9 +1,10 @@
-# 로비 입구와 스킬 트리 해금 장소
+# 로비 입구
 
 - 담당자: 임혜원
 
 ## 하는 일
-- 로비의 입구(사냥터, 연습장, 레이드 던전)와 스킬 트리 해금 장소. 가까이 가서 ↑(상호작용)를 누르면 창을 연다.
+- 로비의 입구(사냥터, 연습장, 레이드 던전). 가까이 가서 ↑(상호작용)를 누르면 창을 연다.
+- 스킬 트리 창은 HUD의 「스킬 트리」 버튼으로 연다 (hud.md). 로비의 스킬 트리 해금 장소(`SkillTreeStation`)는 없앴다 (#378)
 - 입구 창에서 「들어가기」를 누르면 이동 요청을 이벤트로 알리고 로그를 남긴다.
 - 레이드 던전 입구는 입구 창 없이, ↑를 누르면 바로 이벤트로 알린다 (#242).
 - 창이 열린 동안 내 캐릭터의 Player·Attack 액션 맵을 끄고, 닫으면 다시 켠다.
@@ -14,16 +15,16 @@
 
 ## 동작 규칙
 - 스크립트: `Assets/_HW/Scripts/Lobby/`
-- 프리팹: `Assets/_HW/Lobby/` (입구, 해금 장소, 창). Lobby 씬에 놓는다.
-- 가까이 있는지: 입구·해금 장소의 Collider 2D(Is Trigger)에 내 캐릭터(`isLocalPlayer`)가 들어와 있으면. 안내(↑ 표시)를 켠다
+- 프리팹: `Assets/_HW/Lobby/` (입구, 창). Lobby 씬에 놓는다.
+- 가까이 있는지: 입구의 Collider 2D(Is Trigger)에 내 캐릭터(`isLocalPlayer`)가 들어와 있으면. 안내(↑ 표시)를 켠다
 - 내 캐릭터가 다른 장소로 가면 놓아준다: 내 캐릭터의 물리 세계(`scene.GetPhysicsScene2D()`)가 로비와 다르면 안내를 끄고 ↑에 반응하지 않는다. 호스트는 로비 씬이 남아 있어 `OnTriggerExit2D`가 불리지 않기 때문 (이우림 #190 알림, #209)
 - 키: `PlayerInputReader.InteractPressed`(↑)만 읽는다
-- 공통 부모 `PlaceInteractable`(#285, 이전 이름 `LobbyInteractable`): 범위·안내·물리 세계 확인·↑ 읽기를 한다. 입구·해금 장소·`PanelStation`과 출구 `PlaceExit`(이우림)가 물려받아 `Interact()`만 구현한다
+- 공통 부모 `PlaceInteractable`(#285, 이전 이름 `LobbyInteractable`): 범위·안내·물리 세계 확인·↑ 읽기를 한다. 입구·`PanelStation`과 출구 `PlaceExit`(이우림)가 물려받아 `Interact()`만 구현한다
   - 검 타기 중(`PlayerMovement.IsRiding`)이거나 죽었거나 경직 중(`PlayerHealth.CanAct` false)이면 ↑를 무시한다
 - 창이 열린 동안 Player·Attack 맵을 둘 다 끈다 (이우림과 정함). 슬롯 키가 눌리지 않으므로 SlotCaster가 대상 고르기를 끝내며 Player 맵을 다시 켜는 일이 없다
 - 창은 버튼으로 닫는다. 창이 꺼지거나 사라질 때도 맵을 다시 켠다
 - 로비 밖에서도 같은 방식을 쓴다 (#225): `PanelStation`(PlaceInteractable)이 ↑에 `InputBlockingPanel.OpenFor(player)`를 부른다. 연습장의 편집 터미널(`BlockEditorPanel`), 장착대(`SlotEquipPanel`)
-- 창(`LobbyEntrancePanel`, `SkillTreePanel`)은 Lobby 씬에 하나씩 두고, 입구들이 같이 쓴다
+- 창(`LobbyEntrancePanel`, `SkillTreePanel`)은 Lobby 씬에 하나씩 둔다. 입구 창은 입구들이 같이 쓰고, 스킬 트리 창은 HUD 버튼이 연다
 
 | 입구 | `Destination` | 알리는 때 | 알리는 것 |
 | --- | --- | --- | --- |

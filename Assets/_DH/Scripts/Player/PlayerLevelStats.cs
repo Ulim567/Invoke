@@ -18,6 +18,12 @@ public class PlayerLevelStats : MonoBehaviour
 	[SerializeField, Min(0), Tooltip("레벨 1당 더할 공격력 (임시)")]
 	int attackPowerPerLevel = 2;
 
+	/// <summary>레벨 1당 오르는 최대 체력 (레벨업 창의 「다음 레벨」 표시용, 임혜원 #332)</summary>
+	public int MaxHpPerLevel => maxHpPerLevel;
+
+	/// <summary>레벨 1당 오르는 공격력 (레벨업 창의 「다음 레벨」 표시용, 임혜원 #332)</summary>
+	public int AttackPowerPerLevel => attackPowerPerLevel;
+
 	PlayerStats stats;
 	PlayerProgress progress;
 	// 능력치에 이미 반영한 레벨. 처음은 레벨 1(추가 능력치 없음)

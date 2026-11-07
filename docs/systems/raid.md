@@ -144,7 +144,7 @@ Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
 | `OpenFor(PlayerInputReader)` | ↑를 누른 내 캐릭터 | - | 레이드 화면 열기 (방에 있으면 파티방, 아니면 방 목록). 그 캐릭터의 Player·Attack 액션 맵 비활성화. `RaidLobbyOpener`가 부른다. 테스트 씬은 `null` |
 | `Close()` | - | - | `InputBlockingPanel`의 닫기. 액션 맵 다시 활성화 |
 
-- 화면의 닫기 버튼: 방에 있으면 `RequestLeave` 뒤 닫기
+- 화면의 닫기 버튼과 ESC(#324 `OnCancelKey`): 방에 있으면 `RequestLeave` 뒤 닫기
 - 시작으로 내 방이 목록에서 사라지면 화면이 스스로 닫힘
 - 오브젝트 구조: `RaidLobbyUI`가 붙은 오브젝트는 늘 켜 둠. 네 창(방 목록, 파티방, 방 만들기 창, 비밀번호 창)은 `Panel Root` 아래
 

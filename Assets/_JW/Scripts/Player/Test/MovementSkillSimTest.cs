@@ -5,11 +5,13 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
 /// <summary>
-/// 이동 스킬 테스트 (#256). Test_JW의 MoveSkillTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 8초). 캐릭터가 바닥에 서 있고 좌우에 4칸 넘게 빈 공간이 있어야 한다.
+/// 이동 스킬 테스트 (#256). Test_JW의 MoveSkillTest. 켜고 Play → Host, Game 창을 한 번 클릭 (가짜 키 입력, 약 10초). 캐릭터가 바닥에 서 있고 좌우에 4칸 넘게 빈 공간이 있어야 한다.
 /// <para>
 /// 1. 대시: 바라보는 쪽으로 3칸 넘게 빠르게 가고, 대시 중 높이가 그대로<br/>
-/// 2. 더블점프: 점프 뒤 공중에서 Space를 한 번 더 누르면 다시 올라감, 세 번째는 안 됨, 땅에 닿으면 다시 쓸 수 있음 (PlayerProgress가 없으면 Allow Double Jump Without Progress를 따름)<br/>
+/// 2. 더블점프: 점프 뒤 공중에서 한 번 더 뛰면 다시 올라감, 세 번째는 안 됨, 땅에 닿으면 다시 쓸 수 있음.
+/// 더블점프를 해금했으면(또는 PlayerProgress가 없으면) Space로, 아니면 블록코딩 경로(RequestAirJump)로 확인한다. 공용 Player에 PlayerProgress가 붙어 테스트 씬도 해금 목록을 따르기 때문 (#303)<br/>
 /// 3. 검 타기: 소환검이 없으면 NoSummonedSwordError. 있으면 검이 타는 중 상태, 떨어지지 않고 → 키로 옆으로 이동, 스킬이 끝나도 계속 탐(30초), 내리면 검이 돌아옴<br/>
+/// 4. 위아래 검 타기 (#317): ↑로 올라가고 떼면 그 높이에 멈춤, ↓로 내려감 (발판이 있으면 뚫고), 빈 슬롯 키를 누른 채 ↑를 누르면 MoveY가 0이고 높이 그대로 (슬롯 8칸이 다 차 있으면 이 항목은 실패로 알림)<br/>
 /// 「[MoveSkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다.
 /// </para>
 /// </summary>
@@ -54,18 +56,17 @@ public class MovementSkillSimTest : MonoBehaviour
 		// 2. 더블점프
 		yield return WaitUntil(() => movement.IsGrounded, 2f);
 		bool unlocked = movement.DoubleJumpUnlocked;
-		Check("더블점프: 해금됨 (테스트 씬은 Allow Double Jump Without Progress)", unlocked);
+		string how = unlocked ? "Space" : "RequestAirJump";
+		Debug.Log($"{Tag} 더블점프: 해금 {(unlocked ? "됨 → Space로" : "안 됨(PlayerProgress) → RequestAirJump로")} 확인");
 		yield return Keys(0.05f, Key.Space);
 		yield return Keys(0.25f);
 		float firstVy = body.linearVelocity.y;
-		yield return Keys(0.05f, Key.Space);
-		yield return Keys(0.02f);
-		Check($"더블점프: 공중에서 다시 올라감 (속도 {firstVy:0.0} → {body.linearVelocity.y:0.0})", movement.AirJumpUsed && body.linearVelocity.y > firstVy + 1f);
+		yield return AirJump(unlocked, movement);
+		Check($"더블점프({how}): 공중에서 다시 올라감 (속도 {firstVy:0.0} → {body.linearVelocity.y:0.0})", movement.AirJumpUsed && body.linearVelocity.y > firstVy + 1f);
 		yield return Keys(0.15f);
 		float secondVy = body.linearVelocity.y;
-		yield return Keys(0.05f, Key.Space);
-		yield return Keys(0.02f);
-		Check("더블점프: 세 번째는 안 됨", body.linearVelocity.y <= secondVy + 0.1f);
+		yield return AirJump(unlocked, movement);
+		Check($"더블점프({how}): 세 번째는 안 됨", body.linearVelocity.y <= secondVy + 0.1f);
 		yield return WaitUntil(() => movement.IsGrounded, 3f);
 		yield return null;
 		Check("더블점프: 땅에 닿으면 다시 쓸 수 있음", !movement.AirJumpUsed);
@@ -96,6 +97,42 @@ public class MovementSkillSimTest : MonoBehaviour
 		yield return WaitUntil(() => ride == null || ride.IsEnded, 3f);
 		Check($"검 타기: Completed (실제 {ride?.EndReason})", ride != null && ride.EndReason == FunctionTaskEndReason.Completed);
 		Check($"검 타기: 스킬이 끝나도 계속 탐 (남은 시간 {movement.RideRemaining:0.0}초 / {movement.RideSeconds}초)", movement.IsRiding && movement.RideRemaining > 0f);
+
+		// 4. 위아래 검 타기 (#317)
+		PlayerInputReader input = player.GetComponent<PlayerInputReader>();
+		float y0 = player.transform.position.y;
+		yield return Keys(0.3f, Key.UpArrow);
+		float yUp = player.transform.position.y;
+		Check($"위아래: ↑ 로 올라감 (y {y0:0.0} → {yUp:0.0})", yUp - y0 > 1f);
+		yield return Keys(0.05f);
+		float yStop = player.transform.position.y;
+		yield return Keys(0.3f);
+		float yHold = player.transform.position.y;
+		Check($"위아래: 떼면 그 높이에 멈춤 (y {yStop:0.00} → {yHold:0.00})", Mathf.Abs(yHold - yStop) < 0.1f);
+		yield return Keys(0.3f, Key.DownArrow);
+		float yDown = player.transform.position.y;
+		Check($"위아래: ↓ 로 내려감, 발판이 있으면 뚫고 (y {yHold:0.0} → {yDown:0.0})", yHold - yDown > 1f);
+		yield return Keys(0.05f);
+
+		// 빈 슬롯을 눌러야 떼는 순간 아무것도 시전되지 않는다
+		int emptySlot = FindEmptySlot(player.GetComponent<SlotLoadout>());
+		if (emptySlot < 0 || input == null)
+		{
+			Check("위아래: 슬롯 키를 누르는 동안 멈춤 (빈 슬롯이 없거나 PlayerInputReader가 없어 확인 못 함)", false);
+		}
+		else
+		{
+			Key slotKey = SlotKeys[emptySlot];
+			yield return Keys(0.1f, slotKey);
+			float ySlot = player.transform.position.y;
+			yield return Keys(0.3f, slotKey, Key.UpArrow);
+			float moveY = input.MoveY;
+			float ySlotHold = player.transform.position.y;
+			Check($"위아래: 슬롯 키({slotKey})를 누르는 동안 MoveY 0 (실제 {moveY})", moveY == 0f);
+			Check($"위아래: 슬롯 키를 누르는 동안 높이 그대로 (y {ySlot:0.00} → {ySlotHold:0.00})", Mathf.Abs(ySlotHold - ySlot) < 0.1f);
+			yield return Keys(0.1f);
+		}
+		Check("위아래: 아직 타는 중", movement.IsRiding);
 		// 다 기다리면 오래 걸리므로 테스트에서 직접 내린다
 		movement.StopRide();
 		foreach (SummonedSword s in swords.Swords) swords.EndRide(s);
@@ -107,6 +144,24 @@ public class MovementSkillSimTest : MonoBehaviour
 
 		if (failed == 0) Debug.Log($"{Tag} 전체 통과");
 		else Debug.LogError($"{Tag} {failed}개 실패");
+	}
+
+	// 공중 점프 한 번: 해금했으면 Space, 아니면 블록코딩 더블점프와 같은 RequestAirJump
+	IEnumerator AirJump(bool withSpace, PlayerMovement movement)
+	{
+		if (withSpace) yield return Keys(0.05f, Key.Space);
+		else movement.RequestAirJump();
+		yield return Keys(0.02f);
+	}
+
+	// 슬롯 번호(0~7) 순서의 키. InputSystem_Actions의 Slot1~Slot8 (Q W E R A S D F)
+	static readonly Key[] SlotKeys = { Key.Q, Key.W, Key.E, Key.R, Key.A, Key.S, Key.D, Key.F };
+
+	static int FindEmptySlot(SlotLoadout loadout)
+	{
+		if (loadout == null) return -1;
+		for (int i = 0; i < SlotLoadout.SlotCount; i++) if (loadout.GetEntry(i).IsEmpty) return i;
+		return -1;
 	}
 
 	IEnumerator Keys(float hold, params Key[] keys)

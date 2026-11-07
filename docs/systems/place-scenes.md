@@ -138,15 +138,18 @@
     - 답 기다리기 시간 5초: 지나도 답이 없으면 서버가 답 없이 옮김. 답이 오지 않아 그 파티원이 이동을 기다리는 채로 남거나 던전이 내려가지 않는 일을 막기 위함
   - 마무리는 다른 이동과 같음: `TravelPlayer`의 `TravelEndedMessage`
   - 이동 취소: 서버가 `TravelEndedMessage`만 보냄 → 로딩 화면 걷힘, 그 자리에 그대로
-- 부활 이동 (#310, 이우림 결정): 레이드 밖(사냥터 등)에서 죽은 플레이어는 부활하는 순간 로비로 옮김
-  - 서버의 `PlayerHealth.LobbyReturnRequested`(부활 순간)를 `InvokeNetworkManager`가 받아 `ServerTravel`로 알림 → 덮이면 `TravelPlayer(로비)`. 도착 위치는 다른 이동과 같음 (사냥터에서 왔으면 사냥터 입구 앞)
-  - 옮기지 않음: 로비에서 죽음(그 자리에서 부활), 레이드 던전(부활하지 않고 관전, 레이드 끝에 `RaidParties`가 옮김), 서버가 알린 다른 이동을 기다리는 중
+- 부활 이동 (#310, 이우림 결정): 레이드 밖(사냥터 등)에서 죽은 플레이어는 부활할 때가 되면 로비로 옮기고, 로비에 도착한 뒤에 부활 (#391)
+  - 서버의 `PlayerHealth.RespawnDue`(부활 시각)를 `InvokeNetworkManager`가 받아 `DeferRespawn()`으로 부활을 미루고 `ServerTravel`로 알림 → 덮이면 `TravelPlayer(로비)`. 도착 위치는 다른 이동과 같음 (사냥터에서 왔으면 사냥터 입구 앞)
+  - 부활 시점: `TravelPlayer`가 `TravelEndedMessage`를 보내기 직전에 `CompleteRespawn()`을 불러 살림. 로딩 화면이 덮인 채라 죽은 자리에서 먼저 살아나 보이지 않음. 죽어 있는 채로 옮겨진 플레이어는 미뤘는지와 상관없이 도착하면 살아남
+  - 안전장치: 미뤄진 채 `PlayerHealth`의 `Max Defer Time`(10초)이 지나면 그 자리에서 부활
+  - 옮기지 않음: 로비에서 죽음(미루지 않고 그 자리에서 바로 부활), 레이드 던전(부활하지 않고 관전, 레이드 끝에 `RaidParties`가 옮김)
+  - 서버가 알린 다른 이동을 기다리는 중이면 부활만 미루고, 그 이동의 `TravelPlayer`가 도착 직전에 살림
   - 부활 목적지를 정하는 곳은 `InvokeNetworkManager.TryGetRespawnDestination` 하나. 장소마다 다르게 하려면 여기서 씬의 설정을 읽게 바꿈
   - 기다리는 동안 그 클라이언트의 이동 요청은 무시 (레이드 이동과 같음)
 - 끝: 서버에서 `RaidFlow.Ended(던전 씬, 클리어 여부)`
   - 그 던전의 기록을 찾아 상태: 끝남. 기록이 없는 던전(네트워크 없이 시험하는 씬 등): 경고 로그, 무시
   - 파티원마다 「서버가 시작한 이동」으로 로비에 이동. 도착 위치: 로비의 `Arrival_RaidDungeon`
-  - 죽어 있던 파티원: `RaidJudge`가 `ReportEnd` 전에 부활을 되돌리므로 부활한 뒤 이동 ([raid.md](raid.md))
+  - 죽어 있던 파티원: `RaidJudge`가 `ReportEnd` 전에 `SetAutoRespawn(true)`로 되돌리면 `PlayerHealth`가 `RespawnDue`를 내고, `InvokeNetworkManager`가 부활을 미룸. 죽은 채로 옮겨져 로비에 도착한 뒤 부활 (#391, [raid.md](raid.md))
 - 파티원 이탈 실패: 시작할 때 있던 파티원이 한 명이라도 빠지면 그 레이드는 실패
   - 이탈로 보는 일 (상태가 불러오는 중·진행 중일 때)
     - 접속 끊김 (`OnServerDisconnect`)

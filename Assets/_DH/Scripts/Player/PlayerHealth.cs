@@ -8,11 +8,12 @@ using UnityEngine;
 /// 흐름 (시간은 임혜원과 정한 값, #28)<br/>
 /// - 피격: 경직 hitStunTime초(피격 모션) → 무적 invincibleTime초(깜빡임). 피격 순간부터 둘이 끝날 때까지 다시 맞지 않는다.<br/>
 /// - 사망: 체력 0 → 사망 모션 → hideDelay초 뒤 숨김(관전으로 전환) → respawnDelay초 뒤 최대 체력으로 부활(직후 무적 깜빡임).<br/>
-/// - 부활할 때 LobbyReturnRequested로 알린다. 서버에서는 씬 이동 담당이 받아 레이드 밖이면 로비로 옮긴다 (#310). 네트워크를 켜지 않은 테스트에서는 처음 나타난 위치(시작 위치)에서 부활한다.<br/>
+/// - 부활 시각이 되면 먼저 RespawnDue로 알린다. 서버에서는 씬 이동 담당이 받아, 옮길 곳이 있으면 DeferRespawn()으로 부활을 미루고 옮긴 직후(로딩 화면이 덮인 채) CompleteRespawn()으로 살린다 (#310, #391).<br/>
+/// - 아무도 미루지 않으면 그 자리에서 바로 부활한다. 미뤄진 채 maxDeferTime초가 지나도 그 자리에서 부활한다(안전장치). 네트워크를 켜지 않은 테스트에서는 처음 나타난 위치(시작 위치)에서 부활한다.<br/>
 /// - AutoRespawn이 꺼져 있으면(레이드) 부활하지 않고 숨긴 채로 둔다.
 /// </para>
 /// <para>
-/// 이벤트는 몬스터와 같이 로직용과 연출용으로 나뉜다. 로직용(Damaged, Died, Respawned, LobbyReturnRequested)은 서버에서만, 연출·표시용은 모든 화면에서 불린다.
+/// 이벤트는 몬스터와 같이 로직용과 연출용으로 나뉜다. 로직용(Damaged, Died, Respawned, RespawnDue)은 서버에서만, 연출·표시용은 모든 화면에서 불린다.
 /// </para>
 /// <para>
 /// 네트워크 (#310): 피해·사망·숨김·부활은 서버(또는 네트워크 없는 테스트)에서만 정한다.<br/>
@@ -36,6 +37,9 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	[SerializeField, Min(0f), Tooltip("사망 후 부활하기까지 시간(초)")]
 	float respawnDelay = 3f;
 
+	[SerializeField, Min(0f), Tooltip("부활을 미룬 채 기다리는 최대 시간(초). 넘으면 그 자리에서 부활한다. 로딩 화면 답을 기다리는 시간(5초)보다 길게 둔다")]
+	float maxDeferTime = 10f;
+
 	PlayerStats stats;
 	Rigidbody2D body;
 	Vector2 respawnPosition;
@@ -43,6 +47,9 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	float invincibleEndTime;
 	float hideTime;
 	float respawnTime;
+	// 이번 죽음에서 RespawnDue를 이미 알렸는지, 받은 쪽이 부활을 미뤘는지 (서버)
+	bool respawnDueNotified;
+	bool respawnDeferred;
 
 	// 서버의 상태를 클라이언트에 보내는 칸 (#310). 서버는 상태가 바뀔 때마다 SyncState로 옮기고, 클라이언트는 받으면 아래 속성에 넣는다.
 	// 속성과 따로 두는 이유: 클라이언트에서 [SyncVar]에 직접 쓰지 않고, 연출 알림([ClientRpc])으로도 같은 속성을 맞추기 위함
@@ -97,8 +104,11 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	/// <summary>[로직] 부활한 순간 불린다.</summary>
 	public event Action Respawned;
 
-	/// <summary>[로직] 부활할 때 로비(마을)로 보내 달라는 요청. 씬 이동 담당(이우림)이 받는다.</summary>
-	public event Action LobbyReturnRequested;
+	/// <summary>
+	/// [로직] 부활할 때가 되었을 때 죽음마다 한 번 불린다. 받은 쪽이 이 안에서 DeferRespawn()을 부르면 죽은 채로 기다리고, 부르지 않으면 바로 부활한다.<br/>
+	/// 씬 이동 담당(이우림)이 받아 옮길 곳이 있으면 미룬다 (#391).
+	/// </summary>
+	public event Action RespawnDue;
 
 	/// <summary>[표시] 체력이나 최대 체력이 바뀌었을 때 불린다. (지금 체력, 최대 체력)을 넘긴다. 체력 바에 쓴다.</summary>
 	public event Action<int, int> HpChanged;
@@ -176,7 +186,16 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 
 		float now = Time.time;
 		if (!IsHidden && now >= hideTime) Hide();
-		if (AutoRespawn && now >= respawnTime) Respawn();
+		if (!AutoRespawn || now < respawnTime) return;
+
+		// 부활할 때가 되면 먼저 알려, 받은 쪽이 미룰 기회를 준다
+		if (!respawnDueNotified)
+		{
+			respawnDueNotified = true;
+			RespawnDue?.Invoke();
+		}
+		// 미뤄진 채 너무 오래 지나면 그 자리에서 살린다 (옮기기가 끝내 안 되어도 죽은 채로 갇히지 않게 하는 안전장치)
+		if (!respawnDeferred || now >= respawnTime + maxDeferTime) Respawn();
 	}
 
 	/// <summary>
@@ -206,10 +225,29 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	/// </summary>
 	public void SetAutoRespawn(bool value) => AutoRespawn = value;
 
+	/// <summary>
+	/// [서버] RespawnDue를 받은 쪽이 부활을 미룬다. 죽은 채로 기다리다가 CompleteRespawn()이 불리면 살아난다.<br/>
+	/// maxDeferTime초가 지나도록 CompleteRespawn()이 불리지 않으면 그 자리에서 살아난다. 죽어 있지 않으면 무시한다.
+	/// </summary>
+	public void DeferRespawn()
+	{
+		if (IsDead) respawnDeferred = true;
+	}
+
+	/// <summary>
+	/// [서버] 미뤄 둔 부활을 실행한다. 옮기기가 끝난 직후 불러, 도착한 장소에서 살아나게 한다. 죽어 있지 않으면 무시한다.
+	/// </summary>
+	public void CompleteRespawn()
+	{
+		if (IsDead && IsAuthority()) Respawn();
+	}
+
 	void Die()
 	{
 		float now = Time.time;
 		IsDead = true;
+		respawnDueNotified = false;
+		respawnDeferred = false;
 		// 사망 중에는 경직·무적을 쓰지 않는다
 		stunEndTime = 0f;
 		invincibleEndTime = 0f;
@@ -232,12 +270,11 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	{
 		IsDead = false;
 		IsHidden = false;
+		respawnDeferred = false;
 		Hp = MaxHp;
 		invincibleEndTime = Time.time + invincibleTime;
 		SyncState();
 
-		// 서버에서는 씬 이동 담당(InvokeNetworkManager)이 받아 부활 목적지(레이드 밖은 로비)로 옮긴다 (#310)
-		LobbyReturnRequested?.Invoke();
 		// 네트워크를 켜지 않은 테스트에서만 처음 위치로 옮긴다. 서버에서는 위치를 소유 클라이언트가 정하므로 여기서 옮겨도 덮어써진다
 		if (!NetworkServer.active) MoveTo(respawnPosition);
 

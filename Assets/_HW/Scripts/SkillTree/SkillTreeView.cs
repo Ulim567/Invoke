@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Mirror;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,8 +13,9 @@ using UnityEngine.UI;
 ///   탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 두고 칸에 넣는다.<br/>
 /// - 노드 위치는 SkillLayout·SyntaxLayout 표로 정한다. 표에 없는 노드는 맨 아래 「기타」 줄에 놓는다.<br/>
 ///   같은 계열 안의 선행은 선으로 잇고, 다른 계열의 선행(예: 검 소환)은 이름 아래 「+ 검 소환」으로 적는다.<br/>
-/// - 해금 목록은 SetUnlocked로 받는다. 받기 전에는 처음부터 해금된 노드(SkillTree.StartingNodes)만 해금됨으로 보인다.<br/>
-/// - 「해금」 버튼은 UnlockRequested(노드 ID)만 알린다. 재료를 빼고 해금·저장하는 일은 「재료 써서 스킬 트리 해금하기」에서 이 event를 받아 하고, 끝나면 SetUnlocked를 부른다.
+/// - 창이 열리면 내 캐릭터의 PlayerProgress에서 해금 목록과 재료를 읽고, PlayerProgress.Changed마다 다시 그린다. 내 캐릭터가 없으면(네트워크 없는 시험) SetUnlocked로 받은 목록, 그것도 없으면 처음부터 해금된 노드만.<br/>
+/// - 「해금」 버튼은 UnlockRequested(노드 ID)를 알리고, 내 캐릭터의 PlayerProgress.RequestUnlock(이우림 #315)으로 서버에 해금을 요청한다.
+///   서버가 재료를 빼고 해금·저장하며, 결과는 PlayerProgress.UnlockAnswered로 받아 실패 이유를 설명 칸에 적는다.
 /// </para>
 /// </summary>
 public class SkillTreeView : MonoBehaviour
@@ -130,7 +132,55 @@ public class SkillTreeView : MonoBehaviour
 		if (unlockButton != null) unlockButton.onClick.AddListener(RequestUnlock);
 	}
 
-	void OnEnable() => ShowTab(tab);
+	PlayerProgress progress; // 내 캐릭터의 진행도. 없으면 null
+	string failedId;         // 방금 해금에 실패한 노드 (설명 칸에 이유를 적는다)
+	UnlockResult failedResult;
+
+	void OnEnable()
+	{
+		progress = null;
+		NetworkIdentity me = NetworkClient.localPlayer;
+		if (me != null) progress = me.GetComponent<PlayerProgress>();
+		if (progress != null)
+		{
+			unlocked = new HashSet<string>(progress.Unlocked);
+			progress.Changed += OnProgressChanged;
+			progress.UnlockAnswered += OnUnlockAnswered;
+		}
+		failedId = null;
+		ShowTab(tab);
+	}
+
+	void OnDisable()
+	{
+		if (progress != null)
+		{
+			progress.Changed -= OnProgressChanged;
+			progress.UnlockAnswered -= OnUnlockAnswered;
+		}
+		progress = null;
+	}
+
+	void OnProgressChanged()
+	{
+		if (progress != null) SetUnlocked(new List<string>(progress.Unlocked));
+	}
+
+	void OnUnlockAnswered(string nodeId, UnlockResult result)
+	{
+		failedId = result == UnlockResult.Unlocked ? null : nodeId;
+		failedResult = result;
+		RefreshDetail();
+	}
+
+	// 서버가 해금을 거부한 이유 (UnlockResult, progress-store.md 「노드 해금 검사」)
+	static string FailText(UnlockResult result) => result switch
+	{
+		UnlockResult.MaterialShort => "재료가 모자라요",
+		UnlockResult.PrerequisiteMissing => "선행 노드를 먼저 해금하세요",
+		UnlockResult.AlreadyUnlocked => "이미 해금했어요",
+		_ => "지금은 해금할 수 없어요",
+	};
 
 	/// <summary>
 	/// 해금한 노드 ID들로 화면을 다시 그린다. 「재료 써서 스킬 트리 해금하기」가 창을 열 때와 해금한 뒤에 부른다.
@@ -349,11 +399,12 @@ public class SkillTreeView : MonoBehaviour
 		{
 			lines.Add(node.Cost.Count == 0
 				? (node.AutoUnlock ? "재료  없음 (선행을 열면 같이 열림)" : "재료  없음")
-				: "재료  " + string.Join(", ", node.Cost.Select(c => $"{MaterialName(c.MaterialId)} {c.Count}")));
+				: "재료  " + string.Join(", ", node.Cost.Select(CostText)));
 		}
 		var together = SkillTree.Instance.Nodes.Where(n => n.AutoUnlock && n.Prerequisites.Contains(node.Id)).Select(n => n.DisplayName).ToList();
 		if (together.Count > 0) lines.Add("같이 열림  " + string.Join(", ", together));
 		if (node.UnlocksBlocks.Count > 0) lines.Add("여는 블록  " + string.Join(", ", node.UnlocksBlocks.Select(BlockName)));
+		if (failedId == node.Id && !isUnlocked) lines.Add($"<color={Bad}>해금하지 못했어요. {FailText(failedResult)}</color>");
 		detailBody.text = string.Join("\n", lines);
 
 		if (unlockButton != null)
@@ -374,11 +425,22 @@ public class SkillTreeView : MonoBehaviour
 		Refresh();
 	}
 
+	// 재료 한 줄. 내 캐릭터가 있으면 「버그 조각 3/5」처럼 가진 개수를 같이 (모자라면 빨강)
+	string CostText(MaterialCost cost)
+	{
+		string name = MaterialName(cost.MaterialId);
+		if (progress == null) return $"{name} {cost.Count}";
+		int have = progress.GetMaterialCount(cost.MaterialId);
+		return $"<color={(have >= cost.Count ? Good : Bad)}>{name} {have}/{cost.Count}</color>";
+	}
+
 	void RequestUnlock()
 	{
 		if (selectedId == null || !SkillTree.CanUnlock(selectedId, Unlocked)) return;
 		Debug.Log($"[SkillTreeView] 해금 요청: {selectedId}");
+		failedId = null;
 		UnlockRequested?.Invoke(selectedId);
+		if (progress != null) progress.RequestUnlock(selectedId);
 	}
 
 	static void SetTabColor(Button tabButton, bool selected)

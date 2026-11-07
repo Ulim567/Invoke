@@ -1364,6 +1364,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: BossHealthBar
       objectReference: {fileID: 0}
+    - target: {fileID: 3227388905696933103, guid: 6ffae8013cd5654418805da4a1568229, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7517970860067057254, guid: 6ffae8013cd5654418805da4a1568229, type: 3}
       propertyPath: m_Pivot.x
       value: 0

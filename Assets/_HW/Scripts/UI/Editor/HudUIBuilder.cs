@@ -82,22 +82,30 @@ public static class HudUIBuilder
 		Stretch(escText.rectTransform);
 		escText.alignment = TextAlignmentOptions.Center;
 
-		Divider(bar);
+		// 레이드 던전에서는 숨긴다 (시안 8-3: 설정만)
+		var hideInRaid = new System.Collections.Generic.List<GameObject>();
+		hideInRaid.Add(Divider(bar));
 		TMP_Text level = Text(bar, "Level", "Lv. 1", 8, Label);
 		Fit(level, 30);
-		Divider(bar);
-		Icon(bar);
+		hideInRaid.Add(level.gameObject);
+		hideInRaid.Add(Divider(bar));
+		hideInRaid.Add(Icon(bar));
 		TMP_Text bug = Text(bar, "BugFragment", "버그 조각 0", 8, Color.white);
 		Fit(bug, 52);
-		Divider(bar);
-		Icon(bar);
+		hideInRaid.Add(bug.gameObject);
+		hideInRaid.Add(Divider(bar));
+		hideInRaid.Add(Icon(bar));
 		TMP_Text core = Text(bar, "BossCore", "보스 코어 0", 8, Color.white);
 		Fit(core, 48);
+		hideInRaid.Add(core.gameObject);
 
 		// 장소 이름
 		TMP_Text place = Text(root, "Place", "> 사냥터", 12, Color.white);
 		place.fontStyle = FontStyles.Bold;
 		Place(place.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(14, -38), new Vector2(200, 18));
+
+		BuildRaidParty(root);
+		BuildBossBar(root);
 
 		// 아래 띠 ------------------------------------------------------------------
 		RectTransform band = NewUI("BottomBand", root);
@@ -175,6 +183,7 @@ public static class HudUIBuilder
 		SetImage(shortcuts.gameObject, "hud_bar");
 		Button skillTree = Shortcut(shortcuts, "SkillTreeButton", "스킬 트리", new Vector2(3, 0));
 		Button levelUp = Shortcut(shortcuts, "LevelUpButton", "레벨업", new Vector2(46, 0));
+		hideInRaid.Add(shortcuts.gameObject);
 
 		// 칸 연결 ------------------------------------------------------------------
 		var so = new SerializedObject(view);
@@ -184,6 +193,7 @@ public static class HudUIBuilder
 		Set(so, "bugFragmentText", bug);
 		Set(so, "bossCoreText", core);
 		Set(so, "placeText", place);
+		Array(so, "hideInRaid", hideInRaid.ToArray());
 		Set(so, "hpFill", hpFill);
 		Set(so, "hpText", hpText);
 		Set(so, "heapFill", heapFill);
@@ -214,7 +224,7 @@ public static class HudUIBuilder
 
 	// 부품 ---------------------------------------------------------------------
 
-	static void Divider(RectTransform bar)
+	static GameObject Divider(RectTransform bar)
 	{
 		RectTransform line = NewUI("Divider", bar);
 		Image image = line.gameObject.AddComponent<Image>();
@@ -222,13 +232,128 @@ public static class HudUIBuilder
 		image.color = Hex("4A3A6A");
 		image.raycastTarget = false;
 		Layout(line.gameObject, 1, 12);
+		return line.gameObject;
 	}
 
-	static void Icon(RectTransform bar)
+	static GameObject Icon(RectTransform bar)
 	{
 		RectTransform icon = NewUI("Icon", bar);
 		SetImage(icon.gameObject, "hud_icon").raycastTarget = false;
 		Layout(icon.gameObject, 9, 9);
+		return icon.gameObject;
+	}
+
+	// 레이드 파티원 목록 (시안 8-3): 장소 이름 아래, 「파티」 + 2줄 (레이드 최대 3명에서 나를 뺀 수)
+	static void BuildRaidParty(RectTransform root)
+	{
+		RectTransform party = NewUI("RaidParty", root);
+		Place(party, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12, -102), new Vector2(124, 80));
+		RaidPartyView view = party.gameObject.AddComponent<RaidPartyView>();
+
+		RectTransform panel = NewUI("Panel", party);
+		Stretch(panel);
+		TMP_Text title = Text(panel, "Title", "파티", 6, Muted);
+		Place(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), Vector2.zero, new Vector2(60, 9));
+
+		const int rows = 2;
+		var rowImages = new Image[rows];
+		var names = new TMP_Text[rows];
+		var fills = new Image[rows];
+		var dead = new TMP_Text[rows];
+		for (int i = 0; i < rows; i++)
+		{
+			RectTransform row = NewUI("Member" + (i + 1), panel);
+			Place(row, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, -12 - i * 32), new Vector2(124, 26));
+			rowImages[i] = SetImage(row.gameObject, "hud_party");
+			rowImages[i].raycastTarget = false;
+
+			names[i] = Text(row, "Name", "[파티원 1]", 7, Color.white);
+			names[i].fontStyle = FontStyles.Bold;
+			Place(names[i].rectTransform, new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(7, -8), new Vector2(80, 10));
+
+			dead[i] = Text(row, "Dead", "사망", 6, Muted);
+			dead[i].alignment = TextAlignmentOptions.MidlineRight;
+			Place(dead[i].rectTransform, new Vector2(1, 1), new Vector2(1, 0.5f), new Vector2(-7, -8), new Vector2(30, 10));
+			dead[i].gameObject.SetActive(false);
+
+			TMP_Text hp = Text(row, "HpLabel", "HP", 4, Label);
+			Place(hp.rectTransform, new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(7, -18), new Vector2(12, 6));
+			RectTransform bar = NewUI("HpBar", row);
+			Place(bar, new Vector2(0, 1), new Vector2(0, 0.5f), new Vector2(22, -18), new Vector2(90, 3));
+			fills[i] = bar.gameObject.AddComponent<Image>();
+			fills[i].sprite = LoadSprite("hud_white");
+			fills[i].color = HpRed;
+			fills[i].type = Image.Type.Filled;
+			fills[i].fillMethod = Image.FillMethod.Horizontal;
+			fills[i].fillOrigin = (int)Image.OriginHorizontal.Left;
+			fills[i].raycastTarget = false;
+		}
+
+		var so = new SerializedObject(view);
+		Set(so, "panel", panel.gameObject);
+		Array(so, "rowImages", rowImages);
+		Array(so, "nameTexts", names);
+		Array(so, "hpFills", fills);
+		Array(so, "deadTexts", dead);
+		Set(so, "aliveSprite", LoadSprite("hud_party"));
+		Set(so, "deadSprite", LoadSprite("hud_party_dead"));
+		so.ApplyModifiedPropertiesWithoutUndo();
+		panel.gameObject.SetActive(false);
+	}
+
+	// 보스 체력 바 (시안 8-3): 위쪽 가운데. 움직임은 김도훈의 BossHealthBar 그대로 (보스가 있을 때만 보임)
+	static void BuildBossBar(RectTransform root)
+	{
+		RectTransform holder = NewUI("BossBar", root);
+		Place(holder, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -36), new Vector2(300, 24));
+		BossHealthBar bossBar = holder.gameObject.AddComponent<BossHealthBar>();
+
+		RectTransform panel = NewUI("Panel", holder);
+		Stretch(panel);
+
+		TMP_Text name = Text(panel, "Name", "[보스 이름]", 7, HpRed);
+		name.fontStyle = FontStyles.Bold;
+		Place(name.rectTransform, new Vector2(0, 1), new Vector2(0, 1), Vector2.zero, new Vector2(200, 10));
+		TMP_Text percent = Text(panel, "Percent", "100%", 6, Label);
+		percent.alignment = TextAlignmentOptions.MidlineRight;
+		Place(percent.rectTransform, new Vector2(1, 1), new Vector2(1, 1), Vector2.zero, new Vector2(60, 10));
+
+		RectTransform frame = NewUI("Frame", panel);
+		Place(frame, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, -12), new Vector2(300, 8));
+		SetImage(frame.gameObject, "hud_boss").raycastTarget = false;
+		Image trail = Fill(frame, "Trail", Color.white, Image.OriginHorizontal.Left);
+		Image fill = Fill(frame, "Fill", HpRed, Image.OriginHorizontal.Left);
+		fill.fillAmount = trail.fillAmount = 1f;
+
+		// 페이즈 구분선 70%, 40% (BossHealthBar가 위치를 맞춤)
+		var marks = new RectTransform[2];
+		for (int i = 0; i < marks.Length; i++)
+		{
+			marks[i] = NewUI("PhaseMark" + (i + 1), frame);
+			Image mark = marks[i].gameObject.AddComponent<Image>();
+			mark.sprite = LoadSprite("hud_white");
+			mark.color = new Color(0.06f, 0.05f, 0.1f, 0.9f);
+			mark.raycastTarget = false;
+			// BossHealthBar가 앵커를 (비율, 0.5)로 옮기므로 높이는 sizeDelta로 준다
+			marks[i].anchorMin = marks[i].anchorMax = new Vector2(i == 0 ? 0.7f : 0.4f, 0.5f);
+			marks[i].sizeDelta = new Vector2(1, 6);
+			marks[i].anchoredPosition = Vector2.zero;
+		}
+
+		BossBarPercent percentView = panel.gameObject.AddComponent<BossBarPercent>();
+		var percentSo = new SerializedObject(percentView);
+		Set(percentSo, "fill", fill);
+		Set(percentSo, "text", percent);
+		percentSo.ApplyModifiedPropertiesWithoutUndo();
+
+		var so = new SerializedObject(bossBar);
+		Set(so, "panel", panel.gameObject);
+		Set(so, "fill", fill);
+		Set(so, "trail", trail);
+		Set(so, "nameText", name);
+		Array(so, "phaseMarks", marks);
+		so.ApplyModifiedPropertiesWithoutUndo();
+		panel.gameObject.SetActive(false);
 	}
 
 	// 바탕 + 왼쪽(또는 오른쪽)부터 차는 막대 하나

@@ -14,6 +14,7 @@ using UnityEngine.UI;
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
 ///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks. 거부: CastRejected.<br/>
 /// - 오른쪽 아래: 스킬 트리 · 레벨업 바로가기. 누르면 SkillTreeRequested / LevelUpRequested를 알린다 (화면 연결은 다음 이슈).<br/>
+/// - 레이드 던전 (시안 8-3): 왼쪽 위는 설정만, 바로가기 숨김. 파티원 목록(RaidPartyView)과 보스 체력 바(김도훈의 BossHealthBar + BossBarPercent)가 같은 프리팹에 있다.<br/>
 /// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. 창(InputBlockingPanel)이 열린 동안에도 숨긴다. HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
 /// </para>
 /// </summary>
@@ -40,6 +41,7 @@ public class HudView : MonoBehaviour
 	[SerializeField] TMP_Text bugFragmentText;
 	[SerializeField] TMP_Text bossCoreText;
 	[SerializeField] TMP_Text placeText;
+	[SerializeField, Tooltip("레이드 던전에서 숨기는 것 (시안 8-3: Lv, 재료, 스킬 트리·레벨업 바로가기)")] GameObject[] hideInRaid;
 
 	[Header("아래")]
 	[SerializeField] Image hpFill;
@@ -169,6 +171,11 @@ public class HudView : MonoBehaviour
 			SetText(bossCoreText, $"보스 코어 {progress.GetMaterialCount(BossCore)}");
 		}
 		SetText(placeText, "> " + PlaceName(player.scene.name));
+
+		bool raid = player.scene.name == PlaceScenes.RaidDungeon;
+		if (hideInRaid != null)
+			foreach (GameObject item in hideInRaid)
+				if (item != null && item.activeSelf == raid) item.SetActive(!raid);
 	}
 
 	void RefreshBars()

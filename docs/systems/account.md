@@ -10,10 +10,11 @@
 - 전송 암호화: `EncryptionTransport`, 서버 키 자동 생성, 클라이언트의 서버 키 지문 확인
 - 화면용 묶음 (`AccountFlow`): 화면 상태·안내 문장·버튼 함수를 한 컴포넌트에. 화면은 이것만 사용
 - 임시 화면: OnGUI 로그인·회원가입·캐릭터 화면 (`AccountScreen`, `AccountFlow`를 그리기만 함). `NetworkManagerHUD` 대체
+- 로그아웃 (#349): 설정 창의 「로그아웃」(`SettingsView.LogoutRequested`)을 `AccountFlow`가 받아 접속을 끊고 로그인 화면으로
 - 에디터 전용 로그인 건너뛰기
 - 하지 않는 일
   - 진행도 저장: [progress-store.md](progress-store.md). 캐릭터 key(`AccountSession.CharacterKey`) 기준
-  - 닉네임 머리 위 표시, 로그아웃·캐릭터 바꾸기, 비밀번호 찾기·변경, 계정 삭제
+  - 닉네임 머리 위 표시, 캐릭터 바꾸기, 비밀번호 찾기·변경, 계정 삭제
   - 조작한 요청 막기: 보안 작업 때
   - 캐릭터 언어에 따른 플레이어 프리팹 선택: Java 캐릭터가 생길 때. 지금은 모든 캐릭터가 `Base` NetworkManager의 Player Prefab
   - 꾸민 화면(Canvas): 임혜원 이슈 (「맞춘 결과」)
@@ -128,6 +129,15 @@
   - 비밀번호 확인이 다름: 「비밀번호가 서로 다릅니다.」 (`AccountFlow.PasswordMismatchMessage`, 화면에서만)
   - 로그인 실패: 어느 칸이 틀렸는지 알리지 않음 (`MessageField` = `None`)
 - 기다림 (`IsWaiting`): 요청을 보낸 뒤 결과가 올 때까지. 그동안 같은 요청은 다시 보내지 않음. 요청을 보내지 못하면 바로 끝냄
+- 로그아웃 (#349)
+  - 설정 창(`SettingsView`)은 「로그아웃」을 누르면 `LogoutRequested`(static event)만 알림. 받는 쪽이 없으면 버튼이 꺼짐
+  - `AccountFlow`는 `CanLogout`이 true인 동안에만 `LogoutRequested`를 받음 → `CanLogout`이 false이면 버튼이 꺼짐
+  - `CanLogout`: 게임에 들어간 상태(`Page` = `Hidden`)이고, 클라이언트가 켜져 있고, 이 컴퓨터가 서버를 켜지 않았을 때
+    - 서버를 켠 컴퓨터(에디터 Host)가 로그아웃하면 서버도 꺼져 다른 접속자가 모두 끊기므로 버튼을 막음
+  - `Logout()`: `NetworkManager.StopClient()`로 접속을 끊음. 끊은 뒤 닉네임·캐릭터 목록을 비우고 로그인 화면으로. 팝업 없음 (스스로 끊은 것이므로)
+  - 서버 쪽: 따로 하는 일 없음. 접속이 끊기면 `InvokeNetworkManager.OnServerDisconnect`가 접속 중 계정 목록, 플레이어 등을 정리
+  - 클라이언트 쪽 플레이어(`SlotLoadout` 포함)는 접속이 끊길 때 함께 사라짐. 다시 들어가면 새로 받음
+  - 레이드 중에는 같은 버튼이 「레이드 포기」(`RaidParties.RequestGiveUp()`)가 되어 로그아웃은 나오지 않음
 - 접속이 끊김
   - 캐릭터 화면·게임 중: 팝업 (`PopupMessage` = 쫓겨난 이유 또는 「서버와 연결이 끊겼습니다.」), 로그인 화면으로. 확인 → `ClosePopup()`
   - 로그인·회원가입 중 접속 실패: 「서버에 접속하지 못했습니다.」, 서버 주소 칸 강조
@@ -160,12 +170,14 @@
 | `ServerAddress` | - | `string` (읽기·쓰기) | 서버 주소 칸의 값. 쓰면 다음 접속에 사용 |
 | `CanEditServerAddress` | - | `bool` | 서버 주소 칸을 보여 줄지 (접속 전에만 true) |
 | `CanStartHost` | - | `bool` | 에디터 전용 Host 버튼을 보여 줄지 (빌드에서는 늘 false) |
+| `CanLogout` | - | `bool` | 로그아웃할 수 있는지. 게임에 들어갔고 이 컴퓨터가 서버를 켜지 않았을 때만 true (에디터 Host는 false) |
 | `ShowLogin()`, `ShowSignUp()` | - | - | 로그인·회원가입 화면 바꾸기 (링크). 로그인한 뒤에는 무시 |
 | `Login(string loginId, string password)` | 아이디, 비밀번호 | - | 로그인 버튼. 접속 전이면 먼저 접속. 성공하면 `Characters` |
 | `SignUp(string loginId, string password, string passwordConfirm, string nickname)` | 아이디, 비밀번호, 비밀번호 확인, 닉네임 | - | 가입하기 버튼. 먼저 검사 → 통과하면 전송. 성공하면 바로 로그인, `Characters` |
 | `Select(string language)` | 언어 | - | 언어 카드. 그 언어 선택. 준비 중인 언어, 응답 기다리는 중이면 무시 |
 | `Confirm()` | - | - | 오른쪽 아래 버튼. 보유 중이면 들어가기(성공하면 `Hidden`, 서버가 로비에 플레이어 생성), 미보유면 만들기 |
 | `ClosePopup()` | - | - | 팝업의 확인 버튼 |
+| `Logout()` | - | - | 접속을 끊고 로그인 화면으로 (팝업 없음). `CanLogout`이 false이면 무시. `SettingsView.LogoutRequested`를 `AccountFlow`가 받아 부르므로 화면이 직접 부를 필요 없음 |
 | `StartHost()` | - | - | 에디터 전용 Host 버튼. `Skip Login In Editor`가 켜져 있으면 로그인을 건너뜀 |
 | `PasswordMismatchMessage` | - | `string` 상수 | 「비밀번호가 서로 다릅니다.」 |
 - 입력 중인 글자(아이디, 비밀번호 등)는 화면이 들고 있다가 버튼을 누를 때 넘김

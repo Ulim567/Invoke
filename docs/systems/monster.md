@@ -329,11 +329,11 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 ### `MonsterReward`
 
-보상을 줄 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다. Inspector에서 `Player Layers`는 Player로 둔다.
+보상을 줄 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다. Inspector에서 `Player Layers`는 Player로 둔다. `NetworkBehaviour`라서 프리팹에 `NetworkIdentity`가 있어야 한다 (#404).
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 한 플레이어가 보상을 받았을 때. "+경험치" 글자 등에 쓴다. 재료 목록은 이벤트 안에서만 읽는다 |
+| `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 내 캐릭터가 보상을 받았을 때. 받은 플레이어의 화면(호스트 포함)에서만 불린다 (`[TargetRpc]`, #404). 받은 플레이어 = 그 화면의 내 캐릭터. 네트워크 없는 테스트는 받은 플레이어마다 그 자리에서. "+경험치" 글자, 재료가 날아오는 연출에 쓴다. 재료 목록은 이벤트 안에서만 읽는다. 몬스터는 0.5초 뒤 없어지므로 띄운 그림을 몬스터 자식으로 두지 않는다 |
 
 | Inspector 값 | 설명 |
 | --- | --- |

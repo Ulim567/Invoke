@@ -10,15 +10,18 @@ using UnityEngine;
 ///   Whole Scene을 켜면(레이드 보스) 같은 씬의 플레이어 모두에게 준다. 죽어서 관전 중인 파티원도 받는다.<br/>
 /// - 재료는 몬스터가 죽을 때 한 번 굴려서, 받는 플레이어 모두에게 같은 것을 준다. 확률(Chance) 1이면 반드시 나온다.<br/>
 /// - 값은 PlayerProgress(이우림)의 AddExp, AddMoney, AddMaterial로만 바꾼다. PlayerProgress가 없는 플레이어(테스트용 프리팹)는 건너뛴다.<br/>
-/// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다. 판정은 몬스터가 속한 씬의 물리 세계에 한다.
+/// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다. 판정은 몬스터가 속한 씬의 물리 세계에 한다.<br/>
+/// - 연출 이벤트(RewardEffectPlayed)는 [TargetRpc]로 받은 플레이어의 화면(호스트 포함)에서만 불린다 (#404). 몬스터는 Despawn Delay(0.5초) 뒤에 없어지므로,
+///   연출 쪽은 띄운 그림을 몬스터의 자식으로 두지 않는다.
 /// </para>
 /// <para>
 /// 사용법: 보상을 줄 몬스터 프리팹(Leak, Loop, Gateway) 최상위에 Monster와 함께 붙인다. Player Layers는 Player로 둔다.
+/// NetworkBehaviour라 프리팹에 NetworkIdentity가 있어야 한다.
 /// 기둥·분신·웜처럼 보상이 없는 몬스터에는 붙이지 않는다.
 /// </para>
 /// </summary>
 [RequireComponent(typeof(Monster))]
-public class MonsterReward : MonoBehaviour
+public class MonsterReward : NetworkBehaviour
 {
 	/// <summary>
 	/// 재료 드롭 한 줄. 재료 ID(bug_fragment 버그 조각, boss_core 보스 코어), 개수, 나올 확률.
@@ -65,9 +68,13 @@ public class MonsterReward : MonoBehaviour
 	ContactFilter2D playerFilter;
 	// 이번에 나온 재료. 받는 플레이어 모두에게 같은 것을 준다
 	readonly List<MaterialDrop> rolled = new List<MaterialDrop>(4);
+	// 클라이언트가 받은 재료 (TargetRewardEffect). 이벤트 안에서만 읽는다
+	readonly List<MaterialDrop> received = new List<MaterialDrop>(4);
 
 	/// <summary>
-	/// [연출] 한 플레이어가 보상을 받았을 때. (받은 플레이어, 경험치, 돈, 받은 재료 목록)을 넘긴다. "+경험치" 같은 글자를 띄울 때 쓴다.
+	/// [연출] 내 캐릭터가 보상을 받았을 때. (받은 플레이어, 경험치, 돈, 받은 재료 목록)을 넘긴다. "+경험치" 글자, 재료가 날아오는 연출에 쓴다.<br/>
+	/// 받은 플레이어의 화면에서만 불린다 (서버가 [TargetRpc]로 보냄, 호스트 포함). 받은 플레이어는 그 화면의 내 캐릭터다.
+	/// 네트워크를 켜지 않은 테스트에서는 받은 플레이어마다 그 자리에서 불린다.
 	/// 재료 목록은 이 이벤트 안에서만 읽는다(다음 처치 때 바뀐다).
 	/// </summary>
 	public event Action<PlayerProgress, int, int, IReadOnlyList<MaterialDrop>> RewardEffectPlayed;
@@ -143,8 +150,40 @@ public class MonsterReward : MonoBehaviour
 		PlayRewardEffect(player);
 	}
 
-	// 연출만 한다. 네트워크를 붙이면 받은 플레이어 화면에만 보이게 [TargetRpc]로 바꾼다 (코드 작성 규칙 1)
-	void PlayRewardEffect(PlayerProgress player) => RewardEffectPlayed?.Invoke(player, exp, money, rolled);
+	// 연출만 한다 (코드 작성 규칙 1). 받은 플레이어의 화면에만 보낸다. 네트워크를 켜지 않은 테스트는 [TargetRpc]를 보낼 수 없으므로 그 자리에서 부른다
+	void PlayRewardEffect(PlayerProgress player)
+	{
+		if (!NetworkServer.active)
+		{
+			RewardEffectPlayed?.Invoke(player, exp, money, rolled);
+			return;
+		}
+
+		NetworkConnectionToClient conn = player.TryGetComponent(out NetworkIdentity identity) ? identity.connectionToClient : null;
+		if (conn == null) return;
+
+		string[] ids = new string[rolled.Count];
+		int[] counts = new int[rolled.Count];
+		for (int i = 0; i < rolled.Count; i++)
+		{
+			ids[i] = rolled[i].materialId;
+			counts[i] = rolled[i].count;
+		}
+		TargetRewardEffect(conn, exp, money, ids, counts);
+	}
+
+	// 받은 플레이어의 클라이언트(호스트 포함)에서 불린다. 몬스터를 없애기 전에 보내므로 몬스터가 아직 이 화면에 있다
+	[TargetRpc]
+	void TargetRewardEffect(NetworkConnectionToClient target, int expGained, int moneyGained, string[] ids, int[] counts)
+	{
+		NetworkIdentity me = NetworkClient.localPlayer;
+		PlayerProgress receiver = me != null ? me.GetComponent<PlayerProgress>() : null;
+
+		received.Clear();
+		int n = ids != null && counts != null ? Mathf.Min(ids.Length, counts.Length) : 0;
+		for (int i = 0; i < n; i++) received.Add(new MaterialDrop { materialId = ids[i], count = counts[i], chance = 1f });
+		RewardEffectPlayed?.Invoke(receiver, expGained, moneyGained, received);
+	}
 
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 

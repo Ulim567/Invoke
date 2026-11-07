@@ -11,7 +11,8 @@ using UnityEngine.Tilemaps;
 /// - 스프라이트 소품: 씬 맨 위의 Props 오브젝트 아래에 다시 만든다 (이미 있으면 안의 것을 지우고 새로 놓음).<br/>
 /// - 타일 소품: Grid 아래 Decor 타일맵(충돌 없음, Sorting Layer BackProps)을 비우고 다시 찍는다. 없으면 만든다.<br/>
 /// - 연습장은 BackWall 타일맵(충돌 없음, Sorting Layer Sky)에 CyberLab 벽 무늬도 깐다.<br/>
-/// - 로비는 손으로 놓았으므로 배치표가 없다.
+/// - 로비는 소품을 손으로 놓았으므로 소품·타일은 건드리지 않고 떠다니는 데이터 조각만 놓는다.<br/>
+/// - 떠다니는 데이터 조각(DataDust): 씬 맨 위에 파티클 오브젝트를 다시 만든다. 흐린 민트 1~2픽셀 점이 천천히 떠올랐다 사라진다 (「버그 걸린 컴퓨터 세상」 분위기, #421).
 /// </para>
 /// </summary>
 public static class MapDecorator
@@ -27,8 +28,17 @@ public static class MapDecorator
 	struct Prop
 	{
 		public string sprite; public float x, y; public string layer; public int order; public string color;
+		public bool ground; // true면 y는 서 있을 바닥 윗면. 그림의 기준점이 가운데여도 밑변이 바닥에 닿게 올린다
 		public Prop(string sprite, float x, float y, string color = null, string layer = "BackProps", int order = 0)
-		{ this.sprite = sprite; this.x = x; this.y = y; this.color = color; this.layer = layer; this.order = order; }
+		{ this.sprite = sprite; this.x = x; this.y = y; this.color = color; this.layer = layer; this.order = order; ground = false; }
+	}
+
+	// 바닥(또는 발판) 윗면 y에 밑변을 맞춰 세우는 소품 (UrbanDecay 조각은 기준점이 가운데라서)
+	static Prop On(string sprite, float x, float surfaceY, string color = null, string layer = "BackProps", int order = 0)
+	{
+		var prop = new Prop(sprite, x, surfaceY, color, layer, order);
+		prop.ground = true;
+		return prop;
 	}
 
 	// 타일 도장 하나. 원본 그림의 (col,row)부터 w×h칸을, 왼쪽 아래 칸이 (x,y)에 오게 찍는다. y는 땅 윗면 Y
@@ -43,6 +53,7 @@ public static class MapDecorator
 		public Prop[] props;
 		public Stamp[] stamps;
 		public RectInt backWall;   // 연습장처럼 실내 벽을 깔 칸 범위 (비우면 안 깖)
+		public Rect ambient;       // 떠다니는 데이터 조각(DataDust)을 뿌릴 범위 (월드 좌표, 비우면 안 놓음)
 	}
 
 	// No Man's Land 그림의 소품 칸 (왼쪽 위 칸, 가로, 세로)
@@ -87,9 +98,10 @@ public static class MapDecorator
 			Lamp(-16, -4), TreeRound(-6, -4), RockTall(1, -4),
 			Mound(9, -4), Bush(14, -4), Fence(19, -4), Thorns(27, -4), TreeDead(29, -4),
 		},
+		ambient = new Rect(-40, -4, 80, 16),
 	};
 
-	// 레이드 던전 (폭풍 밤). 가로 40칸 평지, 바닥 윗면 Y -4, 양쪽 벽 X -20·-19, 18·19. 가운데(X -4~4)는 Gateway 자리라 비운다
+	// 레이드 던전 (폭풍 밤). 가로 44칸 평지 (#421, 40칸이던 때는 화면에 벽이 보였음), 바닥 윗면 Y -4, 양쪽 벽 X -22·-21, 20·21. 소품 자리는 40칸 때 그대로. 가운데(X -4~4)는 Gateway 자리라 비운다
 	const string Night = "5A5C80";
 	static Decoration RaidDungeon() => new Decoration
 	{
@@ -107,6 +119,7 @@ public static class MapDecorator
 			Lamp(-17, -4), Lamp(16, -4),
 			RockTall(-12, -4), Grave(-10, -4), Thorns(5, -4), RockBig(11, -4),
 		},
+		ambient = new Rect(-20, -4, 40, 16),
 	};
 
 	// 연습장 (실내). 바닥 윗면 Y -4, 천장 아랫면 Y 9, 양쪽 벽 X -25·-24, 23·24. CyberLab 소품은 그림 조각이라 Tiles 폴더에서 찾는다
@@ -124,6 +137,13 @@ public static class MapDecorator
 			new Prop("CyberLab_Objects_7", 21, 4), new Prop("CyberLab_Objects_8", -22, 2),
 			new Prop("CyberLab_Objects_11", 14, 5), new Prop("CyberLab_Objects_0", -1, 4.5f),
 		},
+		ambient = new Rect(-23, -4, 46, 13),
+	};
+
+	// 로비: 소품은 손으로 놓았으므로 건드리지 않고(props 없음) 떠다니는 데이터 조각만 놓는다
+	static Decoration Lobby() => new Decoration
+	{
+		ambient = new Rect(-36, -4, 72, 16),
 	};
 
 	static Decoration Find(string sceneName)
@@ -133,6 +153,7 @@ public static class MapDecorator
 			case PlaceScenes.HuntingGround: return HuntingGround();
 			case PlaceScenes.RaidDungeon: return RaidDungeon();
 			case PlaceScenes.TrainingRoom: return TrainingRoom();
+			case PlaceScenes.Lobby: return Lobby();
 			default: return null;
 		}
 	}
@@ -144,14 +165,93 @@ public static class MapDecorator
 		Decoration deco = Find(scene.name);
 		if (deco == null)
 		{
-			EditorUtility.DisplayDialog("소품 놓기", $"'{scene.name}' 씬의 소품 배치표가 없어요. (사냥터·레이드 던전·연습장만 있음)", "확인");
+			EditorUtility.DisplayDialog("소품 놓기", $"'{scene.name}' 씬의 소품 배치표가 없어요. (로비·사냥터·레이드 던전·연습장만 있음)", "확인");
 			return;
 		}
 
 		int props = PlaceProps(scene, deco.props);
 		int tiles = StampDecor(deco.stamps) + FillBackWall(deco.backWall);
+		PlaceAmbient(scene, deco.ambient);
 		EditorSceneManager.MarkSceneDirty(scene);
 		Debug.Log($"[MapDecorator] {scene.name}: 스프라이트 소품 {props}개, 타일 소품 {tiles}칸. 확인하고 Ctrl/Cmd+S로 저장한다");
+	}
+
+	// 떠다니는 데이터 조각 -----------------------------------------------------
+
+	const string DustMaterialPath = "Assets/_HW/Map/DataDust.mat";
+	const string WhiteTexturePath = "Assets/_HW/UI/Hud/hud_white.png";
+
+	static void PlaceAmbient(UnityEngine.SceneManagement.Scene scene, Rect area)
+	{
+		foreach (GameObject go in scene.GetRootGameObjects())
+			if (go.name == "DataDust") Undo.DestroyObjectImmediate(go);
+		if (area.width <= 0 || area.height <= 0) return;
+
+		var dust = new GameObject("DataDust");
+		Undo.RegisterCreatedObjectUndo(dust, "Place Data Dust");
+		UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(dust, scene);
+		dust.transform.position = new Vector3(area.center.x, area.center.y, 0f);
+
+		ParticleSystem ps = dust.AddComponent<ParticleSystem>();
+		ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+		var main = ps.main;
+		main.loop = true;
+		main.prewarm = true;
+		main.duration = 10f;
+		main.startLifetime = new ParticleSystem.MinMaxCurve(8f, 14f);
+		main.startSpeed = 0f;
+		main.startSize = new ParticleSystem.MinMaxCurve(0.0625f, 0.125f);  // 1~2픽셀 (16 PPU)
+		main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.55f, 0.95f, 0.88f, 0.45f), new Color(0.75f, 0.85f, 1f, 0.3f)); // 흐린 민트 ~ 흐린 하늘색 (은은하게)
+		main.simulationSpace = ParticleSystemSimulationSpace.World;
+		main.maxParticles = 60;
+
+		var emission = ps.emission;
+		emission.rateOverTime = area.width * area.height / 450f; // 화면에 20~30개쯤
+
+		var shape = ps.shape;
+		shape.shapeType = ParticleSystemShapeType.Box;
+		shape.scale = new Vector3(area.width, area.height, 0.1f);
+
+		var velocity = ps.velocityOverLifetime;
+		velocity.enabled = true;
+		velocity.space = ParticleSystemSimulationSpace.World;
+		velocity.x = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+		velocity.y = new ParticleSystem.MinMaxCurve(0.08f, 0.22f);
+		velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
+
+		// 천천히 나타났다 천천히 사라진다
+		var color = ps.colorOverLifetime;
+		color.enabled = true;
+		var fade = new Gradient();
+		fade.SetKeys(
+			new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+			new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.3f), new GradientAlphaKey(1f, 0.7f), new GradientAlphaKey(0f, 1f) });
+		color.color = fade;
+
+		var noise = ps.noise;
+		noise.enabled = true;
+		noise.strength = 0.12f;
+		noise.frequency = 0.25f;
+
+		ParticleSystemRenderer renderer = dust.GetComponent<ParticleSystemRenderer>();
+		renderer.renderMode = ParticleSystemRenderMode.Billboard;
+		renderer.sharedMaterial = DustMaterial();
+		renderer.sortingLayerName = "BackProps"; // 배경보다 앞, 땅·캐릭터보다 뒤
+		renderer.sortingOrder = 50;
+		ps.Play();
+	}
+
+	// 하얀 네모 그림을 쓰는 파티클 재질. 없으면 만든다
+	static Material DustMaterial()
+	{
+		var material = AssetDatabase.LoadAssetAtPath<Material>(DustMaterialPath);
+		if (material != null) return material;
+		Shader shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default") ?? Shader.Find("Sprites/Default");
+		material = new Material(shader) { name = "DataDust" };
+		var white = AssetDatabase.LoadAssetAtPath<Texture2D>(WhiteTexturePath);
+		if (white != null) material.mainTexture = white;
+		AssetDatabase.CreateAsset(material, DustMaterialPath);
+		return material;
 	}
 
 	// 스프라이트 소품 -------------------------------------------------------
@@ -185,7 +285,9 @@ public static class MapDecorator
 			var go = new GameObject(p.sprite);
 			Undo.RegisterCreatedObjectUndo(go, "Place Props");
 			go.transform.SetParent(root.transform, false);
-			go.transform.localPosition = new Vector3(p.x, p.y, 0f);
+			// 바닥에 세우는 소품: 기준점부터 밑변까지만큼 올린다
+			float lift = p.ground ? sprite.pivot.y / sprite.pixelsPerUnit : 0f;
+			go.transform.localPosition = new Vector3(p.x, p.y + lift, 0f);
 			var sr = go.AddComponent<SpriteRenderer>();
 			sr.sprite = sprite;
 			sr.sortingLayerName = p.layer;

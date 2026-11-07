@@ -140,6 +140,21 @@ public static class HudUIBuilder
 		memoryText.alignment = TextAlignmentOptions.MidlineRight;
 		Place(memoryText.rectTransform, new Vector2(0.5f, 0), new Vector2(1, 0.5f), new Vector2(118, 35), new Vector2(40, 8));
 
+		// 소환검: HP 막대 왼쪽 (#365)
+		TMP_Text swordText = Text(center, "SwordLabel", "소환검 0/5", 6, Label);
+		Place(swordText.rectTransform, new Vector2(0.5f, 0), new Vector2(1, 0.5f), new Vector2(-128, 44), new Vector2(50, 8));
+		swordText.alignment = TextAlignmentOptions.MidlineRight;
+		var swordPips = new Image[5];
+		for (int i = 0; i < swordPips.Length; i++)
+		{
+			RectTransform pip = NewUI("SwordPip" + (i + 1), center);
+			Place(pip, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(-170 + i * 9, 32), new Vector2(6, 10));
+			swordPips[i] = pip.gameObject.AddComponent<Image>();
+			swordPips[i].sprite = LoadSprite("hud_white");
+			swordPips[i].color = Hex("2A2240");
+			swordPips[i].raycastTarget = false;
+		}
+
 		// 슬롯 8칸
 		var frames = new Image[8];
 		var keys = new TMP_Text[8];
@@ -194,6 +209,8 @@ public static class HudUIBuilder
 		Set(so, "bugFragmentText", bug);
 		Set(so, "bossCoreText", core);
 		Set(so, "placeText", place);
+		Set(so, "swordText", swordText);
+		Array(so, "swordPips", swordPips);
 		Array(so, "hideInRaid", hideInRaid.ToArray());
 		Set(so, "hpFill", hpFill);
 		Set(so, "hpText", hpText);

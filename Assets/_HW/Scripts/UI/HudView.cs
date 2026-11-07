@@ -10,6 +10,7 @@ using UnityEngine.UI;
 /// <para>
 /// - 왼쪽 위: 설정(Esc) · Lv · 버그 조각 · 보스 코어 (PlayerProgress). 그 아래 지금 장소 이름 (내 캐릭터가 있는 씬).<br/>
 /// - 아래 가운데: HP(PlayerHealth), Memory(ProcessMemory: 왼쪽부터 Data·Heap, 오른쪽부터 Stack), 슬롯 8칸(Q W E R A S D F).<br/>
+/// - 소환검 (#365): 아래 띠 왼쪽에 「소환검 n/5」와 5칸. SummonedSwords.Swords(박진우)를 읽기만 한다. 사용 가능 청록, 쓰는 중 어둡게, 누수 빨강.<br/>
 /// - 레이드 던전 (시안 8-3): 왼쪽 위는 설정만, 바로가기 숨김. 파티원 목록(RaidPartyView)과 보스 체력 바(김도훈의 BossHealthBar + BossBarPercent)가 같은 프리팹에 있다.<br/>
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 줄고 남은 초) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
@@ -60,6 +61,14 @@ public class HudView : MonoBehaviour
 	[SerializeField] Sprite slotEmptySprite;
 	[SerializeField] Sprite slotRejectedSprite;
 
+	[Header("소환검 (아래 띠 왼쪽, #365)")]
+	[SerializeField] TMP_Text swordText;
+	[SerializeField, Tooltip("소환 순서대로 5칸")] Image[] swordPips;
+	[SerializeField] Color swordEmptyColor = new Color32(0x2A, 0x22, 0x40, 0xFF);
+	[SerializeField] Color swordReadyColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+	[SerializeField] Color swordBusyColor = new Color32(0x2F, 0x6E, 0x68, 0xFF);
+	[SerializeField] Color swordLeakedColor = new Color32(0xE0, 0x70, 0x70, 0xFF);
+
 	[Header("오른쪽 아래")]
 	[SerializeField] Button skillTreeButton;
 	[SerializeField] Button levelUpButton;
@@ -75,6 +84,7 @@ public class HudView : MonoBehaviour
 	// 내 캐릭터
 	GameObject player;
 	PlayerProgress progress;
+	SummonedSwords swords;
 	PlayerHealth health;
 	ProcessMemory memory;
 	SlotLoadout loadout;
@@ -112,6 +122,7 @@ public class HudView : MonoBehaviour
 		RefreshBars();
 		RefreshSlots();
 		RefreshShortcuts();
+		RefreshSwords();
 	}
 
 	// 연결 ---------------------------------------------------------------------
@@ -122,6 +133,7 @@ public class HudView : MonoBehaviour
 		player = me;
 		if (player == null) return;
 		progress = player.GetComponent<PlayerProgress>();
+		swords = player.GetComponent<SummonedSwords>();
 		health = player.GetComponent<PlayerHealth>();
 		memory = player.GetComponent<ProcessMemory>();
 		loadout = player.GetComponent<SlotLoadout>();
@@ -196,6 +208,23 @@ public class HudView : MonoBehaviour
 		button.interactable = usable;
 		if (!button.TryGetComponent(out CanvasGroup group)) group = button.gameObject.AddComponent<CanvasGroup>();
 		group.alpha = usable ? 1f : 0.35f;
+	}
+
+	// 소환검: 칸마다 소환 순서대로 사용 가능(청록) / 쓰는 중(어두운 청록: 던짐, 찌르기, 검무, 검 타기 등) / 누수(빨강) / 없음
+	void RefreshSwords()
+	{
+		int count = swords != null ? swords.Swords.Count : 0;
+		SetText(swordText, $"소환검 {count}/{SummonedSwords.MaxCount}");
+		if (swordPips == null) return;
+		for (int i = 0; i < swordPips.Length; i++)
+		{
+			if (swordPips[i] == null) continue;
+			SummonedSword sword = i < count ? swords.Swords[i] : null;
+			swordPips[i].color = sword == null ? swordEmptyColor
+				: sword.State == SummonedSwordState.Ready ? swordReadyColor
+				: sword.State == SummonedSwordState.Leaked ? swordLeakedColor
+				: swordBusyColor;
+		}
 	}
 
 	void RefreshBars()

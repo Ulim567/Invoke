@@ -65,7 +65,6 @@ public static class MapDecorator
 	{
 		props = new[]
 		{
-			new Prop("UrbanDecay_21", -36, -1.19f, Day),
 			new Prop("Grass", -31, -4, Day),
 			new Prop("StopSign_Flowers_Moss", -21, -4, Day),
 			new Prop("Map_Moss", -18, -4, Day),
@@ -73,7 +72,6 @@ public static class MapDecorator
 			new Prop("Grass", -9, -4, Day),
 			new Prop("Bollard_Moss", -2, -4, Day),
 			new Prop("Bollard_Moss", -1.3f, -4, Day),
-			new Prop("UrbanDecay_21", 6, -1.19f, Day),
 			new Prop("Grass_WTrash", 12, -4, Day),
 			new Prop("UrbanDecay_13", 23, -3, Day),
 			new Prop("Flowers_Assorted", 31, -4, Day),
@@ -97,8 +95,6 @@ public static class MapDecorator
 	{
 		props = new[]
 		{
-			new Prop("UrbanDecay_21", -14, -1.19f, Night),
-			new Prop("UrbanDecay_21", 13, -1.19f, Night),
 			new Prop("UrbanDecay_13", 9, -3, Night),
 			new Prop("Grass_WTrash", -9, -4, Night),
 			new Prop("Foxtail_Pink", -6, -4, Night),

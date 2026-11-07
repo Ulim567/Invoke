@@ -13,11 +13,23 @@ using UnityEngine.UI;
 /// - 보상 줄 (시안 12, #383): 클리어면 「보스 코어 +1  버그 조각 +5  경험치 +200」처럼 이번 레이드에서 받은 것을 보여 준다.
 ///   내 캐릭터가 레이드 던전에 들어온 순간의 PlayerProgress(레벨·경험치·재료)를 기억해 두고, 결과 화면이 떠 있는 동안 지금 값과의 차이를 그린다.
 ///   보상은 서버가 주고 Mirror가 조금 늦게 맞춰 주므로, 화면이 떠 있는 동안 매 프레임 다시 센다. 받은 게 없으면 줄을 숨긴다.<br/>
+/// - 내 던전의 결과만 띄운다 (#424). Host는 다른 파티의 던전 씬도 함께 띄워 두므로, 내 캐릭터가 있는 씬의 결과 화면만 보인다.<br/>
+/// - 「레이드 실패」가 떠 있는 동안 MyFailureShowing이 true다. 사망 화면 효과(DeathScreenEffect, 이우림)가 읽어 파티원 모두의 화면을 무채색으로 맞춘다 (#424).<br/>
 /// - 시험: Inspector에서 이 컴포넌트 오른쪽 ⋮ → 「시험: 성공」 / 「시험: 실패」.
 /// </para>
 /// </summary>
 public class RaidResultView : MonoBehaviour
 {
+	// 지금 「레이드 실패」를 띄우고 있는 내 던전의 결과 화면. 없으면 null.
+	// 던전 씬이 내려가 오브젝트가 사라지면 Unity의 null 비교로 null과 같아진다
+	static RaidResultView showingFailure;
+
+	/// <summary>
+	/// 내 던전의 「레이드 실패」 결과 화면이 떠 있으면 true (#424). 「레이드 클리어」일 때는 false.<br/>
+	/// 사망 화면 효과(DeathScreenEffect)가 매 프레임 읽어, 실패 결과 화면 동안 파티원 모두의 화면을 무채색으로 하고 「사망했습니다」 글자를 숨긴다.
+	/// </summary>
+	public static bool MyFailureShowing => showingFailure != null;
+
 	[SerializeField, Tooltip("결과를 받을 RaidJudge. 비워 두면 같은 씬에서 찾는다")]
 	RaidJudge judge;
 
@@ -85,6 +97,22 @@ public class RaidResultView : MonoBehaviour
 	void OnDisable()
 	{
 		if (judge != null) judge.ResultEffectPlayed -= Show;
+		StopShowingFailure();
+	}
+
+	// 이 결과 화면이 「레이드 실패」를 띄우던 중이었으면 내린다
+	void StopShowingFailure()
+	{
+		if (showingFailure == this) showingFailure = null;
+	}
+
+	// 이 결과 화면이 내 캐릭터가 있는 던전의 것이면 true.
+	// Host(서버)는 모든 파티의 던전 씬을 띄워 두므로 내 캐릭터가 있는 씬과 같은지 본다.
+	// 클라이언트는 자기 던전 씬만 불러오고, 네트워크를 켜지 않은 시험에는 다른 던전이 없으므로 늘 내 것이다
+	bool IsMyDungeon()
+	{
+		if (!NetworkServer.active) return true;
+		return NetworkClient.localPlayer != null && NetworkClient.localPlayer.gameObject.scene == gameObject.scene;
 	}
 
 	void Update()
@@ -156,7 +184,11 @@ public class RaidResultView : MonoBehaviour
 	public void Show(bool cleared)
 	{
 		if (root == null) return;
+		// 다른 파티의 레이드 결과는 Host 화면에 띄우지 않는다
+		if (!IsMyDungeon()) return;
 		StopAllCoroutines();
+		if (cleared) StopShowingFailure();
+		else showingFailure = this;
 		showingReward = cleared;
 		if (rewardText != null) rewardText.gameObject.SetActive(false);
 		if (cleared) RefreshReward();
@@ -187,6 +219,7 @@ public class RaidResultView : MonoBehaviour
 		}
 		root.SetActive(false);
 		showingReward = false;
+		StopShowingFailure();
 	}
 
 	// 0이면 닫힘, 1이면 다 열림: 투명도와 띠의 세로 크기

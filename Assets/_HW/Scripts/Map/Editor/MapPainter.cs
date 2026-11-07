@@ -66,7 +66,7 @@ public static class MapPainter
 		},
 	};
 
-	// 로비: 가로 72칸. 왼쪽 시작 → 가운데 광장(해금 장소) → 오른쪽 높은 단(입구 3개). 바닥 윗면 Y -4, 높은 단 윗면 Y -2, 양쪽 벽 Y 3까지
+	// 로비: 가로 72칸. 왼쪽 시작 → 가운데 광장 → 오른쪽 높은 단(입구 3개). 바닥 윗면 Y -4, 높은 단 윗면 Y -2, 양쪽 벽 Y 3까지
 	static Layout Lobby() => new Layout
 	{
 		left = -36, top = 10, tiles = NoMansLand,

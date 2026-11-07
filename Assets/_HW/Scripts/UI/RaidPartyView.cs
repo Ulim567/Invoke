@@ -11,6 +11,7 @@ using UnityEngine.UI;
 /// - 줄은 프리팹에 미리 만들어 둔 만큼만 쓴다 (레이드 최대 3명 → 나를 빼고 2줄). 남는 줄은 끈다.<br/>
 /// - 이름: PlayerPublicInfo.Nickname (이우림, #359). 비어 있으면(시험용 플레이어) 「파티원 1」, 「파티원 2」.<br/>
 /// - 쓰러진 파티원: 어두운 줄, 이름 흐리게, 오른쪽에 「사망」, 체력 막대 비움.<br/>
+/// - 내가 관전 중이면 카메라가 따라가는 파티원의 이름 뒤에 「관전 중」을 붙인다 (PlayerCameraFollow.SpectateTarget).<br/>
 /// - HudCanvas 프리팹 안에 있다 (메뉴 Invoke → UI → 게임 HUD 만들기).
 /// </para>
 /// </summary>
@@ -44,16 +45,19 @@ public class RaidPartyView : MonoBehaviour
 		if (panel != null && panel.activeSelf != show) panel.SetActive(show);
 		if (!show) return;
 
+		// 내가 관전 중일 때 카메라가 따라가는 플레이어 (박진우의 PlayerCameraFollow). 관전 중이 아니면 null
+		PlayerHealth spectated = me.TryGetComponent(out PlayerCameraFollow follow) ? follow.SpectateTarget : null;
+
 		int rows = rowImages != null ? rowImages.Length : 0;
 		for (int i = 0; i < rows; i++)
 		{
 			bool used = i < others.Count;
 			if (rowImages[i] != null && rowImages[i].gameObject.activeSelf != used) rowImages[i].gameObject.SetActive(used);
-			if (used) Draw(i, others[i]);
+			if (used) Draw(i, others[i], others[i] == spectated);
 		}
 	}
 
-	void Draw(int row, PlayerHealth player)
+	void Draw(int row, PlayerHealth player, bool spectated)
 	{
 		bool dead = player.IsDead;
 		if (rowImages[row] != null)
@@ -66,7 +70,8 @@ public class RaidPartyView : MonoBehaviour
 		if (name != null)
 		{
 			string nickname = player.TryGetComponent(out PlayerPublicInfo info) ? info.Nickname : "";
-			SetText(name, $"[{(string.IsNullOrEmpty(nickname) ? $"파티원 {row + 1}" : nickname)}]");
+			// 내가 지금 보고 있는(카메라가 따라가는) 파티원의 줄에는 이름 뒤에 「관전 중」을 붙인다
+			SetText(name, $"[{(string.IsNullOrEmpty(nickname) ? $"파티원 {row + 1}" : nickname)}]{(spectated ? " 관전 중" : "")}");
 			name.color = dead ? deadNameColor : nameColor;
 		}
 

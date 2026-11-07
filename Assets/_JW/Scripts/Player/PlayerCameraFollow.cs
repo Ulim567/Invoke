@@ -26,6 +26,12 @@ public class PlayerCameraFollow : NetworkBehaviour
 	// 관전 중 따라가는 플레이어. null이면 내 캐릭터를 따라간다
 	PlayerHealth spectateTarget;
 
+	/// <summary>
+	/// 관전 중 카메라가 따라가는 플레이어. 관전 중이 아니거나 따라갈 살아 있는 플레이어가 없으면 null.<br/>
+	/// 파티원 목록(RaidPartyView)처럼 「지금 누구를 보고 있는지」를 보여 주는 화면이 읽기만 한다. 값은 이 컴포넌트가 LateUpdate에서 정한다.
+	/// </summary>
+	public PlayerHealth SpectateTarget => spectateTarget != null ? spectateTarget : null;
+
 	public override void OnStartLocalPlayer()
 	{
 		base.OnStartLocalPlayer();

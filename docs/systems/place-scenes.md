@@ -298,6 +298,7 @@ static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파�
 
 | 이름 | 설명 |
 | --- | --- |
+| `RemoteMotionTest` | 다른 플레이어의 이동 모션(#356, [player-animation.md](player-animation.md)). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `RemoteMotionTest.StartInEditor()` + 시험 빌드를 `-remoteMotionTest member`로 실행(호스트 + 클라이언트). member가 오른쪽으로 걷고 호스트가 재고, 호스트가 왼쪽으로 걷고 member가 잼(걷는 프레임의 90% 이상이 이동, `Animator`가 `Run` 재생, 호스트 화면에서 그림이 바뀜). 마지막에 member가 사냥터로 간 뒤 호스트가 뒤따라 가서 가만히 있는 동안 속도가 0인지 봄. 걷기는 `Rigidbody2D.position`을 직접 옮겨 흉내 냄. 「[RemoteMotionTest][역할] 전체 통과」면 통과 |
 | `PlayerPublicInfoTest` | 현재 장소와 닉네임(#356). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `PlayerPublicInfoTest.StartInEditor()`(호스트 혼자). 처음 `Lobby` → 닉네임이 계정의 닉네임 → 사냥터로 옮기면 `HuntingGround`, 닉네임 그대로 → 로비로 돌아오면 `Lobby`. 호스트의 클라이언트는 서버와 같은 오브젝트라 다른 클라이언트가 받는 값은 확인하지 못함. 「[PlayerPublicInfoTest] 전체 통과」면 통과 |
 | `TrainingRoomTest` | 연습장 입장마다 열기(#301). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `TrainingRoomTest.StartInEditor(false)`(호스트 혼자) 또는 `StartInEditor(true)` + 시험 빌드를 `-trainingRoomTest member`로 실행(호스트 + 클라이언트). 입장 전 연습장 없음 → 입장하면 하나 열림 → (클라이언트가 있으면) 둘이 입장해 연습장이 둘, 서로 다른 씬, 서로의 observer가 아님 → 나가면 내 연습장만 내림 → 클라이언트가 접속을 끊으면 그 연습장도 내림 → 다시 입장하면 새 씬 → 플레이어가 없어지면(`DespawnPlayer`) 내림. 「[TrainingRoomTest][역할] 전체 통과」면 통과 |
 | `NoCastPlaceTest` | 공격할 수 없는 장소(#313). 씬에 놓지 않음. 에디터 `Base` 씬 Play 뒤 eval로 `NoCastPlaceTest.StartInEditor()`(호스트 혼자). 로비에서 시전 → `InNoCastPlace` 거부 → 사냥터에서는 `InNoCastPlace`로 거부되지 않음 → 로비로 돌아와 다시 거부. 「[NoCastPlaceTest] 전체 통과」면 통과 |

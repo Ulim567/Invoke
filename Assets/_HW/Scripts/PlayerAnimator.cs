@@ -1,3 +1,4 @@
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -7,7 +8,7 @@ using UnityEngine;
 /// - Animator Controller에는 상태 6개(Idle, Run, Jump, Cast, Hit, Death)만 두고 화살표(Transition)는 만들지 않는다.
 ///   어떤 상태를 재생할지는 이 스크립트가 정해서 <c>Animator.Play</c>로 바꾼다.<br/>
 /// - 읽는 곳 (없으면 임시 값으로 대신한다)<br/>
-///   · 이동: Rigidbody2D 가로 속도<br/>
+///   · 이동: Rigidbody2D 가로 속도. 다른 플레이어의 캐릭터는 Kinematic이고 위치만 옮겨져 속도가 0이므로, 프레임마다 위치 변화로 계산한다 (<c>HorizontalSpeed</c>)<br/>
 ///   · 공중: <c>PlayerMovement.IsGrounded</c> (박진우). 없으면 세로 속도로 임시 판단. 더블점프(<c>PlayerMovement.AirJumped</c>)면 Jump를 처음부터 다시 튼다<br/>
 ///   · 스킬 모션: <c>SkillEffectEvents.Started</c>(스킬 ID, 박진우 #152). 스킬마다 자기 이름의 Animator 상태(예: c_wide_slash)를 튼다.
 ///     어떤 임시 모션을 넣었는지, 몇 초 보여 줄지는 <c>SkillMotionTable</c>에 있다. 이동 계열은 모션 없음 (이동이 보여 준다).
@@ -46,6 +47,8 @@ public class PlayerAnimator : MonoBehaviour
 	LayerMask fallbackGroundLayers;
 
 	Rigidbody2D body;
+	NetworkIdentity identity;
+	NetworkTransformBase networkTransform;
 	PlayerMovement movement;
 	PlayerHealth health;
 	FunctionExecutor executor;
@@ -58,10 +61,23 @@ public class PlayerAnimator : MonoBehaviour
 	bool dead;
 	string currentState;
 
+	// 다른 플레이어의 위치 변화로 계산하는 가로 속도 (MeasureHorizontalSpeed)
+	Vector3 lastPosition;
+	bool hasLastPosition;
+	float horizontalSpeed;
+
+	/// <summary>
+	/// 이 화면에서 보이는 캐릭터의 가로 속도(유닛/초). 내 캐릭터는 Rigidbody2D 속도, 다른 플레이어는 위치 변화로 계산한 값이다.
+	/// 이동 모션(Run)을 고르는 데 쓰며, 시험이 읽기도 한다.
+	/// </summary>
+	public float HorizontalSpeed => horizontalSpeed;
+
 	void Awake()
 	{
 		if (animator == null) animator = GetComponent<Animator>();
 		body = GetComponent<Rigidbody2D>();
+		identity = GetComponent<NetworkIdentity>();
+		networkTransform = GetComponent<NetworkTransformBase>();
 		movement = GetComponent<PlayerMovement>();
 		health = GetComponent<PlayerHealth>();
 		executor = GetComponent<FunctionExecutor>();
@@ -105,7 +121,32 @@ public class PlayerAnimator : MonoBehaviour
 
 	void Update()
 	{
+		horizontalSpeed = MeasureHorizontalSpeed();
 		Play(ChooseState());
+	}
+
+	// 다른 플레이어의 캐릭터인가. 네트워크를 켜지 않은 시험용 플레이어와 내 캐릭터는 Rigidbody2D 속도가 맞다
+	bool IsRemotePlayer()
+	{
+		return identity != null && networkTransform != null && (NetworkClient.active || NetworkServer.active) && !identity.isLocalPlayer;
+	}
+
+	// 가로 속도를 잰다. 다른 플레이어의 캐릭터는 Kinematic이고 NetworkRigidbodyReliable2D가 위치만 옮겨서 Rigidbody2D 속도가 0이므로 위치 변화로 계산한다
+	float MeasureHorizontalSpeed()
+	{
+		if (!IsRemotePlayer()) return body != null ? body.linearVelocity.x : 0f;
+
+		Vector3 position = transform.position;
+		// 순간이동(ServerTeleport)과 처음 나타난 때는 Mirror가 보간 목록을 비우므로, 목록이 비었거나 하나뿐인 프레임의 위치 변화는 이동이 아니다.
+		// 거리 기준으로 순간이동을 가르면 빠른 낙하나 검 타기와 구분이 흐려져서, Mirror의 상태를 따른다.
+		// 호스트에서 다른 클라이언트의 캐릭터는 서버 쪽 목록, 클라이언트에서는 클라이언트 쪽 목록으로 보간한다
+		var snapshots = NetworkServer.active ? networkTransform.serverSnapshots : networkTransform.clientSnapshots;
+		bool moved = hasLastPosition && snapshots.Count > 1 && Time.deltaTime > 0f;
+		float speed = moved ? (position.x - lastPosition.x) / Time.deltaTime : 0f;
+
+		lastPosition = position;
+		hasLastPosition = true;
+		return speed;
 	}
 
 	/// <summary>
@@ -118,7 +159,7 @@ public class PlayerAnimator : MonoBehaviour
 		if (now < hitEndTime) return HitState;
 		if (now < castEndTime) return castState;
 		if (!IsGrounded()) return JumpState;
-		if (body != null && Mathf.Abs(body.linearVelocity.x) > runThreshold) return RunState;
+		if (Mathf.Abs(horizontalSpeed) > runThreshold) return RunState;
 		return IdleState;
 	}
 

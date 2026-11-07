@@ -50,6 +50,7 @@ public class LevelUpView : InputBlockingPanel
 	GameObject player;
 	PlayerProgress progress;
 	PlayerStats stats;
+	PlayerLevelStats levelStats;
 
 	// 레벨업 감지
 	int lastLevel;
@@ -101,7 +102,7 @@ public class LevelUpView : InputBlockingPanel
 
 		WatchLevel();
 
-		if (pending && !IsOpen && !AnyOpen && player.scene.name == PlaceScenes.Lobby)
+		if (pending && !IsOpen && !AnyOpen && PlayerPlace.Of(player) == PlaceScenes.Lobby)
 		{
 			showingResult = true;
 			Open();
@@ -116,6 +117,7 @@ public class LevelUpView : InputBlockingPanel
 		player = me;
 		progress = me != null ? me.GetComponent<PlayerProgress>() : null;
 		stats = me != null ? me.GetComponent<PlayerStats>() : null;
+		levelStats = me != null ? me.GetComponent<PlayerLevelStats>() : null;
 		pending = false;
 		// 접속해서 불러온 레벨은 레벨업이 아니다. 서버가 플레이어를 만든 직후 불러온 값을 넣으므로 첫 동기화에 이미 들어 있다 (progress-store.md)
 		if (progress != null) lastLevel = progress.Level;
@@ -185,12 +187,25 @@ public class LevelUpView : InputBlockingPanel
 
 			TMP_Text diff = At(diffTexts, i);
 			if (diff == null) continue;
-			// 상태 창의 「다음 레벨」: 레벨당 오르는 값은 아직 읽을 수 있는 곳이 없어 「-」 (PlayerLevelStats, 김도훈에게 요청)
-			float delta = showingResult ? now[i] - pendingFromStats[i] : 0f;
+			// 결과 창: 이전과 지금의 차이. 상태 창: 다음 레벨에 오르는 값 (PlayerLevelStats, 김도훈 #340)
+			float delta = showingResult ? now[i] - pendingFromStats[i] : NextLevelGain(i, level);
 			bool up = delta > 0.0001f;
 			SetText(diff, up ? "+" + Format(i, delta) : "-");
 			diff.color = up ? upColor : sameColor;
 		}
+	}
+
+	// 다음 레벨이 되면 오르는 값. 최대 레벨이거나 PlayerLevelStats가 없으면 0
+	float NextLevelGain(int stat, int level)
+	{
+		if (levelStats == null || level >= LevelRules.MaxLevel) return 0f;
+		return stat switch
+		{
+			0 => levelStats.MaxHpPerLevel,
+			1 => levelStats.AttackPowerPerLevel,
+			3 => levelStats.MemoryBonusAt(level + 1) - levelStats.MemoryBonusAt(level),
+			_ => 0f,
+		};
 	}
 
 	void ReadStats(float[] into)

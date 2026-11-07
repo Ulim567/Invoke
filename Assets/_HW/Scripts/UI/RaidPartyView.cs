@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// <para>
 /// - 목록은 PlayerRoster(이우림), 체력은 PlayerHealth의 Hp, MaxHp, IsDead를 읽기만 한다 (place-scenes.md, player-health.md).<br/>
 /// - 줄은 프리팹에 미리 만들어 둔 만큼만 쓴다 (레이드 최대 3명 → 나를 빼고 2줄). 남는 줄은 끈다.<br/>
-/// - 이름: 다른 플레이어의 닉네임은 아직 넘어오지 않아 「파티원 1」, 「파티원 2」로 쓴다 (닉네임이 생기면 바꾼다).<br/>
+/// - 이름: PlayerPublicInfo.Nickname (이우림, #359). 비어 있으면(시험용 플레이어) 「파티원 1」, 「파티원 2」.<br/>
 /// - 쓰러진 파티원: 어두운 줄, 이름 흐리게, 오른쪽에 「사망」, 체력 막대 비움.<br/>
 /// - HudCanvas 프리팹 안에 있다 (메뉴 Invoke → UI → 게임 HUD 만들기).
 /// </para>
@@ -31,7 +31,7 @@ public class RaidPartyView : MonoBehaviour
 	void Update()
 	{
 		GameObject me = NetworkClient.localPlayer != null ? NetworkClient.localPlayer.gameObject : null;
-		bool inRaid = me != null && me.scene.name == PlaceScenes.RaidDungeon;
+		bool inRaid = me != null && PlayerPlace.Of(me) == PlaceScenes.RaidDungeon; // #362: scene.name은 클라이언트에서 늘 Base
 
 		others.Clear();
 		if (inRaid)
@@ -65,7 +65,8 @@ public class RaidPartyView : MonoBehaviour
 		TMP_Text name = At(nameTexts, row);
 		if (name != null)
 		{
-			SetText(name, $"[파티원 {row + 1}]");
+			string nickname = player.TryGetComponent(out PlayerPublicInfo info) ? info.Nickname : "";
+			SetText(name, $"[{(string.IsNullOrEmpty(nickname) ? $"파티원 {row + 1}" : nickname)}]");
 			name.color = dead ? deadNameColor : nameColor;
 		}
 

@@ -210,7 +210,8 @@ public class PlayerMovement : NetworkBehaviour
 
 	/// <summary>
 	/// [연출] 더블점프(공중 점프)를 한 순간 (#256). 점프 모션을 처음부터 다시 틀 때 쓴다 (PlayerAnimator, 임혜원).<br/>
-	/// 첫 점프는 공중 상태로 바뀌는 것으로 알 수 있지만, 더블점프는 이미 공중이라 따로 알린다. 내 화면(소유 클라이언트)에서 불린다.
+	/// 첫 점프는 공중 상태로 바뀌는 것으로 알 수 있지만, 더블점프는 이미 공중이라 따로 알린다.<br/>
+	/// 모든 화면에서 한 번씩 불린다 (#322): 내 화면은 뛴 순간 바로, 서버·Host와 다른 클라이언트는 [Command] → [ClientRpc]로 조금 늦게 불린다.
 	/// </summary>
 	public event System.Action AirJumped;
 
@@ -336,7 +337,32 @@ public class PlayerMovement : NetworkBehaviour
 		airJumpUsed = true;
 		Jump();
 		AirJumped?.Invoke();
+		ShareAirJumped();
 		return true;
+	}
+
+	// [소유 클라이언트] 더블점프를 다른 화면에도 알린다 (#322). 내 화면은 이미 AirJumped를 불렀다.
+	// Host의 내 캐릭터는 서버이므로 바로 Rpc를 보내고, 원격 클라이언트는 Command로 서버에 알린다. 네트워크 없는 테스트는 아무것도 하지 않는다
+	void ShareAirJumped()
+	{
+		if (isServer) RpcAirJumped();
+		else if (isClient) CmdAirJumped();
+	}
+
+	// [서버] 원격 클라이언트가 더블점프를 했다. 서버·Host 화면에서 부르고, 다른 클라이언트에 보낸다
+	[Command]
+	void CmdAirJumped()
+	{
+		AirJumped?.Invoke();
+		RpcAirJumped();
+	}
+
+	// [다른 클라이언트] 더블점프 연출. 뛴 주인 화면은 이미 불렀으므로 빼고(includeOwner = false), 서버·Host는 위에서 불렀으므로 건너뛴다
+	[ClientRpc(includeOwner = false)]
+	void RpcAirJumped()
+	{
+		if (isServer) return;
+		AirJumped?.Invoke();
 	}
 
 	// 대시·검 타기 동안 중력을 끈다. 처음 중력은 한 번만 기억한다

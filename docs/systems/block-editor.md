@@ -8,7 +8,8 @@
 - 만든 함수를 저장하고 다시 불러온다. 실제 계정이면 서버 DB, 아니면 이 컴퓨터의 파일에 저장한다. (#77, 서버 저장은 이우림 #226 #239)
 - 편집 중인 함수는 `FunctionData` 하나다. 블록 UI(`BlockView`)가 `BlockData`를 직접 들고 있어서, 화면에서 블록을 옮기거나 칸을 고치면 함수 데이터가 바로 바뀐다. 데이터 형식은 function-data.md를 따른다.
 - 하지 않는 일
-  - 해금은 아직 보지 않는다. 블록을 모두 보여 준다. 스킬 트리가 생기면 해금된 블록만 보여 준다.
+  - 해금 (#396, 이우림 #309): 실제 계정이면 해금한 문법 블록(`SkillTree.IsBlockUnlocked`)과 해금한 C 스킬만 보여 준다. 서버의 저장 검사(`FunctionExecutorNetwork.CheckFunctionContent`)와 같은 규칙. 스킬 트리에 노드가 없는 함수(`input.*` 등)는 늘 보이고, 블록이 다 걸러진 분류는 머리글도 없다. 임시 계정(로그인 건너뛰기)은 모두 보여 준다
+  - 저장 거부 안내: `BlockLocked`(해금 안 한 블록), `SkillLocked`(해금 안 한 스킬), `CodeSizeExceeded`(슬롯 코드 영역 `ProgressRules.MaxCodeSize` 넘음)
   - 함수 실행은 하지 않는다. `FunctionExecutor`(이우림)가 한다.
   - 구조 검사(빈 칸, 선언하지 않은 변수, 짝 없는 else 등)는 하지 않는다. 「만든 함수를 서버로 보내 검사·저장하기」(이우림)에서 한다.
   - 함수의 구조 검사·저장 판정은 서버가 한다 (`FunctionExecutorNetwork.RequestSaveFunction`, network.md).
@@ -143,7 +144,7 @@
 - 이우림과 정한 것 (#72)
   - 블록 UI가 블록 데이터(`BlockData`)를 직접 들고 있다. 저장할 때 따로 바꾸지 않고 `FunctionData`를 그대로 저장한다.
   - 조건문·for·while 안쪽 블록은 `InnerBlocks`, 값 칸에 들어가는 블록은 `SlotData.Block`에 넣는다.
-  - 해금은 일단 보지 않는다.
+  - 해금은 일단 보지 않는다. (#396에서 해금한 것만 보이게 바꿈, 위 「하는 일」)
 - 이우림에게 알릴 것 (#77)
   - 실제 계정은 서버 DB, 임시 계정(서버 데이터를 쓰지 않는 캐릭터)은 이 컴퓨터 파일(`FunctionStorage`)에 저장한다.
   - 잘못 적은 값은 저장하지 않고 빈 칸으로 둔다. 빈 칸, 선언하지 않은 변수는 편집 화면에서 막지 않는다 (구조 검사에서).

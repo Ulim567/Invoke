@@ -12,7 +12,9 @@ using UnityEngine.UI;
 /// <para>
 /// - 편집 중인 함수는 FunctionData 하나다. 블록 UI(BlockView)가 BlockData를 직접 들고 있어서, 화면을 고치면 데이터가 바로 바뀐다.
 ///   (function-data.md 「편집 화면 연결」, 이우림과 확인함)<br/>
-/// - 해금은 아직 보지 않고 블록을 모두 보여 준다. 스킬 트리가 생기면 해금된 것만 보여 준다.<br/>
+/// - 블록 목록 해금 (#396, 이우림 #309): 실제 계정(server != null)이면 해금한 문법 블록(SkillTree.IsBlockUnlocked)과 해금한 C 스킬만 보여 준다.
+///   서버가 저장 때 하는 검사(FunctionExecutorNetwork.CheckFunctionContent)와 같은 규칙이다. 스킬 트리에 노드가 없는 함수(input.* 등)는 늘 보인다.
+///   임시 계정은 서버가 검사하지 않고 해금 목록도 비어 있으므로 모두 보여 준다. 편집 화면을 열 때마다 목록을 다시 만들어서, 스킬 트리에서 해금하면 다음에 열 때 보인다.<br/>
 /// - 저장: 실제 계정(내 캐릭터의 FunctionExecutorNetwork.UsesServerData)이면 서버 DB(RequestSaveFunction), 아니면 이 컴퓨터의 파일(FunctionStorage). (이우림 #226, #239)<br/>
 ///   실제 계정은 슬롯 함수 slot1~slot8이 늘 있고(이름 고정), 페이지 함수는 ProgressRules.MaxPageFunctions개까지 더할 수 있다.
 /// </para>
@@ -307,6 +309,9 @@ public class BlockEditor : MonoBehaviour
 			PlayerDataRequestResult.TooManyFunctions => $"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음",
 			PlayerDataRequestResult.SlotFunctionLocked => "슬롯 함수는 이름, 파라미터를 바꿀 수 없음",
 			PlayerDataRequestResult.InvalidData => "저장하지 못함 (함수 데이터 오류)",
+			PlayerDataRequestResult.BlockLocked => "저장하지 못함 (아직 해금하지 않은 블록이 있음)",
+			PlayerDataRequestResult.SkillLocked => "저장하지 못함 (아직 해금하지 않은 스킬이 있음)",
+			PlayerDataRequestResult.CodeSizeExceeded => $"저장하지 못함 (슬롯의 코드 영역이 {ProgressRules.MaxCodeSize}을 넘음)",
 			_ => $"저장하지 못함 ({result})",
 		}, result != PlayerDataRequestResult.Saved);
 		Redraw();
@@ -887,21 +892,38 @@ public class BlockEditor : MonoBehaviour
 		messageIsError = error;
 	}
 
+	// 블록 목록에서 쓸 해금 목록. null이면 걸러 내지 않고 모두 보여 준다 (임시 계정)
+	HashSet<string> unlockedForPalette;
+
 	void BuildPalette()
 	{
+		unlockedForPalette = null;
+		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
+			unlockedForPalette = new HashSet<string>(progress.Unlocked);
+
 		foreach ((string title, Func<BlockData>[] blocks) in PaletteGroups)
 		{
+			// 해금한 블록만 남긴다. 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
+			Func<BlockData>[] shown = blocks;
+			if (blocks != null && unlockedForPalette != null)
+			{
+				shown = blocks.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette)).ToArray();
+				if (shown.Length == 0) continue;
+			}
+			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
+			if (blocks == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
+
 			if (headerPrefab != null)
 			{
 				ListHeaderView header = Instantiate(headerPrefab, palette);
 				// 분류 색 네모: 그 분류 블록의 색
-				BlockData sample = blocks != null ? blocks[0]() : BlockData.CallPredefinedFunction("", new SlotData[0]);
+				BlockData sample = shown != null ? shown[0]() : BlockData.CallPredefinedFunction("", new SlotData[0]);
 				header.Show(title, null, BlockLabels.ColorOf(sample));
 			}
 			// 분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로)
 			paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
-			if (blocks == null) AddPredefinedTemplates();
-			else foreach (Func<BlockData> template in blocks) AddTemplate(template);
+			if (shown == null) AddPredefinedTemplates();
+			else foreach (Func<BlockData> template in shown) AddTemplate(template);
 		}
 		paletteTarget = palette;
 	}
@@ -944,6 +966,8 @@ public class BlockEditor : MonoBehaviour
 				if (function == null) continue;
 				string id = function.Id;
 				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
+				if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
 				int parameterCount = function.Parameters?.Count ?? 0;
 				AddTemplate(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
 			}

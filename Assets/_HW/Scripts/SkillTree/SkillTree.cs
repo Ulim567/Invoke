@@ -45,8 +45,13 @@ public class SkillTree : ScriptableObject
 	{
 		node = null;
 		if (id == null) return false;
-		if (byId == null) BuildIndex();
-		return byId.TryGetValue(id, out node);
+		Dictionary<string, SkillTreeNode> index = byId;
+		if (index == null)
+		{
+			BuildIndex();
+			index = byId;
+		}
+		return index != null && index.TryGetValue(id, out node);
 	}
 
 	/// <summary>
@@ -120,18 +125,22 @@ public class SkillTree : ScriptableObject
 
 	static void BuildIndex()
 	{
-		byId = new Dictionary<string, SkillTreeNode>();
+		// 에셋을 먼저 불러온다. 에디터에서는 처음 불러올 때 OnValidate가 불려 byId를 비우므로,
+		// 목록은 새 변수에 다 채운 뒤 마지막에 넣는다 (먼저 넣으면 채우는 도중에 null이 되어 로그인 때 에러가 났음, #396)
 		SkillTree tree = Instance;
+		var index = new Dictionary<string, SkillTreeNode>();
 		if (tree == null)
 		{
 			Debug.LogError($"[SkillTree] Resources/{ResourcePath} 에셋이 없음");
+			byId = index;
 			return;
 		}
 		foreach (SkillTreeNode node in tree.nodes)
 		{
-			if (string.IsNullOrEmpty(node.Id) || byId.ContainsKey(node.Id)) continue;
-			byId.Add(node.Id, node);
+			if (node == null || string.IsNullOrEmpty(node.Id) || index.ContainsKey(node.Id)) continue;
+			index.Add(node.Id, node);
 		}
+		byId = index;
 	}
 
 	// Inspector에서 노드를 더하거나 ID를 바꾸면 찾기 목록을 다시 만든다

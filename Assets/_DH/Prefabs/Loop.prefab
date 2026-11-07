@@ -24,6 +24,7 @@ GameObject:
   - component: {fileID: -4527870653899485198}
   - component: {fileID: 3637307629106896013}
   - component: {fileID: 2646029998434878842}
+  - component: {fileID: 6935348868150230616}
   m_Layer: 9
   m_Name: Loop
   m_TagString: Untagged
@@ -349,6 +350,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5dcb3679c0d9e4a448d7024b3aaec3e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusEffects
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
 --- !u!114 &-8882788714917605207
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -422,3 +426,26 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &6935348868150230616
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4097032019296542800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 403729004d0d745eb8a3c1a63bea5d34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StatusEffectView
+  targetRenderer: {fileID: 0}
+  blindTint: {r: 0.45, g: 0.45, b: 0.5, a: 1}
+  slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
+  bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
+  bleedFlashSeconds: 0.15
+  bleedEffect: {fileID: 0}
+  markEffect: {fileID: 0}
+  stunEffect: {fileID: 0}
+  blindEffect: {fileID: 0}
+  slowEffect: {fileID: 0}
+  headEffectHeight: 0.2

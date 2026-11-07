@@ -36,7 +36,7 @@ public class TestUnlockMoveNodes : MonoBehaviour
 		{
 			if (NetworkServer.active)
 			{
-				foreach (PlayerProgress progress in FindObjectsByType<PlayerProgress>(FindObjectsSortMode.None)) UnlockFor(progress);
+				foreach (PlayerProgress progress in FindObjectsByType<PlayerProgress>()) UnlockFor(progress);
 			}
 			LogLocalPlayer();
 			yield return wait;

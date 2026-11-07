@@ -16,8 +16,8 @@ public class StatusIconView : MonoBehaviour
 {
 	[Tooltip("아이콘 프리팹. 비워 두면 Resources/StatusIcon")]
 	[SerializeField] StatusIcon iconPrefab;
-	[Tooltip("대상 콜라이더 윗면에서 아이콘까지 높이 (유닛)")]
-	[SerializeField, Min(0f)] float heightAboveTop = 0.6f;
+	[Tooltip("대상 콜라이더 윗면에서 아이콘까지 높이 (유닛). 몬스터 체력 바(MonsterHealthBarView, 0.6)보다 위")]
+	[SerializeField, Min(0f)] float heightAboveTop = 1.4f;
 	[Tooltip("아이콘 사이 간격 (유닛, 아이콘 한 칸 = 1)")]
 	[SerializeField, Min(0.1f)] float spacing = 1.1f;
 

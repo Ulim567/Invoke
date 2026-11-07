@@ -1755,6 +1755,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1810310911}
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1810310912}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &477589597
 GameObject:
@@ -1792,6 +1795,50 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 477589597}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &663208354
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 663208356}
+  - component: {fileID: 663208355}
+  m_Layer: 0
+  m_Name: MonsterHpBarTest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &663208355
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 663208354}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7bd4deb29e0e444bb3dbafd86704b93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterHealthBarSimTest
+--- !u!4 &663208356
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 663208354}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -1868,6 +1915,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1943402328}
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1943402329}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &832843940
 GameObject:
@@ -2163,6 +2213,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1391551132}
+    - targetCorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1391551133}
   m_SourcePrefab: {fileID: 100100000, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
 --- !u!1 &1036190583
 GameObject:
@@ -2518,7 +2571,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusIconView
   iconPrefab: {fileID: 0}
-  heightAboveTop: 0.6
+  heightAboveTop: 1.4
   spacing: 1.1
 --- !u!114 &1391551131
 MonoBehaviour:
@@ -2558,6 +2611,22 @@ MonoBehaviour:
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
   headEffectHeight: 0.2
+--- !u!114 &1391551133
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1391551121}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44a2d8618da7e4664a7483bb508f9ee0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterHealthBarView
+  barPrefab: {fileID: 0}
+  heightAboveTop: 0.6
+  trailDelay: 0.3
+  trailSpeed: 30
 --- !u!1 &1398325081
 GameObject:
   m_ObjectHideFlags: 0
@@ -3016,7 +3085,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusIconView
   iconPrefab: {fileID: 0}
-  heightAboveTop: 0.6
+  heightAboveTop: 1.4
   spacing: 1.1
 --- !u!114 &1810310910
 MonoBehaviour:
@@ -3056,6 +3125,22 @@ MonoBehaviour:
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
   headEffectHeight: 0.2
+--- !u!114 &1810310912
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1810310900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44a2d8618da7e4664a7483bb508f9ee0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterHealthBarView
+  barPrefab: {fileID: 0}
+  heightAboveTop: 0.6
+  trailDelay: 0.3
+  trailSpeed: 30
 --- !u!1 &1943402317 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7396410919086133594, guid: ce31ba418bdb041478c116aeb41c4e07, type: 3}
@@ -3091,7 +3176,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusIconView
   iconPrefab: {fileID: 0}
-  heightAboveTop: 0.6
+  heightAboveTop: 1.4
   spacing: 1.1
 --- !u!114 &1943402327
 MonoBehaviour:
@@ -3131,6 +3216,22 @@ MonoBehaviour:
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
   headEffectHeight: 0.2
+--- !u!114 &1943402329
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1943402317}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44a2d8618da7e4664a7483bb508f9ee0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterHealthBarView
+  barPrefab: {fileID: 0}
+  heightAboveTop: 0.6
+  trailDelay: 0.3
+  trailSpeed: 30
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3170,3 +3271,4 @@ SceneRoots:
   - {fileID: 238713165}
   - {fileID: 1390917288}
   - {fileID: 1571074969}
+  - {fileID: 663208356}

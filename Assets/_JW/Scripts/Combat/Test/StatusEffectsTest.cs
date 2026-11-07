@@ -2,8 +2,8 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// 상태 이상 테스트 (#97). 씬의 아무 오브젝트에 붙이고 Play. 몬스터가 2마리 이상 있어야 한다 (보스가 아닌 몬스터 우선).
-/// 몬스터에 StatusEffects가 없으면 테스트 동안 붙인다. 콘솔에 「[StatusTest] … 통과/실패」가 찍힌다 (약 6초).
+/// 상태 이상 테스트 (#97). 씬의 아무 오브젝트에 붙이고 Play → Host (몬스터가 나타날 때까지 기다림). 몬스터가 2마리 이상 있어야 한다 (보스가 아닌 몬스터 우선).
+/// 몬스터에 StatusEffects가 미리 붙어 있어야 한다. StatusEffects는 네트워크 컴포넌트(#325)라 실행 중에 붙이면 Host에서 오류가 나서 붙이지 않는다 (Test_JW의 TestMonster에는 씬에서 붙여 둠). 콘솔에 「[StatusTest] … 통과/실패」가 찍힌다 (약 6초).
 /// <para>
 /// 몬스터 A: 출혈 → 5초 동안 1초마다 5 데미지(총 25), 끝나면 풀림<br/>
 /// 몬스터 B: 기절 1초, 이속 감소 3초(배율 0.5), 실명 3초(2초에 다시 걸어 시간 새로 시작), 표식(같은 공격 2배)
@@ -17,22 +17,37 @@ public class StatusEffectsTest : MonoBehaviour
 
 	IEnumerator Start()
 	{
-		yield return new WaitForSeconds(0.5f);
+		// 네트워크 몬스터는 Host를 누른 뒤 서버가 켜야 나타나므로, 몬스터 2마리가 보일 때까지 기다린다 (최대 15초)
 		Monster a = null, b = null;
-		foreach (Monster m in FindObjectsByType<Monster>())
+		float until = Time.time + 15f;
+		while (Time.time < until)
 		{
-			if (m.IsDead || m.IsBoss) continue;
-			if (a == null) a = m; else if (b == null) b = m;
+			a = b = null;
+			foreach (Monster m in FindObjectsByType<Monster>())
+			{
+				if (m.IsDead || m.IsBoss) continue;
+				if (a == null) a = m; else if (b == null) b = m;
+			}
+			if (a != null && b != null) break;
+			yield return null;
 		}
+		yield return new WaitForSeconds(0.5f);
 		if (a == null || b == null)
 		{
 			Debug.LogError("[StatusTest] 보스가 아닌 몬스터 2마리가 필요함: 실패");
 			yield break;
 		}
 
+		StatusEffects effectsA = a.GetComponent<StatusEffects>(), effectsB = b.GetComponent<StatusEffects>();
+		if (effectsA == null || effectsB == null)
+		{
+			Debug.LogError($"[StatusTest] 몬스터에 StatusEffects가 붙어 있어야 함 ({a.name}, {b.name}): 실패");
+			yield break;
+		}
+
 		running = 2;
-		StartCoroutine(Run(BleedTest(Ensure(a), a)));
-		StartCoroutine(Run(OtherTest(Ensure(b), b)));
+		StartCoroutine(Run(BleedTest(effectsA, a)));
+		StartCoroutine(Run(OtherTest(effectsB, b)));
 		while (running > 0) yield return null;
 
 		if (failures == 0) Debug.Log("[StatusTest] 전체 통과");
@@ -43,12 +58,6 @@ public class StatusEffectsTest : MonoBehaviour
 	{
 		yield return test;
 		running--;
-	}
-
-	static StatusEffects Ensure(Monster monster)
-	{
-		StatusEffects effects = monster.GetComponent<StatusEffects>();
-		return effects != null ? effects : monster.gameObject.AddComponent<StatusEffects>();
 	}
 
 	IEnumerator BleedTest(StatusEffects effects, Monster monster)

@@ -3,7 +3,7 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// 상태 이상 표시 테스트 (#156). 씬의 아무 오브젝트에 붙이고 Play (Host 필요 없음, 약 3초). 콘솔에 「[StatusIconTest] … 통과/실패」가 찍힌다.
+/// 상태 이상 표시 테스트 (#156). 씬의 아무 오브젝트에 붙이고 Play → Host (몬스터가 나타날 때까지 기다린 뒤 약 3초). 콘솔에 「[StatusIconTest] … 통과/실패」가 찍힌다.
 /// <para>
 /// 1. 출혈을 걸면 아이콘 1개, 머리 위<br/>
 /// 2. 출혈·표식·기절 → 아이콘 3개가 걸린 순서대로 왼쪽부터 나란히<br/>
@@ -11,7 +11,7 @@ using UnityEngine;
 /// 4. 다시 걸어도 아이콘이 늘지 않음<br/>
 /// 5. 몬스터가 죽으면 모두 사라짐
 /// </para>
-/// 몬스터에 StatusEffects, StatusIconView가 없으면 테스트 동안 붙인다. 마지막에 몬스터 하나를 죽이므로 평소에는 꺼 둔다.
+/// 몬스터에 StatusEffects가 미리 붙어 있어야 한다 (네트워크 컴포넌트라 실행 중에 붙이지 않음, #325). StatusIconView는 없으면 테스트 동안 붙인다. 마지막에 몬스터 하나를 죽이므로 평소에는 꺼 둔다.
 /// </summary>
 public class StatusIconSimTest : MonoBehaviour
 {
@@ -19,12 +19,19 @@ public class StatusIconSimTest : MonoBehaviour
 
 	IEnumerator Start()
 	{
+		// 네트워크 몬스터는 Host를 누른 뒤 서버가 켜야 나타나므로 보일 때까지 기다린다 (최대 15초)
+		Monster monster = null;
+		float until = Time.time + 15f;
+		while (monster == null && Time.time < until)
+		{
+			monster = FindFirstObjectByType<Monster>();
+			yield return null;
+		}
 		yield return new WaitForSeconds(0.5f);
-		Monster monster = FindFirstObjectByType<Monster>();
 		if (monster == null) { Check("씬에 몬스터가 있음", false); yield break; }
 
 		StatusEffects status = monster.GetComponent<StatusEffects>();
-		if (status == null) status = monster.gameObject.AddComponent<StatusEffects>();
+		if (status == null) { Check($"{monster.name}에 StatusEffects가 붙어 있음", false); yield break; }
 		StatusIconView view = monster.GetComponent<StatusIconView>();
 		if (view == null) view = monster.gameObject.AddComponent<StatusIconView>();
 		status.ClearAll();

@@ -5,7 +5,7 @@ using UnityEngine;
 /// 상태 이상을 출혈 → 표식 → 기절 → 실명 → 이속 감소 순서로 하나씩 건다.
 /// <para>
 /// - Test_JW의 빈 오브젝트에 붙이고 Play → Host. 플레이어가 생기면 SkillEffectEvents.Hit을 받는다.<br/>
-/// - 맞은 몬스터에 StatusEffects / StatusIconView가 없으면 붙인다 (TestMonster에는 없음).<br/>
+/// - 맞은 몬스터에 StatusEffects가 붙어 있어야 한다 (네트워크 컴포넌트라 실행 중에 붙이지 않음, #325). StatusIconView는 없으면 붙인다.<br/>
 /// - 보기 편하게 지속 시간은 duration(기본 8초)으로 건다. 평소에는 꺼 둔다.
 /// </para>
 /// </summary>
@@ -38,6 +38,11 @@ public class StatusIconPlayTest : MonoBehaviour
 
 		if (root.GetComponent<StatusIconView>() == null) root.AddComponent<StatusIconView>();
 		StatusEffects status = root.GetComponent<StatusEffects>();
+		if (status == null)
+		{
+			Debug.LogWarning($"[StatusIconPlayTest] {root.name}에 StatusEffects가 없어 상태 이상을 걸지 못함");
+			return;
+		}
 
 		StatusType type = (StatusType)(next % 5);
 		next++;

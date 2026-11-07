@@ -29,6 +29,7 @@
     - 반원 가운데 = 머리 뒤로 `Orbit Behind`, 머리 꼭대기(플레이어 콜라이더 윗변)에서 `Orbit Below Head Top`만큼 아래. 높이가 콜라이더 기준이라 캐릭터 크기가 바뀌어도 머리를 따라간다. 검 가운데는 거기서 `Orbit Radius`만큼 떨어진다.
     - 가운데 검이 바로 앞, 위아래로 검마다 `Orbit Angle Step`(30°)씩 벌어진다. 소환한 순서대로 위에서부터.
     - 검마다 조금씩 다른 박자로 위아래로 둥둥 뜬다 (`Bob Height`, `Bob Speed`).
+    - 위에서부터 첫째·셋째·다섯째 검은 캐릭터 뒤에 그린다 (#415, `SummonedSword.DrawBehind`, `[SyncVar]`). 캐릭터를 덜 가리고 깊이감을 준다. 뒤에 그릴 때 정렬은 `SummonedSwordView`의 `Behind Sorting Layer`(Player) / `Behind Sorting Order`(-5). 던지기·찌르기 등 다른 상태에서는 늘 앞(Projectile).
     - 방향을 바꾸면 반원이 앞쪽으로 따라오고 칼끝도 돌아간다. 다른 상태에서 돌아오면 자리와 각도로 부드럽게 돌아간다.
     - 돌아오는 검(`Recall`, 찌르기 뒤)은 반원 가운데 앞 자리로 먼저 온다.
   - 던져짐(`Flying`): 대상을 향해 날아가 닿으면 `Hit`을 알리고 그 자리에서 떨어진다. 대상이 없거나 `Max Flight Time` 안에 못 닿으면 바로 떨어진다.

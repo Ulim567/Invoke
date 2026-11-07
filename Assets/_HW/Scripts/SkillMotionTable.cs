@@ -42,6 +42,7 @@ public static class SkillMotionTable
 	// - 캐릭터가 직접 검을 쓰면 그 동작 (찌르기 Cast, 베기 Slash, 던지기 Throw)
 	// - 소환검이 대신 움직이면 손짓(Summon): 소환검 휘두르기·던지기·찌르기, 검 돌아오기, 검무
 	// - 패링은 막기(Guard) 그림이 생길 때까지 Cast
+	// 전용 그림이 있는 스킬은 PlayerMotionBuilder.Dedicated에 적는다 (Base는 그 클립이 없을 때 쓰는 임시 모션)
 	public static readonly Entry[] All =
 	{
 		// 찌르기
@@ -61,12 +62,12 @@ public static class SkillMotionTable
 		new Entry("c.wide_slash", "검 크게베기", Slash, 0.5f),
 		new Entry("c.summoned_slash", "소환검 휘두르기", Summon, 0.5f),
 		new Entry("c.wound_slash", "상처 가르기", Slash, 0.5f),
-		new Entry("c.multi_slash", "검 다중베기", Slash, 0.5f),
-		new Entry("c.battlefield_sweep", "전장 휩쓸기", Slash, 0.5f),
+		new Entry("c.multi_slash", "검 다중베기", Slash, 0.67f), // 전용: C_MultiSlash (#295)
+		new Entry("c.battlefield_sweep", "전장 휩쓸기", Slash, 0.67f), // 전용: C_Sweep (#295)
 		// 소환
 		new Entry("c.summon_sword", "검 소환", Summon, 0.5f),
 		new Entry("c.free_sword", "해제", Summon, 0.5f),
-		new Entry("c.parry", "패링", Cast, 0.5f),
+		new Entry("c.parry", "패링", Cast, 0.5f), // 전용: C_Guard (#295)
 		new Entry("c.mark", "표식 남기기", Cast, 0.5f),
 		new Entry("c.sword_dance", "검무", Summon, 0.5f),
 		// 이동 (모션 없음)

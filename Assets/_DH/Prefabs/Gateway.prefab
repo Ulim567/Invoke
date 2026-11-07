@@ -26,6 +26,7 @@ GameObject:
   - component: {fileID: 4137216757166093200}
   - component: {fileID: 6040740301031971895}
   - component: {fileID: 241456783796053641}
+  - component: {fileID: 7922331635189388338}
   m_Layer: 9
   m_Name: Gateway
   m_TagString: Untagged
@@ -486,3 +487,19 @@ MonoBehaviour:
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
   headEffectHeight: 0.2
+--- !u!114 &7922331635189388338
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1495201610127570355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ee9727e965244944b9c732135d1bfd0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialDropView
+  overrides: []
+  maxPerMaterial: 10
+  popSpeedX: {x: -2.5, y: 2.5}
+  popSpeedY: {x: 6, y: 8}

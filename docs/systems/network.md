@@ -83,7 +83,9 @@ public class SkillEffectEvents : NetworkBehaviour
 ```
 
 **3. 서버의 스킬이 플레이어 오브젝트의 이동을 바꿈 → `[TargetRpc]`**
-- 플레이어 이동은 소유 클라이언트가 정함(공용 `Player.prefab`의 `NetworkRigidbodyReliable2D`, Sync Direction: Client To Server). 서버에서 `PlayerMovement`를 불러도 움직이지 않음
+- 플레이어 이동은 소유 클라이언트가 정함(공용 `Player.prefab`의 `NetworkRigidbodyReliable2DKeepBaseline`, Sync Direction: Client To Server). 서버에서 `PlayerMovement`를 불러도 움직이지 않음
+- `NetworkRigidbodyReliable2DKeepBaseline`(`Assets/_UL/Scripts/Network`): `NetworkRigidbodyReliable2D`를 상속해 `OnTeleport`에서 차이 압축 기준값 5개(`lastSerializedPosition`, `lastDeserializedPosition`, `lastSerializedScale`, `lastDeserializedScale`, `last`)를 지우지 않고 유지 (#387, place-scenes.md)
+  - `OnEnable`·`OnDisable`·클라이언트 권한 변경 때의 `ResetState()`는 그대로 기준값을 지움
 - 서버가 그 플레이어 오브젝트의 소유 클라이언트에 `[TargetRpc]`로 이동을 요청
 - 예: 찌르기의 `PlayerMovement.StartLunge` — #223에서 반영 (player-movement.md)
 

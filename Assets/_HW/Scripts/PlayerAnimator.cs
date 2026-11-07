@@ -12,7 +12,9 @@ using UnityEngine;
 ///   · 공중: <c>PlayerMovement.IsGrounded</c> (박진우). 없으면 세로 속도로 임시 판단. 더블점프(<c>PlayerMovement.AirJumped</c>)면 Jump를 처음부터 다시 튼다<br/>
 ///   · 스킬 모션: <c>SkillEffectEvents.Started</c>(스킬 ID, 박진우 #152). 스킬마다 자기 이름의 Animator 상태(예: c_wide_slash)를 튼다.
 ///     어떤 임시 모션을 넣었는지, 몇 초 보여 줄지는 <c>SkillMotionTable</c>에 있다. 이동 계열은 모션 없음 (이동이 보여 준다).
-///     스킬 상태가 컨트롤러에 없으면 임시 모션 상태(Cast, Slash, Throw, Summon, Lunge)를, 표에 없는 새 스킬은 스킬 계열로 고른 임시 모션을 튼다<br/>
+///     스킬 상태가 컨트롤러에 없으면 임시 모션 상태(Cast, Slash, Throw, Summon)를, 표에 없는 새 스킬은 스킬 계열로 고른 임시 모션을 튼다<br/>
+///   · 돌진: 찌르기 스킬이 대상 앞까지 돌진하기 시작하면 Lunge를 처음부터 끝까지 튼다 (#373). 내 캐릭터는 <c>PlayerMovement.IsLunging</c>,
+///     다른 플레이어의 캐릭터는 IsLunging이 그 화면에서 늘 false라서, 찌르기 시전 중에 가로 속도가 <c>remoteLungeSpeed</c>보다 빠르면 돌진으로 본다<br/>
 ///   · SkillEffectEvents가 없는 시험용 플레이어는 예전처럼 함수 시작(<c>FunctionExecutorNetwork.TaskStarted</c> / <c>FunctionExecutor.TaskStarted</c>)에 Cast<br/>
 ///   · 피격·사망: <c>PlayerHealth.HitEffectPlayed</c>, <c>DeathEffectPlayed</c>, <c>RespawnEffectPlayed</c> (김도훈)
 /// </para>
@@ -43,6 +45,12 @@ public class PlayerAnimator : MonoBehaviour
 	[SerializeField, Range(0f, 1f), Tooltip("Jump 클립을 어디서부터 틀지 (0~1). 앞부분의 웅크리는 장면은 이미 몸이 떠오른 뒤라 건너뛴다")]
 	float jumpStartTime = 0.25f;
 
+	[SerializeField, Min(0f), Tooltip("돌진(Lunge) 모션을 보여 주는 시간(초). Lunge 클립 길이에 맞춘다")]
+	float lungeDuration = 0.75f;
+
+	[SerializeField, Min(0f), Tooltip("다른 플레이어의 캐릭터가 찌르기 시전 중에 이 가로 속도(유닛/초)보다 빠르면 돌진으로 본다. 걷기보다 빠르고 돌진(30)보다 느리게")]
+	float remoteLungeSpeed = 12f;
+
 	[SerializeField, Tooltip("PlayerMovement가 없을 때 바닥으로 볼 레이어")]
 	LayerMask fallbackGroundLayers;
 
@@ -55,6 +63,8 @@ public class PlayerAnimator : MonoBehaviour
 	FunctionExecutorNetwork executorNetwork;
 	SkillEffectEvents skillEvents;
 	string castState = CastState; // 지금 시전 중인 모션
+	bool castCanLunge; // 지금 시전 중인 스킬이 찌르기 계열이라 돌진할 수 있는가 (#373)
+	bool wasLunging;
 
 	float castEndTime;
 	float hitEndTime;
@@ -122,6 +132,7 @@ public class PlayerAnimator : MonoBehaviour
 	void Update()
 	{
 		horizontalSpeed = MeasureHorizontalSpeed();
+		CheckLungeStarted();
 		Play(ChooseState());
 	}
 
@@ -147,6 +158,22 @@ public class PlayerAnimator : MonoBehaviour
 		lastPosition = position;
 		hasLastPosition = true;
 		return speed;
+	}
+
+	// 돌진이 시작된 프레임에 Lunge를 처음부터 튼다. 클립 안에 뛰어들기와 찌르기가 다 있어서, 돌진이 끝나도 클립이 끝날 때까지 둔다
+	void CheckLungeStarted()
+	{
+		bool lunging = IsLungingNow();
+		if (lunging && !wasLunging && !dead) StartCast(SkillMotionTable.Lunge, lungeDuration);
+		wasLunging = lunging;
+	}
+
+	// 돌진 중인가. 다른 플레이어의 캐릭터는 돌진을 소유 클라이언트에서 해서 이 화면의 IsLunging이 늘 false이므로 속도로 본다
+	bool IsLungingNow()
+	{
+		if (movement == null) return false;
+		if (!IsRemotePlayer()) return movement.IsLunging;
+		return castCanLunge && Time.time < castEndTime && Mathf.Abs(horizontalSpeed) > remoteLungeSpeed;
 	}
 
 	/// <summary>
@@ -204,28 +231,37 @@ public class PlayerAnimator : MonoBehaviour
 	// FunctionExecutor.TaskStarted. FunctionExecutorNetwork가 없는 시험용 플레이어만
 	void OnCastStarted(FunctionTask task) => StartCast();
 
-	void StartCast() => StartCast(CastState, castDuration);
+	void StartCast()
+	{
+		StartCast(CastState, castDuration);
+		castCanLunge = true; // 공용 시전(찌르기)과 계열을 모르는 스킬은 돌진할 수 있다고 본다
+	}
 
 	void StartCast(string state, float duration)
 	{
 		castState = state;
 		castEndTime = Time.time + duration;
+		castCanLunge = false;
+		// 스킬 시작 알림이 돌진보다 늦게 와도, 아직 돌진 중이면 다음 프레임에 Lunge를 다시 튼다
+		if (state != SkillMotionTable.Lunge) wasLunging = false;
 		currentState = null; // 연달아 시전해도 처음부터 다시 튼다
 	}
 
 	// SkillEffectEvents.Started (스킬 ID). 모든 화면에서 불린다. 스킬 전용 상태를 튼다 (SkillMotionTable)
 	void OnSkillStarted(string skillId)
 	{
+		bool known = SkillTable.TryGet(skillId, out SkillData skill);
 		if (SkillMotionTable.TryGet(skillId, out SkillMotionTable.Entry motion))
 		{
 			if (motion.Base == null) return; // 이동 계열: 움직임이 보여 준다
 			string skillState = motion.StateName;
 			StartCast(HasState(skillState) ? skillState : motion.Base, motion.Duration);
+			castCanLunge = known && skill.Family == SkillFamily.Thrust;
 			return;
 		}
 
 		// 표에 없는 새 스킬: 스킬 계열로 임시 모션을 고른다. SkillMotionTable에 한 줄 더하면 전용 상태를 쓴다
-		if (!SkillTable.TryGet(skillId, out SkillData skill))
+		if (!known)
 		{
 			StartCast();
 			return;

@@ -9,7 +9,7 @@ using UnityEngine;
 /// - 색 효과: 실명은 어두운 틴트, 이속 감소는 파란 틴트. 둘 다 걸리면 곱해서 섞는다. 출혈은 데미지가 들어갈 때마다(1초마다) 빨갛게 번쩍인다.<br/>
 ///   · 서버·Host는 StatusEffects.BleedTicked(실제 데미지)에 맞춰 번쩍인다. 클라이언트에는 BleedTicked가 없어서, 출혈이 걸린 순간부터 BleedInterval마다 번쩍인다.<br/>
 ///   · 색은 상태가 걸린 동안만 바꾸고, 모두 풀리면 처음 색으로 되돌린다.<br/>
-/// - 그림 효과(핏방울, 표적 링, 머리 위 별, 검은 연기, 발밑 기운): Inspector 칸에 프리팹을 넣으면 걸린 동안 대상의 자식으로 띄운다. 칸이 비어 있으면 그 상태는 색 효과만 낸다.<br/>
+/// - 그림 효과(핏방울, 표식, 머리 위 별, 검은 연기, 발밑 얼음): 걸린 동안 대상의 자식으로 띄운다. Inspector 칸이 비어 있으면 기본 그림(Resources/StatusEffects/상태 이름, #363)을 쓰고, 그것도 없으면 색 효과만 낸다.<br/>
 /// - 보여 주기만 하는 오브젝트라 네트워크 오브젝트가 아니다. 각 화면이 직접 만들고 없앤다.
 /// </para>
 /// </summary>
@@ -30,7 +30,7 @@ public class StatusEffectView : MonoBehaviour
 	[Tooltip("출혈: 번쩍이는 시간 (초)")]
 	[SerializeField, Min(0.02f)] float bleedFlashSeconds = 0.15f;
 
-	[Header("그림 효과 (비워 두면 색 효과만)")]
+	[Header("그림 효과 (비워 두면 Resources/StatusEffects의 기본 그림, #363)")]
 	[Tooltip("출혈: 몸에서 떨어지는 핏방울 (몸 가운데)")]
 	[SerializeField] GameObject bleedEffect;
 	[Tooltip("표식: 표적 링 (몸 가운데)")]
@@ -180,15 +180,33 @@ public class StatusEffectView : MonoBehaviour
 		effects.Remove(type);
 	}
 
-	GameObject PrefabOf(StatusType type) => type switch
+	GameObject PrefabOf(StatusType type)
 	{
-		StatusType.Bleed => bleedEffect,
-		StatusType.Mark => markEffect,
-		StatusType.Stun => stunEffect,
-		StatusType.Blind => blindEffect,
-		StatusType.Slow => slowEffect,
-		_ => null,
-	};
+		GameObject assigned = type switch
+		{
+			StatusType.Bleed => bleedEffect,
+			StatusType.Mark => markEffect,
+			StatusType.Stun => stunEffect,
+			StatusType.Blind => blindEffect,
+			StatusType.Slow => slowEffect,
+			_ => null,
+		};
+		return assigned != null ? assigned : DefaultPrefab(type);
+	}
+
+	// 칸이 비어 있으면 Resources/StatusEffects/{상태 이름} 프리팹을 쓴다 (#363). 몬스터 프리팹마다 칸을 채우지 않아도 되게.
+	// 한 번 찾은 결과(없음 포함)는 모든 몬스터가 같이 쓴다
+	static readonly Dictionary<StatusType, GameObject> defaults = new Dictionary<StatusType, GameObject>();
+
+	static GameObject DefaultPrefab(StatusType type)
+	{
+		if (!defaults.TryGetValue(type, out GameObject prefab))
+		{
+			prefab = Resources.Load<GameObject>($"StatusEffects/{type}");
+			defaults[type] = prefab;
+		}
+		return prefab;
+	}
 
 	// 효과를 놓을 자리: 별은 머리 위, 연기는 머리 쪽, 발밑 기운은 발밑, 나머지는 몸 가운데
 	Vector3 AnchorOf(StatusType type)

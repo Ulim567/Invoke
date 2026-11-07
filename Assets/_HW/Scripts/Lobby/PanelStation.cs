@@ -5,10 +5,10 @@ using UnityEngine;
 /// <para>
 /// 사용법: 장소 오브젝트에 Is Trigger를 켠 Collider 2D와 이 컴포넌트를 붙이고, Panel 칸에 같은 씬의 창(InputBlockingPanel)을 넣는다.<br/>
 /// - 창이 열린 동안 Player·Attack 액션 맵은 꺼진다 (InputBlockingPanel).<br/>
-/// - 내 캐릭터가 다른 장소로 가면 놓아준다 (LobbyInteractable).
+/// - 내 캐릭터가 다른 장소로 가면 놓아준다 (PlaceInteractable).
 /// </para>
 /// </summary>
-public class PanelStation : LobbyInteractable
+public class PanelStation : PlaceInteractable
 {
 	[SerializeField, Tooltip("열 창. 같은 씬에 놓은 BlockEditorPanel, SlotEquipPanel 등")]
 	InputBlockingPanel panel;

@@ -1,4 +1,5 @@
 using System;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -11,9 +12,13 @@ using UnityEngine;
 /// - 같은 오브젝트의 StatusEffects(없으면 무시)가 기절이면 쏘지 않고, 실명이면 쏘지만 그 투사체는 플레이어를 통과한다(빗나감).<br/>
 /// - Fire를 부르면 발사 연출(FireEffectPlayed)이 바로 나가고, Fire Delay초(모으는 시간) 뒤에 투사체가 나간다. 모으는 중에 죽거나 기절하면 투사체는 나가지 않는다.
 /// </para>
+/// <para>
+/// 네트워크 (#310): 발사 연출(FireEffectPlayed)은 [ClientRpc]로 이 몬스터를 보는 모든 화면(호스트 포함)에서 불린다. 전용 서버에서는 불리지 않는다.
+/// NetworkBehaviour라서 이 컴포넌트를 쓰는 프리팹에는 NetworkIdentity가 있어야 한다 (Gateway, Loop, TestMonster).
+/// </para>
 /// </summary>
 [RequireComponent(typeof(Monster))]
-public class ProjectileAttack : MonoBehaviour
+public class ProjectileAttack : NetworkBehaviour
 {
 	[SerializeField, Tooltip("맞았을 때 적용할 공격 데이터")]
 	MonsterAttackData attack;
@@ -92,17 +97,31 @@ public class ProjectileAttack : MonoBehaviour
 	{
 		Vector2 offset = new Vector2(dir.x < 0f ? -firePointOffset.x : firePointOffset.x, firePointOffset.y);
 		MonsterProjectile projectile = SpawnProjectile((Vector2)transform.position + offset);
+		if (projectile == null) return;
 		// 실명 중에 나간 투사체는 날아가는 동안 실명이 풀려도 빗나간다
 		projectile.Launch(attack, dir * speed, status != null && status.IsBlinded);
 	}
 
 	bool IsStunned() => status != null && status.IsStunned;
 
-	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
-	void PlayFireEffect(Vector2 dir) => FireEffectPlayed?.Invoke(dir);
+	// 연출만 한다 (코드 작성 규칙 1). 서버에서 부르면 [ClientRpc]로 이 몬스터를 보는 모든 화면(호스트 포함)에서 연출한다.
+	// 서버에서 따로 부르지 않아 호스트에서 두 번 불리지 않는다. 네트워크를 켜지 않은 테스트는 [ClientRpc]를 보낼 수 없으므로 그 자리에서 부른다
+	void PlayFireEffect(Vector2 dir)
+	{
+		if (!NetworkServer.active) { FireEffectPlayed?.Invoke(dir); return; }
+		RpcFireEffect(dir);
+	}
 
-	// 투사체를 만드는 곳은 여기 하나다. 네트워크를 붙이면 NetworkServer.Spawn을 더한다 (코드 작성 규칙 3·4)
-	MonsterProjectile SpawnProjectile(Vector2 position) => Instantiate(projectilePrefab, position, Quaternion.identity);
+	[ClientRpc]
+	void RpcFireEffect(Vector2 dir) => FireEffectPlayed?.Invoke(dir);
+
+	// 투사체를 만드는 곳은 여기 하나다 (코드 작성 규칙 3·4). NetworkSpawner로 이 몬스터의 씬에 만든다 (#310).
+	// Instantiate는 서버의 활성 씬(Base)에 만들어서, 던전·사냥터의 플레이어와 판정되지 않고 클라이언트에도 보이지 않았다
+	MonsterProjectile SpawnProjectile(Vector2 position)
+	{
+		GameObject obj = NetworkSpawner.Spawn(projectilePrefab.gameObject, position, Quaternion.identity, gameObject.scene);
+		return obj != null ? obj.GetComponent<MonsterProjectile>() : null;
+	}
 
 	void OnDrawGizmosSelected()
 	{

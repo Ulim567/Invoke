@@ -10,7 +10,8 @@ using UnityEngine;
 /// - 실패: 던전 안 플레이어가 한 명 이상 있고, 모두 죽었으면(PlayerHealth.IsDead).<br/>
 /// - 던전에 들어온 플레이어는 죽어도 부활하지 않고 관전한다(SetAutoRespawn(false)). 던전을 나가거나 레이드가 끝나면 다시 켠다.<br/>
 /// - 끝나면 ResultEffectPlayed(결과 화면용)를 부르고, Result Delay초 뒤 RaidFlow.ReportEnd(레이드 끝)를 부른다. 한 던전에서 한 번만 끝난다.<br/>
-/// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다. 플레이어는 이 씬의 최상위 오브젝트 중 PlayerHealth가 붙은 것이다.
+/// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다. 플레이어는 이 씬의 최상위 오브젝트 중 PlayerHealth가 붙은 것이다.<br/>
+/// - 바깥에서 부르는 함수: FailByServer(서버, 파티원 이탈·레이드 포기로 실패), PlayResultOnly(클라이언트, 서버가 보낸 결과로 결과 화면만). 둘 다 RaidParties(이우림)가 부른다.
 /// </para>
 /// <para>사용법: 레이드 던전 씬의 RaidBossSpawner 오브젝트에 함께 붙인다.</para>
 /// </summary>
@@ -35,6 +36,8 @@ public class RaidJudge : MonoBehaviour
 	bool cleared;
 	float reportTime;
 	bool reported;
+	// 결과 화면 이벤트를 이미 불렀으면 true (한 던전에서 한 번만)
+	bool resultPlayed;
 
 	/// <summary>레이드가 끝났으면 true</summary>
 	public bool IsEnded => ended;
@@ -63,6 +66,31 @@ public class RaidJudge : MonoBehaviour
 	}
 
 	void OnBossDied() => End(true);
+
+	/// <summary>
+	/// [서버] 레이드를 실패로 끝낸다. 파티원이 이탈하거나 레이드를 포기했을 때 RaidParties가 부른다.
+	/// 모두 죽었을 때와 같다: ResultEffectPlayed(false) → Result Delay 뒤 RaidFlow.ReportEnd(던전 씬, false).
+	/// 이미 끝났으면 아무것도 하지 않는다.
+	/// </summary>
+	public void FailByServer()
+	{
+		if (!IsAuthority())
+		{
+			Debug.LogWarning("[RaidJudge] FailByServer는 서버에서만 부릅니다.", this);
+			return;
+		}
+		End(false);
+	}
+
+	/// <summary>
+	/// [클라이언트] 판정 없이 결과 화면 이벤트(ResultEffectPlayed)만 부른다. 서버의 RaidResultMessage를 받은 클라이언트에서 RaidParties가 부른다.
+	/// ReportEnd는 부르지 않는다. 이 던전에서 이미 결과 화면을 불렀으면(Host 등) 무시한다.
+	/// </summary>
+	public void PlayResultOnly(bool isCleared)
+	{
+		if (resultPlayed) return;
+		PlayResultEffect(isCleared);
+	}
 
 	void Update()
 	{
@@ -136,8 +164,12 @@ public class RaidJudge : MonoBehaviour
 		players.Clear();
 	}
 
-	// 연출만 한다. 네트워크를 붙이면 [ClientRpc]를 단다 (코드 작성 규칙 1)
-	void PlayResultEffect(bool isCleared) => ResultEffectPlayed?.Invoke(isCleared);
+	// 연출만 한다 (코드 작성 규칙 1). 씬에 놓인 오브젝트라 [ClientRpc]를 쓰지 않고, 클라이언트에는 RaidParties가 RaidResultMessage로 전한다 (PlayResultOnly)
+	void PlayResultEffect(bool isCleared)
+	{
+		resultPlayed = true;
+		ResultEffectPlayed?.Invoke(isCleared);
+	}
 
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 }

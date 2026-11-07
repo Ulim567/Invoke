@@ -13,7 +13,8 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 「로그인 건너뛰기」 임시 계정과 네트워크를 켜지 않은 테스트는 DB에 쓰지 않고 값을 메모리에만 둔다.<br/>
-/// 레벨업: AddExp가 LevelRules(김도훈)의 경험치 표로 레벨을 올린다. 노드 해금(재료 빼기): TryUnlock (「재료 써서 스킬 트리 해금하기」, 임혜원, 이우림 허락).
+/// 레벨업: AddExp가 LevelRules(김도훈)의 경험치 표로 레벨을 올린다.<br/>
+/// 노드 해금: 소유 클라이언트가 RequestUnlock을 부르면 서버의 TryUnlock이 검사·재료 빼기·저장을 하고, 결과를 UnlockAnswered로 알린다.
 /// </para>
 /// </summary>
 public class PlayerProgress : NetworkBehaviour
@@ -52,6 +53,12 @@ public class PlayerProgress : NetworkBehaviour
 	/// [로직] 레벨이 오른 순간 (새 레벨). 서버에서 AddExp가 부른다. 한 번에 여러 레벨이 오르면 오른 레벨마다 불린다.
 	/// </summary>
 	public event Action<int> LeveledUp;
+
+	/// <summary>
+	/// [표시] 내가 보낸 해금 요청(RequestUnlock)의 결과 (노드 ID, 결과). 성공(Unlocked)도 알린다. 소유 클라이언트에서 불린다.<br/>
+	/// 네트워크를 켜지 않은 테스트에서는 RequestUnlock이 바로 부른다.
+	/// </summary>
+	public event Action<string, UnlockResult> UnlockAnswered;
 
 	/// <summary>그 재료의 개수. 없으면 0.</summary>
 	public int GetMaterialCount(string materialId)
@@ -160,43 +167,74 @@ public class PlayerProgress : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// [서버] 스킬 트리 노드를 해금한다 (「재료 써서 스킬 트리 해금하기」, 임혜원). 선행 조건(SkillTree.CanUnlock)과 재료(SkillTreeNode.Cost)를 검사하고,
-	/// 되면 재료를 빼고 노드와 같이 열리는 노드(SkillTree.AutoUnlockedBy)를 해금 목록에 넣은 뒤 DB에 한 트랜잭션으로 쓴다(ProgressStore.SaveUnlock). 안 되면 아무것도 바꾸지 않고 false.
+	/// [서버] 스킬 트리 노드를 해금한다. 노드 ID, 이미 해금함, 선행 조건(SkillTree.CanUnlock), 재료(노드의 Cost) 순서로 검사하고
+	/// 먼저 걸린 이유를 돌려준다. 통과하면 재료를 빼고 노드와 같이 열리는 노드(SkillTree.AutoUnlockedBy)를 해금 목록에 넣은 뒤
+	/// DB에 한 트랜잭션으로 쓴다. 다른 시스템은 이 함수가 아니라 소유 클라이언트의 RequestUnlock을 쓴다.
 	/// </summary>
-	public bool TryUnlock(string nodeId)
+	public UnlockResult TryUnlock(string nodeId)
 	{
-		if (string.IsNullOrEmpty(nodeId) || !CanChange(nameof(TryUnlock))) return false;
-		if (!SkillTree.TryGet(nodeId, out SkillTreeNode node) || !SkillTree.CanUnlock(nodeId, unlocked)) return false;
-		foreach (MaterialCost cost in node.Cost)
-		{
-			if (GetMaterialCount(cost.MaterialId) < cost.Count) return false;
-		}
+		if (!CanChange(nameof(TryUnlock))) return UnlockResult.NotAllowed;
+		if (!SkillTree.TryGet(nodeId, out SkillTreeNode node)) return UnlockResult.UnknownNode;
+		if (unlocked.Contains(nodeId)) return UnlockResult.AlreadyUnlocked;
+		if (!SkillTree.CanUnlock(nodeId, unlocked)) return UnlockResult.PrerequisiteMissing;
 
-		// 재료 빼기 (0개가 되면 지운다)
+		// 재료를 뺀 뒤의 개수를 먼저 계산한다. 하나라도 모자라면 아무것도 바꾸지 않는다
+		// 같은 재료가 Cost에 두 번 적혀 있어도 합쳐서 빼도록 계산 결과를 이어 쓴다
 		var newCounts = new Dictionary<string, int>();
 		foreach (MaterialCost cost in node.Cost)
 		{
-			int left = GetMaterialCount(cost.MaterialId) - cost.Count;
-			if (left > 0) materials[cost.MaterialId] = left;
-			else materials.Remove(cost.MaterialId);
-			newCounts[cost.MaterialId] = left;
+			int current = newCounts.TryGetValue(cost.MaterialId, out int pending) ? pending : GetMaterialCount(cost.MaterialId);
+			newCounts[cost.MaterialId] = current - cost.Count;
 		}
-
-		// 노드 + 같이 열리는 노드
-		var added = new List<string> { nodeId };
-		unlocked.Add(nodeId);
-		foreach (string id in SkillTree.AutoUnlockedBy(unlocked))
+		foreach (int count in newCounts.Values)
 		{
-			if (unlocked.Contains(id)) continue;
-			unlocked.Add(id);
-			added.Add(id);
+			if (count < 0) return UnlockResult.MaterialShort;
 		}
 
+		// 같이 열리는 노드는 방금 연 노드가 목록에 들어간 뒤에 구해야 한다 (예: 검 소환 → 해제)
+		var afterUnlock = new HashSet<string>(unlocked) { nodeId };
+		List<string> autoNodes = SkillTree.AutoUnlockedBy(afterUnlock);
+		var newNodes = new List<string> { nodeId };
+		newNodes.AddRange(autoNodes);
+
+		// DB에 먼저 쓰고, 성공한 뒤에 메모리를 바꾼다. 저장이 예외로 실패하면 메모리는 그대로여서
+		// 재료만 빠지거나 해금만 사라지는 불일치가 생기지 않는다
 #if UNITY_SERVER || UNITY_EDITOR
-		store?.SaveUnlock(characterKey, added, newCounts);
+		store?.SaveUnlock(characterKey, newNodes, newCounts);
 #endif
+		foreach (KeyValuePair<string, int> pair in newCounts)
+		{
+			if (pair.Value > 0) materials[pair.Key] = pair.Value;
+			else materials.Remove(pair.Key);
+		}
+		unlocked.AddRange(newNodes);
 		Changed?.Invoke();
-		return true;
+		return UnlockResult.Unlocked;
+	}
+
+	/// <summary>
+	/// [소유 클라이언트] 서버에 노드 해금을 요청한다. 결과는 UnlockAnswered로 온다.<br/>
+	/// 내 플레이어(isLocalPlayer)가 아니면 아무것도 하지 않는다.
+	/// </summary>
+	public void RequestUnlock(string nodeId)
+	{
+		if (!isLocalPlayer) return;
+		CmdUnlock(nodeId);
+	}
+
+	// 클라이언트가 보낸 노드 ID는 믿지 않는다. TryUnlock이 SkillTree에서 찾아 보고, 없으면 UnknownNode로 돌려준다
+	[Command]
+	void CmdUnlock(string nodeId)
+	{
+		TargetUnlockAnswered(nodeId, TryUnlock(nodeId));
+	}
+
+	[TargetRpc]
+	void TargetUnlockAnswered(string nodeId, UnlockResult result)
+	{
+		if (result != UnlockResult.Unlocked)
+			Debug.LogWarning($"[PlayerProgress] {name}: 서버가 {nodeId} 해금을 거부했습니다: {result}", this);
+		UnlockAnswered?.Invoke(nodeId, result);
 	}
 
 	// 값은 서버에서만 바꾼다. 클라이언트 전용에서 바꾸면 서버·DB와 달라지기 때문

@@ -23,21 +23,23 @@
 ## 동작 규칙
 - 데미지는 `int`다. 0 이하의 데미지와 이미 죽은 몬스터에게 준 데미지는 무시한다.
 - Inspector 값 `Invulnerable`을 켜면 맞아도 체력이 줄지 않고 죽지 않는다. `Damaged`, `HitEffectPlayed`는 그대로 받은 데미지를 넘겨 불린다 (연습장 허수아비, 임혜원과 정함).
-- 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 오브젝트를 없앤다. `Despawn Delay`는 사망 모션 길이 이상으로 둔다(Leak 1.0초).
-- event는 로직용과 연출용으로 나뉜다. 네트워크를 붙이면 로직용은 서버에서만, 연출용은 각 플레이어 화면에서만 불린다.
+- 체력이 0이 되면 `Died`를 한 번 알리고, Inspector 값 `Despawn Delay`초 뒤에 `NetworkSpawner.Despawn`으로 오브젝트를 없앤다(서버에서 없애면 모든 클라이언트에서도 사라짐, #310). `Despawn Delay`는 사망 모션 길이 이상으로 둔다(Leak 1.0초).
+- event는 로직용과 연출용으로 나뉜다. 로직용은 서버(또는 네트워크 없는 테스트)에서만, 연출용은 그 몬스터를 보는 모든 화면에서 불린다 (#310, `MonsterNetwork`와 각 컴포넌트의 `[ClientRpc]`).
   - 로직(드롭, 스포너, 보스 페이즈, 레이드 판정)은 `Damaged`, `Died`를 받는다.
   - 연출(이펙트, 소리, 애니메이션, 데미지 숫자)은 `HitEffectPlayed`, `DeathEffectPlayed`를 받는다.
   - 순서: `Damaged` → `HitEffectPlayed` → (체력 0이면) `Died` → `DeathEffectPlayed`
 - 접촉 피해는 `FixedUpdate`마다 몸 크기의 상자 안을 검사한다. Player와 Monster 레이어는 충돌이 꺼져 있어서 Trigger를 쓸 수 없기 때문이다.
   - 같은 대상에게는 Inspector 값 `Hit Interval`초에 한 번만 피해를 준다.
   - Trigger가 아닌 Collider(몸)에 닿았을 때만 피해를 준다.
+  - 서버(또는 네트워크를 켜지 않은 테스트)에서만 검사한다. 클라이언트의 몬스터 복사본은 피해를 주지 않는다 (#310)
 - 판정(접촉 피해 상자, 플레이어 탐지, 낭떠러지·장애물 검사)은 `Physics2D`가 아니라 몬스터가 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 한다. 서버는 장소 씬마다 물리 세계가 따로 있어서, `Physics2D`로 검사하면 사냥터 등에 있는 플레이어와 땅을 찾지 못한다(`place-scenes.md`). 물리 세계는 저장하지 않고 검사할 때마다 가져온다.
 - 몬스터 공격 = 공격 형태 + 효과
   - 효과는 `MonsterAttackData` 파일에 목록으로 담는다. 맞으면 위에서부터 차례로 적용한다.
   - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 실행 중단은 맞은 대상의 `FunctionExecutor.InterruptAll()`(이우림)로 실행 중인 함수를 모두 끊는다(실행기가 없으면 무시). 메모리 효과(점유·탈취·회수 방해)는 받는 방식을 정하기 전까지 로그만 남긴다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
   - 패링: Player에 맞으면 효과를 주기 전에 그 플레이어의 `ParryGuard.TryParry(투사체)`(박진우, `c-skills.md`)를 묻는다. `true`면 효과 없이 사라진다. 관통 투사체도 잡히면 사라진다. 관통은 이미 맞힌 대상에게는 다시 묻지 않는다.
-  - 맞았는지 판단과 효과 적용은 네트워크를 붙이면 서버에서만 한다.
+  - 맞았는지 판단과 효과 적용은 서버(또는 네트워크 없는 테스트)에서만 한다 (#310).
+  - 네트워크 (#310): 투사체 프리팹(`PacketThrow`, `MonsterBullet`)은 `NetworkIdentity`가 있고 Base NetworkManager에 등록돼 있다. `ProjectileAttack`이 `NetworkSpawner`로 쏜 몬스터의 씬에 만든다(서버의 `Base`가 아니라 던전·사냥터의 물리 세계에서 판정됨). 클라이언트는 서버가 `[ClientRpc]`로 보낸 출발 위치·속도로 그림만 날리고(검기와 같은 방식), 서버가 없애면 함께 사라진다. `Instantiate`로 직접 만든 투사체(시험용)는 그 자리에서만 동작한다
 
 - 잡몹
   - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects` + `StatusIconView`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
@@ -55,7 +57,7 @@
   - 놓침: 쫓던 플레이어가 죽거나 `Lose Range` 밖으로 나가면 잠깐 멈췄다가 순찰로 돌아간다.
   - 추적: 좌우로만 움직이고 점프하지 않는다. 앞이 낭떠러지나 장애물이면 그 자리에서 기다린다(떨어지지 않는다).
   - 몬스터가 죽으면 멈춘다. 그림은 오른쪽을 보고 그리고, 왼쪽을 볼 때 `SpriteRenderer.flipX`를 켠다(플레이어와 같은 규칙).
-  - 네트워크를 붙이면 AI는 서버에서만 돈다.
+  - AI는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 처음 방향을 랜덤으로 정하는 일도 서버만 한다 (#310)
 
 - 스포너 (`MonsterSpawner`)
   - 구역(`Area Size`, `Area Offset`) 안에 몬스터를 `Max Count`(임시 3)마리까지 둔다. 한 마리가 죽으면(`Died`) `Respawn Delay`(임시 5초) 뒤 구역 안 새 랜덤 위치에 한 마리를 만든다.
@@ -69,13 +71,14 @@
     - 마리 수는 씬에 놓은 스포너에서만 바꾼다. 프리팹 원본(Leak 3, Loop 2)은 테스트용으로 그대로 둔다
   - 서버(Host 포함)에서만 만든다. 서버가 켜지는 순간 모든 지점에 만들고, 클라이언트는 서버가 만든 몬스터를 받기만 한다. 네트워크를 켜지 않으면 만들지 않는다.
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
-  - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 위치 동기화는 아직 없어서 Host가 아닌 클라이언트에서는 몬스터가 생긴 자리에 멈춰 보인다(몬스터 서버 동기화 이슈).
+  - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 체력·피격·사망 연출은 `MonsterNetwork`로 맞춘다(#310). 위치는 `NetworkRigidbodyReliable2D`(Gateway는 `NetworkTransformReliable`, Sync Direction Server To Client)로 맞춘다(#310, 아래 「위치·방향은 모든 화면에서 같다」).
 
 - 떠다니며 쏘기 (`FlyingShooterAI`)
   - 떠다니기: 중력 없이 생긴 자리보다 `Hover Height`(2.5)만큼 위에서 위아래로 살짝 둥실거린다.
   - 순찰: 움직이기·멈추기를 랜덤 시간씩 번갈아 하고 가끔 돌아선다. 벽(`Obstacle Layers`)이나 처음 자리에서 `Patrol Radius`(4)보다 멀어지면 돌아선다.
   - 공격: `Attack Range`(6) 안의 살아 있는 플레이어 중 가장 가까운 플레이어를 멈춰서 바라보고, 처음엔 `First Shot Delay`(0.5초) 뒤, 그다음엔 `Fire Interval`(2초)마다 몸 중심을 겨냥해 `ProjectileAttack.Fire`를 부른다. 대각선으로도 쏜다. `Lose Range`(8) 밖으로 나가거나 죽으면 순찰로 돌아간다.
   - 밀려나기: 맞으면(`Damaged`) 쏘던 플레이어 반대쪽(없으면 바라보는 반대쪽)으로 `Knockback Time`(0.15초) 동안 `Knockback Speed`(4)로 밀린다. `TakeDamage`에는 때린 쪽 정보가 없어서 쏘던 플레이어를 기준으로 한다.
+  - AI(이동·탐지·발사)는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 클라이언트의 복사본은 쏘지 않는다 (#310)
 - 발사 (`ProjectileAttack`)
   - `Fire`를 부르면 연출 `FireEffectPlayed`가 바로 나가고, `Fire Delay`초(모으는 시간) 뒤에 투사체가 나간다. 모으는 중에는 `IsCharging`이 `true`이고, 다시 `Fire`를 불러도 무시한다.
   - 방향은 `Fire`를 부른 순간에 정해진다. 모으는 중에 죽거나 기절하면 투사체는 나가지 않는다.
@@ -89,6 +92,16 @@
   - 때리기(`Smash`, #203): 바라보는 쪽 몸 앞 끝에서 `Smash Range`(6칸) 안에 목표 플레이어가 있을 때만 고른다. 연출 `SlamEffectPlayed`(Slam 모션, 낙하와 같이 씀) 뒤 `Smash Delay`(0.42초 = Slam 6번째 장면)에 몸 앞 구역(`Smash Size` 6×4, 아래 변은 보스 아래 땅. 땅을 못 찾으면 보스 몸 판정 바닥)의 플레이어에게 한 번씩 `Gateway_Smash`(체력 피해 25 + 실행 중단). 맞은 플레이어가 실행 중이던 함수가 모두 끊긴다
   - 공격 고르기: 목록(던지기, 낙하, 소환, 때리기)에서 랜덤. 직전 공격과 지금 쓸 수 없는 공격(가까운 플레이어 없는 때리기, 웜이 가득 찬 소환)은 뺀다
   - 기절 중이나 `Pause(초)`로 멈춘 동안에는 공격을 고르지 않는다. 모으던 낙하·소환·때리기는 취소된다. 패턴은 서버(또는 네트워크 없는 테스트)에서만 돈다.
+  - 위치·방향은 모든 화면에서 같다 (#310)
+    - 위치: Gateway는 `NetworkTransformReliable`, Worm·Leak·Loop는 `NetworkRigidbodyReliable2D`(둘 다 Sync Direction Server To Client). 분신·기둥·안전지대·낙하 패킷은 움직이지 않아 생성 위치만
+    - 진짜 찾기의 순간이동: 서버에서 `NetworkTransformBase.ServerTeleport`. 클라이언트 화면에서도 미끄러지지 않고 바로 옮겨진다
+    - 바라보는 방향: `GatewayAI`, `GroundChaseAI`, `FlyingShooterAI`의 방향이 `[SyncVar]`. 바뀌면 각 화면에서 그림을 뒤집는다. 분신 방향은 만든 직후 `GatewayPhases`가 `[ClientRpc]`로 한 번 알린다
+    - `GroundChaseAI.IsMoving`: 클라이언트에서는 서버 값(`[SyncVar]`). 클라이언트의 Rigidbody 속도는 서버와 다를 수 있다
+  - 연출 이벤트는 모든 화면에서 불린다 (#310)
+    - `GatewayAI`, `GatewayPhases`, `ProjectileAttack`: `NetworkBehaviour`. 연출 함수가 서버에서 `[ClientRpc]`를 보내 그 몬스터를 보는 모든 화면(호스트 포함)에서 이벤트를 부른다. 전용 서버에서는 불리지 않는다. 네트워크 없는 테스트는 그 자리에서
+    - `ProjectileAttack`을 쓰는 프리팹에는 `NetworkIdentity`가 있어야 한다: Gateway, Loop, `TestMonster`(#310에서 `NetworkIdentity` 추가, Test_DH·Test_HW·Test_JW 씬에 놓여 있음)
+    - 새 몬스터 부품의 연출 이벤트: 그 부품이 네트워크 프리팹에만 쓰이면 `GatewayAI`처럼 직접 `[ClientRpc]`, `NetworkIdentity` 없는 오브젝트도 쓰면 `Monster`처럼 네트워크 컴포넌트를 따로 둔다
+    - `Monster`만 따로 두는 이유는 연습장 허수아비(`NetworkIdentity` 없는 씬 오브젝트). 허수아비를 네트워크 프리팹으로 바꾸면 `MonsterNetwork`를 `Monster`로 합친다
 - 페이즈와 기믹 (`GatewayPhases`)
   - 1페이즈 100~70%, 2페이즈 70% 이하, 3페이즈 40% 이하 (`Phase Thresholds`). 기믹은 **페이즈마다 한 번**만 나온다.
   - 1페이즈 기믹: 플레이어를 처음 발견하고 `First Gimmick Delay`(15초) 뒤 기믹 1
@@ -124,7 +137,7 @@
   - 위치는 임시로 화면 위쪽 가운데(프리팹의 Panel 위치만 바꾸면 옮겨진다. 그림·UI 배치 때 확정). 내 캐릭터와 같은 씬에 살아 있는 보스(`Monster.IsBoss`)가 있을 때만 보인다. 여러 마리면 최대 체력이 가장 큰 보스. `Search Interval`(0.5초)마다 찾는다.
   - 빨간 막대 = 지금 체력, 흰 막대 = 맞은 뒤 `Trail Delay`(0.4초) 기다렸다가 천천히 따라 줄어듦, 숫자 = 지금 / 최대, 이름 = 보스 오브젝트 이름("(Clone)" 뗌)
   - 페이즈 구분선을 70%, 40% 위치에 놓는다 (`Phase Thresholds`)
-  - 체력은 아직 동기화되지 않아 Host 화면에서만 정확하다. 몬스터 서버 동기화 이슈에서 맞춘다
+  - 체력은 `MonsterNetwork`로 동기화되어 클라이언트 화면에서도 정확하다 (#310)
   - 지금은 색 막대(임시). 그림은 임혜원(테두리, 빨간 채움, 흰 채움, 구분선)
   - UI 프리팹 `BossHealthBar`(`_DH`). Base 씬(공용) 화면 UI에 놓는 일은 이우림과 정한다
 - 스포너 설정 확인: `Monster Prefab`이나 `Ground Layers`가 비어 있으면 시작할 때 `[MonsterSpawner]` 경고를 남긴다 (#188)
@@ -179,6 +192,19 @@
 | `Died` (event) | - | - | [로직] 체력이 0이 된 순간 한 번 불린다. 드롭, 스포너 집계, 레이드 판정에 쓴다. |
 | `HitEffectPlayed` (event) | `int` (받은 데미지) | - | [연출] 피격 이펙트, 소리, 데미지 숫자 표시에 쓴다. |
 | `DeathEffectPlayed` (event) | - | - | [연출] 사망 이펙트, 소리, 애니메이션에 쓴다. 한 번 불린다. |
+| `ApplyServerHp(int)`, `PlayHitFromServer(int, int)`, `PlayDeathFromServer()` | - | - | [클라이언트] `MonsterNetwork`만 부른다. 다른 스크립트는 부르지 않는다 (#310) |
+
+- 클라이언트에서는 `Hp`, `IsDead`, `HitEffectPlayed`, `DeathEffectPlayed`가 서버와 같다 (`MonsterNetwork`가 붙은 몬스터). `TakeDamage`, `Damaged`, `Died`는 서버에서만
+
+### `MonsterNetwork` (#310)
+
+네트워크 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다 (Gateway, GatewayClone, Pillar, Worm, Leak, Loop). `NetworkIdentity`가 있어야 한다. 다른 스크립트가 부르는 함수는 없다.
+
+- 서버 → 그 몬스터를 보는 클라이언트: 체력(`[SyncVar]`), 피격 알림(데미지, 맞은 뒤 체력, `[ClientRpc]`), 사망 알림(`[ClientRpc]`)
+- 받은 클라이언트: `Monster`에 체력을 넣고 `HitEffectPlayed`·`DeathEffectPlayed`만 부른다
+- 나중에 그 장소에 들어와 몬스터를 처음 본 클라이언트도 생성 때 지금 체력을 받는다
+- 호스트: 서버의 `Monster`가 이미 연출 이벤트를 불러서 받은 알림은 무시. 네트워크를 켜지 않은 테스트: 아무것도 하지 않음
+- `Monster`를 `NetworkBehaviour`로 바꾸지 않고 따로 둔 이유: 연습장 허수아비처럼 `NetworkIdentity` 없는 씬 오브젝트도 `Monster`를 쓴다
 
 ### `ContactDamage`
 
@@ -236,13 +262,12 @@
 
 ### `ProjectileAttack`
 
-몬스터 프리팹에 `Monster`와 함께 붙인다. Inspector에서 `Attack`(MonsterAttackData), `Projectile Prefab`, `Speed`, `Fire Point Offset`, `Fire Delay`(모으는 시간)를 정한다.
+몬스터 프리팹에 `Monster`와 함께 붙인다. Inspector에서 `Attack`(MonsterAttackData), `Projectile Prefab`, `Speed`, `Fire Point Offset`, `Fire Delay`(모으는 시간)를 정한다. `NetworkBehaviour`라서 프리팹에 `NetworkIdentity`가 있어야 한다 (#310).
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Fire(Vector2 direction)` | 쏠 방향 (길이 상관없음) | - | 그 방향으로 쏜다. 몬스터 AI가 부른다. 연출이 바로 나가고 `Fire Delay`초 뒤 투사체가 나간다. 죽었거나 기절했거나 방향이 (0, 0)이거나 모으는 중이면 쏘지 않는다. 실명 중에 나간 투사체는 빗나간다. |
-| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` |
-| `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
+| `IsCharging` | - | `bool` | 발사를 모으는 중이면 `true` || `FireEffectPlayed` (event) | `Vector2` (쏠 방향, 길이 1) | - | [연출] 발사를 시작할 때 불린다. 발사 모션, 소리에 쓴다. 투사체는 `Fire Delay`초 뒤에 나간다. |
 
 ### `FlyingShooterAI`
 
@@ -330,7 +355,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
   - 스포너가 몬스터를 만들 수 있도록 김도훈이 Leak에 `NetworkIdentity`를 붙이고 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록한다(#86, 이우림 허락).
   - 사냥터 씬(`HuntingGround`)에 스포너를 놓고 구역을 맵에 맞추는 일은 김도훈이 한다 (처음엔 이우림이 하기로 했으나 김도훈이 맡음).
-  - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 투사체 생성·삭제와 몬스터 삭제를 `NetworkSpawner`로 바꾸는 일은 몬스터 서버 동기화 이슈에서 한다.
+  - 몬스터 생성은 스포너에서 `NetworkSpawner.Spawn`을 쓴다(#86). 몬스터 삭제와 투사체 생성·삭제는 #310에서 `NetworkSpawner`로 바꿨다.
   - 공용 Player의 Rigidbody2D Simulated를 모든 플레이어에서 켰다(#23). 그래서 서버의 `ContactDamage` 검사와 몬스터 투사체가 원격 플레이어에게도 닿는다.
 - 박진우와 정한 것
   - 상태 이상(#97)은 `StatusEffects`가 걸고 풀고, 몬스터 반응(기절·이속 감소·실명)은 김도훈이 `IsStunned`, `MoveSpeedMultiplier`, `IsBlinded`를 읽어서 한다(#103). 몬스터 프리팹에 `StatusEffects`를 붙이는 일은 김도훈이 한다.

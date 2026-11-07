@@ -9,8 +9,8 @@
 - 하지 않는 일
   - 함수 실행: `FunctionExecutor`가 `UserFunction`으로 실행 (`function-executor.md`)
   - 함수 데이터 → `UserFunction` 변환: `FunctionDataConverter` (`function-executor.md`, #90)
-  - 구조 검사, 해금 검사: 「만든 함수를 서버로 보내 검사·저장하기」 이슈
-  - 크기와 한도 비교: 슬롯에 넣는 쪽
+  - 구조 검사: 「만든 함수를 서버로 보내 검사·저장하기」 이슈
+  - 해금 검사, 코드 영역 한도 비교: 서버의 저장 요청 처리 (`FunctionExecutorNetwork.CheckFunctionContent`, #306, `progress-store.md`)
   - 블록 UI, 칸을 채우는 화면: 편집 화면(임혜원)
 
 ## 정의
@@ -125,7 +125,10 @@
 - 슬롯에 바로 넣은 C 스킬: C 스킬 블록 하나만 든 함수와 같게 셈 (그 스킬의 `CodeSize`)
 - 편집 화면 표시: 편집 중인 함수의 코드 영역 크기 (그 함수 + 그 함수가 호출로 닿는 함수들)
   - 슬롯 전체 크기: 슬롯 장착 화면에서 표시
-- 캐릭터별 한도 위치: 메모리 작업 때 결정
+- 한도: `ProgressRules.MaxCodeSize` (임시 1000). 슬롯 8개 전체의 코드 영역 크기에 대한 한도
+  - 서버가 함수를 저장할 때마다 그 함수를 반영한 뒤의 슬롯 크기를 세고, 한도를 넘으면 거부 (`CodeSizeExceeded`)
+  - 슬롯에서 닿지 않는 함수(어느 슬롯 함수도 부르지 않는 페이지 함수)는 크기에 들어가지 않으므로 그 함수가 커도 거부하지 않음. 슬롯 함수가 그 함수를 부르게 저장하는 순간 검사됨
+  - 캐릭터별 한도, 한도의 최종 위치: 메모리 작업 때 결정
 
 ### 저장 형식
 - 형식: JSON 글자열 (Newtonsoft Json)
@@ -291,7 +294,7 @@ string json = FunctionDataJson.ToJson(function);
 - 임혜원과 정한 것 (#72)
   - 편집 화면 연결: 블록 UI가 블록 데이터를 직접 들고 있음. 저장할 때 따로 바꾸지 않음
   - 조건문·for·while 안쪽 블록은 `InnerBlocks`, 값 칸에 들어가는 블록은 `SlotData.Block`
-  - 해금은 일단 보지 않음
+  - 해금은 일단 보지 않음 → #306에서 서버가 저장할 때 검사 (아래 「임혜원과 확인할 것 (#306)」)
 - 임혜원과 정할 것
   - 블록 종류, 블록별 칸 (「블럭코딩 화면 2」에서 값 칸 채우기와 함께)
 - 임혜원과 확인할 것 (#90)
@@ -299,6 +302,10 @@ string json = FunctionDataJson.ToJson(function);
   - `malloc` 블록의 struct 드롭다운: `PredefinedStructs.All`
 - 임혜원과 확인할 것 (#120)
   - `NULL` 직접 입력: 플레이어가 값 칸에 `NULL`을 입력하면 `SlotData.FromNull()`로 저장. C 화면에서는 `NULL`로 보여 줌
+- 임혜원과 확인할 것 (#306)
+  - 편집 화면은 해금한 블록만 보여 줄 것 (`SkillTree.IsBlockUnlocked`, 해금한 C 스킬). 서버는 해금하지 않은 블록·스킬이 든 함수의 저장을 거부함
+  - 새 거부 결과 `BlockLocked`, `SkillLocked`, `CodeSizeExceeded`의 안내 메시지 (`BlockEditor`의 `OnServerAnswered`). 없으면 기본 메시지가 나옴
+  - 코드 크기 표시(`CodeSizeOf`)를 슬롯 합계 기준으로 바꿀지 (서버 한도는 슬롯 합계 기준)
 - 임혜원과 확인할 것 (#132)
   - 새 블록: 원소 읽기(`BlockData.ArrayGet(이름, index)`, 값 칸에 끼움), 원소 쓰기(`BlockData.ArraySet(이름, index, 값)`). array 칸은 변수 칸(`VariableName`)
   - 배열 만들기 블록의 길이 칸: 1 이상의 숫자를 직접 입력하는 것만. 다른 값이 든 함수는 실행기가 변환 거부

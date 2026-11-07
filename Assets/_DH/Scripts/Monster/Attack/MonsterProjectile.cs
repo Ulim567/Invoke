@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -15,9 +16,15 @@ using UnityEngine;
 /// 패링(박진우): 플레이어에 닿으면 효과를 주기 전에 그 플레이어의 ParryGuard.TryParry(this)를 묻는다.
 /// true면 패링 성공이라 효과 없이 사라진다(관통 투사체도 사라진다). Parryable·Misses·판정 시간은 ParryGuard가 본다.
 /// </para>
+/// <para>
+/// 네트워크 (#310): 프리팹에 NetworkIdentity를 붙이고 Base NetworkManager에 등록한다. ProjectileAttack이 NetworkSpawner로 서버에서 만든다.<br/>
+/// - 맞았는지 판단·패링·수명은 서버(또는 네트워크 없는 테스트)에서만 한다. 없애면 Mirror가 클라이언트에서도 없앤다.<br/>
+/// - 클라이언트: Launch 때 서버가 [ClientRpc]로 보낸 출발 위치·속도로 그림만 날린다 (검기와 같은 방식, c-skills.md).<br/>
+/// - 서버가 생성하지 않고 Instantiate로 직접 만든 투사체(박진우의 ParrySimTest 등)는 지금처럼 그 자리에서만 동작한다.
+/// </para>
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
-public class MonsterProjectile : MonoBehaviour
+public class MonsterProjectile : NetworkBehaviour
 {
 	[SerializeField, Min(0.1f), Tooltip("아무것도 맞히지 못했을 때 사라지기까지 시간(초)")]
 	float lifetime = 5f;
@@ -65,17 +72,28 @@ public class MonsterProjectile : MonoBehaviour
 		body.linearVelocity = velocity;
 		despawnTime = Time.time + lifetime;
 		spent = false;
+		// 서버가 생성한 투사체면 클라이언트도 같은 길로 날린다 (생성 메시지가 먼저 도착하므로 클라이언트에 투사체가 이미 있다)
+		if (isServer) RpcLaunch(body.position, velocity);
+	}
+
+	// 클라이언트: 보여 주기만 한다. 판정은 하지 않는다
+	[ClientRpc]
+	void RpcLaunch(Vector2 position, Vector2 velocity)
+	{
+		if (isServer) return;
+		body.position = position;
+		body.linearVelocity = velocity;
 	}
 
 	void FixedUpdate()
 	{
-		if (Time.time >= despawnTime) Despawn();
+		if (IsAuthority() && Time.time >= despawnTime) Despawn();
 	}
 
-	// 네트워크를 붙이면 [ServerCallback]을 단다. 맞았는지는 서버에서만 판단한다
+	// 맞았는지는 서버(또는 네트워크 없는 테스트)에서만 판단한다. 클라이언트의 투사체는 서버가 없애면 함께 사라진다
 	void OnTriggerEnter2D(Collider2D other)
 	{
-		if (spent) return;
+		if (spent || !IsAuthority()) return;
 
 		int layerBit = 1 << other.gameObject.layer;
 		if ((targetLayers.value & layerBit) != 0)
@@ -122,6 +140,14 @@ public class MonsterProjectile : MonoBehaviour
 		return true;
 	}
 
-	// 투사체를 없애는 곳은 여기 하나다. 네트워크를 붙이면 NetworkServer.Destroy로 바꾼다 (코드 작성 규칙 3)
-	void Despawn() => Destroy(gameObject);
+	// 투사체를 없애는 곳은 여기 하나다 (코드 작성 규칙 3). 서버가 생성한 투사체는 NetworkSpawner로 없애 클라이언트에서도 사라지게 한다.
+	// 서버가 생성하지 않은 투사체(Instantiate로 직접 만든 시험용)는 Destroy로 없앤다
+	void Despawn()
+	{
+		if (isServer) NetworkSpawner.Despawn(gameObject);
+		else Destroy(gameObject);
+	}
+
+	// 서버이거나 네트워크를 켜지 않은 테스트면 true
+	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 }

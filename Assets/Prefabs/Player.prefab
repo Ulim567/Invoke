@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 7679958723639315811}
   - component: {fileID: 1304864832004228049}
   - component: {fileID: 6317378190948175376}
+  - component: {fileID: 1598455907839974460}
   - component: {fileID: 3376740816470663825}
   - component: {fileID: 8827871125244465063}
   - component: {fileID: 9058111638273282288}
@@ -24,7 +25,6 @@ GameObject:
   - component: {fileID: 1210551639577649294}
   - component: {fileID: 4696210639705928058}
   - component: {fileID: 5525880356177457718}
-  - component: {fileID: 1598455907839974460}
   - component: {fileID: 7574371112174244603}
   - component: {fileID: 6456502398718284672}
   - component: {fileID: 4021862485252956600}
@@ -42,7 +42,8 @@ GameObject:
   - component: {fileID: 5743095526360772754}
   - component: {fileID: 7930981262655194856}
   - component: {fileID: 5499647203975102261}
-  - component: {fileID: 8266242461447349182}
+  - component: {fileID: 8456120021185903775}
+  - component: {fileID: 5657045320687703192}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -249,6 +250,28 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
+--- !u!95 &1598455907839974460
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 1094f84c881d5409caced2850b901505, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &3376740816470663825
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -306,7 +329,7 @@ MonoBehaviour:
   bodyCollider: {fileID: 1304864832004228049}
   input: {fileID: 3376740816470663825}
   stats: {fileID: 8827871125244465063}
-  health: {fileID: 0}
+  health: {fileID: 7930981262655194856}
   groundLayers:
     serializedVersion: 2
     m_Bits: 192
@@ -381,7 +404,7 @@ MonoBehaviour:
   net: {fileID: 0}
   loadout: {fileID: 0}
   minigame: {fileID: 0}
-  health: {fileID: 0}
+  health: {fileID: 7930981262655194856}
 --- !u!114 &1210551639577649294
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -422,28 +445,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 134b623e91090ef4e9bbd8a052475ec0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FunctionExecutorLogger
---- !u!95 &1598455907839974460
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4136478383384515981}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 1094f84c881d5409caced2850b901505, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &7574371112174244603
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -711,6 +712,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c6fab3c7c6687a43a66a28de95b5e68, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   hitStunTime: 0.3
   invincibleTime: 1
   hideDelay: 1
@@ -729,7 +733,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealthEffects
   spriteRenderer: {fileID: 0}
   blinkInterval: 0.1
---- !u!114 &8266242461447349182
+--- !u!114 &8456120021185903775
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -738,9 +742,23 @@ MonoBehaviour:
   m_GameObject: {fileID: 4136478383384515981}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: aa78b40ca179433897b99ec745e79d79, type: 3}
+  m_Script: {fileID: 11500000, guid: c7010811173a915469b5d6470a3b8329, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SkillTreeUnlocker
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerProgress
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &5657045320687703192
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7736dc87ca9daf4d90f4ae2a5a4c299, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerLevelStats
+  maxHpPerLevel: 10
+  attackPowerPerLevel: 2

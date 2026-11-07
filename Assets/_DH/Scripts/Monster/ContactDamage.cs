@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>
@@ -6,7 +7,8 @@ using UnityEngine;
 /// <para>
 /// Player와 Monster 레이어는 충돌이 꺼져 있어서 OnTriggerEnter2D가 오지 않는다.
 /// 그래서 FixedUpdate마다 몸 크기의 상자 안에 targetLayers 오브젝트가 있는지 직접 검사한다.<br/>
-/// 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.
+/// 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.<br/>
+/// 검사는 서버(또는 네트워크를 켜지 않은 테스트)에서만 한다. 클라이언트의 복사본도 검사하면 그 클라이언트의 플레이어 체력을 한 번 더 깎아 서버와 달라지기 때문이다 (#310).
 /// </para>
 /// <para>
 /// 사용법<br/>
@@ -57,7 +59,7 @@ public class ContactDamage : MonoBehaviour
 	void FixedUpdate()
 	{
 		// 기절이면 행동하지 않고, 실명이면 공격이 빗나간다
-		if (monster.IsDead || (status != null && (status.IsStunned || status.IsBlinded))) return;
+		if (!IsAuthority() || monster.IsDead || (status != null && (status.IsStunned || status.IsBlinded))) return;
 
 		// 내가 속한 장소 씬의 물리 세계에 묻는다. 장소를 옮기면 씬이 바뀌므로 저장하지 않고 매번 가져온다
 		int count = gameObject.scene.GetPhysicsScene2D().OverlapBox((Vector2)transform.position + boxOffset, boxSize, 0f, filter, hits);
@@ -82,6 +84,9 @@ public class ContactDamage : MonoBehaviour
 		// 사라진 대상이 목록에 남지 않도록 비운다
 		nextHitTime.Clear();
 	}
+
+	// 서버이거나 네트워크를 켜지 않은 테스트면 true
+	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
 
 	void OnDrawGizmosSelected()
 	{

@@ -1,15 +1,16 @@
 using UnityEngine;
 
 /// <summary>
-/// 로비에서 내 캐릭터가 가까이 와서 ↑(상호작용)를 누르면 반응하는 오브젝트의 공통 부분. 입구, 스킬 트리 해금 장소가 물려받는다.
+/// 내 캐릭터가 가까이 와서 ↑(상호작용)를 누르면 반응하는 오브젝트의 공통 부분. 로비의 입구·스킬 트리 해금 장소·패널 장소와 각 장소의 출구(PlaceExit)가 물려받는다.
 /// <para>
 /// - 이 오브젝트에 Is Trigger를 켠 Collider 2D를 붙인다. 그 범위 안에 내 캐릭터가 들어오면 ↑ 안내(prompt)를 보여 준다.<br/>
 /// - 내 캐릭터(isLocalPlayer)만 반응한다. 다른 플레이어가 들어와도 내 화면의 안내는 켜지지 않는다.<br/>
 /// - 키는 PlayerInputReader.InteractPressed로만 읽는다 (CLAUDE.md 코드 작성 규칙 5).<br/>
-/// - 내 캐릭터가 다른 장소로 가면 놓아준다. 호스트에서는 로비 씬이 남아 있어도 OnTriggerExit2D가 불리지 않기 때문이다 (이우림 PlaceExit와 같은 방식).
+/// - 내 캐릭터가 다른 장소로 가면 놓아준다. 호스트에서는 씬이 서버에 남아 있어도 OnTriggerExit2D가 불리지 않기 때문이다.<br/>
+/// - 검을 타고 나는 중(PlayerMovement.IsRiding)이거나 죽었거나 경직 중(PlayerHealth.CanAct가 false)이면 ↑를 무시한다.
 /// </para>
 /// </summary>
-public abstract class LobbyInteractable : MonoBehaviour
+public abstract class PlaceInteractable : MonoBehaviour
 {
 	[SerializeField, Tooltip("내 캐릭터가 범위 안에 있을 때 켜지는 ↑ 안내. 비워 두면 안내 없음")]
 	GameObject prompt;
@@ -52,11 +53,18 @@ public abstract class LobbyInteractable : MonoBehaviour
 		}
 
 		// 창이 열려 있는 동안은 Player 액션 맵이 꺼져 있어서 InteractPressed가 false이므로, 같은 창이 또 열리지 않는다
-		if (localPlayer.InteractPressed) Interact(localPlayer);
+		if (!localPlayer.InteractPressed) return;
+
+		// 검을 타고 위로 날 때 누르는 ↑가 상호작용으로도 읽히므로, 검 타기 중에는 무시한다 (#285)
+		if (localPlayer.TryGetComponent(out PlayerMovement movement) && movement.IsRiding) return;
+		// 죽었거나 경직 중이면 창을 열거나 장소를 옮기지 않는다 (#310)
+		if (localPlayer.TryGetComponent(out PlayerHealth health) && !health.CanAct) return;
+
+		Interact(localPlayer);
 	}
 
 	/// <summary>
-	/// 범위 안에서 ↑를 눌렀을 때 불린다. 물려받는 쪽이 창을 연다.
+	/// 범위 안에서 ↑를 눌렀을 때 불린다. 물려받는 쪽이 창을 열거나 장소 이동을 요청한다.
 	/// </summary>
 	protected abstract void Interact(PlayerInputReader player);
 }

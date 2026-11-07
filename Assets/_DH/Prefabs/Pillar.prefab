@@ -102,11 +102,12 @@ GameObject:
   m_Component:
   - component: {fileID: 7702366671769008036}
   - component: {fileID: 1478245817994729693}
+  - component: {fileID: 3592860967248318400}
   - component: {fileID: 2811848839569070}
   - component: {fileID: 1833644907637921559}
   - component: {fileID: 6690848387844445683}
-  - component: {fileID: 3592860967248318400}
   - component: {fileID: 5622192208641966478}
+  - component: {fileID: -5033091409746861686}
   m_Layer: 9
   m_Name: Pillar
   m_TagString: Untagged
@@ -176,6 +177,23 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 2, y: 4}
   m_EdgeRadius: 0
+--- !u!114 &3592860967248318400
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5026354700828327269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
+  sceneId: 0
+  _assetId: 215246063
+  serverOnly: 0
+  visibility: 0
+  hasSpawned: 0
 --- !u!114 &2811848839569070
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -219,23 +237,6 @@ MonoBehaviour:
   iconPrefab: {fileID: 0}
   heightAboveTop: 0.6
   spacing: 1.1
---- !u!114 &3592860967248318400
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5026354700828327269}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b91ecbcc199f4492b9a91e820070131, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Mirror::Mirror.NetworkIdentity
-  sceneId: 0
-  _assetId: 215246063
-  serverOnly: 0
-  visibility: 0
-  hasSpawned: 0
 --- !u!114 &5622192208641966478
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -262,3 +263,18 @@ MonoBehaviour:
   breakFps: 12
   hitFlashColor: {r: 1, g: 0.75, b: 0.9, a: 1}
   hitFlashTime: 0.08
+--- !u!114 &-5033091409746861686
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5026354700828327269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dabd2c308ade4db4794d046aaefaa2f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MonsterNetwork
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0

@@ -51,6 +51,8 @@ public class MonsterSpawner : MonoBehaviour
 	ContactFilter2D groundFilter;
 	// 선이 맞은 땅 목록. 재사용해서 메모리 할당을 없앤다
 	readonly List<RaycastHit2D> groundHits = new List<RaycastHit2D>(8);
+	// 만들지 못했다고 이미 알렸으면 true
+	bool spawnFailWarned;
 	// 가까운 순서로 정렬하는 비교 함수. 한 번만 만들어 둔다
 	static readonly System.Comparison<RaycastHit2D> ByDistance = (a, b) => a.distance.CompareTo(b.distance);
 	// 지금 살아 있는 마리 수
@@ -113,8 +115,10 @@ public class MonsterSpawner : MonoBehaviour
 			{
 				// 위치를 못 찾았거나 설정이 잘못됐다. 매 프레임 반복하지 않도록 뒤로 미루고 이번 프레임은 멈춘다
 				respawnTimes.Enqueue(now + Mathf.Max(respawnDelay, 1f));
+				WarnSpawnFailedOnce();
 				break;
 			}
+			spawnFailWarned = false;
 		}
 	}
 
@@ -129,6 +133,17 @@ public class MonsterSpawner : MonoBehaviour
 		alive++;
 		obj.GetComponent<Monster>().Died += OnMonsterDied;
 		return true;
+	}
+
+	// 만들지 못했을 때 한 번만 알린다 (성공하면 다시 알릴 수 있게 풀림). 로그 없이 안 만들어 원인을 찾기 어려웠기 때문 (#319)
+	void WarnSpawnFailedOnce()
+	{
+		if (spawnFailWarned) return;
+		spawnFailWarned = true;
+		if (monsterPrefab == null)
+			Debug.LogWarning($"[MonsterSpawner] {name}: Monster Prefab이 비어 있어 만들지 못했습니다.", this);
+		else if (alive < maxCount)
+			Debug.LogWarning($"[MonsterSpawner] {name}: 구역 안에서 설 땅을 찾지 못해 만들지 못했습니다. 초록 상자가 땅을 덮는지, Ground Layers, 위쪽이 막힌 실내(천장)인지 확인하세요. 1초 뒤 다시 시도합니다.", this);
 	}
 
 	void OnMonsterDied()

@@ -137,6 +137,9 @@ public class RaidLobbyUI : InputBlockingPanel
 		else ShowRoomList();
 	}
 
+	// ESC (#324): 닫기 버튼과 같이 방에서도 나간다
+	protected override void OnCancelKey() => CloseAndLeave();
+
 	// 닫기 버튼. 화면을 닫으면 방에서 나간다 (방에 들어간 채로 다른 장소에 가지 않게)
 	void CloseAndLeave()
 	{

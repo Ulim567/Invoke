@@ -58,7 +58,12 @@
 | `ExpToNext(int level)` | 지금 레벨 | `int` | 다음 레벨까지 필요한 경험치. 최대 레벨이면 0. 경험치 바 화면에 쓴다 |
 
 ### `PlayerLevelStats`
-플레이어 프리팹 최상위(`PlayerStats`, `PlayerProgress`와 같은 곳)에 붙어 있다. 지금은 `Player_UL`(Base 씬 NetworkManager의 Player Prefab, `PlayerProgress`가 붙은 곳, 이우림 허락). 다른 스크립트가 부르는 함수는 없다. Inspector `Max Hp Per Level`(10), `Attack Power Per Level`(2).
+플레이어 프리팹 최상위(`PlayerStats`, `PlayerProgress`와 같은 곳)에 붙어 있다. 지금은 공용 `Player.prefab` (#303). Inspector `Max Hp Per Level`(10), `Attack Power Per Level`(2).
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `MaxHpPerLevel` | - | `int` | 레벨 1당 오르는 최대 체력. 레벨업 창의 「다음 레벨」 표시용 (임혜원 #332) |
+| `AttackPowerPerLevel` | - | `int` | 레벨 1당 오르는 공격력. 레벨업 창의 「다음 레벨」 표시용 (임혜원 #332) |
 
 ### `StatType`
 `MaxHp`, `AttackPower`, `AttackSpeed`, `MemorySize`, `CooldownReduction`, `MoveSpeed`

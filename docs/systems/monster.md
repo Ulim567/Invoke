@@ -43,7 +43,7 @@
 
 - 잡몹
   - 잡몹 1 **Leak**(메모리 누수 덩어리): 순찰형. `Monster` + `ContactDamage` + `GroundChaseAI`(`Chase Players` 끔) + `StatusEffects` + `StatusIconView`. 플레이어를 쫓지 않고 돌아다니며, 닿으면 접촉 피해를 준다. 체력 40, 접촉 피해 10, 순찰 1.5, 사망 대기 1.0초 (전부 임시, 프리팹 Inspector 값)
-    - 몸 약 2.5×1.5칸, 그림 Pivot은 몸 바닥(임혜원 #101). 판정 BoxCollider2D와 `ContactDamage` 상자는 Size (2.4, 1.2), Offset (0, 0.6) (#107)
+    - 몸 약 2.5×1.5칸, 그림 Pivot은 몸 바닥(임혜원 #101). 판정 BoxCollider2D와 `ContactDamage` 상자는 Size (2.4, 0.6), Offset (0, 0.6) (#107, #281에서 높이 1.2 → 0.6: 그림이 땅 위에 서도록 발 높이를 맞춤)
   - 잡몹 2 **Loop**(무한 루프 드론): 원거리 투사체형. `Monster` + `ContactDamage` + `FlyingShooterAI` + `ProjectileAttack` + `StatusEffects` + `StatusIconView`. 공중을 떠다니다 사거리 안의 플레이어를 멈춰서 겨냥해 쏜다. 쫓아가지는 않는다. 체력 30, 접촉 피해 5, 투사체 체력 피해 8(`Loop_Shot`), 사거리 6, 쏘는 간격 2초, 모으는 시간 0.25초, 사망 대기 0.75초 (전부 임시, 프리팹 Inspector 값)
     - 원형 판정(CircleCollider2D) 지름 1.1, 그림 Pivot은 가운데(임혜원 #101). Rigidbody2D Gravity Scale 0
 - 몬스터끼리는 서로 통과한다(메이플 방식). 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌이 꺼져 있다(#81).
@@ -238,6 +238,8 @@
 | `Respawn Delay` | 죽은 뒤 다시 만들기까지 시간(초) |
 | `Area Size`, `Area Offset` | 몬스터를 만들 구역. 몬스터가 생길 땅과 발판을 덮는다. 스포너를 선택하면 Scene 창에서 초록 상자로 보인다. |
 | `Ground Layers` | 몬스터가 설 수 있는 레이어. Ground, Platform으로 둔다. |
+
+- 구역 안에서 설 땅을 찾지 못하면 만들지 않고 경고 로그를 한 번 남긴 뒤 1초마다 다시 시도한다. 위가 막힌 실내(천장 아래)에서는 땅을 못 찾을 수 있다 (#319, 임혜원 알림)
 
 ### `AttackEffectType`, `AttackEffect`
 

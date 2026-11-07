@@ -43,7 +43,7 @@ public static class RaidUIBuilder
 		// 가운데 띠
 		RectTransform banner = NewUI("Banner", root);
 		banner.anchorMin = banner.anchorMax = new Vector2(0.5f, 0.5f);
-		banner.sizeDelta = new Vector2(400, 96);
+		banner.sizeDelta = new Vector2(400, 112);
 		Image bannerImage = banner.gameObject.AddComponent<Image>();
 		bannerImage.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(PanelSprite);
 		bannerImage.type = Image.Type.Sliced;
@@ -55,11 +55,16 @@ public static class RaidUIBuilder
 		Image bottom = Accent(banner, "AccentBottom", false);
 
 		TMP_Text title = Text(banner, "Title", "레이드 성공", 22, font, new Color32(0xFF, 0xD7, 0x7A, 0xFF));
-		Place(title.rectTransform, 0, 16, 400, 30);
+		Place(title.rectTransform, 0, 26, 400, 30);
 		TMP_Text subtitle = Text(banner, "Subtitle", "보스를 쓰러뜨렸어요!", 11, font, new Color32(0xE8, 0xEC, 0xFF, 0xFF));
-		Place(subtitle.rectTransform, 0, -12, 400, 16);
+		Place(subtitle.rectTransform, 0, 2, 400, 16);
+		// 보상 줄 (시안 12): 클리어일 때만 RaidResultView가 채운다
+		TMP_Text reward = Text(banner, "Reward", "보스 코어 +1    버그 조각 +5    경험치 +200", 10, font, new Color32(0xE8, 0xEC, 0xFF, 0xFF));
+		Place(reward.rectTransform, 0, -18, 400, 14);
+		reward.richText = true;
+		reward.gameObject.SetActive(false);
 		TMP_Text hint = Text(banner, "Hint", "잠시 후 돌아가요", 9, font, new Color32(0x7C, 0x84, 0xA8, 0xFF));
-		Place(hint.rectTransform, 0, -32, 400, 12);
+		Place(hint.rectTransform, 0, -38, 400, 12);
 
 		RaidResultView view = canvasObject.AddComponent<RaidResultView>();
 		var so = new SerializedObject(view);
@@ -68,6 +73,7 @@ public static class RaidUIBuilder
 		so.FindProperty("banner").objectReferenceValue = banner;
 		so.FindProperty("titleText").objectReferenceValue = title;
 		so.FindProperty("subtitleText").objectReferenceValue = subtitle;
+		so.FindProperty("rewardText").objectReferenceValue = reward;
 		SerializedProperty accents = so.FindProperty("accents");
 		accents.arraySize = 2;
 		accents.GetArrayElementAtIndex(0).objectReferenceValue = top;

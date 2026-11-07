@@ -390,6 +390,25 @@ public class PlayerMovement : NetworkBehaviour
 		if (!riding) return;
 		riding = false;
 		RestoreGravity();
+		ShareRideEnded();
+	}
+
+	// [소유 클라이언트] 검 타기가 끝났음을 서버에 알려, 서버의 소환검이 Riding에서 풀리게 한다 (#325)
+	// 대시·움직임 잠금(장소 이동)·경직·사망으로 소유 클라이언트에서 먼저 끝나도 서버는 모르기 때문이다
+	// Host의 내 캐릭터는 서버이므로 바로 부르고, 원격 클라이언트는 Command로 알린다. 네트워크 없는 테스트는 아무것도 하지 않는다
+	void ShareRideEnded()
+	{
+		if (isServer) EndRidingSwords();
+		else if (isClient) CmdRideEnded();
+	}
+
+	// [서버] 원격 클라이언트의 검 타기가 끝났다. 서버가 이미 풀었으면(StopRide 등) 풀 검이 없어 아무 일도 없다
+	[Command]
+	void CmdRideEnded() => EndRidingSwords();
+
+	void EndRidingSwords()
+	{
+		if (TryGetComponent(out SummonedSwords swords)) swords.EndAllRides();
 	}
 
 	// 서버에서 불렸고, 이 플레이어를 다른 컴퓨터(원격 클라이언트)가 움직이면 true. Host의 내 캐릭터, 네트워크 없는 테스트는 false
@@ -470,6 +489,9 @@ public class PlayerMovement : NetworkBehaviour
 		if (health != null && !health.CanAct)
 		{
 			lunging = false;
+			// 대시·검 타기 중이면 여기서 끝낸다. 끝내는 코드가 아래에 있어서 먼저 return하면 중력 0인 채 공중에 멈춘다 (#325)
+			EndDashLocal();
+			EndRideLocal();
 			body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
 			return;
 		}

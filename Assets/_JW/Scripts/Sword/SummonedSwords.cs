@@ -228,6 +228,25 @@ public class SummonedSwords : MonoBehaviour
 		NotifyChanged();
 	}
 
+	/// <summary>
+	/// 타고 있는(Riding) 검을 모두 끝낸다 (#325). 소유 클라이언트의 PlayerMovement가 대시·움직임 잠금·경직·사망으로 검 타기를 먼저 끝냈을 때 서버에서 부른다.<br/>
+	/// 서버의 PlayerMovement는 어느 검을 탔는지 모르므로 검을 지정하지 않는다. 타는 검이 없으면 아무 일도 없다. 서버에서만 부른다.
+	/// </summary>
+	public void EndAllRides()
+	{
+		foreach (SummonedSword s in swords.ToArray()) EndRide(s);
+	}
+
+	/// <summary>타고 있는(Riding) 검이 있으면 true. 검 타기 스킬이 이미 타는 중에 두 번째 검을 묶지 않으려고 확인한다 (#325)</summary>
+	public bool HasRidingSword
+	{
+		get
+		{
+			foreach (SummonedSword s in swords) if (s != null && s.State == SummonedSwordState.Riding) return true;
+			return false;
+		}
+	}
+
 	// 검 타기에서 검이 붙을 자리: 플레이어 발밑
 	internal Vector2 RidePoint => (Vector2)transform.position + rideOffset;
 

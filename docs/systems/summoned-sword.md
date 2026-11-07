@@ -87,6 +87,8 @@
 | `Dance(SummonedSword, GameObject target, float startAngle)` | 검, 대상, 시작 각도(도) | `bool` | (#243) 사용 가능한 검을 대상 둘레로 보내 돌게 한다 (`Dance Radius` 1.2, `Dance Degrees Per Second` 540, 임시). `Dancing` 상태. 데미지는 스킬이 준다. 검무가 쓴다 |
 | `EndDance(SummonedSword)` | 검 | - | (#243) 검무를 끝낸다. 도는 중인 검만 `Ready`로 바뀌고 곁의 자리로 날아온다 |
 | `Ride(SummonedSword, float seconds)`, `EndRide(SummonedSword)` | 검, 초 | `bool` / - | (#256) 검 타기. 사용 가능한 검을 seconds초 동안 발밑(`Ride Offset`)에 붙이고(`Riding`), 시간이 다 되면 스스로 곁으로 돌아온다. `EndRide`는 바로 돌려보냄 |
+| `EndAllRides()` | - | - | (#325) 타고 있는(`Riding`) 검을 모두 끝낸다. 소유 클라이언트의 `PlayerMovement`가 대시·움직임 잠금·경직·사망으로 검 타기를 먼저 끝냈을 때 서버에서 부른다 |
+| `HasRidingSword` | - | `bool` | (#325) 타고 있는 검이 있으면 `true`. 검 타기 스킬이 이미 타는 중에 두 번째 검을 묶지 않으려고 확인한다 |
 | `Throw(SummonedSword, GameObject target, Vector2 direction)` | 검, 대상(빗나가면 `null`), 방향 | `bool` | (#167) 일직선으로 던진다. 대상에 닿으면 `Hit`을 알리고 몬스터 몸에 꽂혀 따라다닌다(몬스터가 죽으면 떨어짐). 대상이 `null`이면 안 맞고 날아가 벽·땅(Ground)에 꽂히거나 14칸에서 떨어진다. 한쪽 방향 발판(Platform)은 통과한다. 소환검 던지기가 쓴다 |
 | `StartReturn(SummonedSword)` | 검 | `bool` | (#167) 던진(날아가는 중, 떨어짐·꽂힘) 검을 곁으로 날아오게 한다. 지나가는 몬스터는 `ReturnHit`, 닿으면 `Ready`. 검 돌아오기가 쓴다 |
 | `ReturnHit` (event) | `SummonedSword`, `GameObject` | - | [로직] (#167) 돌아오는 검이 몬스터를 지나갔을 때. 몬스터마다 한 번 |

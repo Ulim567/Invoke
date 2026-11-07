@@ -32,7 +32,8 @@
     - 나는 시간은 스킬 시간(20틱 = 0.4초)과 따로다. 스킬은 타기를 시작만 하고 먼저 끝난다.
     - 남은 시간은 `SwordRideTimerView`(임시 표시)가 머리 위 작은 바로 그린다. 왼쪽 끝 고정, 오른쪽 끝이 왼쪽으로 줄어든다.
     - 슬롯 키를 누르고 있는 동안은 `MoveX`·`MoveY`가 0이다(대상 고르기용, player-input.md). 그동안 그 자리에 떠 있고, 슬롯 키를 떼면 다시 ←→↑↓로 난다.
-  - 대시·검 타기 동안은 중력을 0으로 두고 끝나면 처음 중력으로 되돌린다. 움직임을 잠그면(#207) 먼저 끝낸다.
+  - 대시·검 타기 동안은 중력을 0으로 두고 끝나면 처음 중력으로 되돌린다. 움직임을 잠그면(#207) 먼저 끝낸다. 경직·사망이 되어도(`CanAct`가 false) 먼저 끝낸다 (#325). 끝내지 않으면 중력 0인 채 공중에 멈춘다.
+  - 검 타기가 소유 클라이언트에서 끝나면(대시, 움직임 잠금, 경직·사망, 시간 종료, `StopRide`) 서버에 알려 서버의 소환검 `Riding`을 푼다 (#325). 원격 클라이언트는 `[Command]`로, Host의 내 캐릭터는 바로 `SummonedSwords.EndAllRides()`를 부른다. 서버가 이미 푼 뒤에 알려도 풀 검이 없어 아무 일도 없다.
   - 서버에서 다른 컴퓨터의 플레이어에 부르면 `[TargetRpc]`로 소유 클라이언트에서 한다 (돌진과 같은 방식, #223).
 - 바닥 판정
   - 콜라이더 아래 끝에 얇은 상자(너비 = 콜라이더 너비 × 0.9, 높이 0.1)를 두고 Ground·Platform 레이어와 겹치는지 검사한다.
@@ -61,7 +62,7 @@
   - `FaceTowards`는 서버의 `Facing`도 바로 바꾼다. 같은 틱에 스킬이 방향을 읽기 때문.
   - 다른 컴퓨터의 플레이어면 서버의 `IsLunging`은 늘 `false`다 (돌진은 소유 클라이언트에서 함).
   - 한계: 방향을 바꾼 거의 같은 순간에 시전하면 서버가 바뀌기 전 방향을 읽을 수 있다 (network.md).
-- 경직·사망 중(`PlayerHealth.CanAct`가 false)에는 좌우로 움직이지 않고 점프하지 않는다. 떨어지는 것은 그대로다. `PlayerHealth`가 없는 플레이어는 검사하지 않는다.
+- 경직·사망 중(`PlayerHealth.CanAct`가 false)에는 좌우로 움직이지 않고 점프하지 않는다. 떨어지는 것은 그대로다. 대시·검 타기 중이었으면 끝낸다 (#325). `PlayerHealth`가 없는 플레이어는 검사하지 않는다.
 - 붙는 곳 (#268): 공용 `Assets/Prefabs/Player.prefab` 최상위. 공용 PlayerMove(`_UL`) 자리를 대신한다. `Player_JW` 등 변형 프리팹은 물려받는다.
   - 박진우 컴포넌트와 실행기 묶음이 함께 붙어 있다: `PlayerMovement`, `PlayerFacingView`, `SwordRideTimerView` / `FunctionExecutor`, `ProcessMemory`, `LanguageRule`, `FunctionExecutorLogger`, `SlotLoadout`, `FunctionExecutorNetwork` / `SlotCaster`, `SlotTargetMarker` / `PhysicalSword`, `SwordPickUpInput`, `SummonedSwords`, `SummonedSwordHud`, `SwordWaveLauncher` / `SkillEffectEvents`, `ThrustEffectView`, `VitalStrikeMinigame`, `VitalStrikeMinigameView`, `ParryGuard`
   - 이어서 붙일 것: `PlayerHealth`·`PlayerHealthEffects`(김도훈), `PlayerProgress`·`PlayerLevelStats`(이우림). 각 변형 프리팹의 중복 컴포넌트는 각 담당자가 지운다.

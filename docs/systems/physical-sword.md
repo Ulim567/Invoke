@@ -30,7 +30,7 @@
   - 안에서 `NetworkSpawner.Spawn` / `Despawn`을 부른다 (place-scenes.md, #125). 떨어진 검 프리팹은 `NetworkIdentity`를 붙이고 `Base` 씬과 Test_JW의 NetworkManager에 등록했다. 만들지 못하면 `Throw`가 `false`.
   - 그림 순서: 떨어진 검 프리팹 SpriteRenderer Sorting Layer `Projectile` (#341). `Default`면 맵 배경 뒤에 그려져 안 보인다
 - 떨어질 땅 찾기는 떨어진 검이 속한 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D()`)에 묻는다 (#125).
-- 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다. 못 주우면 근처에 떨어진 소환검을 줍는다 (`SummonedSwords.TryPickUpNearest`).
+- 줍기: 내 캐릭터에서 `PlayerInputReader.PickUpPressed`(Z)가 true이면 `SwordPickUpInput`이 `TryPickUp`을 부른다. 못 주우면 근처에 떨어진 소환검을 줍는다 (`SummonedSwords.TryPickUpNearest`). 죽은 동안·경직 중(`PlayerHealth.CanAct`가 false)에는 서버가 줍기 요청을 무시한다 (#325).
 
 ### 지금 값 (공용 Player, #268)
 
@@ -55,7 +55,7 @@
 | `Dropped` | - | `DroppedSword` | 던진 검 오브젝트. 손에 있으면 `null`. 위치 표시에 쓴다 |
 | `Throw(GameObject target)` | 대상 (없으면 `null` = 빗나감) | `bool` | 검을 던진다. 손에 없으면 `false`. 검 던지기 스킬이 부른다 |
 | `TryPickUp()` | - | `bool` | 근처의 떨어진 검을 줍는다. 주울 수 없으면 `false`. 줍기 키를 눌렀을 때 부른다 |
-| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false`. 스킬은 쓰지 않음 (테스트·시스템용, #232) |
+| `Recall()` | - | `bool` | 거리와 상관없이 바로 손으로 되돌린다. 이미 손에 있으면 `false`. 스킬은 쓰지 않음 (테스트·시스템용, #232). 장소 이동 때 `InvokeNetworkManager.TravelPlayer`가 부른다 (#325, place-scenes.md) |
 | `HandPosition` | - | `Vector2` | 던지는 손 위치 |
 | `StateChanged` (event) | `SwordState` | - | [표시] 상태가 바뀔 때. 손 그림, 맨손 표시 |
 | `Hit` (event) | `GameObject` 맞은 대상 | - | [로직] 던진 검이 대상에 닿았을 때. 데미지·처형은 이 이벤트를 받는 쪽(검 던지기 스킬)이 준다 |

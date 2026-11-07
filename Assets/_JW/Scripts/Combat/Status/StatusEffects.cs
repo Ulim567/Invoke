@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Mirror;
 using UnityEngine;
 
 /// <summary>상태 이상 종류 (노션 「C 캐릭터 - 1차」 5. 상태이상)</summary>
@@ -46,13 +47,17 @@ public static class StatusDefaults
 /// - 출혈: 걸려 있는 동안 BleedInterval마다 BleedDamage를 DamageCalculator를 거쳐 같은 오브젝트의 IDamageable.TakeDamage로 준다.<br/>
 /// - 표식: DamageTarget.FromMonster가 읽어서 DamageCalculator가 데미지 +100%를 자동으로 붙인다.<br/>
 /// - 기절·이속 감소·실명: 값만 공개한다. 몬스터 AI·공격이 읽어서 반응한다 (김도훈 「몬스터가 상태 이상에 반응하고 죽으면 드롭하기」).<br/>
-/// - 대상이 죽으면 모든 상태를 지운다.
+/// - 대상이 죽으면 모든 상태를 지운다.<br/>
+/// - 네트워크 (#325): 상태를 걸고 푸는 일, 출혈 데미지는 서버에서만 한다. 걸린 상태와 끝나는 시각은 [SyncDictionary]로 클라이언트에 보낸다.
+///   클라이언트에서도 Has, RemainingTime, IsStunned 등 읽는 값이 서버와 같고, StatusApplied·StatusRemoved가 모든 화면에서 불린다 (아이콘 표시용).
 /// </para>
 /// </summary>
-public class StatusEffects : MonoBehaviour
+public class StatusEffects : NetworkBehaviour
 {
-	// 걸려 있는 상태와 끝나는 시각
+	// 걸려 있는 상태와 끝나는 시각. 서버(Host, 네트워크 없는 시험 포함)의 원본이고 Time.time 기준이다
 	readonly Dictionary<StatusType, float> endTimes = new Dictionary<StatusType, float>();
+	// [서버 → 클라이언트] 걸린 상태와 끝나는 시각 (NetworkTime.time 기준, 서버와 클라이언트가 같은 시계를 본다). 서버만 바꾼다
+	readonly SyncDictionary<StatusType, double> syncedEnds = new SyncDictionary<StatusType, double>();
 	float nextBleedTime;
 	// 상처 가르기(#172): 지금 출혈의 틱 데미지 추가분. 출혈이 풀리면 0으로
 	float bleedBonusRate;
@@ -81,10 +86,45 @@ public class StatusEffects : MonoBehaviour
 	/// <summary>이동 속도 배율. 이속 감소 중이면 StatusDefaults.SlowMultiplier, 아니면 1. 몬스터 AI가 이동 속도에 곱한다.</summary>
 	public float MoveSpeedMultiplier => Has(StatusType.Slow) ? StatusDefaults.SlowMultiplier : 1f;
 
+	// 서버가 아니고 클라이언트로만 접속한 컴퓨터. 여기서는 상태를 바꾸지 않고 서버가 보낸 값을 읽기만 한다
+	static bool IsClientOnly => NetworkClient.active && !NetworkServer.active;
+
 	void Awake()
 	{
 		damageable = GetComponent<IDamageable>();
 		monster = GetComponent<Monster>();
+	}
+
+	// [클라이언트] 서버가 보낸 상태가 바뀌면 서버·Host가 Apply·Clear 안에서 내는 것과 같은 이벤트를 낸다 (아이콘 표시용)
+	// 서버와 Host는 이미 직접 냈으므로 구독하지 않는다 (SyncDictionary의 변경 알림은 서버에서도 불려 이중으로 불리기 때문)
+	public override void OnStartClient()
+	{
+		base.OnStartClient();
+		if (isServer) return;
+
+		syncedEnds.OnChange += OnSyncedChanged;
+		// 접속하기 전부터 걸려 있던 상태도 알린다 (처음 받은 목록은 변경 알림 없이 들어온다)
+		foreach (StatusType type in new List<StatusType>(syncedEnds.Keys)) StatusApplied?.Invoke(type);
+	}
+
+	public override void OnStopClient()
+	{
+		syncedEnds.OnChange -= OnSyncedChanged;
+		base.OnStopClient();
+	}
+
+	void OnSyncedChanged(SyncIDictionary<StatusType, double>.Operation op, StatusType type, double end)
+	{
+		switch (op)
+		{
+			case SyncIDictionary<StatusType, double>.Operation.OP_ADD:
+			case SyncIDictionary<StatusType, double>.Operation.OP_SET:
+				StatusApplied?.Invoke(type);
+				break;
+			case SyncIDictionary<StatusType, double>.Operation.OP_REMOVE:
+				StatusRemoved?.Invoke(type);
+				break;
+		}
 	}
 
 	void OnEnable()
@@ -108,10 +148,12 @@ public class StatusEffects : MonoBehaviour
 	/// </summary>
 	public void Apply(StatusType type, float duration)
 	{
-		if (duration <= 0f || (monster != null && monster.IsDead)) return;
+		// 클라이언트는 서버가 보낸 값을 읽기만 한다
+		if (IsClientOnly || duration <= 0f || (monster != null && monster.IsDead)) return;
 
 		bool wasBleeding = Has(StatusType.Bleed);
 		endTimes[type] = Time.time + duration;
+		if (NetworkServer.active) syncedEnds[type] = NetworkTime.time + duration;
 		// 출혈을 새로 걸면 한 간격 뒤에 첫 데미지. 이미 출혈 중이면 데미지 간격은 그대로 둔다
 		if (type == StatusType.Bleed && !wasBleeding) nextBleedTime = Time.time + StatusDefaults.BleedInterval;
 		StatusApplied?.Invoke(type);
@@ -131,21 +173,36 @@ public class StatusEffects : MonoBehaviour
 	public float BleedBonusRate => bleedBonusRate;
 
 	/// <summary>이 상태가 걸려 있으면 true.</summary>
-	public bool Has(StatusType type) => endTimes.TryGetValue(type, out float end) && Time.time < end;
-
-	/// <summary>남은 시간(초). 걸려 있지 않으면 0.</summary>
-	public float RemainingTime(StatusType type) => endTimes.TryGetValue(type, out float end) ? Mathf.Max(0f, end - Time.time) : 0f;
-
-	/// <summary>이 상태를 바로 푼다.</summary>
-	public void Clear(StatusType type)
+	public bool Has(StatusType type)
 	{
-		if (type == StatusType.Bleed) bleedBonusRate = 0f;
-		if (endTimes.Remove(type)) StatusRemoved?.Invoke(type);
+		// 클라이언트는 서버가 보낸 끝나는 시각을 서버와 같은 시계(NetworkTime)로 본다
+		if (IsClientOnly) return syncedEnds.TryGetValue(type, out double syncedEnd) && NetworkTime.time < syncedEnd;
+		return endTimes.TryGetValue(type, out float end) && Time.time < end;
 	}
 
-	/// <summary>모든 상태를 바로 푼다.</summary>
+	/// <summary>남은 시간(초). 걸려 있지 않으면 0. 클라이언트에서는 전송 지연만큼의 오차가 있다.</summary>
+	public float RemainingTime(StatusType type)
+	{
+		if (IsClientOnly) return syncedEnds.TryGetValue(type, out double syncedEnd) ? Mathf.Max(0f, (float)(syncedEnd - NetworkTime.time)) : 0f;
+		return endTimes.TryGetValue(type, out float end) ? Mathf.Max(0f, end - Time.time) : 0f;
+	}
+
+	/// <summary>이 상태를 바로 푼다. 서버에서만 한다.</summary>
+	public void Clear(StatusType type)
+	{
+		if (IsClientOnly) return;
+		if (type == StatusType.Bleed) bleedBonusRate = 0f;
+		if (endTimes.Remove(type))
+		{
+			if (NetworkServer.active) syncedEnds.Remove(type);
+			StatusRemoved?.Invoke(type);
+		}
+	}
+
+	/// <summary>모든 상태를 바로 푼다. 서버에서만 한다.</summary>
 	public void ClearAll()
 	{
+		if (IsClientOnly) return;
 		foreach (StatusType type in new List<StatusType>(endTimes.Keys)) Clear(type);
 	}
 
@@ -164,6 +221,9 @@ public class StatusEffects : MonoBehaviour
 
 	void Update()
 	{
+		// 출혈 데미지와 만료는 서버만 한다. 클라이언트는 서버가 목록에서 지우면 StatusRemoved를 받는다
+		if (IsClientOnly) return;
+
 		// 출혈 데미지는 끝나는 시각 전까지만 준다 (지속 5초, 간격 1초 → 5번)
 		if (endTimes.TryGetValue(StatusType.Bleed, out float bleedEnd))
 		{

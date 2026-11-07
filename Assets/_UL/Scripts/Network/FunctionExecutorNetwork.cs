@@ -224,6 +224,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		// 슬롯은 언제나 그 슬롯의 슬롯 함수이므로 장착을 바꾸는 요청이 없다. 슬롯 함수의 내용은 RequestSaveFunction으로 바꾼다
 		if (usesServerData)
 		{
+			// 이 컴퓨터의 SlotLoadout도 서버의 슬롯으로 채운다. 다른 화면(편집 화면, 장착 화면)이 PlayerDataReceived를 받을 때 이미 새 값이도록 가장 먼저 구독한다
+			PlayerDataReceived += ApplyReceivedDataToLoadout;
 			CmdRequestPlayerData();
 			return;
 		}
@@ -236,11 +238,21 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		base.OnStopLocalPlayer();
 
+		PlayerDataReceived -= ApplyReceivedDataToLoadout;
 		loadout.Changed -= OnLoadoutChanged;
 		resendRequested = false;
 	}
 
 	void OnLoadoutChanged(int slot) => resendRequested = true;
+
+	// [내 화면] 서버가 보낸 슬롯·함수를 이 컴퓨터의 SlotLoadout에 넣는다 (slot-caster.md 「실제 계정 슬롯」, #263)
+	// SlotCaster가 이 컴퓨터의 SlotLoadout.json·기본값 대신 서버 슬롯으로 시전 여부와 방식(바로, 대상 고르기)을 정하게 하기 위함이다
+	// 실제 계정은 loadout.Changed를 구독하지 않으므로(OnStartLocalPlayer) SetEntries가 낸 Changed가 서버로 다시 보내지지 않는다
+	void ApplyReceivedDataToLoadout()
+	{
+		if (ReceivedSlots == null || ReceivedFunctions == null) return;
+		loadout.SetEntries(ReceivedSlots, ReceivedFunctions);
+	}
 
 	void Update()
 	{

@@ -21,7 +21,8 @@
   - heap 크기: 소환검 하나 = `Sword` struct 크기(`PredefinedStructs`, 임시 2칸).
   - 포인터는 소환한 순서대로 커진다. 목록(`Swords`)도 소환 순서.
 - 최대 5개
-  - 누수된 소환검도 개수에 들어간다 (`HeapStorage.CountObjects`). 누수가 쌓이면 새로 소환할 수 있는 수가 줄어든다.
+  - 누수된 소환검도 개수에 들어간다 (`HeapStorage.CountObjects`). 누수가 쌓이면 새로 소환할 수 있는 수가 줄어든다. `Destroy`된 오브젝트는 세지 않는다 (#325, `TryGet`과 같은 기준).
+  - 플레이어가 장소를 옮겨도 누수 검은 같이 옮겨지고 개수를 계속 차지한다 (`MoveToScene`).
   - 5개거나 heap이 모자라면 검 소환 스킬이 만들지 않는다 (C의 malloc처럼 에러로 끝내지 않음).
 - 상태
   - 사용 가능(`Ready`): 플레이어 머리 뒤쪽에 줄 서서 따라다닌다 (`Follow Offset`, `Follow Spacing`).
@@ -62,7 +63,7 @@
 - 위치·회전: 소환검 프리팹의 `NetworkTransform`(Sync Direction: Server To Client, 위치·회전)이 맞춘다.
 - 포인터, 상태, 주인 플레이어: `SummonedSword`의 `[SyncVar]`. 클라이언트에서도 `Pointer`, `State`가 맞고 `StateChanged`가 불린다 (누수 반투명).
 - 목록: 클라이언트에는 heap이 없어서, 소환검 오브젝트가 주인의 `SummonedSwords` 목록에 스스로 들어가고 나간다(포인터 순서). 그래서 클라이언트에서도 `Swords`, `Count`, `ReadyCount`, `Changed`를 그대로 읽는다 (HUD, 여러 명 선택 최대 인원).
-- 줍기: `SwordPickUpInput`이 Z를 `[Command]`로 서버에 요청한다 (network.md 경우 4).
+- 줍기: `SwordPickUpInput`이 Z를 `[Command]`로 서버에 요청한다 (network.md 경우 4). 죽은 동안·경직 중(`PlayerHealth.CanAct`가 false)에는 서버가 요청을 무시한다 (#325).
 - 스킬이 부르는 함수(`Throw`, `Stab`, `Recall` 등)는 서버에서만 부른다. 클라이언트에서 부르면 클라이언트 목록만 보고 아무 일도 하지 않는다.
 
 ## 다른 시스템이 쓰는 것
@@ -88,6 +89,9 @@
 | `Dance(SummonedSword, GameObject target, float startAngle)` | 검, 대상, 시작 각도(도) | `bool` | (#243) 사용 가능한 검을 대상 둘레로 보내 돌게 한다 (`Dance Radius` 1.2, `Dance Degrees Per Second` 540, 임시). `Dancing` 상태. 데미지는 스킬이 준다. 검무가 쓴다 |
 | `EndDance(SummonedSword)` | 검 | - | (#243) 검무를 끝낸다. 도는 중인 검만 `Ready`로 바뀌고 곁의 자리로 날아온다 |
 | `Ride(SummonedSword, float seconds)`, `EndRide(SummonedSword)` | 검, 초 | `bool` / - | (#256) 검 타기. 사용 가능한 검을 seconds초 동안 발밑(`Ride Offset`)에 붙이고(`Riding`), 시간이 다 되면 스스로 곁으로 돌아온다. `EndRide`는 바로 돌려보냄 |
+| `MoveToScene(Scene scene)` | 갈 씬 | - | (#325) 소환검을 모두 새 씬으로 옮긴다. 누수가 아닌 검은 모든 상태(던짐·꽂힘·찌르기·검무·검 타기)에서 `Ready`로 돌려 곁의 자리에 놓고, 누수 검은 `Leaked` 그대로 곁에 놓는다. 장소 이동 때 `InvokeNetworkManager.TravelPlayer`가 서버에서 부른다 (place-scenes.md) |
+| `EndAllRides()` | - | - | (#325) 타고 있는(`Riding`) 검을 모두 끝낸다. 소유 클라이언트의 `PlayerMovement`가 대시·움직임 잠금·경직·사망으로 검 타기를 먼저 끝냈을 때 서버에서 부른다 |
+| `HasRidingSword` | - | `bool` | (#325) 타고 있는 검이 있으면 `true`. 검 타기 스킬이 이미 타는 중에 두 번째 검을 묶지 않으려고 확인한다 |
 | `Throw(SummonedSword, GameObject target, Vector2 direction)` | 검, 대상(빗나가면 `null`), 방향 | `bool` | (#167) 일직선으로 던진다. 대상에 닿으면 `Hit`을 알리고 몬스터 몸에 꽂혀 따라다닌다(몬스터가 죽으면 떨어짐). 대상이 `null`이면 안 맞고 날아가 벽·땅(Ground)에 꽂히거나 14칸에서 떨어진다. 한쪽 방향 발판(Platform)은 통과한다. 소환검 던지기가 쓴다 |
 | `StartReturn(SummonedSword)` | 검 | `bool` | (#167) 던진(날아가는 중, 떨어짐·꽂힘) 검을 곁으로 날아오게 한다. 지나가는 몬스터는 `ReturnHit`, 닿으면 `Ready`. 검 돌아오기가 쓴다 |
 | `ReturnHit` (event) | `SummonedSword`, `GameObject` | - | [로직] (#167) 돌아오는 검이 몬스터를 지나갔을 때. 몬스터마다 한 번 |

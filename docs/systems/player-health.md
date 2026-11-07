@@ -82,7 +82,7 @@
   - 서버의 시전 처리(`FunctionExecutorNetwork`): `CanAct`가 false면 `CastRejection.CannotAct`로 거부
   - 출구(`PlaceExit`): `CanAct`가 false면 ↑ 무시
   - 죽으면 그 플레이어가 실행 중인 함수를 모두 끊는다 (`FunctionExecutorNetwork`가 서버의 `Died`를 받아 `FunctionExecutor.InterruptAll`)
-  - 요청 (각 담당자): 검 줍기 `SwordPickUpInput.CmdPickUp`(박진우, 서버에서 `CanAct` 검사), `SlotCaster`의 `CannotAct` 거부 처리(박진우), 로비 입구 `PlaceInteractable`(임혜원, `CanAct`가 false면 ↑ 무시)
+  - 요청 (각 담당자): 검 줍기 `SwordPickUpInput.CmdPickUp`(박진우, 서버에서 `CanAct` 검사, #325에서 함), `SlotCaster`의 `CannotAct` 거부 처리(박진우), 로비 입구 `PlaceInteractable`(임혜원, `CanAct`가 false면 ↑ 무시)
 - 임혜원과 정한 것
   - `PlayerAnimator`가 `HitEffectPlayed`, `DeathEffectPlayed`, `RespawnEffectPlayed`를 받아 피격·사망 모션을 재생한다 (#49)
 - 다른 시스템이 쓰는 곳

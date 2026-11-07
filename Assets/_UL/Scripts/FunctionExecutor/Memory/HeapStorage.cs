@@ -191,13 +191,14 @@ public class HeapStorage
 	}
 
 	/// <summary>
-	/// 힙에 있는 T 타입 객체의 수. 누수된 객체도 센다. 소환검 최대 개수 검사에 쓴다.
+	/// 힙에 있는 T 타입 객체의 수. 누수된 객체도 센다. 소환검 최대 개수 검사에 쓴다.<br/>
+	/// Destroy된 Unity 오브젝트는 세지 않는다 (TryGet, GetGlobalPointers와 같은 기준). 쓸 수 없는 객체가 소환 가능 개수를 차지하지 않게 하기 위함이다 (#325).
 	/// </summary>
 	public int CountObjects<T>()
 	{
 		int count = 0;
 		foreach (HeapEntry entry in entries.Values)
-			if (entry.Obj is T) count++;
+			if (entry.Obj is T && !IsDestroyed(entry.Obj)) count++;
 		return count;
 	}
 

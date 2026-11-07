@@ -238,7 +238,9 @@
 - 결과: `PlayerDataRequestAnswered(요청 종류, 결과)`. 성공(`Saved`)이면 그보다 먼저 `ReceivedFunctions`·`ReceivedGlobals`가 새 값으로 바뀌고 `PlayerDataReceived`가 불림
 - 거부되면 `ReceivedXxx`는 그대로. 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)의 요청은 `NotAllowed`
 - 「로그인 건너뛰기」 임시 계정: 지금처럼 PC 파일 (`SlotLoadout`의 장착 그대로)
-- `SlotLoadout` 연결: 박진우의 `SlotLoadout.SetEntries(Entry[], IReadOnlyList<FunctionData>)`가 생긴 뒤, `FunctionExecutorNetwork`가 `PlayerDataReceived` 때(실제 계정, 소유 클라이언트) 부름. 그 전까지 실제 계정의 소유 클라이언트 `SlotLoadout`은 서버의 슬롯을 모름 (시전은 서버의 슬롯 원본으로 되므로 영향 없음)
+- `SlotLoadout` 연결 (#325): 실제 계정의 소유 클라이언트(호스트 포함)에서 `FunctionExecutorNetwork`가 `PlayerDataReceived` 때마다 박진우의 `SlotLoadout.SetEntries(ReceivedSlots, ReceivedFunctions)`를 부름
+  - 이유: 서버의 시전은 서버의 슬롯 원본으로 되지만, 내 화면의 `SlotCaster`는 `SlotLoadout`을 보고 시전 요청 여부와 방식(바로, 대상 고르기)을 정함. 연결 전에는 `SlotLoadout`이 이 컴퓨터의 `SlotLoadout.json`·기본값이라 서버에 함수가 있어도 빈 슬롯은 시전되지 않고 방식이 어긋났음
+  - 구독은 `OnStartLocalPlayer`(실제 계정)에서 하고 `PlayerDataReceived`의 다른 구독자(편집 화면, 장착 화면)보다 먼저 연결됨
 - 함수 구조 검사: 「만든 함수를 서버로 보내 검사·저장하기」. 해금한 블록·스킬만 썼는지, 코드 영역 한도는 위 「함수 내용 검사」
 
 ### `ProgressStore` 함수 (서버)

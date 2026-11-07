@@ -11,7 +11,7 @@
 - 하지 않는 일
   - 기절·이속 감소·실명에 대한 몬스터 반응(AI 정지, 이동 속도, 공격 빗나감): 김도훈 「몬스터가 상태 이상에 반응하고 죽으면 드롭하기」. 이 컴포넌트의 값을 읽기만 하면 된다.
   - 어떤 스킬이 어떤 상태를 거는지: 각 스킬 이슈 (아래 표)
-  - 네트워크 동기화: 「데미지·상태 이상을 서버에서 판정하기」 이슈
+  - 몸 효과(상태 이상이 걸린 대상의 모습): 박진우 `StatusEffectView` (위 네트워크 항목의 읽는 값과 이벤트를 쓴다)
 
 ## 동작 규칙
 - 같은 상태를 다시 걸면 **지속 시간만 새로 시작**한다. 남은 시간에 더하지 않고, 겹치지 않는다.
@@ -58,6 +58,17 @@
 | `AmplifyBleed(float bonusRate)` | 추가분 | - | (#172) 출혈 중이면 그 출혈이 끝날 때까지 틱 데미지 추가분. 상처 가르기가 부른다 |
 | `BleedBonusRate` | - | `float` | (#172) 지금 출혈 틱 데미지 추가분. 0이면 기본 |
 | `BleedTicked` (event) | `int` 데미지 | - | [로직] 출혈 데미지를 줬을 때 |
+
+### 네트워크 (#325)
+
+- `StatusEffects`는 `NetworkBehaviour`다. 몬스터 프리팹의 `NetworkIdentity`와 함께 쓴다. 스크립트 연결은 그대로라 프리팹을 고치지 않는다.
+- 상태를 걸고 푸는 일(`Apply`, `Clear`, `ClearAll`, `AmplifyBleed`), 출혈 데미지, 시간이 다 된 상태를 푸는 일은 **서버에서만** 한다. 클라이언트에서 `Apply`와 `Clear`를 불러도 아무 일도 없다.
+- 서버가 걸린 상태와 끝나는 시각(`NetworkTime.time` 기준)을 `SyncDictionary`로 클라이언트에 보낸다. 나중에 접속한 클라이언트도 현재 걸린 상태를 받는다.
+- 클라이언트에서도 서버와 같게 읽는 값: `Has`, `RemainingTime`(전송 지연만큼 오차), `IsStunned`, `IsBlinded`, `IsMarked`, `MoveSpeedMultiplier`
+- 모든 화면(서버, Host, 클라이언트)에서 불리는 이벤트: `StatusApplied`(다시 걸 때도), `StatusRemoved` [표시]. `StatusIconView`와 몸 효과(`StatusEffectView`)는 이 이벤트로 그린다.
+  - 접속하기 전부터 걸려 있던 상태는 접속한 순간 `StatusApplied`로 한 번씩 알린다.
+- 서버에서만 의미 있는 값: `BleedTicked`(이벤트), `BleedBonusRate`. 클라이언트에는 보내지 않는다.
+- 몬스터 AI와 `DamageCalculator`가 읽는 값(`IsStunned`, `IsBlinded`, `IsMarked`, `MoveSpeedMultiplier`)은 서버에서 읽으므로 판정은 그대로다.
 
 ### `StatusIconView` (상태 이상 아이콘 표시)
 

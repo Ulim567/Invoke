@@ -98,6 +98,8 @@ public class CSwordRide : MovementSkill
 	{
 		swords = task.Caster.GetComponent<SummonedSwords>();
 		riding = null;
+		// 이미 타는 중이면 두 번째 검을 묶지 않는다. 소유 클라이언트의 StartRide는 타는 중이면 무시하므로, 서버만 두 번째 검을 Riding으로 만들게 된다 (#325)
+		if (swords != null && swords.HasRidingSword) return;
 		if (swords == null || !swords.TryGetFirstReady(out SummonedSword sword) || !swords.Ride(sword, movement.RideSeconds)) return;
 		riding = sword;
 		movement.StartRide();

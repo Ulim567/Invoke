@@ -27,7 +27,7 @@ public class SummonedSwords : MonoBehaviour
 	[SerializeField] LayerMask groundLayers;
 	[Header("사용 가능한 검: 몸 둘레 반원 (#399)")]
 	[Tooltip("반원 가운데가 머리에서 뒤로 떨어진 거리 (유닛). 뒤통수 뒤")]
-	[SerializeField] float orbitBehind = 0.8f;
+	[SerializeField] float orbitBehind = 1.3f; // #451: 0.8 → 1.3
 	[Tooltip("반원 가운데가 머리 꼭대기(콜라이더 윗변)에서 내려온 거리 (유닛). 캐릭터 크기가 바뀌어도 머리 높이를 따라간다")]
 	[SerializeField] float orbitBelowHeadTop = 0.4f;
 	[Tooltip("반원 반지름: 가운데에서 검 가운데까지 (유닛)")]

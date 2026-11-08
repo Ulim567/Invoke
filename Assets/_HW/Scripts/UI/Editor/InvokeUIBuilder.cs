@@ -35,6 +35,7 @@ public static class InvokeUIBuilder
 	const float LayoutPalette = 207; // 오른쪽 블록 목록
 	const float LayoutStrip = 33;    // 오른쪽 끝 세로 탭
 	const float LayoutStatus = 22;   // 아래 줄
+	const float LayoutFrame = 20;    // 편집 영역 위아래의 함수 틀 줄 (#432)
 
 	[MenuItem("Invoke/UI/편집·장착 화면 새 디자인으로 만들기")]
 	public static void BuildAll()
@@ -245,6 +246,92 @@ public static class InvokeUIBuilder
 		Set(view, "messageText", message);
 		Set(view, "showButton", show);
 		return SavePrefab(root, "ErrorItem").GetComponent<ErrorItemView>();
+	}
+
+	// 편집 영역 위의 머리줄(반환 타입 · 이름 · 파라미터 · 안내)과 아래의 「}」 줄. 이미 만들어 둔 것이 있으면 그것을 쓴다.
+	// 편집 영역(BlockList)의 자식으로 두지 않는다: BlockList는 자식 순서가 곧 데이터 순서라서 다른 자식이 있으면 놓을 자리 계산이 어긋난다
+	static FunctionFrameView GetOrBuildFunctionFrame(Transform window)
+	{
+		float right = LayoutPalette + LayoutStrip;
+
+		RectTransform header = Child(window, "FrameHeader");
+		TopStretch(header, LayoutLeft, right, -LayoutTop, LayoutFrame);
+		SetImage(header.gameObject, "ui_bar", Image.Type.Sliced).raycastTarget = false;
+		HorizontalLayoutGroup row = GetOrAdd<HorizontalLayoutGroup>(header.gameObject);
+		row.padding = new RectOffset(8, 8, 2, 2);
+		row.spacing = 5;
+		row.childAlignment = TextAnchor.MiddleLeft;
+		row.childControlWidth = row.childControlHeight = true;
+		row.childForceExpandWidth = row.childForceExpandHeight = false;
+
+		Button returnButton = GetOrButton(header, "ReturnButton", "ui_button", "void ▾");
+		LayoutElement returnSize = GetOrAdd<LayoutElement>(returnButton.gameObject);
+		returnSize.minWidth = 40;
+		returnSize.preferredWidth = 44;
+		returnSize.preferredHeight = 14;
+		returnSize.flexibleWidth = 0;
+		TMP_Text returnLabel = returnButton.transform.Find("Text").GetComponent<TMP_Text>();
+		TMP_Text nameText = GetOrText(header, "Name", "combo", 10, Color.white, TextAlignmentOptions.MidlineLeft);
+		nameText.fontStyle = FontStyles.Bold;
+		TMP_Text paramsText = GetOrText(header, "Params", "( ) {", 10, Hex("C8CEEA"), TextAlignmentOptions.MidlineLeft);
+		TMP_Text tagText = GetOrText(header, "Tag", "", 8, Muted, TextAlignmentOptions.MidlineRight);
+		GetOrAdd<LayoutElement>(tagText.gameObject).flexibleWidth = 1;
+
+		RectTransform footer = Child(window, "FrameFooter");
+		BottomStretch(footer, LayoutLeft, right, LayoutStatus, LayoutFrame);
+		SetImage(footer.gameObject, "ui_bar", Image.Type.Sliced).raycastTarget = false;
+		TMP_Text footerText = GetOrText(footer, "Text", "}", 10, Color.white, TextAlignmentOptions.MidlineLeft);
+		Stretch(footerText.rectTransform, 10, 8, 0, 0);
+
+		FunctionFrameView view = GetOrAdd<FunctionFrameView>(header.gameObject);
+		Set(view, "returnButton", returnButton);
+		Set(view, "returnLabel", returnLabel);
+		Set(view, "nameText", nameText);
+		Set(view, "paramsText", paramsText);
+		Set(view, "tagText", tagText);
+		Set(view, "footerText", footerText);
+		return view;
+	}
+
+	// 확인창: 어두운 바탕(뒤의 버튼을 막음) 위에 문구와 「예 (Enter)」 「아니오 (Esc)」. 이미 만들어 둔 것이 있으면 그것을 쓴다
+	// 키 표시는 글자로 먼저 둔다. 키 표시 부품(#430)이 생기면 버튼 글자 옆 배지로 바꾼다
+	static ConfirmDialog GetOrBuildConfirmDialog(Transform window)
+	{
+		RectTransform root = Child(window, "ConfirmDialog");
+		Stretch(root, 0, 0, 0, 0);
+		Image dim = GetOrAdd<Image>(root.gameObject);
+		dim.color = new Color(0.03f, 0.03f, 0.06f, 0.75f);
+		dim.raycastTarget = true;
+
+		RectTransform box = Child(root, "Box");
+		Place(box, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(340, 120));
+		SetImage(box.gameObject, "ui_window", Image.Type.Sliced);
+
+		TMP_Text message = GetOrText(box, "Message", "", 11, Color.white, TextAlignmentOptions.Center);
+		message.textWrappingMode = TextWrappingModes.Normal;
+		message.overflowMode = TextOverflowModes.Overflow;
+		Stretch(message.rectTransform, 16, 16, 14, 48);
+
+		Button yes = GetOrButton(box, "YesButton", "ui_button_accent", "예 (Enter)");
+		Place(Rect(yes.gameObject), new Vector2(0.5f, 0), new Vector2(1, 0), new Vector2(-6, 12), new Vector2(118, 26));
+		Button no = GetOrButton(box, "NoButton", "ui_button", "아니오 (Esc)");
+		Place(Rect(no.gameObject), new Vector2(0.5f, 0), new Vector2(0, 0), new Vector2(6, 12), new Vector2(118, 26));
+
+		ConfirmDialog dialog = GetOrAdd<ConfirmDialog>(root.gameObject);
+		Set(dialog, "messageText", message);
+		Set(dialog, "yesButton", yes);
+		Set(dialog, "noButton", no);
+		root.gameObject.SetActive(false); // 처음엔 꺼 둔다. BlockEditor가 필요할 때 켠다
+		return dialog;
+	}
+
+	// 이름으로 찾아 있으면 그 버튼, 없으면 새로 만든다. 키보드 이동은 쓰지 않는다 (선택된 버튼이 Enter를 먼저 받지 않도록)
+	static Button GetOrButton(Transform parent, string name, string sprite, string label)
+	{
+		Transform found = parent.Find(name);
+		Button button = found != null ? found.GetComponent<Button>() : NewButton(parent, name, sprite, label, 10, Color.white);
+		button.navigation = new Navigation { mode = Navigation.Mode.None };
+		return button;
 	}
 
 	// 참고 창의 카드 하나: 이름과 분류 태그 한 줄, 설명, 사용법(없으면 숨김), C 표기·칸·놓는 곳
@@ -718,7 +805,8 @@ public static class InvokeUIBuilder
 
 			// 가운데 편집 영역 (블록은 자기 너비만큼)
 			RectTransform workspace = (RectTransform)window.Find("Workspace");
-			Stretch(workspace, LayoutLeft, LayoutPalette + LayoutStrip, LayoutTop, LayoutStatus);
+			// 위아래에 함수 틀 줄(「반환 타입 이름() {」, 「}」)이 있으므로 그만큼 줄인다. 블록은 이 사이(함수 body)에만 놓인다
+			Stretch(workspace, LayoutLeft, LayoutPalette + LayoutStrip, LayoutTop + LayoutFrame, LayoutStatus + LayoutFrame);
 			SetImage(workspace.gameObject, "ui_grid", Image.Type.Tiled);
 			VerticalLayoutGroup blocks = GetOrAdd<VerticalLayoutGroup>(workspace.gameObject);
 			blocks.padding = new RectOffset(12, 12, 12, 12);
@@ -736,9 +824,16 @@ public static class InvokeUIBuilder
 			hint.text = "블록 지우기: 오른쪽 블록 목록으로 끌어다 놓기";
 			Stretch(hint.rectTransform, 6, 90, 0, 0);
 
+			// 편집 영역 위아래의 함수 틀: 「void combo( ) {」와 「}」
+			FunctionFrameView functionFrame = GetOrBuildFunctionFrame(window);
+
+			// 저장하지 않은 변경을 버리기 전에 묻는 확인창 (맨 위에 그린다)
+			ConfirmDialog confirmDialog = GetOrBuildConfirmDialog(window);
+
 			okBadge.SetAsLastSibling();
 			trash.SetAsLastSibling();
 			if (close != null) close.SetAsLastSibling();
+			confirmDialog.transform.SetAsLastSibling();
 			Transform dragLayer = window.Find("DragLayer");
 			if (dragLayer != null) dragLayer.SetAsLastSibling(); // 끄는 블록이 가장 위에 그려지게
 
@@ -771,6 +866,8 @@ public static class InvokeUIBuilder
 			Set(editor, "referenceSearch", referenceSearch);
 			Set(editor, "referenceList", referenceList);
 			Set(editor, "referenceCardPrefab", referenceCard);
+			Set(editor, "confirmDialog", confirmDialog);
+			Set(editor, "functionFrame", functionFrame);
 
 			PrefabUtility.SaveAsPrefabAsset(root, EditorCanvasPath);
 		}

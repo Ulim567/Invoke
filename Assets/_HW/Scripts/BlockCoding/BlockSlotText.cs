@@ -21,6 +21,15 @@ public static class BlockSlotText
 	public static bool IsIdentifier(string text) =>
 		!string.IsNullOrEmpty(text) && Identifier.IsMatch(text) && text != "true" && text != "false";
 
+	// 함수 이름: 글자(한글 포함), 숫자, 밑줄만. 첫 글자는 숫자 불가
+	static readonly Regex FunctionNamePattern = new Regex(@"^[\p{L}_][\p{L}\p{N}_]*$");
+
+	/// <summary>
+	/// 함수 이름으로 쓸 수 있는 글자면 true. 예: 새_함수, count_bugs
+	/// 이름은 실행에 쓰이지 않고(함수는 GUID로 부른다) 화면에만 보이는데, 화면의 글자 칸이 &lt;로 시작하는 글자를 태그로 읽어 깨지므로 기호를 막는다.
+	/// </summary>
+	public static bool IsFunctionName(string text) => !string.IsNullOrEmpty(text) && FunctionNamePattern.IsMatch(text);
+
 	/// <summary>
 	/// 값 칸에 적은 글자를 칸 데이터에 넣는다. 알 수 없는 글자면 칸을 비우고 false를 돌려준다.
 	/// </summary>

@@ -13,6 +13,7 @@
 - 스크립트: `Assets/_HW/Scripts/Map/Parallax.cs`
 - 그림: `Assets/_HW/Map` (하늘 `Sky`, 건물 `Buildings`, 타일 `Tiles`, 소품 `Props`). 전부 PPU 16
 - 씬마다 `Background` 오브젝트 아래에 겹을 둔다. 앞에 있는 겹일수록 Order in Layer가 크고 Factor가 작다.
+- 겹의 아래 끝은 `Max Bottom Y`(-4.5, 바닥 윗면 -4보다 반 칸 아래)보다 위로 올라가지 않는다 (#431). 점프로 카메라가 올라갈 때 폐허 그림이 땅보다 덜 내려가 그 사이로 하늘이 보이던 것을 막음. 전에는 HUD 아래 띠가 이 틈을 가렸다
 
 | 겹 | Factor | Vertical Factor | Order in Layer |
 | --- | --- | --- | --- |

@@ -10,16 +10,18 @@
 - 프리팹 `Assets/_HW/UI/Hud/HudCanvas`를 **Base 씬**에 둔다. 정렬 순서 5 (게임 화면 바로 위, 다른 창보다 아래)
   - 메뉴 Invoke → UI → 게임 HUD 만들기(`HudUIBuilder`, 에디터 전용)가 만든다
 - 내 캐릭터(`NetworkClient.localPlayer`)가 생기면 보이고, 없으면 숨긴다
-- 창이 열린 동안 숨긴다: `InputBlockingPanel.HudHidden` (로비 입구, 스킬 트리, 블록 편집, 스킬 장착, 레이드 방). 창 뒤로 HUD가 겹쳐 보이지 않게. 설정 창은 숨기지 않고 어둡게 덮는다 (settings.md)
+- 창이 열린 동안 숨긴다: `InputBlockingPanel.HudHidden` (블록 편집, 스킬 장착, 레이드 방, 레벨업). 창 뒤로 HUD가 겹쳐 보이지 않게. 설정 창은 숨기지 않고 어둡게 덮는다 (settings.md)
+- 로비 창(입구, 스킬 트리)은 HUD를 숨기지 않는다 (#431, `HidesHud` false). 창이 열린 동안(`InputBlockingPanel.AnyOpen`) HUD는 보이기만 하고 누를 수 없다 (`CanvasGroup` interactable·blocksRaycasts 끔)
+  - 창이 HUD 위에 그려지도록 `LobbyUI` 캔버스의 Sort Order는 HUD(5)보다 큰 8
 
 | 자리 | 보여 주는 것 | 읽는 곳 |
 | --- | --- | --- |
-| 왼쪽 위 띠 | 설정(Esc) · Lv · 버그 조각 · 보스 코어 | `PlayerProgress.Level`, `GetMaterialCount("bug_fragment" / "boss_core")` |
+| 왼쪽 위 띠 | 설정(Esc) · Lv · 버그 조각 · 보스 코어. 재료 앞에 재료 그림 16×16 (#431, 박진우의 `material_{ID}.png` 첫 장) | `PlayerProgress.Level`, `GetMaterialCount("bug_fragment" / "boss_core")` |
 | 그 아래 | 「> 사냥터」 지금 장소 이름 | 내 캐릭터가 있는 씬 이름 (`PlaceScenes` 상수 → 한글) |
-| 아래 가운데 | HP 막대·숫자 | `PlayerHealth.Hp`, `MaxHp` |
+| 아래 가운데 | HP 막대·숫자. 닳으면 흰 잔상이 0.3초 남았다가 줄어든다 (#431, 몬스터·보스 체력 바와 같은 방식. 회복은 바로) | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
 | | 슬롯 8칸 Q W E R A S D F | 아래 「슬롯 상태」 |
-| 오른쪽 아래 | 스킬 트리 · 레벨업 바로가기 | 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비에 있을 때만, 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게) |
+| 오른쪽 아래 | 스킬 트리(1) · 레벨업(2) 바로가기. 아이콘 자리에 숫자 키 | 누르거나 숫자 1·2를 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비에 있을 때만, 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게, 키도 안 먹음). 숫자 키는 HUD의 `UIShortcut` On Shortcut 1·2 (#431, player-input.md)라 다른 창이 열려 있으면 반응하지 않음 |
 
 ### 슬롯 상태
 | 상태 | 모습 | 읽는 곳 |
@@ -28,7 +30,7 @@
 | 스킬 아이콘 (#444) | 칸 가운데 24×24 아이콘, 키 글자는 오른쪽 아래 구석에 작게 (쿨타임 초는 가운데). C 스킬 칸은 그 스킬, 함수 칸은 함수 안의 첫 C 스킬(말풍선 이름과 같은 것). 스킬이 없으면 아이콘 없이 키 글자만 가운데. 공격할 수 없는 장소에서는 어둡게 | `SkillIcons.Get(스킬 ID)` (박진우, skill-icons.md) |
 | 사용 가능 | 키 글자 | - |
 | 실행 중 | 칸 전체를 밝은 청록으로 덮음 | `FunctionExecutorNetwork.CastAccepted(슬롯, 작업)` ~ `TaskEnded(작업)` |
-| 쿨타임 | 어두운 덮개가 시계 방향으로 줄고, 키 글자 대신 남은 초 | `FunctionExecutor.GetRemainingCooldownTicks` × `SecondsPerTick`. 덮개 비율은 이번 쿨타임이 처음 보였을 때를 1로 |
+| 쿨타임 | 어두운 덮개가 12시부터 시계 방향으로 걷히고, 키 글자 대신 「1.5 sec」 (#431) | `FunctionExecutor.GetRemainingCooldownTicks` × `SecondsPerTick`. C 스킬 칸은 그 스킬, 함수 칸은 안의 C 스킬(`PredefinedFunctionRegistry.TryGet`) 중 가장 긴 것 (함수 자체는 쿨타임이 없음). 덮개 비율은 이번 쿨타임이 처음 보였을 때를 1로 |
 | 시전 거부 | 0.5초 빨간 테두리 (쿨타임 거부는 제외) | `CastRejected` |
 | 공격할 수 없는 장소 (로비) | 모든 칸 무채색 | `PlaceScenes.IsPlayerInNoCastPlace` |
 
@@ -38,6 +40,8 @@
 - Esc: 열린 창이 없으면 설정 열기 (`UIShortcut`이 HUD에 붙어 있음, 맨 위 창만 반응). `HudView.SettingsRequested`를 알린다
 - 창(`InputBlockingPanel`을 물려받은 로비 입구, 스킬 트리, 편집, 장착, 레이드 방)은 ESC로 닫힌다. 로비 입구 창은 Enter로 들어간다. 창마다 바꾸려면 `OnCancelKey()` / `OnSubmitKey()`를 덮어쓴다
 - 시안의 버프·디버프 칸은 아직 기획 전이라 넣지 않음
+
+- 아래 띠 (#431): 띠 전체를 칠하지 않는다 (바닥을 너무 가림). 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자(`hud_band_fade`)
 
 ## 다른 시스템이 쓰는 것
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |

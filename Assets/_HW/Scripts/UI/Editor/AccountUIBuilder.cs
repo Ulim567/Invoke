@@ -285,7 +285,8 @@ public static class AccountUIBuilder
 		RectTransform box = NewUI("Input", row);
 		Height(box.gameObject, 20);
 		Image boxImage = SetImage(box.gameObject, "acc_field");
-		TMP_InputField input = box.gameObject.AddComponent<TMP_InputField>();
+		// 한글 조합 중에 칸을 벗어나도 멈추지 않는 칸 (닉네임에 한글을 적으므로)
+		TMP_InputField input = box.gameObject.AddComponent<ImeSafeInputField>();
 		input.targetGraphic = boxImage;
 
 		RectTransform area = NewUI("Text Area", box);

@@ -98,6 +98,12 @@ public class SlotEquipPanel : InputBlockingPanel
 		Refresh();
 	}
 
+	/// <summary>
+	/// 임시 계정(이 컴퓨터의 파일을 쓰는 플레이어)만 쓸 수 있다. 실제 계정은 슬롯이 늘 slot1~slot8이라 장착할 것이 없으므로 장착대를 숨긴다 (#470).
+	/// </summary>
+	public override bool IsAvailableFor(PlayerInputReader player) =>
+		player == null || !player.TryGetComponent(out FunctionExecutorNetwork network) || !network.UsesServerData;
+
 	// Awake는 InputBlockingPanel이 창을 숨기는 데 쓰므로 여기서는 Start를 쓴다
 	void Start()
 	{

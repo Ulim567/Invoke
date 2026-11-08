@@ -25,6 +25,7 @@
 | 상태 | 모습 | 읽는 곳 |
 | --- | --- | --- |
 | 비어 있음 | 점선 테두리, 흐린 키 글자 | `SlotLoadout.GetEntry(i).IsEmpty` |
+| 스킬 아이콘 (#444) | 칸 가운데 24×24 아이콘, 키 글자는 오른쪽 아래 구석에 작게 (쿨타임 초는 가운데). C 스킬 칸은 그 스킬, 함수 칸은 함수 안의 첫 C 스킬(말풍선 이름과 같은 것). 스킬이 없으면 아이콘 없이 키 글자만 가운데. 공격할 수 없는 장소에서는 어둡게 | `SkillIcons.Get(스킬 ID)` (박진우, skill-icons.md) |
 | 사용 가능 | 키 글자 | - |
 | 실행 중 | 칸 전체를 밝은 청록으로 덮음 | `FunctionExecutorNetwork.CastAccepted(슬롯, 작업)` ~ `TaskEnded(작업)` |
 | 쿨타임 | 어두운 덮개가 시계 방향으로 줄고, 키 글자 대신 남은 초 | `FunctionExecutor.GetRemainingCooldownTicks` × `SecondsPerTick`. 덮개 비율은 이번 쿨타임이 처음 보였을 때를 1로 |

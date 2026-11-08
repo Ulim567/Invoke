@@ -72,8 +72,8 @@
 | 배열 만들기의 길이 | 직접 적은 1 이상의 int만 (변수, 블록 불가) |
 | 비교의 양쪽 | string과 array를 뺀 값 (C는 string 비교 불가) |
 | free | `NULL`, malloc, 포인터를 돌려주는 함수 |
-| 선언의 처음 값 | 선언한 타입. 숫자(int, float, char)끼리는 서로 받음. `Sword*`는 `NULL`·malloc(Sword)·`summon_sword()`. 전역 변수는 직접 적은 값만 |
-| 함수 블록의 파라미터 | 그 파라미터의 타입 (예: `thrust`의 target은 `get_bug()`, `free_sword`의 sword는 `Sword*`) |
+| 선언의 처음 값 | 선언한 타입. 숫자(int, float, char)끼리는 서로 받음. `Sword*`는 `NULL`·malloc(Sword)·`summon_sword()`. `Target`은 `get_bug()`(NULL 불가). 전역 변수는 직접 적은 값만(`Target` 전역 변수는 비워 둠) |
+| 함수 블록의 파라미터 | 그 파라미터의 타입 (예: `thrust`의 target은 `get_bug()`·Target 변수, `free_sword`의 sword는 `Sword*`) |
 | return | 함수의 반환 타입. void 함수는 비워 둠 |
 | 대입의 값, 원소 쓰기의 값 | 아무 값 (왼쪽 변수의 타입을 편집 화면이 모름) |
 
@@ -87,9 +87,9 @@
   - 저장 버튼을 누르면 펼쳐 두고 비운 처음 값 칸을 접음 (빈 처음 값은 기본값으로 실행되므로 `int x;`와 같음)
   - 전역 변수 편집 화면도 같은 선언 블록이라 같음
 - 타입 칸: 드롭다운 (아래 「화면 배치」)
-  - 선언(지역 변수, 전역 변수), 배열 만들기의 원소 타입: int, float, bool, char, string, `Sword*` (#474). `Sword*`는 `VariableType.PointerTo(StructOf("Sword"))`
+  - 선언(지역 변수, 전역 변수), 배열 만들기의 원소 타입: int, float, bool, char, string, `Sword*`, `Target` (#474). `Sword*`는 `VariableType.PointerTo(StructOf("Sword"))`, `Target`은 `VariableType.TargetOf(Bug)`
   - 선언의 타입을 바꿨는데 이미 넣은 처음 값이 맞지 않으면: 값은 지우지 않고 칸을 빨갛게, 상태 줄에 알림. 저장할 때 컴파일이 막음
-  - `Target`은 선언할 수 없음 (#474): 담아 둔 몬스터가 죽었는지 확인할 방법이 없음. 대상은 `get_bug()`를 스킬 칸에 바로 넣음 (예: `thrust(get_bug());`)
+  - `Target` 변수 (#474): `get_bug()`로 고른 몬스터를 담아 여러 스킬에 넘김. 몬스터가 죽었는지는 `is_valid_target(b)`로 확인 (NULL과 비교 불가). 예: `if (!is_valid_target(b)) b = get_bug(); thrust(b);`
 - 연산자 버튼: 누를 때마다 `BlockOptions`의 enum 순서대로. 데이터에는 enum 이름(`"Add"`)
 - if·else if·else는 블록 목록에서 따로 고르고, 놓은 뒤에는 바꾸지 않는다.
 
@@ -108,6 +108,7 @@
 - 위쪽 줄의 「동기 / 비동기」 버튼: `FunctionData.IsAsync`를 고른다 (#132). 슬롯 함수와 전역 변수는 바꿀 수 없음
   - 지금은 항상 숨김 (#470). 버튼과 `ToggleAsync`는 남겨 둠, 저장된 `IsAsync` 값은 그대로
 - 끄는 동안: 블록이 반투명, 들어갈 자리에 보라색 줄(`InsertMarker`, 시작 위치에서 그 편집 영역·블록 영역의 오른쪽 끝까지, 두께 3. #432), 끼울 수 있는 값 칸은 보라색. 놓인 블록을 끌면 블록 목록 위에 빨간 휴지통 「여기에 놓으면 블록을 지워요」
+  - 놓을 자리: 끄는 동안의 미리보기와 같은 자리 (#474). 끄는 블록 자신과 그 안쪽(칸, 블록 영역)은 고르지 않음. 예전에는 놓는 순간 블록 자신이 걸려, 자기 블록 영역에 들어가 화면에 떠 있거나 지워졌음
 - 컴파일(`FunctionChecker`): 반복문 밖의 break·continue, return이 없는 길, 비어 있는 값 칸. 오류가 있으면 오른쪽 오류 창으로 바뀌고, 비어 있는 값 칸과 반복문 밖의 break·continue 블록을 빨갛게 표시. 고치면 표시를 지운다
 - 함수 틀 (#432): 편집 영역 위에 머리줄 「반환 타입 이름(파라미터) {」, 아래에 「}」 줄이 늘 있다 (`FunctionFrameView`). 편집 영역(`BlockList`)의 자식이 아니라 따로 둔 줄이다
   - 슬롯 함수: 반환 타입(void)·이름은 고정이라 누를 수 없고 「슬롯 함수 · 이름과 반환 타입은 고정」 안내. 페이지 함수: 반환 타입(void, int, float, bool, char, string)을 눌러 드롭다운으로 고른다

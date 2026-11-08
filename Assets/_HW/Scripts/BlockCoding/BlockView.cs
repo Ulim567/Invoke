@@ -62,7 +62,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 	// 선언 블록에서 고를 수 있는 타입. 고를 때마다 새 VariableType을 만들도록 함수로 둔다 (블록끼리 같은 타입 객체를 나눠 쓰지 않게)
 	// Sword*: 소환검 포인터를 담아 두었다가 free_sword(s)처럼 해제하기 위함. 스킬 파라미터는 반드시 채워야 하기 때문 (#474)
-	// Target은 넣지 않는다: 담아 둔 몬스터가 죽었는지 플레이어가 확인할 방법이 없어서, 대상은 get_bug()를 스킬 칸에 바로 넣어 쓴다 (#474)
+	// Target: get_bug()로 고른 몬스터를 담아 두고 여러 스킬에 넘기기 위함. 몬스터가 죽었는지는 is_valid_target(b)로 확인한다 (#474)
 	static readonly Func<VariableType>[] DeclareTypes =
 	{
 		() => new VariableType(VariableTypeKind.Int),
@@ -71,10 +71,11 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		() => new VariableType(VariableTypeKind.Char),
 		() => new VariableType(VariableTypeKind.String),
 		() => VariableType.PointerTo(VariableType.StructOf(PredefinedStructs.Sword)),
+		() => VariableType.TargetOf(TargetKind.Bug),
 	};
 
 	// 배열 만들기 블록의 원소 타입. 선언과 같다 (#474). 실행기가 포인터 array를 받고, 원소의 처음 값은 NULL이다
-	// 예: Sword* swords[3]; 에 소환검 여러 개를 담아 두었다가 차례로 해제한다
+	// 예: Sword* swords[3]; 에 소환검 여러 개를 담아 두었다가 차례로 해제한다. Target targets[3]; 은 battlefield_sweep의 targets에 넘긴다
 	static readonly Func<VariableType>[] ArrayElementTypes = DeclareTypes;
 
 	/// <summary>이 블록이 들고 있는 블록 데이터</summary>
@@ -545,12 +546,14 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		if (!dragging) return;
 		dragging = false;
+		// 놓을 자리는 클릭 통과를 되돌리기 전에 찾는다. 되돌린 뒤에 찾으면 마우스 아래의 이 블록 자신이 걸려,
+		// 미리보기와 다른 자리(자기 자신의 블록 영역)에 들어가거나 지워지기 때문 (#474)
+		Component target = FindDropTarget(eventData);
 		canvasGroup.blocksRaycasts = true;
 		canvasGroup.alpha = 1f;
 		editor.ShowTrash(false);
 		editor.HideDropPreview();
 
-		Component target = FindDropTarget(eventData);
 		if (target == null)
 		{
 			// 블록 목록이나 빈 곳에 놓으면 지운다
@@ -599,6 +602,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		EventSystem.current.RaycastAll(eventData, results);
 		foreach (RaycastResult result in results)
 		{
+			// 끄는 블록 자신과 그 안쪽(칸, 블록 영역)은 놓을 자리가 아니다. 자기 안에 들어가면 데이터가 자기 자신을 담게 되기 때문 (#474)
+			if (result.gameObject.transform.IsChildOf(transform)) continue;
 			for (Transform t = result.gameObject.transform; t != null; t = t.parent)
 			{
 				if (t.TryGetComponent(out BlockValueSlot slot))

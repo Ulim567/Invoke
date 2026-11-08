@@ -2,7 +2,7 @@
 /// 모든 사전 정의 함수의 고정 ID. 스킬의 Id는 글자를 직접 적지 않고 여기의 상수를 쓴다.
 /// <para>
 /// 규칙 (docs/systems/predefined-function.md 「고정 ID」)<br/>
-/// - 형식: 분류.영어_이름 (소문자, 밑줄). 분류는 c, common, input, test<br/>
+/// - 형식: 분류.영어_이름 (소문자, 밑줄). 분류는 c, common, input, game, test<br/>
 /// - 한 번 정한 ID는 바꾸거나 지우지 않는다. 예전에 저장한 함수 데이터가 그 함수를 찾지 못하게 되기 때문이다.
 /// </para>
 /// <para>
@@ -46,6 +46,9 @@ public static class PredefinedFunctionIds
 
 	// 입력 함수 (이우림, #131). 플레이어에게 값을 입력받아 돌려준다
 	public const string GetBug = "input.get_bug";
+
+	// 게임 상태를 묻는 함수 (이우림, #474). 입력을 받지 않고 바로 값을 돌려준다
+	public const string IsValidTarget = "game.is_valid_target";
 
 	// 테스트용 함수
 	public const string TestFunctionA = "test.function_a";

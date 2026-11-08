@@ -217,7 +217,8 @@ public class BlockEditor : MonoBehaviour
 	};
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
-	static readonly string[] PaletteFunctionPrefixes = { "c.", "common.", "input." };
+	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
+	static readonly string[] PaletteFunctionPrefixes = { "c.", "common.", "input.", "game." };
 
 	static SlotData Int(string value) => SlotData.FromLiteral(new VariableType(VariableTypeKind.Int), value);
 

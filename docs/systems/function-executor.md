@@ -91,7 +91,9 @@
   - 종류를 정하지 않은 `Target`(예: `DataDrivenSkill`의 파라미터): 어떤 종류의 대상이든 받음. 값은 언제나 자기 종류를 가짐
   - 값: `RuntimeValue.FromBug(몬스터)`. 「대상 없음」은 `FromBug(null)`
   - 초기값을 비운 `Target` 변수: 「대상 없음」(언어와 상관없음)
-  - 비교: `==`, `!=`만. 같은 종류의 대상끼리는 같은 대상인지, `NULL`과는 「대상 없음」인지. 죽었거나 없어진 대상은 `NULL`과 같지 않음. 크기 비교, 다른 종류끼리 비교: `TypeMismatch`
+  - 비교: 같은 종류의 대상끼리 `==`, `!=`만. 같은 대상인지. `NULL`과 비교, 크기 비교, 다른 종류끼리 비교: `TypeMismatch` (#474에서 `NULL` 비교를 막음. Target은 포인터가 아님)
+  - 쓸 수 있는 대상인지 확인: 사전 정의 함수 `is_valid_target(b)` (`game.is_valid_target`, #474). 「대상 없음」·죽음·없어짐이면 false. 판정은 스킬에 넘길 때의 `InvalidTarget` 검사(`RuntimeValue.IsUsableTarget`)와 같음
+  - `NULL`을 Target 변수에 넣기: `TypeMismatch`. 「대상 없음」은 처음 값을 비운 Target 변수
   - 직접 입력한 `0`: `NULL`로 보지 않음(`zeroIsNull`은 포인터 자리의 규칙)
   - 계산, 조건으로 쓰기(`if (b)`): `TypeMismatch`
   - 스킬에 argument로 넘길 때: 「대상 없음」, 죽은 대상(`Monster.IsDead`), 오브젝트가 없어진 대상이면 `InvalidTarget`. 변수에 담거나 비교할 때는 검사하지 않음(C의 해제한 포인터처럼 쓰는 순간에 에러)
@@ -218,7 +220,7 @@
   - 실행 중에 `Capacity`가 줄어도 잡힌 칸은 유지. `Free`가 0이 됨 (stack 규칙과 같음)
 - 저장 검사(`FunctionExecutor.TrySaveGlobalVariables`): 걸리면 저장하지 않음. 콘솔 오류
   - 선언 수 > `Capacity`
-  - 대상(Target) 타입, array, 다룰 수 없는 타입
+  - array, 다룰 수 없는 타입 (대상(Target) 타입은 #474부터 받음. 처음 값은 비워 두는 것만 = 「대상 없음」)
   - 빈 이름, 같은 이름 두 번
   - 직접 입력한 값이 아닌 초기값(연산, 변수, `malloc`), 읽을 수 없는 글자열, 변수 타입으로 바꿀 수 없는 값
 - 초기화(`FunctionExecutor.RestartProcess`): 프로세스를 새로 시작

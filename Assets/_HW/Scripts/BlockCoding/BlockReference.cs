@@ -70,7 +70,7 @@ public class BlockReferenceEntry
 public static class BlockReference
 {
 	// 블록 목록에 나오는 사전 정의 함수의 고정 ID 앞부분 (BlockEditor.PaletteFunctionPrefixes와 같다)
-	static readonly string[] FunctionPrefixes = { "c.", "common.", "input." };
+	static readonly string[] FunctionPrefixes = { "c.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
 
@@ -216,7 +216,7 @@ public static class BlockReference
 		["Declare"] = ("타입 이름;\n타입 이름 = 처음 값;",
 			new[]
 			{
-				"타입 — int, float, bool, char, string, Sword* 중에서 고릅니다. Sword*에는 summon_sword()가 돌려준 소환검을 담습니다.",
+				"타입 — int, float, bool, char, string, Sword*, Target 중에서 고릅니다. Sword*에는 summon_sword()가 돌려준 소환검을, Target에는 get_bug()가 돌려준 몬스터를 담습니다.",
 				"이름 — 새 변수의 이름입니다. 영문자, 숫자, 밑줄만 쓰고 숫자로 시작할 수 없습니다.",
 				"처음 값 — 변수에 처음 담을 값입니다. 블록 끝의 > 버튼으로 칸을 펼치고, < 버튼으로 접습니다(넣은 값은 지워집니다). 비워 두면 그 타입의 기본값으로 시작합니다.",
 			},
@@ -323,12 +323,13 @@ public static class BlockReference
 	static readonly Dictionary<string, string> FunctionSummaries = new Dictionary<string, string>
 	{
 		["input.get_bug"] = "플레이어가 고른 몬스터 한 명을 대상으로 돌려줍니다.",
+		["game.is_valid_target"] = "대상이 스킬에 넘길 수 있는 몬스터인지(있고, 살아 있는지) 알려 줍니다.",
 	};
 
 	// 파라미터 이름 → 무엇을 넣는지 (코드에서 알 수 없는 사용 지식)
 	static readonly Dictionary<string, string> ParameterMeanings = new Dictionary<string, string>
 	{
-		["target"] = "공격할 몬스터 한 명입니다. get_bug()로 얻습니다.",
+		["target"] = "몬스터 한 명입니다. get_bug()를 넣거나, get_bug()를 담아 둔 Target 변수를 넣습니다.",
 		["targets"] = "공격할 몬스터 여러 명입니다. 슬롯에서 시전하면 여러 명을 고르게 해 줍니다.",
 		["sword"] = "쓸 소환검의 포인터입니다. summon_sword()가 돌려준 값을 넣습니다.",
 	};
@@ -338,10 +339,11 @@ public static class BlockReference
 	{
 		[PredefinedFunctionIds.SummonSword] = "만든 소환검의 포인터입니다. 만들지 못하면 NULL입니다.",
 		[PredefinedFunctionIds.GetBug] = "플레이어가 고른 몬스터입니다. 고를 몬스터가 없으면 「대상 없음」입니다.",
+		[PredefinedFunctionIds.IsValidTarget] = "스킬에 넘길 수 있으면 true, 「대상 없음」이거나 죽었거나 없어진 몬스터면 false입니다.",
 	};
 
 	// 파라미터에 무엇을 넣는지 한 문장 (접힌 카드에 보인다). 파라미터가 없으면 호출 모양만으로 충분해 한 줄 안내만 둔다
-	const string SingleTarget = "target에는 get_bug()가 돌려준 대상을 넣습니다.";
+	const string SingleTarget = "target에는 get_bug()가 돌려준 대상이나 Target 변수를 넣습니다.";
 	const string NoParameter = "값을 넣지 않고 이름();으로 부릅니다.";
 	const string NeedsSword = " 소환검이 있어야 씁니다.";
 
@@ -371,7 +373,8 @@ public static class BlockReference
 		[PredefinedFunctionIds.Dash] = NoParameter,
 		[PredefinedFunctionIds.DoubleJump] = NoParameter,
 		[PredefinedFunctionIds.SwordRide] = NoParameter + NeedsSword,
-		[PredefinedFunctionIds.GetBug] = "thrust(get_bug()); 처럼 스킬의 target 칸에 넣으면 플레이어가 대상을 고를 때까지 기다린 뒤 그 대상을 돌려줍니다. 고를 몬스터가 없으면 「대상 없음」을 돌려주고, 그 값을 스킬에 넘기면 실패합니다.",
+		[PredefinedFunctionIds.GetBug] = "Target b = get_bug(); 처럼 쓰면 플레이어가 대상을 고를 때까지 기다린 뒤 그 대상을 돌려줍니다. 고를 몬스터가 없으면 「대상 없음」을 돌려주고, 그 값을 스킬에 넘기면 실패합니다.",
+		[PredefinedFunctionIds.IsValidTarget] = "if (!is_valid_target(b)) b = get_bug(); 처럼 담아 둔 몬스터가 죽었으면 새로 고릅니다. Target은 포인터가 아니라 NULL과 비교할 수 없습니다.",
 	};
 
 	static List<BlockReferenceEntry> Build()

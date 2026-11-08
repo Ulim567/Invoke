@@ -72,11 +72,17 @@ public abstract class PredefinedFunction : FunctionBlock
 	// sealed: 스킬 작성자가 덮어써서 쿨타임 검사나 기록을 빠뜨리지 못하게 한다
 	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
 	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
+	/// <summary>
+	/// 시작하기 전에 Target argument가 쓸 수 있는 대상인지 검사하면 true(기본). 검사에 걸리면 InvalidTarget으로 시작하지 않는다.<br/>
+	/// 대상을 쓰지 않고 상태만 묻는 함수(is_valid_target)만 false로 둔다. 쓸 수 없는 대상을 받아 false를 돌려줘야 하기 때문이다 (#474).
+	/// </summary>
+	protected virtual bool ValidatesTargets => true;
+
 	// 넘겨받은 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 시작하지 않고 InvalidTarget으로 실패한다. 대상 array는 원소 하나라도 쓸 수 없으면 실패한다
 	// 함수 안의 호출(CallBlock)과 슬롯 직접 시전(FunctionExecutor.Cast의 argument)이 모두 여기를 지난다. 스킬마다 검사 코드를 넣지 않기 위함
 	internal sealed override bool TryValidateStart(FunctionContext context)
 	{
-		if (Arguments == null) return true;
+		if (Arguments == null || !ValidatesTargets) return true;
 
 		foreach (RuntimeValue? argument in Arguments)
 		{

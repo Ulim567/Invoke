@@ -145,7 +145,7 @@ public static class SlotRules
 					VariableTypeKind.Int or VariableTypeKind.Float or VariableTypeKind.Char => $"{BlockLabels.TypeName(rule.Type)}(숫자)",
 					VariableTypeKind.Bool => "bool(true, false, 비교, 논리)",
 					VariableTypeKind.Pointer => $"{BlockLabels.TypeName(rule.Type)}(NULL, malloc, summon_sword() 등)",
-					VariableTypeKind.Target => "대상(get_bug())",
+					VariableTypeKind.Target => "대상(get_bug(), Target 변수. NULL은 안 됨)",
 					_ => BlockLabels.TypeName(rule.Type),
 				};
 				return rule.LiteralOnly ? $"직접 적은 {type}" : type;

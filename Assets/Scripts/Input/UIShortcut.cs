@@ -34,11 +34,17 @@ public class UIShortcut : MonoBehaviour
 {
 	[SerializeField] UnityEvent onSubmit;
 	[SerializeField] UnityEvent onCancel;
+	[SerializeField, Tooltip("숫자 1 (#431, 게임 HUD의 스킬 트리 바로가기)")] UnityEvent onShortcut1;
+	[SerializeField, Tooltip("숫자 2 (#431, 게임 HUD의 레벨업 바로가기)")] UnityEvent onShortcut2;
 
 	/// <summary>Enter를 눌렀을 때 부를 함수. 코드에서 AddListener로 붙일 때 쓴다 (예: InputBlockingPanel이 창마다 붙인다)</summary>
 	public UnityEvent OnSubmit => onSubmit ??= new UnityEvent();
 	/// <summary>ESC를 눌렀을 때 부를 함수. 코드에서 AddListener로 붙일 때 쓴다</summary>
 	public UnityEvent OnCancel => onCancel ??= new UnityEvent();
+	/// <summary>숫자 1을 눌렀을 때 부를 함수 (#431)</summary>
+	public UnityEvent OnShortcut1 => onShortcut1 ??= new UnityEvent();
+	/// <summary>숫자 2를 눌렀을 때 부를 함수 (#431)</summary>
+	public UnityEvent OnShortcut2 => onShortcut2 ??= new UnityEvent();
 
 	// 열린 순서. 마지막 칸이 맨 위 화면이다
 	static readonly List<UIShortcut> openOrder = new List<UIShortcut>();
@@ -76,12 +82,24 @@ public class UIShortcut : MonoBehaviour
 			Handle(OnCancel);
 		else if (GameInput.UI.SubmitPressed && !SelectedHandles<ISubmitHandler>())
 			Handle(OnSubmit);
+		else if (GameInput.UI.Shortcut1Pressed && !SelectedIsTextInput())
+			Handle(OnShortcut1);
+		else if (GameInput.UI.Shortcut2Pressed && !SelectedIsTextInput())
+			Handle(OnShortcut2);
 	}
 
 	static void Handle(UnityEvent action)
 	{
 		handledFrame = Time.frameCount;
 		action.Invoke();
+	}
+
+	// 선택된 UI가 글자를 받는 입력칸인지. 숫자 키는 입력칸에서 글자로 쓰이므로 양보한다
+	static bool SelectedIsTextInput()
+	{
+		var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+		return selected != null && selected.activeInHierarchy
+			&& (selected.TryGetComponent<TMPro.TMP_InputField>(out _) || selected.TryGetComponent<UnityEngine.UI.InputField>(out _));
 	}
 
 	// EventSystem이 선택된 UI에 그 키를 보내 처리하는지

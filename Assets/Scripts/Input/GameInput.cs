@@ -62,7 +62,7 @@ public static class GameInput
 	}
 
 	/// <summary>
-	/// UI 액션 맵: 확인(Enter), 취소(ESC).<br/>
+	/// UI 액션 맵: 확인(Enter), 취소(ESC), 숫자 1·2 (화면 바로가기).<br/>
 	/// Player 액션 맵이나 Attack 액션 맵이 비활성화되어 있어도 동작한다. (UI를 여는 쪽이 두 액션 맵을 비활성화하는 경우가 있으므로)
 	/// </summary>
 	public static class UI
@@ -78,6 +78,16 @@ public static class GameInput
 		/// 이번 프레임에 취소 키(ESC)를 눌렀으면 true. Attack 액션 맵의 취소(C)와는 다른 키다.
 		/// </summary>
 		public static bool CancelPressed => A.UICancel.WasPressedThisFrame();
+
+		/// <summary>
+		/// 이번 프레임에 숫자 1을 눌렀으면 true. 게임 HUD에서 스킬 트리 바로가기로 쓴다 (#431). 화면에서는 UIShortcut의 On Shortcut 1을 쓴다.
+		/// </summary>
+		public static bool Shortcut1Pressed => A.Shortcut1.WasPressedThisFrame();
+
+		/// <summary>
+		/// 이번 프레임에 숫자 2를 눌렀으면 true. 게임 HUD에서 레벨업 바로가기로 쓴다 (#431). 화면에서는 UIShortcut의 On Shortcut 2를 쓴다.
+		/// </summary>
+		public static bool Shortcut2Pressed => A.Shortcut2.WasPressedThisFrame();
 	}
 
 	// 찾은 액션을 한꺼번에 들고 있다가 ResetStatics 때 한꺼번에 버리기 위해 묶어 둔다
@@ -86,7 +96,7 @@ public static class GameInput
 		public readonly InputActionMap PlayerMap, AttackMap, UIMap;
 		public readonly InputAction Move, MoveUp, MoveDown, Jump, Run, Down, PickUp, Interact;
 		public readonly InputAction TargetPrev, TargetNext, Mark, AttackCancel;
-		public readonly InputAction Submit, UICancel;
+		public readonly InputAction Submit, UICancel, Shortcut1, Shortcut2;
 		public readonly InputAction[] Slots = new InputAction[Attack.SlotCount];
 
 		public Actions(InputActionAsset asset)
@@ -113,6 +123,8 @@ public static class GameInput
 			UIMap = asset.FindActionMap("UI", true);
 			Submit = UIMap.FindAction("Submit", true);
 			UICancel = UIMap.FindAction("Cancel", true);
+			Shortcut1 = UIMap.FindAction("Shortcut1", true);
+			Shortcut2 = UIMap.FindAction("Shortcut2", true);
 		}
 	}
 }

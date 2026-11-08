@@ -13,6 +13,9 @@ public class SkillTreePanel : InputBlockingPanel
 {
 	void Start() => HudView.SkillTreeRequested += OpenForLocalPlayer;
 
+	// 로비 창은 HUD를 숨기지 않는다 (#431). HUD는 보이기만 하고 누를 수 없다. 창이 HUD 위에 그려지도록 LobbyUI 캔버스의 Sort Order가 HUD(5)보다 크다
+	protected override bool HidesHud => false;
+
 	void OnDestroy() => HudView.SkillTreeRequested -= OpenForLocalPlayer;
 
 	/// <summary>

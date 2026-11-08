@@ -93,6 +93,8 @@
 | --- | --- | --- | --- |
 | `GameInput.UI.SubmitPressed` | - | `bool` | 이번 프레임에 확인 키(Enter)를 눌렀으면 true |
 | `GameInput.UI.CancelPressed` | - | `bool` | 이번 프레임에 취소 키(ESC)를 눌렀으면 true. Attack 액션 맵의 취소(C, `PlayerInputReader.CancelPressed`)와 다른 키 |
+| `GameInput.UI.Shortcut1Pressed` | - | `bool` | 이번 프레임에 숫자 1을 눌렀으면 true (#431). 화면에서는 `UIShortcut`의 On Shortcut 1을 씀 |
+| `GameInput.UI.Shortcut2Pressed` | - | `bool` | 이번 프레임에 숫자 2를 눌렀으면 true (#431). 화면에서는 `UIShortcut`의 On Shortcut 2를 씀 |
 
 ### 화면 단축키 (`UIShortcut`, #298)
 
@@ -100,6 +102,7 @@
 | --- | --- | --- | --- |
 | On Submit (Inspector) | - | - | 맨 위 화면일 때 Enter를 누르면 부를 함수 |
 | On Cancel (Inspector) | - | - | 맨 위 화면일 때 ESC를 누르면 부를 함수 |
+| On Shortcut 1 / On Shortcut 2 (Inspector) | - | - | 맨 위 화면일 때 숫자 1 / 2를 누르면 부를 함수 (#431). 입력칸이 선택되어 있으면 반응하지 않음 (글자로 쓰임). 게임 HUD가 스킬 트리·레벨업 바로가기로 씀 (hud.md) |
 | `IsTop` | - | `bool` | 이 화면이 열린 화면 중 맨 위이면 true |
 
 - 붙이는 곳: 화면 스크립트가 `SetActive`로 여닫는 오브젝트 또는 그 자식. 부모에 붙이면 화면이 닫혀도 알지 못함
@@ -126,6 +129,9 @@
     - 왼쪽 Shift: 달리기(`Run`). 달리기 속도 적용은 박진우(`PlayerMovement`)
     - 검 줍기: Z(`PickUp`), 상호작용: ↑(`Interact`), 여러 명 선택의 대상 찍기: Space(`Mark`)
     - 키 사용자 지정: 추후 결정
+- HUD 바로가기 1·2 (#431, 임혜원)
+  - 바인딩: UI 액션 맵에 Shortcut1(`<Keyboard>/1`), Shortcut2(`<Keyboard>/2`) 추가
+  - `UIShortcut`의 On Shortcut 1 / 2로 받으므로 「맨 위 화면만」 규칙이 그대로 적용됨. HUD는 다른 창이 열려 있으면 맨 위가 아니라 반응하지 않음
 - UI Enter·ESC (#298)
   - 바인딩: UI 액션 맵의 Submit(`*/{Submit}`, Enter 포함), Cancel(`*/{Cancel}`, Escape 포함). 입력 설정 파일 변경 없음
   - 두 화면이 열려 있을 때 ESC: 맨 위 화면만 닫음

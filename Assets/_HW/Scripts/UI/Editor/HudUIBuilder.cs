@@ -18,7 +18,6 @@ public static class HudUIBuilder
 	const string FontPath = "Assets/Fonts/Galmuri11 TMP.asset";
 	static readonly string[] Keys = { "Q", "W", "E", "R", "A", "S", "D", "F" };
 
-	static readonly Color Band = Hex("1A1430");
 	static readonly Color Label = Hex("B8BED6");
 	static readonly Color Muted = Hex("7C84A8");
 	static readonly Color HpRed = Hex("E07070");
@@ -56,7 +55,7 @@ public static class HudUIBuilder
 		bar.sizeDelta = new Vector2(0, 20);
 		SetImage(bar.gameObject, "hud_bar");
 		HorizontalLayoutGroup barLayout = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
-		barLayout.padding = new RectOffset(6, 6, 3, 3);
+		barLayout.padding = new RectOffset(6, 6, 2, 2); // 재료 그림 16×16이 들어가게 위아래 2
 		barLayout.spacing = 6;
 		barLayout.childAlignment = TextAnchor.MiddleLeft;
 		barLayout.childControlWidth = barLayout.childControlHeight = true;
@@ -89,12 +88,12 @@ public static class HudUIBuilder
 		Fit(level, 30);
 		hideInRaid.Add(level.gameObject);
 		hideInRaid.Add(Divider(bar));
-		hideInRaid.Add(Icon(bar));
+		hideInRaid.Add(MaterialIcon(bar, "bug_fragment"));
 		TMP_Text bug = Text(bar, "BugFragment", "버그 조각 0", 8, Color.white);
 		Fit(bug, 52);
 		hideInRaid.Add(bug.gameObject);
 		hideInRaid.Add(Divider(bar));
-		hideInRaid.Add(Icon(bar));
+		hideInRaid.Add(MaterialIcon(bar, "boss_core"));
 		TMP_Text core = Text(bar, "BossCore", "보스 코어 0", 8, Color.white);
 		Fit(core, 48);
 		hideInRaid.Add(core.gameObject);
@@ -115,9 +114,12 @@ public static class HudUIBuilder
 		band.pivot = new Vector2(0.5f, 0);
 		band.sizeDelta = new Vector2(0, 60);
 		band.anchoredPosition = Vector2.zero;
-		Image bandImage = band.gameObject.AddComponent<Image>();
-		bandImage.color = Band;
-		bandImage.raycastTarget = false;
+		// 띠 전체를 칠하지 않고 (바닥을 너무 가림, #431) 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자
+		RectTransform fade = NewUI("Fade", band);
+		Place(fade, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-10, 0), new Vector2(440, 62));
+		Image fadeImage = fade.gameObject.AddComponent<Image>();
+		fadeImage.sprite = LoadSmoothSprite("hud_band_fade");
+		fadeImage.raycastTarget = false;
 
 		RectTransform center = NewUI("Center", band);
 		Place(center, new Vector2(0.5f, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(240, 60));
@@ -125,7 +127,11 @@ public static class HudUIBuilder
 		// HP
 		TMP_Text hpLabel = Text(center, "HpLabel", "HP", 6, Label);
 		Place(hpLabel.rectTransform, new Vector2(0.5f, 0), new Vector2(0, 0.5f), new Vector2(-110, 44), new Vector2(26, 8));
-		(Image hpFill, _) = Gauge(center, "HpBar", new Vector2(-5, 44), HpRed, Image.OriginHorizontal.Left);
+		(Image hpFill, RectTransform hpBar) = Gauge(center, "HpBar", new Vector2(-5, 44), HpRed, Image.OriginHorizontal.Left);
+		// 닳은 부분: 흰 잔상이 빨간 막대 뒤에서 잠시 남았다가 줄어든다 (#431, 몬스터 체력 바의 잔상 색)
+		Image hpTrail = Fill(hpBar, "Trail", Hex("E8ECFF"), Image.OriginHorizontal.Left);
+		hpTrail.transform.SetAsFirstSibling();
+		hpTrail.fillAmount = hpFill.fillAmount = 1f;
 		TMP_Text hpText = Text(center, "HpText", "100 / 100", 6, Label);
 		hpText.alignment = TextAlignmentOptions.MidlineRight;
 		Place(hpText.rectTransform, new Vector2(0.5f, 0), new Vector2(1, 0.5f), new Vector2(118, 44), new Vector2(40, 8));
@@ -193,7 +199,7 @@ public static class HudUIBuilder
 			cooldowns[i].type = Image.Type.Filled;
 			cooldowns[i].fillMethod = Image.FillMethod.Radial360;
 			cooldowns[i].fillOrigin = (int)Image.Origin360.Top;
-			cooldowns[i].fillClockwise = true;
+			cooldowns[i].fillClockwise = false; // 줄어들 때 걷히는 끝이 12시에서 시계 방향으로 돈다 (#431)
 			cooldowns[i].raycastTarget = false;
 			cooldowns[i].enabled = false;
 
@@ -229,8 +235,8 @@ public static class HudUIBuilder
 		RectTransform shortcuts = NewUI("Shortcuts", band);
 		Place(shortcuts, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-20, 4), new Vector2(90, 28));
 		SetImage(shortcuts.gameObject, "hud_bar");
-		Button skillTree = Shortcut(shortcuts, "SkillTreeButton", "스킬 트리", new Vector2(3, 0));
-		Button levelUp = Shortcut(shortcuts, "LevelUpButton", "레벨업", new Vector2(46, 0));
+		Button skillTree = Shortcut(shortcuts, "SkillTreeButton", "스킬 트리", "1", new Vector2(3, 0));
+		Button levelUp = Shortcut(shortcuts, "LevelUpButton", "레벨업", "2", new Vector2(46, 0));
 		hideInRaid.Add(shortcuts.gameObject);
 
 		// 칸 연결 ------------------------------------------------------------------
@@ -245,6 +251,7 @@ public static class HudUIBuilder
 		Array(so, "swordPips", swordPips);
 		Array(so, "hideInRaid", hideInRaid.ToArray());
 		Set(so, "hpFill", hpFill);
+		Set(so, "hpTrail", hpTrail);
 		Set(so, "hpText", hpText);
 		Set(so, "heapFill", heapFill);
 		Set(so, "dataFill", dataFill);
@@ -266,6 +273,9 @@ public static class HudUIBuilder
 		// Esc: 다른 화면이 열려 있지 않을 때 설정 열기 (UIShortcut #298, 맨 위 화면만 반응)
 		UIShortcut shortcut = root.gameObject.AddComponent<UIShortcut>();
 		Bind(shortcut, "onCancel", view.OpenSettings);
+		// 숫자 1·2: 스킬 트리 · 레벨업 바로가기 (#431). 같은 UIShortcut이라 다른 창이 열려 있으면 반응하지 않는다
+		Bind(shortcut, "onShortcut1", view.OpenSkillTreeByKey);
+		Bind(shortcut, "onShortcut2", view.OpenLevelUpByKey);
 
 		root.gameObject.SetActive(false);
 		PrefabUtility.SaveAsPrefabAsset(canvasObject, PrefabPath);
@@ -287,11 +297,20 @@ public static class HudUIBuilder
 		return line.gameObject;
 	}
 
-	static GameObject Icon(RectTransform bar)
+	// 재료 그림 (#431): 박진우의 재료 드롭 그림(material_{ID}.png 가로 시트)의 첫 장. 16×16 칸에 비율을 지켜 넣는다
+	static GameObject MaterialIcon(RectTransform bar, string materialId)
 	{
 		RectTransform icon = NewUI("Icon", bar);
-		SetImage(icon.gameObject, "hud_icon").raycastTarget = false;
-		Layout(icon.gameObject, 9, 9);
+		Image image = icon.gameObject.AddComponent<Image>();
+		image.raycastTarget = false;
+		image.preserveAspect = true;
+		string path = $"Assets/_JW/Effects/Materials/material_{materialId}.png";
+		Sprite first = null;
+		foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(path))
+			if (asset is Sprite sprite && (first == null || string.CompareOrdinal(sprite.name, first.name) < 0)) first = sprite;
+		if (first == null) Debug.LogWarning($"[HudUIBuilder] {path}에서 그림을 찾지 못함");
+		image.sprite = first;
+		Layout(icon.gameObject, 16, 16);
 		return icon.gameObject;
 	}
 
@@ -471,7 +490,7 @@ public static class HudUIBuilder
 		return fill;
 	}
 
-	static Button Shortcut(RectTransform parent, string name, string label, Vector2 left)
+	static Button Shortcut(RectTransform parent, string name, string label, string key, Vector2 left)
 	{
 		RectTransform r = NewUI(name, parent);
 		Place(r, new Vector2(0, 0.5f), new Vector2(0, 0.5f), left, new Vector2(41, 24));
@@ -479,9 +498,13 @@ public static class HudUIBuilder
 		hit.color = new Color(0, 0, 0, 0);
 		Button button = r.gameObject.AddComponent<Button>();
 		button.targetGraphic = hit;
-		RectTransform icon = NewUI("Icon", r);
-		Place(icon, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(9, 9));
-		SetImage(icon.gameObject, "hud_icon").raycastTarget = false;
+		// 아이콘 자리에 바로가기 숫자 키 (#431, Esc 키 표시와 같은 모양)
+		RectTransform keyBox = NewUI("Key", r);
+		Place(keyBox, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(11, 11));
+		SetImage(keyBox.gameObject, "hud_key").raycastTarget = false;
+		TMP_Text keyText = Text(keyBox, "Text", key, 6, Label);
+		Stretch(keyText.rectTransform);
+		keyText.alignment = TextAlignmentOptions.Center;
 		TMP_Text text = Text(r, "Label", label, 6, Label);
 		text.alignment = TextAlignmentOptions.Bottom;
 		Place(text.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 2), new Vector2(41, 9));
@@ -545,6 +568,23 @@ public static class HudUIBuilder
 		Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"{Dir}/{name}.png");
 		if (sprite == null) Debug.LogWarning($"[HudUIBuilder] {Dir}/{name}.png 스프라이트를 찾지 못함");
 		return sprite;
+	}
+
+	// 부드럽게 늘어나야 하는 그림(그라데이션): 스프라이트, 선형 필터, 압축 없음으로 가져온다
+	static Sprite LoadSmoothSprite(string name)
+	{
+		string path = $"{Dir}/{name}.png";
+		if (AssetImporter.GetAtPath(path) is TextureImporter importer
+			&& (importer.textureType != TextureImporterType.Sprite || importer.filterMode != FilterMode.Bilinear || importer.textureCompression != TextureImporterCompression.Uncompressed))
+		{
+			importer.textureType = TextureImporterType.Sprite;
+			importer.spriteImportMode = SpriteImportMode.Single;
+			importer.filterMode = FilterMode.Bilinear;
+			importer.mipmapEnabled = false;
+			importer.textureCompression = TextureImporterCompression.Uncompressed;
+			importer.SaveAndReimport();
+		}
+		return LoadSprite(name);
 	}
 
 	static void Set(SerializedObject so, string property, Object value)

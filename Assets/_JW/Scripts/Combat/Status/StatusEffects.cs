@@ -61,6 +61,8 @@ public class StatusEffects : NetworkBehaviour
 	float nextBleedTime;
 	// 상처 가르기(#172): 지금 출혈의 틱 데미지 추가분. 출혈이 풀리면 0으로
 	float bleedBonusRate;
+	// [서버] 지금 출혈을 건 플레이어 (#484). 출혈 데미지를 이 플레이어의 피해로 넘겨, 몬스터가 처치 보상을 정할 때 센다. 출혈이 풀리면 null로
+	GameObject bleedSource;
 
 	IDamageable damageable;
 	Monster monster;
@@ -144,14 +146,24 @@ public class StatusEffects : NetworkBehaviour
 	public void Apply(StatusType type) => Apply(type, StatusDefaults.DurationOf(type));
 
 	/// <summary>
+	/// 상태를 기본 지속 시간으로 걸고, 건 플레이어(source)를 기억한다 (#484). 지금은 출혈만 source를 쓴다:
+	/// 출혈 데미지를 source의 피해로 넘겨 몬스터의 처치 보상 순위에 센다. 다시 걸면 마지막으로 건 플레이어로 바뀐다.
+	/// </summary>
+	public void Apply(StatusType type, GameObject source) => Apply(type, StatusDefaults.DurationOf(type), source);
+
+	/// <summary>
 	/// 상태를 duration초 동안 건다. 이미 걸려 있으면 지속 시간만 새로 시작한다 (남은 시간에 더하지 않음).
 	/// </summary>
-	public void Apply(StatusType type, float duration)
+	public void Apply(StatusType type, float duration) => Apply(type, duration, null);
+
+	void Apply(StatusType type, float duration, GameObject source)
 	{
 		// 클라이언트는 서버가 보낸 값을 읽기만 한다
 		if (IsClientOnly || duration <= 0f || (monster != null && monster.IsDead)) return;
 
 		bool wasBleeding = Has(StatusType.Bleed);
+		// 건 사람을 모르고 다시 걸면 기억한 사람을 그대로 둔다 (출혈 시간을 늘린 사람이 없으므로)
+		if (type == StatusType.Bleed && (source != null || !wasBleeding)) bleedSource = source;
 		endTimes[type] = Time.time + duration;
 		if (NetworkServer.active) syncedEnds[type] = NetworkTime.time + duration;
 		// 출혈을 새로 걸면 한 간격 뒤에 첫 데미지. 이미 출혈 중이면 데미지 간격은 그대로 둔다
@@ -191,7 +203,11 @@ public class StatusEffects : NetworkBehaviour
 	public void Clear(StatusType type)
 	{
 		if (IsClientOnly) return;
-		if (type == StatusType.Bleed) bleedBonusRate = 0f;
+		if (type == StatusType.Bleed)
+		{
+			bleedBonusRate = 0f;
+			bleedSource = null;
+		}
 		if (endTimes.Remove(type))
 		{
 			if (NetworkServer.active) syncedEnds.Remove(type);
@@ -208,14 +224,14 @@ public class StatusEffects : NetworkBehaviour
 
 	/// <summary>
 	/// target(또는 부모)에 붙은 StatusEffects로 상태를 건다. 스킬이 맞은 대상에 쓴다.
-	/// StatusEffects가 없는 대상이면 false.
+	/// StatusEffects가 없는 대상이면 false. 출혈을 거는 스킬은 source에 시전자를 넘긴다 (#484, Apply(type, source)).
 	/// </summary>
-	public static bool TryApply(GameObject target, StatusType type)
+	public static bool TryApply(GameObject target, StatusType type, GameObject source = null)
 	{
 		if (target == null) return false;
 		StatusEffects effects = target.GetComponentInParent<StatusEffects>();
 		if (effects == null) return false;
-		effects.Apply(type);
+		effects.Apply(type, source);
 		return true;
 	}
 
@@ -250,7 +266,7 @@ public class StatusEffects : NetworkBehaviour
 		DamageRequest request = DamageRequest.Flat(StatusDefaults.BleedDamage);
 		request.BonusRate = bleedBonusRate;
 		int damage = DamageCalculator.Calculate(request).Damage;
-		damageable.TakeDamage(damage);
+		damageable.TakeDamage(damage, bleedSource);
 		BleedTicked?.Invoke(damage);
 	}
 }

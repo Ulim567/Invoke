@@ -114,7 +114,7 @@ public abstract class ThrustSkill : DataDrivenSkill
 			DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = BonusRate(monster), CritChance = CritChance, CritBonusRate = CritBonusRate };
 			DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 			Vector2 point = ClosestPoint(monster, caster.transform.position);
-			monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+			monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 			OnHitMonster(task, monster, result);
 			effects?.RaiseHit(Id, monster.gameObject, point, result);
 		}
@@ -332,7 +332,7 @@ public class CSummonedThrust : DataDrivenSkill
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
 		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
-		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, hitSword.transform.position, result);
 	}
 }

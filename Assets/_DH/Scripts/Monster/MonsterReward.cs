@@ -4,18 +4,19 @@ using Mirror;
 using UnityEngine;
 
 /// <summary>
-/// 몬스터가 죽으면 근처 플레이어에게 경험치·돈·재료(드롭)를 준다. 드롭은 땅에 떨어지지 않고 바로 가방(PlayerProgress)에 들어간다.
+/// 몬스터가 죽으면 플레이어에게 경험치·돈·재료(드롭)를 준다. 드롭은 땅에 떨어지지 않고 바로 가방(PlayerProgress)에 들어간다.
 /// <para>
-/// - 받는 플레이어: 몬스터가 죽은 자리에서 Reward Range 안에 있는 살아 있는 플레이어 모두. 때린 사람을 따로 세지 않는다.<br/>
+/// - 받는 플레이어 (#484): 누적 피해량이 가장 큰 플레이어 한 명 (Monster.GetAttackerRanking). 같으면 먼저 때린 플레이어.<br/>
+///   그 플레이어가 죽었거나 몬스터의 씬을 떠났으면 다음 순위. 받을 수 있는 플레이어가 없으면 아무도 받지 않는다.<br/>
 ///   Whole Scene을 켜면(레이드 보스) 같은 씬의 플레이어 모두에게 준다. 죽어서 관전 중인 파티원도 받는다.<br/>
-/// - 재료는 몬스터가 죽을 때 한 번 굴려서, 받는 플레이어 모두에게 같은 것을 준다. 확률(Chance) 1이면 반드시 나온다.<br/>
+/// - 재료는 몬스터가 죽을 때 한 번 굴린다. 확률(Chance) 1이면 반드시 나온다.<br/>
 /// - 값은 PlayerProgress(이우림)의 AddExp, AddMoney, AddMaterial로만 바꾼다. PlayerProgress가 없는 플레이어(테스트용 프리팹)는 건너뛴다.<br/>
 /// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다. 판정은 몬스터가 속한 씬의 물리 세계에 한다.<br/>
 /// - 연출 이벤트(RewardEffectPlayed)는 [TargetRpc]로 받은 플레이어의 화면(호스트 포함)에서만 불린다 (#404). 몬스터는 Despawn Delay(0.5초) 뒤에 없어지므로,
 ///   연출 쪽은 띄운 그림을 몬스터의 자식으로 두지 않는다.
 /// </para>
 /// <para>
-/// 사용법: 보상을 줄 몬스터 프리팹(Leak, Loop, Gateway) 최상위에 Monster와 함께 붙인다. Player Layers는 Player로 둔다.
+/// 사용법: 보상을 줄 몬스터 프리팹(Leak, Loop, Gateway) 최상위에 Monster와 함께 붙인다.
 /// NetworkBehaviour라 프리팹에 NetworkIdentity가 있어야 한다.
 /// 기둥·분신·웜처럼 보상이 없는 몬스터에는 붙이지 않는다.
 /// </para>
@@ -50,22 +51,15 @@ public class MonsterReward : NetworkBehaviour
 	MaterialDrop[] drops = { new MaterialDrop { materialId = "bug_fragment", count = 1, chance = 0.5f } };
 
 	[Header("받는 플레이어")]
-	[SerializeField, Min(0f), Tooltip("몬스터가 죽은 자리에서 이 거리 안의 살아 있는 플레이어가 받는다 (유닛)")]
-	float rewardRange = 20f;
-
-	[SerializeField, Tooltip("플레이어 레이어. Player로 둔다")]
-	LayerMask playerLayers;
-
-	[SerializeField, Tooltip("켜면 거리와 생사에 상관없이 같은 씬의 플레이어 모두가 받는다 (레이드 보스)")]
+	[SerializeField, Tooltip("켜면 피해량·생사에 상관없이 같은 씬의 플레이어 모두가 받는다 (레이드 보스). 끄면 가장 많이 때린 플레이어 한 명")]
 	bool wholeScene;
 
 	// 판정에 쓰는 목록은 모든 몬스터가 함께 쓴다 (죽을 때 한 번씩만 쓰고, 메인 스레드라 겹치지 않음)
-	static readonly List<Collider2D> found = new List<Collider2D>(16);
+	static readonly List<GameObject> ranking = new List<GameObject>(8);
 	static readonly List<GameObject> roots = new List<GameObject>(64);
 	static readonly HashSet<PlayerProgress> rewarded = new HashSet<PlayerProgress>();
 
 	Monster monster;
-	ContactFilter2D playerFilter;
 	// 이번에 나온 재료. 받는 플레이어 모두에게 같은 것을 준다
 	readonly List<MaterialDrop> rolled = new List<MaterialDrop>(4);
 	// 클라이언트가 받은 재료 (TargetRewardEffect). 이벤트 안에서만 읽는다
@@ -82,10 +76,6 @@ public class MonsterReward : NetworkBehaviour
 	void Awake()
 	{
 		monster = GetComponent<Monster>();
-		playerFilter.SetLayerMask(playerLayers);
-		playerFilter.useTriggers = true;
-		if (!wholeScene && playerLayers.value == 0)
-			Debug.LogWarning($"[MonsterReward] {name}: Player Layers가 비어 있어 보상을 받을 플레이어를 찾지 못합니다. Player로 두세요.", this);
 	}
 
 	void OnEnable() => monster.Died += OnDied;
@@ -100,7 +90,7 @@ public class MonsterReward : NetworkBehaviour
 		RollDrops();
 		rewarded.Clear();
 		if (wholeScene) RewardWholeScene();
-		else RewardNearby();
+		else RewardTopAttacker();
 		rewarded.Clear();
 	}
 
@@ -116,19 +106,21 @@ public class MonsterReward : NetworkBehaviour
 		}
 	}
 
-	// 죽은 자리 근처의 살아 있는 플레이어
-	void RewardNearby()
+	// 가장 많이 때린 플레이어 한 명 (#484). 죽었거나 다른 씬으로 떠난 플레이어는 건너뛰고 다음 순위에게 준다
+	void RewardTopAttacker()
 	{
-		int count = gameObject.scene.GetPhysicsScene2D().OverlapCircle(transform.position, rewardRange, playerFilter, found);
-		for (int i = 0; i < count; i++)
+		monster.GetAttackerRanking(ranking);
+		for (int i = 0; i < ranking.Count; i++)
 		{
-			PlayerProgress player = found[i].GetComponentInParent<PlayerProgress>();
-			if (player == null || rewarded.Contains(player)) continue;
+			PlayerProgress player = ranking[i].GetComponentInParent<PlayerProgress>();
+			if (player == null || player.gameObject.scene != gameObject.scene) continue;
 
 			PlayerHealth health = player.GetComponentInChildren<PlayerHealth>();
 			if (health != null && health.IsDead) continue;
 			Give(player);
+			break;
 		}
+		ranking.Clear();
 	}
 
 	// 같은 씬의 플레이어 모두 (플레이어는 씬 최상위 오브젝트). 죽은 파티원도 받는다
@@ -186,11 +178,4 @@ public class MonsterReward : NetworkBehaviour
 	}
 
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;
-
-	void OnDrawGizmosSelected()
-	{
-		if (wholeScene) return;
-		Gizmos.color = new Color(1f, 0.85f, 0.2f);
-		Gizmos.DrawWireSphere(transform.position, rewardRange);
-	}
 }

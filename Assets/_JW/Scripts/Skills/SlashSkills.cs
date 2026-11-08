@@ -139,7 +139,7 @@ public abstract class SwordWaveSkill : DataDrivenSkill
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
 		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
-		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 		OnHitMonster(monster, result);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, wave != null ? (Vector2)wave.transform.position : (Vector2)monster.transform.position, result);
 	}
@@ -193,7 +193,7 @@ public class CWideSlash : SwordWaveSkill
 	protected override bool Pierce => true;
 
 	protected override void OnHitMonster(Monster monster, DamageResult result) =>
-		StatusEffects.TryApply(monster.gameObject, StatusType.Bleed);
+		StatusEffects.TryApply(monster.gameObject, StatusType.Bleed, caster);
 }
 
 /// <summary>
@@ -317,7 +317,7 @@ public class CMultiSlash : DataDrivenSkill
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
 		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
-		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, sword.transform.position, result);
 	}
 }
@@ -408,7 +408,7 @@ public class CBattlefieldSweep : DataDrivenSkill
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
 		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
-		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, sword.transform.position, result);
 	}
 }

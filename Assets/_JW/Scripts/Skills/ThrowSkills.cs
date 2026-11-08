@@ -21,7 +21,7 @@ public abstract class ThrowSkillBase : DataDrivenSkill
 		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
 		DamageRequest request = new DamageRequest(attackPower, multiplier) { CanExecute = CanExecute };
 		DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
-		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, point, result);
 	}
 

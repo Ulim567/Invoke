@@ -62,7 +62,7 @@ public static class GameInput
 	}
 
 	/// <summary>
-	/// UI 액션 맵: 확인(Enter), 취소(ESC), 숫자 1·2 (화면 바로가기).<br/>
+	/// UI 액션 맵: 확인(Enter), 취소(ESC), 숫자 1·2 (화면 바로가기), 다음 입력칸(Tab).<br/>
 	/// Player 액션 맵이나 Attack 액션 맵이 비활성화되어 있어도 동작한다. (UI를 여는 쪽이 두 액션 맵을 비활성화하는 경우가 있으므로)
 	/// </summary>
 	public static class UI
@@ -88,6 +88,11 @@ public static class GameInput
 		/// 이번 프레임에 숫자 2를 눌렀으면 true. 게임 HUD에서 레벨업 바로가기로 쓴다 (#431). 화면에서는 UIShortcut의 On Shortcut 2를 쓴다.
 		/// </summary>
 		public static bool Shortcut2Pressed => A.Shortcut2.WasPressedThisFrame();
+
+		/// <summary>
+		/// 이번 프레임에 Tab을 눌렀으면 true. 화면 안의 다음 입력칸으로 넘어갈 때 쓴다 (#430, TabFieldNavigator).
+		/// </summary>
+		public static bool NextFieldPressed => A.NextField.WasPressedThisFrame();
 	}
 
 	// 찾은 액션을 한꺼번에 들고 있다가 ResetStatics 때 한꺼번에 버리기 위해 묶어 둔다
@@ -96,7 +101,7 @@ public static class GameInput
 		public readonly InputActionMap PlayerMap, AttackMap, UIMap;
 		public readonly InputAction Move, MoveUp, MoveDown, Jump, Run, Down, PickUp, Interact;
 		public readonly InputAction TargetPrev, TargetNext, Mark, AttackCancel;
-		public readonly InputAction Submit, UICancel, Shortcut1, Shortcut2;
+		public readonly InputAction Submit, UICancel, Shortcut1, Shortcut2, NextField;
 		public readonly InputAction[] Slots = new InputAction[Attack.SlotCount];
 
 		public Actions(InputActionAsset asset)
@@ -125,6 +130,7 @@ public static class GameInput
 			UICancel = UIMap.FindAction("Cancel", true);
 			Shortcut1 = UIMap.FindAction("Shortcut1", true);
 			Shortcut2 = UIMap.FindAction("Shortcut2", true);
+			NextField = UIMap.FindAction("NextField", true);
 		}
 	}
 }

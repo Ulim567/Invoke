@@ -129,12 +129,12 @@ public static class RaidLobbyUIBuilder
 		Set(so, "emptyText", empty.gameObject);
 		Set(so, "createButton", create);
 		Set(so, "closeButton", listClose);
-		Set(so, "createPopup", createPopup.gameObject);
+		Set(so, "createPopup", createPopup.parent.gameObject); // 어두운 바탕째 켜고 끈다
 		Set(so, "createNameInput", nameInput);
 		Set(so, "createPasswordInput", passwordInput);
 		Set(so, "createConfirmButton", createConfirm);
 		Set(so, "createCancelButton", createCancel);
-		Set(so, "passwordPopup", passwordPopup.gameObject);
+		Set(so, "passwordPopup", passwordPopup.parent.gameObject);
 		Set(so, "joinPasswordInput", joinInput);
 		Set(so, "joinConfirmButton", joinConfirm);
 		Set(so, "joinCancelButton", joinCancel);
@@ -152,14 +152,15 @@ public static class RaidLobbyUIBuilder
 		so.ApplyModifiedPropertiesWithoutUndo();
 
 		root.gameObject.SetActive(false);
-		createPopup.gameObject.SetActive(false);
-		passwordPopup.gameObject.SetActive(false);
+		createPopup.parent.gameObject.SetActive(false);
+		passwordPopup.parent.gameObject.SetActive(false);
 		party.gameObject.SetActive(false);
 
 		GameObject prefab = PrefabUtility.SaveAsPrefabAsset(canvasObject, PrefabPath);
 		Object.DestroyImmediate(canvasObject);
 		AssetDatabase.SaveAssets();
 		Debug.Log($"[RaidLobbyUIBuilder] {PrefabPath}를 만듦");
+		KeyBadgeInstaller.InstallLater(); // 키 표시(#430)를 다시 붙인다
 
 		PlaceInLobby(prefab);
 	}
@@ -363,9 +364,15 @@ public static class RaidLobbyUIBuilder
 	}
 
 	// 가운데 작은 창 (주황 테두리, 접속 끊김 팝업과 같은 그림)
+	// 작은 창(방 만들기, 비밀번호): 화면 전체를 어둡게 덮는 바탕(이름 = name, 켜고 끄는 오브젝트) 안에 창(Window). 돌려주는 것은 창 (#430)
+	// 바탕이 뒤의 방 목록을 가리고 마우스도 막아서, 앞 창에만 눈이 가고 뒤의 「방 만들기」 버튼과 겹쳐 보이지 않는다
 	static RectTransform Popup(RectTransform root, string name, string title)
 	{
-		RectTransform popup = NewUI(name, root);
+		RectTransform dim = NewUI(name, root);
+		Stretch(dim);
+		Image dimImage = dim.gameObject.AddComponent<Image>();
+		dimImage.color = new Color(0.04f, 0.03f, 0.08f, 0.72f);
+		RectTransform popup = NewUI("Window", dim);
 		Place(popup, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(240, 0));
 		SetImage(popup.gameObject, "Assets/_HW/UI/Account/acc_popup.png");
 		VerticalLayoutGroup layout = popup.gameObject.AddComponent<VerticalLayoutGroup>();

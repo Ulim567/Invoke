@@ -192,7 +192,7 @@
   - 길이: 직접 입력한 1 이상의 정수만(C89). 변수, 값 블록, 0 이하는 변환 거부
   - 처음 값: 모든 원소가 언어 규칙 파일의 기본값. 초기값 목록(`{1, 2, 3}`) 없음
   - 원소 타입: 변수로 선언할 수 있는 타입. 2차원 array는 변환 거부
-  - memory: 그 array를 만든 function의 stack 프레임. function이 시작할 때 프레임과 함께 받고, 끝날 때 함께 돌려줌. `free` 필요 없음
+  - memory: 그 array를 만든 function의 stack 프레임. function이 시작할 때 프레임과 함께 받고, 끝날 때 함께 돌려줌. `free` 필요 없음. 전역 array는 데이터 영역(아래 「전역 변수」, #478)
   - 범위: 일반 변수와 같음. `{ }` 안의 array는 `}`에서 사라지고, 반복문 안이면 바퀴마다 새 array
   - 원소 읽기 `arr[i]`, 원소 쓰기 `arr[i] = 값`
     - index: 정수 타입(`int`, `char`, C의 `bool`)만. `float` 등은 `TypeMismatch`(C의 `arr[0.5]`도 compile error)
@@ -212,15 +212,23 @@
 - 선언: 캐릭터마다 전역 변수 파일 1개(`GlobalVariablesData`, [function-data.md](function-data.md)). 함수 안의 선언은 언제나 지역 변수
 - 쓰기: 모든 사용자 정의 함수가 함께 읽고 대입
   - 찾는 순서: 지금 함수의 지역 변수 → 캐릭터의 전역 변수. 변수 읽기, 대입, array 원소 읽기·쓰기 모두 같음
-  - 전역 변수에 원소 읽기·쓰기(전역 `int x`에 `x[0]`): `TypeMismatch` (전역 array는 없음)
+  - array가 아닌 전역 변수에 원소 읽기·쓰기(전역 `int x`에 `x[0]`): `TypeMismatch`
   - 이름이 같을 때: 지역 변수가 전역 변수를 가림 (C 규칙)
 - 초기값: 직접 입력한 값만. 비우면 언어 규칙 파일의 기본값. 포인터는 `NULL`만
-- memory: 전역 변수 하나 = 데이터 영역 1칸(`DataUsed`). 초기화 때 자동으로 잡히고 다음 초기화까지 유지. `malloc` 아님
+- 전역 array (#478)
+  - 만들기: 전역 변수 파일에 배열 만들기 블록(`int scores[3]`). 선언 블록의 array 타입은 저장 검사에서 거부
+  - 길이: 지역 array와 같음. 직접 입력한 1 이상의 정수만
+  - 처음 값: 모든 원소가 언어 규칙 파일의 기본값. 초기값 목록(`{1, 2, 3}`) 없음. 초기화 때마다 새 array로 다시 만듦
+  - 원소 타입: 지역 array와 같음(int, float, bool, char, string, `Sword*`, `Target`). `Target` 원소는 처음에 「대상 없음」
+  - 원소 읽기·쓰기, 함수에 넘기기: 지역 array와 같은 규칙
+  - 원소의 포인터: 루트 집합의 「플레이어의 전역 변수」. 원소에 담은 객체는 누수가 아님
+- memory: 전역 변수 하나 = 데이터 영역 1칸, 전역 array = 길이만큼(`DataUsed`). 예: `int x; int scores[3];` → 1 + 3 = 4칸. 초기화 때 자동으로 잡히고 다음 초기화까지 유지. `malloc` 아님
   - 포인터 전역 변수: 변수 자체는 데이터 영역 1칸, 가리키는 객체는 heap
   - 실행 중에 `Capacity`가 줄어도 잡힌 칸은 유지. `Free`가 0이 됨 (stack 규칙과 같음)
 - 저장 검사(`FunctionExecutor.TrySaveGlobalVariables`): 걸리면 저장하지 않음. 콘솔 오류
-  - 선언 수 > `Capacity`
-  - array, 다룰 수 없는 타입 (대상(Target) 타입은 #474부터 받음. 처음 값은 비워 두는 것만 = 「대상 없음」)
+  - 데이터 영역 칸 수 합계 > `Capacity`
+  - 선언·배열 만들기 블록이 아닌 블록, 다룰 수 없는 타입 (대상(Target) 타입은 #474부터 받음. 처음 값은 비워 두는 것만 = 「대상 없음」)
+  - 선언 블록의 array 타입, 직접 입력한 1 이상의 정수가 아닌 배열 길이 (#478)
   - 빈 이름, 같은 이름 두 번
   - 직접 입력한 값이 아닌 초기값(연산, 변수, `malloc`), 읽을 수 없는 글자열, 변수 타입으로 바꿀 수 없는 값
 - 초기화(`FunctionExecutor.RestartProcess`): 프로세스를 새로 시작
@@ -230,7 +238,7 @@
 - 전역 변수 파일 저장 위치: 이 컴퓨터의 `GlobalVariables.json` 하나(`GlobalVariablesStorage`). 서버 저장 전까지의 임시 저장소
 - 초기화 때 읽는 파일 (#173): `SetGlobalVariablesFile`로 정한 파일. 정하지 않았으면 이 컴퓨터의 파일
   - 서버: 플레이어가 접속할 때 보낸 파일(`FunctionExecutorNetwork`, [network.md](network.md))
-- 아직 없음: 전역 array, 전역 변수 파일 편집 화면, 서버 저장, Mirror 동기화
+- 아직 없음: 전역 변수 파일 편집 화면, 서버 저장, Mirror 동기화
 - 지금 한계 (서버 저장 이슈에서 해결)
   - 전역 변수 파일이 컴퓨터마다 하나: 같은 컴퓨터의 다른 계정·캐릭터도 같은 파일을 보냄. 캐릭터 ID로 나눠 저장해야 함
   - 접속 직후 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전하면, 그 순간의 `Free`에 데이터 영역이 빠져 있음. 서버에서 불러오기를 기다린 뒤 전역 변수를 만드는 흐름으로 바꿀 때 함께 정리
@@ -254,7 +262,7 @@
 | --- | --- | --- |
 | 작업의 지역 루트 | 진행 중인 작업이 malloc한 포인터, 실행 중인 작업들의 지역 변수·파라미터·지역 array 원소에 담긴 포인터. 작업이 끝나면 사라짐 | 지역 포인터 |
 | 숨은 시스템 전역 (캐릭터 하나에 하나) | 사전 정의 함수가 정상으로 끝날 때 옮겨진, 그 함수가 malloc한 포인터(예: 소환검). 플레이어에게 보이지 않음 | C 라이브러리의 `static` 전역 변수 |
-| 플레이어의 전역 변수 | 전역 변수에 담긴 포인터 값 | 전역 포인터 |
+| 플레이어의 전역 변수 | 전역 변수·전역 array 원소(#478)에 담긴 포인터 값 | 전역 포인터 |
 
 - 사전 정의 함수가 정상으로 끝날 때: 그 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮김
   - 작업이 아니라 그 함수가 끝나는 순간. 사용자 정의 함수 안에서 불린 검 소환도, 그 함수가 나중에 실패해도 소환검이 남음
@@ -408,7 +416,7 @@
 | `Cancel(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 원본으로 시전한 `FunctionTask`만 `Cancelled`로 끊는다(진행 중, 다음 tick을 기다리는 것 모두). 끊은 작업이 있으면 `true`, 없으면 `false`. 플레이어가 그 슬롯의 작업을 취소할 때 부른다. 스킬 슬롯은 같은 스킬이 다른 function 안에서 실행 중이어도 끊지 않으므로, `IsRunning`이 `true`여도 `false`일 수 있다. 처리는 「끊기는 경우」 (#143) |
 | `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 로비 도착(`TravelPlayer`, #435), 연습장 초기화에서 부른다. (#139) |
 | `SetGlobalVariablesFile(GlobalVariablesData file)` | 전역 변수 파일 (`null`이면 이 컴퓨터의 파일) | - | 초기화 때 읽을 전역 변수 파일을 정한다. 정하기만 하고 초기화하지 않는다. 서버가 플레이어가 보낸 파일로 전역 변수를 만들 때 쓴다 (#173) |
-| `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장한 뒤 `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
+| `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장하고, 저장한 파일을 초기화 때 읽을 파일로 정한 뒤(`SetGlobalVariablesFile`, #478) `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
 | `CanUseGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | `TrySaveGlobalVariables`와 같은 검사만 한다. 저장·반영하지 않음. 서버가 DB에 저장하기 전에 쓴다(`FunctionExecutorNetwork`). (#205) |
 
 ### `FunctionTask`
@@ -489,7 +497,7 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Capacity` | - | `int` | memory 전체 칸 수. `PlayerStats.MemorySize`와 같다. |
-| `DataUsed` | - | `int` | 지금 데이터 영역이 쓰는 칸 수. 선언한 전역 변수 수 (#139) |
+| `DataUsed` | - | `int` | 지금 데이터 영역이 쓰는 칸 수. 전역 변수 하나에 1칸, 전역 array는 길이만큼 더한 값 (#139, #478) |
 | `StackUsed` | - | `int` | 지금 stack이 쓰는 칸 수. 실행 중인 모든 `FunctionBlock`의 `FrameSize` 합 |
 | `HeapUsed` | - | `int` | 지금 heap이 쓰는 칸 수. 해제하지 않은 객체와 누수 객체의 크기 합 |
 | `Free` | - | `int` | 남은 칸 수. `Capacity - DataUsed - StackUsed - HeapUsed`이고, 0보다 작아지지 않는다. (#139) |
@@ -576,7 +584,8 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables)` | 전역 변수 파일, 캐릭터의 언어 규칙 파일, memory 전체 칸 수 | `bool` | 검사하고 선언할 목록(이름, 타입, 초기값)을 돌려준다. 걸리면 콘솔 오류를 내고 `false` |
+| `TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables)` | 전역 변수 파일, 캐릭터의 언어 규칙 파일, memory 전체 칸 수 | `bool` | 검사하고 선언할 목록(이름, 타입, 초기값)을 돌려준다. 전역 array의 초기값은 원소를 기본값으로 채운 새 array. 걸리면 콘솔 오류를 내고 `false` |
+| `CountCells(GlobalVariablesData data)` | 전역 변수 파일 | `int` | 데이터 영역에서 쓸 칸 수. 선언 블록 1칸, 배열 만들기 블록은 길이만큼(길이를 읽을 수 없으면 1칸). 검사하지 않음. 전역 변수 편집 화면의 칸 수 표시가 씀 (#478) |
 
 - 보통은 직접 부르지 않고 `FunctionExecutor.TrySaveGlobalVariables`를 부른다
 

@@ -765,7 +765,7 @@ public class BlockEditor : MonoBehaviour
 			errors = new List<FunctionChecker.Error>();
 			NetworkIdentity localPlayer = NetworkClient.localPlayer;
 			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
-			if (!ok) errors.Add(new FunctionChecker.Error { Code = "Global Variables", Message = "int x = 3; 처럼 선언 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
+			if (!ok) errors.Add(new FunctionChecker.Error { Code = "Global Variables", Message = "int x = 3; 같은 선언 블록과 int arr[5]; 같은 배열 만들기 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
 		}
 		else errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
 
@@ -1290,7 +1290,8 @@ public class BlockEditor : MonoBehaviour
 
 		if (infoText == null) return;
 		string info;
-		if (editingGlobals) info = $"전역 변수 {globals.Declarations.Count}개   데이터 영역 {globals.Declarations.Count}칸";
+		// 데이터 영역은 선언 수가 아니라 칸 수. 전역 array는 길이만큼 칸을 쓴다 (#478)
+		if (editingGlobals) info = $"전역 변수 {globals.Declarations.Count}개   데이터 영역 {GlobalVariablesConverter.CountCells(globals)}칸";
 		else info = $"블록 {Function.CountBlocks()}개   코드 크기 {CodeSizeOf(Function)}";
 		// 상태 글자 칸이 없으면 예전처럼 뒤에 붙인다
 		if (messageLabel == null && !string.IsNullOrEmpty(message)) info += $"  {message}";

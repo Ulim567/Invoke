@@ -240,6 +240,8 @@ public class GlobalVariableTest : MonoBehaviour
 		Check("전역 array 초기화: DataUsed 6", memory.DataUsed == 6, $"실제 {memory.DataUsed}");
 
 		GlobalVariablesStorage.Save(originalFile);
+		// TrySaveGlobalVariables가 정해 둔 테스트 파일 대신 되돌린 파일을 읽게 한다 (#478)
+		executor.SetGlobalVariablesFile(null);
 		executor.RestartProcess();
 		Debug.Log($"[GlobalVariableTest] 끝. 시작할 때의 전역 변수 파일로 되돌림 (DataUsed {memory.DataUsed})");
 	}

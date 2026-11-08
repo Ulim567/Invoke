@@ -325,6 +325,9 @@ public class FunctionExecutor : MonoBehaviour
 		if (!CanUseGlobalVariables(file)) return false;
 
 		GlobalVariablesStorage.Save(file);
+		// 저장한 파일로 초기화하도록 정한다. 접속 때 SetGlobalVariablesFile로 정한 예전 파일이 남아 있으면,
+		// RestartProcess가 방금 저장한 파일 대신 예전 파일로 전역 변수를 다시 만들기 때문 (임시 계정의 호스트, #478에서 찾음)
+		SetGlobalVariablesFile(file);
 		RestartProcess();
 		return true;
 	}

@@ -72,6 +72,27 @@ public static class GlobalVariablesConverter
 	}
 
 	/// <summary>
+	/// 전역 변수 파일이 데이터 영역에서 쓸 칸 수. 선언 블록은 1칸, 배열 만들기 블록은 길이만큼이다(CellsOf와 같은 규칙).<br/>
+	/// 편집 화면이 저장하기 전에 칸 수를 보여 줄 때 쓴다. 검사는 하지 않는다. 길이를 읽을 수 없는 배열 만들기 블록은 1칸으로 센다(저장 검사가 거부함).
+	/// </summary>
+	// 지역 array의 프레임 크기(FunctionDataConverter.ExtraArrayCells)처럼, 길이가 잘못된 블록은 변수 1칸만 센다
+	public static int CountCells(GlobalVariablesData data)
+	{
+		long cells = 0;
+		foreach (BlockData block in data?.Declarations ?? new List<BlockData>())
+		{
+			if (block == null) continue;
+			if (block.Kind == BlockKind.ArrayDeclare && block.Slots != null && block.Slots.Count >= 3
+				&& FunctionDataConverter.TryGetArrayLength(block.Slots[2], out int length))
+				cells += length;
+			else
+				cells += 1;
+		}
+		// 조작한 파일의 아주 큰 길이로 int를 넘으면 가장 큰 값으로 보여 준다
+		return (int)Math.Min(cells, int.MaxValue);
+	}
+
+	/// <summary>
 	/// 전역 변수 하나가 데이터 영역에서 쓰는 칸 수. array는 길이만큼, 그 밖은 1칸이다(지역 array가 스택 프레임에서 쓰는 칸과 같은 규칙).<br/>
 	/// TryConvert의 칸 검사와 ProcessMemory.DataUsed가 같은 규칙으로 세게 하려고 함께 쓴다.
 	/// </summary>

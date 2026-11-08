@@ -56,9 +56,10 @@ public static class InvokeUIBuilder
 		RectTransform errorFrame = BuildErrorFrame();
 		SlotCardView card = BuildSlotCard();
 		ReferenceCardView referenceCard = BuildReferenceCard();
+		BlockTooltipView tooltip = BuildBlockTooltip();
 
 		StyleBlockPrefabs();
-		BuildEditorCanvas(item, header, save, compile, paletteGroup, dropdown, marker, errorItem, errorFrame, referenceCard);
+		BuildEditorCanvas(item, header, save, compile, paletteGroup, dropdown, marker, errorItem, errorFrame, referenceCard, tooltip);
 		BuildEquipCanvas(equipItem, card);
 
 		AssetDatabase.SaveAssets();
@@ -167,9 +168,9 @@ public static class InvokeUIBuilder
 		GameObject root = NewUI("PaletteGroup", null);
 		FlowLayoutGroup flow = root.AddComponent<FlowLayoutGroup>();
 		flow.padding = new RectOffset(2, 2, 0, 6);
-		// 시안 6: 블록 목록의 칩은 편집 영역 블록보다 조금 작다 (0.85배)
+		// 칩은 편집 영역 블록과 같은 크기 (#476). 예전(시안 6)에는 0.85배였는데 작아서 끌기 어려웠다
 		var so = new SerializedObject(flow);
-		so.FindProperty("childScale").floatValue = 0.85f;
+		so.FindProperty("childScale").floatValue = 1f;
 		so.ApplyModifiedPropertiesWithoutUndo();
 		return SavePrefab(root, "PaletteGroup").GetComponent<RectTransform>();
 	}
@@ -498,6 +499,118 @@ public static class InvokeUIBuilder
 		return content;
 	}
 
+	// 편집 영역의 스크롤 (#476): workspace(Scroll Rect + 격자 바탕) → Viewport(Rect Mask 2D) → Content(Vertical Layout Group + BlockList), 오른쪽·아래 스크롤바.
+	// 예전에는 workspace 자체가 블록 자리(BlockList)였으므로, 그 컴포넌트들을 지우고 Content에 새로 붙인다. (Viewport, Content)를 돌려준다
+	static (RectTransform, RectTransform) GetOrBuildWorkspaceScroll(RectTransform workspace)
+	{
+		if (workspace.TryGetComponent(out BlockList oldList)) Object.DestroyImmediate(oldList);
+		if (workspace.TryGetComponent(out VerticalLayoutGroup oldLayout)) Object.DestroyImmediate(oldLayout);
+		ScrollRect scrollRect = GetOrAdd<ScrollRect>(workspace.gameObject);
+
+		RectTransform viewport = Child(workspace, "Viewport");
+		Stretch(viewport, 0, 0, 0, 0);
+		GetOrAdd<RectMask2D>(viewport.gameObject);
+
+		RectTransform content = Child(viewport, "Content");
+		content.anchorMin = content.anchorMax = new Vector2(0, 1);
+		content.pivot = new Vector2(0, 1);
+		content.anchoredPosition = Vector2.zero;
+		// 블록을 놓을 수 있도록 투명한 바탕(Raycast Target 켬)을 둔다. BlockList는 같은 오브젝트의 Image로 놓을 자리를 받는다
+		Image back = GetOrAdd<Image>(content.gameObject);
+		back.sprite = null;
+		back.color = new Color(0, 0, 0, 0);
+		VerticalLayoutGroup blocks = GetOrAdd<VerticalLayoutGroup>(content.gameObject);
+		blocks.padding = new RectOffset(12, 12, 12, 12);
+		blocks.spacing = 3;
+		blocks.childAlignment = TextAnchor.UpperLeft;
+		blocks.childControlWidth = blocks.childControlHeight = true;
+		blocks.childForceExpandWidth = blocks.childForceExpandHeight = false;
+		ContentSizeFitter fit = GetOrAdd<ContentSizeFitter>(content.gameObject);
+		fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+		fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+		// 가장 작을 때의 크기는 BlockEditor가 Viewport 크기로 맞춘다. 블록 아래 빈 곳에 놓아도 블록 자리에 들어가게 하기 위함
+		GetOrAdd<LayoutElement>(content.gameObject);
+		GetOrAdd<BlockList>(content.gameObject);
+
+		scrollRect.viewport = viewport;
+		scrollRect.content = content;
+		scrollRect.horizontal = true;
+		scrollRect.vertical = true;
+		scrollRect.movementType = ScrollRect.MovementType.Clamped;
+		scrollRect.scrollSensitivity = 20;
+		scrollRect.verticalScrollbar = BuildScrollbar(workspace, "VerticalScrollbar", true);
+		scrollRect.horizontalScrollbar = BuildScrollbar(workspace, "HorizontalScrollbar", false);
+		scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+		scrollRect.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+		scrollRect.verticalScrollbarSpacing = 2;
+		scrollRect.horizontalScrollbarSpacing = 2;
+		return (viewport, content);
+	}
+
+	// 가장자리의 스크롤바 하나 (세로는 오른쪽, 가로는 아래). 참고 창 스크롤바와 같은 모양
+	static Scrollbar BuildScrollbar(Transform parent, string name, bool vertical)
+	{
+		RectTransform bar = Child(parent, name);
+		if (vertical)
+		{
+			bar.anchorMin = new Vector2(1, 0);
+			bar.anchorMax = new Vector2(1, 1);
+			bar.pivot = new Vector2(1, 0.5f);
+			bar.sizeDelta = new Vector2(4, 0);
+		}
+		else
+		{
+			bar.anchorMin = new Vector2(0, 0);
+			bar.anchorMax = new Vector2(1, 0);
+			bar.pivot = new Vector2(0.5f, 0);
+			bar.sizeDelta = new Vector2(0, 4);
+		}
+		bar.anchoredPosition = Vector2.zero;
+		GetOrAdd<Image>(bar.gameObject).color = new Color(1, 1, 1, 0.08f);
+		Scrollbar scrollbar = GetOrAdd<Scrollbar>(bar.gameObject);
+		scrollbar.direction = vertical ? Scrollbar.Direction.BottomToTop : Scrollbar.Direction.LeftToRight;
+		RectTransform slidingArea = Child(bar, "Sliding Area");
+		Stretch(slidingArea, 0, 0, 0, 0);
+		RectTransform handle = Child(slidingArea, "Handle");
+		Stretch(handle, 0, 0, 0, 0);
+		Image handleImage = GetOrAdd<Image>(handle.gameObject);
+		handleImage.color = Hex("8B9CFF");
+		scrollbar.handleRect = handle;
+		scrollbar.targetGraphic = handleImage;
+		return scrollbar;
+	}
+
+	// 블록에 마우스를 올리면 보이는 설명창 (#476): 어두운 패널 + 여러 줄 글자. 너비는 고정, 높이는 글자만큼. 마우스를 가리지 않게 클릭을 통과시킨다
+	static BlockTooltipView BuildBlockTooltip()
+	{
+		GameObject root = NewUI("BlockTooltip", null);
+		RectTransform rect = Rect(root);
+		rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+		rect.pivot = new Vector2(0, 1);
+		Image back = SetImage(root, "ui_panel", Image.Type.Sliced);
+		back.raycastTarget = false;
+		VerticalLayoutGroup layout = root.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(7, 7, 5, 6);
+		layout.childControlWidth = layout.childControlHeight = true;
+		layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+		ContentSizeFitter fit = root.AddComponent<ContentSizeFitter>();
+		fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+		fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+		CanvasGroup group = root.AddComponent<CanvasGroup>();
+		group.blocksRaycasts = false;
+		group.interactable = false;
+
+		TMP_Text text = Text(root.transform, "Text", "void thrust(Target target);", 9, Hex("C8CEEA"), TextAlignmentOptions.TopLeft);
+		text.textWrappingMode = TextWrappingModes.Normal;
+		text.overflowMode = TextOverflowModes.Overflow;
+		text.richText = true;
+		text.gameObject.AddComponent<LayoutElement>().preferredWidth = 230;
+
+		BlockTooltipView view = root.AddComponent<BlockTooltipView>();
+		Set(view, "text", text);
+		return SavePrefab(root, "BlockTooltip").GetComponent<BlockTooltipView>();
+	}
+
 	// 오류가 난 블록에 씌우는 빨간 테두리와 오른쪽 위 !
 	static RectTransform BuildErrorFrame()
 	{
@@ -551,20 +664,27 @@ public static class InvokeUIBuilder
 
 			Transform row = root.transform.Find("Row");
 			HorizontalLayoutGroup rowLayout = GetOrAdd<HorizontalLayoutGroup>(row.gameObject);
-			rowLayout.spacing = 3;
+			rowLayout.spacing = 4;
 			rowLayout.childAlignment = TextAnchor.MiddleLeft;
+
+			// 블록 가장자리의 어두운 1픽셀 테두리 (#476). 바탕 그림의 모양(문장 블록의 홈, 값 블록의 알약)을 따라 그려진다
+			Outline outline = GetOrAdd<Outline>(root);
+			outline.effectColor = new Color(0, 0, 0, 0.55f);
+			outline.effectDistance = new Vector2(1, 1);
+			outline.useGraphicAlpha = true;
 
 			Transform inner = root.transform.Find("Inner");
 			SetShape(inner.gameObject, "blk_inner", Workspace);
 			VerticalLayoutGroup innerLayout = GetOrAdd<VerticalLayoutGroup>(inner.gameObject);
-			innerLayout.padding = new RectOffset(12, 2, 3, 3);
-			innerLayout.spacing = 2;
+			// 블록을 끌어 놓기 쉽게 안쪽 여백과 간격을 키운다 (#476)
+			innerLayout.padding = new RectOffset(14, 3, 4, 4);
+			innerLayout.spacing = 3;
 			innerLayout.childAlignment = TextAnchor.UpperLeft;
 			innerLayout.childControlWidth = innerLayout.childControlHeight = true;
 			innerLayout.childForceExpandWidth = false;
 			innerLayout.childForceExpandHeight = false;
 			LayoutElement innerSize = GetOrAdd<LayoutElement>(inner.gameObject);
-			innerSize.minHeight = 14;
+			innerSize.minHeight = 18;
 
 			BlockView view = root.GetComponent<BlockView>();
 			Set(view, "statementSprite", LoadShape("blk_stmt"));
@@ -573,17 +693,21 @@ public static class InvokeUIBuilder
 			Set(view, "innerSprite", LoadShape("blk_inner"));
 			Set(view, "nameFieldSprite", LoadShape("blk_underline"));
 			Set(view, "variableFieldSprite", LoadShape("blk_dashed"));
+			var viewSettings = new SerializedObject(view);
+			viewSettings.FindProperty("containerBottom").intValue = 9; // 조건문·반복문 아래 막대 (예전 7)
+			viewSettings.ApplyModifiedPropertiesWithoutUndo();
 		});
 
 		EditPrefab(BlockDir + "BlockValueSlot.prefab", root =>
 		{
 			SetShape(root, "blk_slot", new Color(0, 0, 0, 0.35f));
 			HorizontalLayoutGroup layout = GetOrAdd<HorizontalLayoutGroup>(root);
-			layout.padding = new RectOffset(4, 4, 1, 1);
+			// 값 칸을 키워 블록을 끼우기 쉽게 한다 (#476, 예전 여백 4·1, 최소 18×13)
+			layout.padding = new RectOffset(5, 5, 2, 2);
 			layout.childAlignment = TextAnchor.MiddleCenter;
 			LayoutElement size = GetOrAdd<LayoutElement>(root);
-			size.minWidth = 18;
-			size.minHeight = 13;
+			size.minWidth = 24;
+			size.minHeight = 17;
 			size.flexibleWidth = 0;
 			size.flexibleHeight = 0;
 		});
@@ -594,6 +718,21 @@ public static class InvokeUIBuilder
 			Image image = GetOrAdd<Image>(root);
 			image.sprite = null;
 			image.color = new Color(0, 0, 0, 0);
+
+			// 빈 값 칸의 안내 글자(int, bool, Target 등, #476): 흐린 흰 글자. 기울임은 픽셀 글꼴이 깨지므로 끈다
+			if (root.TryGetComponent(out TMP_InputField input) && input.placeholder is TMP_Text placeholder)
+			{
+				if (font != null) placeholder.font = font;
+				placeholder.fontStyle = FontStyles.Normal;
+				placeholder.color = new Color(1, 1, 1, 0.35f);
+				placeholder.text = "";
+				((TextMeshProUGUI)placeholder).extraPadding = false;
+				if (input.textComponent != null)
+				{
+					placeholder.fontSize = input.textComponent.fontSize;
+					placeholder.alignment = input.textComponent.alignment;
+				}
+			}
 		});
 
 		// 타입·연산자 고르기 버튼: 밝은 작은 네모
@@ -681,7 +820,7 @@ public static class InvokeUIBuilder
 
 	// 편집 화면 ------------------------------------------------------------------
 
-	static void BuildEditorCanvas(ListItemView item, ListHeaderView header, Button save, Button compile, RectTransform paletteGroup, RectTransform dropdown, RectTransform marker, ErrorItemView errorItem, RectTransform errorFrame, ReferenceCardView referenceCard)
+	static void BuildEditorCanvas(ListItemView item, ListHeaderView header, Button save, Button compile, RectTransform paletteGroup, RectTransform dropdown, RectTransform marker, ErrorItemView errorItem, RectTransform errorFrame, ReferenceCardView referenceCard, BlockTooltipView tooltip)
 	{
 		GameObject root = PrefabUtility.LoadPrefabContents(EditorCanvasPath);
 		try
@@ -811,11 +950,8 @@ public static class InvokeUIBuilder
 			// 위아래에 함수 틀 줄(「반환 타입 이름() {」, 「}」)이 있으므로 그만큼 줄인다. 블록은 이 사이(함수 body)에만 놓인다
 			Stretch(workspace, LayoutLeft, LayoutPalette + LayoutStrip, LayoutTop + LayoutFrame, LayoutStatus + LayoutFrame);
 			SetImage(workspace.gameObject, "ui_grid", Image.Type.Tiled);
-			VerticalLayoutGroup blocks = GetOrAdd<VerticalLayoutGroup>(workspace.gameObject);
-			blocks.padding = new RectOffset(12, 12, 12, 12);
-			blocks.spacing = 2;
-			blocks.childAlignment = TextAnchor.UpperLeft;
-			blocks.childForceExpandWidth = false;
+			// 블록이 길어지면 세로·가로로 스크롤한다 (#476): Workspace(Scroll Rect, 격자 바탕) → Viewport → Content(블록 자리)
+			(RectTransform workspaceViewport, RectTransform workspaceContent) = GetOrBuildWorkspaceScroll(workspace);
 
 			// 아래 줄: 블록 수·코드 크기
 			RectTransform statusBar = Child(window, "StatusBar");
@@ -855,6 +991,10 @@ public static class InvokeUIBuilder
 			Set(editor, "paletteView", palette.gameObject);
 			Set(editor, "palette", paletteContent);
 			Set(editor, "paletteSearch", paletteSearch);
+			Set(editor, "workspace", workspaceContent.GetComponent<BlockList>());
+			Set(editor, "layoutRoot", workspaceContent);
+			Set(editor, "workspaceViewport", workspaceViewport);
+			Set(editor, "tooltipPrefab", tooltip);
 			Set(editor, "errorView", errorPanel.gameObject);
 			Set(editor, "errorText", errorText);
 			Set(editor, "blockTabButton", blockTab);

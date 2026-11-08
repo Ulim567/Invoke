@@ -15,7 +15,7 @@ using UnityEngine.UI;
 /// </para>
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
-public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
 {
 	[SerializeField, Tooltip("블록 배경. 분류별 색이 들어간다")]
 	Image background;
@@ -52,7 +52,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	Color fieldLineColor = new Color(1, 1, 1, 0.75f);
 
 	[SerializeField, Tooltip("조건문·반복문 아래 막대 높이")]
-	int containerBottom = 7;
+	int containerBottom = 9;
 
 	[SerializeField, Tooltip("컴파일 오류가 난 블록 색 (반복문 밖의 break 등)")]
 	Color errorColor = new Color32(0xC8, 0x48, 0x58, 0xFF);
@@ -164,9 +164,10 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (row.TryGetComponent(out HorizontalLayoutGroup rowLayout))
 		{
 			// 문장 블록은 위의 홈(3픽셀)만큼 위 여백을 더 둔다
-			rowLayout.padding = chip ? new RectOffset(5, 5, 2, 3)
-				: value ? new RectOffset(6, 6, 2, 2)
-				: new RectOffset(5, 6, 5, 3);
+			// 끌어 놓기 쉽게 예전(칩 5·2·3, 값 6·2, 문장 5·5·3)보다 여백을 키운다 (#476)
+			rowLayout.padding = chip ? new RectOffset(7, 7, 4, 4)
+				: value ? new RectOffset(8, 8, 3, 3)
+				: new RectOffset(7, 8, 7, 4);
 			rowLayout.childAlignment = chip ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
 		}
 
@@ -514,9 +515,22 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		return button.GetComponentInChildren<TMP_Text>();
 	}
 
+	// 마우스를 올리면 잠깐 뒤에 설명창 (#476): 함수 원형, 스킬 설명, 파라미터. 끄는 중에는 띄우지 않는다
+	public void OnPointerEnter(PointerEventData eventData)
+	{
+		if (editor == null || eventData.dragging || dragging) return;
+		editor.EnterHover(this, (RectTransform)transform, () => editor.TooltipOf(Data));
+	}
+
+	public void OnPointerExit(PointerEventData eventData)
+	{
+		if (editor != null) editor.ExitHover(this);
+	}
+
 	public void OnBeginDrag(PointerEventData eventData)
 	{
 		BlockView dragged = this;
+		editor.ClearHover(); // 끌기 시작하면 설명창을 지운다
 
 		if (templateFactory != null)
 		{

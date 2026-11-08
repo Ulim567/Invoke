@@ -59,8 +59,14 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("끌고 있는 블록을 잠시 올려 두는 곳. Canvas 맨 아래(가장 위에 그려지는) 자식으로 둔다")]
 	RectTransform dragLayer;
 
-	[SerializeField, Tooltip("레이아웃을 다시 계산할 기준. 편집 영역(Workspace)을 넣는다")]
+	[SerializeField, Tooltip("레이아웃을 다시 계산할 기준. 편집 영역의 블록 자리(Workspace/Viewport/Content)를 넣는다")]
 	RectTransform layoutRoot;
+
+	[SerializeField, Tooltip("편집 영역 스크롤의 보이는 칸 (Workspace/Viewport, #476). 블록 자리가 이보다 작아지지 않게 맞춘다. 비워 두면 맞추지 않는다")]
+	RectTransform workspaceViewport;
+
+	[SerializeField, Tooltip("블록·값 칸에 마우스를 올리면 보이는 설명창 (BlockTooltip 프리팹, #476). 비워 두면 설명창을 쓰지 않는다")]
+	BlockTooltipView tooltipPrefab;
 
 	[SerializeField, Tooltip("함수 이름 칸과 저장 버튼이 만들어지는 줄 (Horizontal Layout Group). 아래 칸들을 비워 두면 새 함수 버튼, 블록 수, 저장한 함수도 여기에 만든다")]
 	RectTransform topBar;
@@ -282,6 +288,121 @@ public class BlockEditor : MonoBehaviour
 
 	void OnDestroy() => UnbindServer();
 
+	void OnDisable() => ClearHover(); // 편집 화면을 닫으면 설명창을 지운다
+
+	void Update()
+	{
+		FitWorkspaceToViewport();
+		UpdateTooltip();
+	}
+
+	// 편집 영역 스크롤 (#476) ----------------------------------------------------
+
+	LayoutElement workspaceMinSize;
+	Vector2 fittedViewportSize;
+
+	// 블록 자리(Content)의 가장 작은 크기를 보이는 칸(Viewport) 크기로 맞춘다. 블록이 적어도 편집 영역 전체가 블록 자리여서,
+	// 블록 아래 빈 곳에 놓아도 지워지지 않고 맨 끝에 들어가게 하기 위함 (예전에는 편집 영역 자체가 블록 자리였다)
+	void FitWorkspaceToViewport()
+	{
+		if (workspaceViewport == null) return;
+		if (workspaceMinSize == null && !workspace.TryGetComponent(out workspaceMinSize)) return;
+		Vector2 size = workspaceViewport.rect.size;
+		if (size == fittedViewportSize) return;
+		fittedViewportSize = size;
+		workspaceMinSize.minWidth = size.x;
+		workspaceMinSize.minHeight = size.y;
+	}
+
+	// 설명창 (#476) -------------------------------------------------------------
+
+	// 마우스가 올라가 있는 블록·값 칸들. 블록 안의 값 칸, 값 칸 안의 블록처럼 겹치므로 가장 안쪽의 설명을 보인다
+	readonly List<(Component owner, RectTransform anchor, Func<string> text)> hovered = new List<(Component, RectTransform, Func<string>)>();
+	float hoverSince;
+	Component tooltipOwner;
+	BlockTooltipView tooltip;
+
+	// 마우스를 올리고 이만큼 멈춰 있어야 설명창을 띄운다. 블록 위를 지나가기만 할 때 깜빡이지 않게
+	const float TooltipDelay = 0.4f;
+
+	/// <summary>
+	/// 블록·값 칸에 마우스가 들어왔을 때 부른다 (BlockView, BlockValueSlot). 잠깐 멈추면 text()의 글자로 설명창을 띄운다.
+	/// </summary>
+	public void EnterHover(Component owner, RectTransform anchor, Func<string> text)
+	{
+		hovered.RemoveAll(h => h.owner == owner);
+		hovered.Add((owner, anchor, text));
+		hoverSince = Time.unscaledTime;
+	}
+
+	/// <summary>블록·값 칸에서 마우스가 나갔을 때 부른다</summary>
+	public void ExitHover(Component owner)
+	{
+		hovered.RemoveAll(h => h.owner == owner);
+		hoverSince = Time.unscaledTime;
+	}
+
+	/// <summary>설명창을 지우고 마우스가 올라간 것을 모두 잊는다. 블록을 끌기 시작할 때, 편집 화면을 닫을 때 부른다</summary>
+	public void ClearHover()
+	{
+		hovered.Clear();
+		HideTooltip();
+	}
+
+	void UpdateTooltip()
+	{
+		// 지워진 블록(검색으로 블록 목록을 다시 만든 경우 등)은 뺀다
+		hovered.RemoveAll(h => h.owner == null);
+		if (hovered.Count == 0)
+		{
+			HideTooltip();
+			return;
+		}
+		// 가장 안쪽(부모가 가장 많은) 것을 고른다. Unity가 마우스가 들어왔다고 알리는 순서는 안쪽·바깥쪽이 섞이기 때문
+		(Component owner, RectTransform anchor, Func<string> text) top = hovered[0];
+		int topDepth = -1;
+		foreach (var entry in hovered)
+		{
+			int depth = 0;
+			for (Transform t = entry.owner.transform; t != null; t = t.parent) depth++;
+			if (depth <= topDepth) continue;
+			topDepth = depth;
+			top = entry;
+		}
+		if (top.owner == tooltipOwner) return;
+		HideTooltip();
+		if (Time.unscaledTime - hoverSince < TooltipDelay) return;
+		ShowTooltip(top.anchor, top.text());
+		tooltipOwner = top.owner;
+	}
+
+	// 설명창은 처음 한 번만 프리팹에서 만들고, 숨겼다 보였다 한다. 끄는 블록과 같은 층(DragLayer)에 두어 다른 것 위에 그린다
+	void ShowTooltip(RectTransform anchor, string text)
+	{
+		if (tooltipPrefab == null || string.IsNullOrEmpty(text)) return;
+		if (tooltip == null) tooltip = Instantiate(tooltipPrefab, dragLayer);
+		tooltip.Show(text, anchor, dragLayer);
+	}
+
+	void HideTooltip()
+	{
+		tooltipOwner = null;
+		if (tooltip != null) tooltip.Hide();
+	}
+
+	/// <summary>
+	/// 블록에 마우스를 올렸을 때 보일 설명. 함수 원형, 스킬의 한국어 이름·설명, 파라미터 설명 (BlockReference.TooltipOf).
+	/// </summary>
+	public string TooltipOf(BlockData block) =>
+		BlockReference.TooltipOf(block, PaletteNameOf(block), block.IsUserFunction ? FindUserFunction(block.FunctionId) : null);
+
+	/// <summary>
+	/// 값 칸에 마우스를 올렸을 때 보일 설명. 함수의 파라미터면 이름·타입·설명, 그리고 이 칸에 넣을 수 있는 것 (SlotRules.Describe).
+	/// </summary>
+	public string SlotTooltipOf(BlockData owner, int index) =>
+		BlockReference.SlotTooltipOf(owner, index, SlotRules.Describe(RuleOf(owner, index)),
+			owner.IsUserFunction ? FindUserFunction(owner.FunctionId) : null);
+
 	/// <summary>
 	/// 편집 화면을 열 때 부른다 (BlockEditorPanel). 내 캐릭터가 실제 계정인지 다시 보고 함수 목록을 새로 그린다.
 	/// 실제 계정이고 지금 연 함수가 서버 목록에 없으면 slot1을 연다.
@@ -386,7 +507,8 @@ public class BlockEditor : MonoBehaviour
 			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
 			return;
 		}
-		confirmDialog.Show($"파일이 저장되지 않았습니다. {label}{Eul(label)} {verb}?", open);
+		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
+		confirmDialog.Show($"파일이 저장되지 않았습니다.\n{label}{Eul(label)} {verb}?", open);
 	}
 
 	/// <summary>
@@ -405,7 +527,7 @@ public class BlockEditor : MonoBehaviour
 			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
 			return;
 		}
-		confirmDialog.Show("파일이 저장되지 않았습니다. 저장하지 않고 나가시겠습니까?", () =>
+		confirmDialog.Show("파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?", () =>
 		{
 			DiscardUnsaved();
 			close();
@@ -1098,6 +1220,9 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (layoutRoot != null) LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
 		if (Function == null && !editingGlobals) return;
+
+		// 빈 값 칸의 안내 글자 (#476). 선언의 타입이나 대입의 변수를 바꾸면 다른 칸이 받는 타입도 바뀌므로 고칠 때마다 다시 쓴다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>()) slot.RefreshPlaceholder();
 
 		// 동기·비동기 버튼 (슬롯 함수와 전역 변수는 바꿀 수 없음)
 		if (asyncButton != null)

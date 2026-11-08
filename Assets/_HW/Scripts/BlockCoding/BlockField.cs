@@ -49,6 +49,23 @@ public class BlockField : MonoBehaviour
 		set { minWidth = value; Resize(); }
 	}
 
+	/// <summary>
+	/// 칸이 비어 있을 때 흐리게 보일 안내 글자 (#476). 값 칸이 받는 타입을 보인다 (예: int, bool, Target).
+	/// 칸 너비도 이 글자에 맞춘다. 비어 있는 칸이 넓어져 블록을 끼우기 쉽게 하기 위함
+	/// </summary>
+	public string Placeholder
+	{
+		set
+		{
+			Setup();
+			if (input.placeholder is TMP_Text placeholder && placeholder.text != (value ?? ""))
+			{
+				placeholder.text = value ?? "";
+				Resize();
+			}
+		}
+	}
+
 	/// <summary>칸에 적을 수 있는지. 슬롯 함수의 이름 칸처럼 바꾸면 안 되는 칸은 끈다</summary>
 	public bool Interactable
 	{
@@ -95,6 +112,9 @@ public class BlockField : MonoBehaviour
 	{
 		if (input == null || layout == null || input.textComponent == null) return;
 		float width = input.textComponent.GetPreferredValues(input.text).x;
+		// 비어 있으면 안내 글자(Placeholder)만큼 넓힌다
+		if (string.IsNullOrEmpty(input.text) && input.placeholder is TMP_Text placeholder && !string.IsNullOrEmpty(placeholder.text))
+			width = placeholder.GetPreferredValues(placeholder.text).x;
 		layout.minWidth = minWidth;
 		layout.preferredWidth = Mathf.Max(minWidth, width + padding);
 		LayoutRebuilder.MarkLayoutForRebuild((RectTransform)transform);

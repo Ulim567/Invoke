@@ -235,6 +235,7 @@
   - `sword`(`Sword*`)를 넘기면 그 소환검을 해제한다 (`free(s)`와 같음, #220).
   - 안 넘기면 마지막에 소환한 소환검부터 해제한다 (`GetGlobalPointers<SummonedSword>`의 마지막). 블록코딩 `malloc(Sword)`로 만든 검은 이 목록에 없으니 포인터를 넘기거나 `free`로 해제한다.
   - 날아가는 중·떨어진 소환검도 거리와 상관없이 해제한다. 물리 검, 누수된 소환검, 아직 진행 중인 검 소환의 소환검은 해제하지 않는다.
+  - 타고 있는 검(검 타기)도 해제한다. 발밑 검이 없어지므로 검 타기도 끝나서 떨어진다 (#440, `SummonedSwords.DespawnSword`가 `PlayerMovement.StopRide`).
   - 순서: `TryGetHeapObject` → `PredefinedFunction.Free`. 오브젝트는 `SummonedSwords`가 `HeapStorage.ObjectFreed`를 받아 없앤다 (#191, #220). 쓸 수 없는 포인터면 `InvalidPointerError`로 그 작업만 끝난다.
   - 해제할 소환검이 없으면 `NoSummonedSwordError`.
 

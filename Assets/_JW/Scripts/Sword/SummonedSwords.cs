@@ -136,9 +136,12 @@ public class SummonedSwords : MonoBehaviour
 	public void DespawnSword(SummonedSword sword)
 	{
 		if (sword == null) return;
+		bool wasRiding = sword.State == SummonedSwordState.Riding;
 		bool listed = swords.Remove(sword);
 		NetworkSpawner.Despawn(sword.gameObject);
 		if (listed) NotifyChanged();
+		// 타고 있던 검이 없어지면(해제, 영역 비우기) 발밑에 검이 없으니 검 타기도 끝내서 떨어진다 (#440)
+		if (wasRiding && !HasRidingSword && movement != null) movement.StopRide();
 	}
 
 	/// <summary>포인터로 소환검을 찾는다. 해제·누수된 포인터이면 false.</summary>

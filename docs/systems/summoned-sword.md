@@ -18,6 +18,7 @@
   - 검 소환 스킬 순서: `SpawnSword`(오브젝트) → `PredefinedFunction.Malloc`(heap) → `Register(sword, pointer)`(목록). malloc 실패면 `DespawnSword`.
   - 블록코딩 `malloc(Sword)` (#191, #220): `Start`에서 `ProcessMemory.StructObjects.Register<SummonedSword>(PredefinedStructs.Sword, () => CanSummon ? SpawnSword() : null, Register)`로 등록. 실행기가 heap 확인 → `SpawnSword` → heap에 올림 → `Register` 순서로 부른다. 5개면 `NULL`.
   - 해제 순서: `Free`(해제 스킬이든 `free` 블록이든, heap) → `HeapStorage.ObjectFreed` → 이 컴포넌트가 `DespawnSword`(오브젝트, 목록에서 뺌) (#220). 스킬은 `DespawnSword`를 부르지 않는다.
+  - 타고 있던(`Riding`) 검이 `DespawnSword`로 없어지고 남은 타는 검이 없으면 `PlayerMovement.StopRide`를 불러 검 타기도 끝낸다 (#440). 발밑 검 없이 떠 있지 않게.
   - heap 크기: 소환검 하나 = `Sword` struct 크기(`PredefinedStructs`, 임시 2칸).
   - 포인터는 소환한 순서대로 커진다. 목록(`Swords`)도 소환 순서.
 - 최대 5개

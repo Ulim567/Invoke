@@ -105,6 +105,9 @@
   - 줄은 `ListItemView`(번호, 이름, 오른쪽 글자, 고른 줄 모양), 머리글은 `ListHeaderView`(글자, + 버튼). 지금 연 줄은 고른 모양, 열고 나서 고쳤으면 이름 뒤 `*`
 - 가운데 편집 영역(점 격자 바탕), 아래 상태 줄: 왼쪽 저장 상태(`Message Label`: 「슬롯 1 · 저장하지 않은 변경 있음」, 「저장됨」, 오류는 빨강), 오른쪽 블록 수·코드 크기(`Info Label`)
 - 오른쪽 블록 목록: 분류 머리글(제어, 변수, 값, 함수, 메모리, 기타) 아래에 견본 블록
+  - 검색 칸 (#476): 분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있는 블록만 (대소문자 구분 없음). 분류 이름이 맞으면 그 분류 전체. 남은 블록이 없는 분류는 머리글도 없음
+  - 세로 스크롤 + 오른쪽 스크롤바 (내용이 길 때만 보임)
+- 참고 탭 (#476): 블록 목록과 같은 분류 순서로 분류 머리글(`ListHeaderView`, 분류 색 네모) 아래에 카드. 검색해서 카드가 없는 분류는 머리글도 없음. 카드 사이 간격 7
 - 그림: `Assets/_HW/UI/Frame/`의 9-slice 스프라이트(창, 제목줄, 패널, 머리글, 버튼, 목록 줄, 슬롯 카드, 키 배지, 격자)
 - 블록 모양(`Assets/_HW/UI/BlockCoding/Shapes`): 문장 블록은 위 왼쪽 홈(`blk_stmt`), 값 블록은 알약(`blk_value`), 조건문·반복문은 왼쪽 기둥과 아래 막대로 안쪽을 감쌈(`blk_inner`), 값 칸은 어두운 알약(`blk_slot`), 이름 칸은 밑줄, 변수 칸은 점선 상자, 드롭다운은 밝은 네모 + ▾
 - 블록 목록은 칩(짧은 이름: If, For, Declare, Array Get, thrust…)을 분류별로 줄줄이 놓는다 (`FlowLayoutGroup`). 칩을 끌면 칸이 다 있는 블록이 나온다
@@ -165,7 +168,7 @@
 
 ### 화면 구성 (테스트 씬 `Test_HW`)
 - `BlockEditorCanvas` (Canvas Scaler 640×360, `BlockEditor`)
-  - `Palette`: Image + Rect Mask 2D + Scroll Rect → `Content`(Vertical Layout Group + Content Size Fitter)
+  - `Palette`: Image + Rect Mask 2D → `SearchField`, `Scroll`(Scroll Rect + `Scrollbar`) → `Viewport` → `Content`(Vertical Layout Group + Content Size Fitter). 참고 창과 같은 구조 (#476)
   - `Workspace`: Image + Vertical Layout Group + `BlockList`
   - `TopBar`: Image + Horizontal Layout Group (안의 칸과 버튼은 `BlockEditor`가 만든다)
   - `DragLayer`: 화면 전체, Canvas 맨 아래 자식

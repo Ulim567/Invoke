@@ -408,22 +408,24 @@ public static class InvokeUIBuilder
 		return text;
 	}
 
-	// 참고 창의 검색 칸. 이미 만들어 둔 것이 있으면 그것을 쓴다
-	static TMP_InputField GetOrBuildSearchField(Transform panel)
+	// 참고 창·블록 목록의 검색 칸. y는 패널 위에서의 위치(머리글이 있으면 그 아래), placeholder는 비어 있을 때 보이는 안내 글자.
+	// 이미 만들어 둔 것이 있으면 위치만 맞추고 그것을 쓴다
+	static TMP_InputField GetOrBuildSearchField(Transform panel, float y, string placeholderText)
 	{
 		RectTransform fieldRect = Child(panel, "SearchField");
-		TopStretch(fieldRect, 6, 6, -26, 18);
+		TopStretch(fieldRect, 6, 6, y, 18);
 		if (fieldRect.TryGetComponent(out TMP_InputField existing)) return existing;
 
 		SetImage(fieldRect.gameObject, "ui_field", Image.Type.Sliced);
-		TMP_InputField input = fieldRect.gameObject.AddComponent<TMP_InputField>();
+		// 한글 조합 중에 칸을 벗어나도 멈추지 않는 칸 (스킬의 한국어 이름으로 검색하므로)
+		TMP_InputField input = fieldRect.gameObject.AddComponent<ImeSafeInputField>();
 
 		// 글자가 칸 밖으로 나가지 않게 자르는 영역
 		RectTransform area = Child(fieldRect, "Text Area");
 		Stretch(area, 5, 5, 0, 0);
 		GetOrAdd<RectMask2D>(area.gameObject);
 
-		TMP_Text placeholder = Text(area, "Placeholder", "블록 이름으로 검색", 9, Muted, TextAlignmentOptions.MidlineLeft);
+		TMP_Text placeholder = Text(area, "Placeholder", placeholderText, 9, Muted, TextAlignmentOptions.MidlineLeft);
 		placeholder.overflowMode = TextOverflowModes.Overflow;
 		Stretch(placeholder.rectTransform, 0, 0, 0, 0);
 		TMP_Text text = Text(area, "Text", "", 9, Color.white, TextAlignmentOptions.MidlineLeft);
@@ -441,11 +443,12 @@ public static class InvokeUIBuilder
 		return input;
 	}
 
-	// 참고 창의 카드 목록: 세로 스크롤. 카드가 쌓이는 Content를 돌려준다
-	static RectTransform GetOrBuildCardScroll(Transform panel)
+	// 참고 창의 카드 목록·블록 목록의 칩 목록: 세로 스크롤. top은 패널 위에서 목록이 시작하는 곳(검색 칸 아래), spacing은 항목 사이 간격.
+	// 항목이 쌓이는 Content를 돌려준다
+	static RectTransform GetOrBuildCardScroll(Transform panel, float top, float spacing)
 	{
 		RectTransform scroll = Child(panel, "Scroll");
-		Stretch(scroll, 4, 4, 48, 4);
+		Stretch(scroll, 4, 4, top, 4);
 		// 카드 사이 빈 곳에서도 마우스 휠이 먹도록 투명한 바탕을 둔다
 		Image back = GetOrAdd<Image>(scroll.gameObject);
 		back.color = new Color(0, 0, 0, 0);
@@ -461,7 +464,7 @@ public static class InvokeUIBuilder
 		content.pivot = new Vector2(0.5f, 1);
 		content.offsetMin = new Vector2(0, content.offsetMin.y);
 		content.offsetMax = new Vector2(0, 0);
-		VerticalList(content.gameObject, 4);
+		VerticalList(content.gameObject, spacing);
 		GetOrAdd<ContentSizeFitter>(content.gameObject).verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
 		scrollRect.viewport = viewport;
@@ -733,16 +736,15 @@ public static class InvokeUIBuilder
 			RectTransform palette = (RectTransform)window.Find("Palette");
 			RightStretch(palette, LayoutStrip, LayoutPalette, LayoutTop, 0);
 			SetImage(palette.gameObject, "ui_panel", Image.Type.Sliced);
-			Transform content = palette.Find("Content");
-			if (content != null)
-			{
-				VerticalLayoutGroup list = GetOrAdd<VerticalLayoutGroup>(content.gameObject);
-				list.padding = new RectOffset(8, 8, 8, 8);
-				list.spacing = 2;
-				list.childControlWidth = list.childControlHeight = true;
-				list.childForceExpandWidth = true;
-				list.childForceExpandHeight = false;
-			}
+			// 위에 검색 칸, 아래에 칩 목록(세로 스크롤 + 스크롤바). 참고 창과 같은 구조 (#476)
+			// 예전 구조(Palette에 바로 붙은 ScrollRect와 Content)는 지운다. 칩은 새 Scroll/Viewport/Content 아래에 만들어지기 때문
+			if (palette.TryGetComponent(out ScrollRect oldPaletteScroll)) Object.DestroyImmediate(oldPaletteScroll);
+			Transform oldPaletteContent = palette.Find("Content");
+			if (oldPaletteContent != null) Object.DestroyImmediate(oldPaletteContent.gameObject);
+			TMP_InputField paletteSearch = GetOrBuildSearchField(palette, -6, "블록·스킬 이름으로 검색");
+			RectTransform paletteContent = GetOrBuildCardScroll(palette, 28, 2);
+			// 스크롤 영역의 여백(4)과 합쳐 예전처럼 패널 가장자리에서 8 떨어지게
+			paletteContent.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(4, 4, 4, 4);
 
 			// 오류 창 (블록 목록과 같은 자리. 오른쪽 세로 막대로 바꾼다)
 			Transform errorPanel = Panel(window, "ErrorView", "오류", 22, 11);
@@ -758,8 +760,9 @@ public static class InvokeUIBuilder
 			// 참고 창 (블록 목록과 같은 자리): 위에 검색 칸, 아래에 블록 설명 카드 목록
 			Transform referencePanel = Panel(window, "ReferenceView", "참고", 22, 11);
 			RightStretch(Rect(referencePanel), LayoutStrip, LayoutPalette, LayoutTop, 0);
-			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel);
-			RectTransform referenceList = GetOrBuildCardScroll(referencePanel);
+			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel, -26, "블록 이름으로 검색");
+			// 카드 사이 간격 7: 카드끼리 붙어 보이지 않게 (#476)
+			RectTransform referenceList = GetOrBuildCardScroll(referencePanel, 48, 7);
 			referencePanel.gameObject.SetActive(false); // 처음엔 꺼 둔다. 「참고」 탭을 누르면 BlockEditor가 켠다
 
 			// 오른쪽 끝 세로 막대: 블록 / 오류 / 참고
@@ -850,6 +853,8 @@ public static class InvokeUIBuilder
 			Set(editor, "dropdownPrefab", dropdown);
 			Set(editor, "insertMarkerPrefab", marker);
 			Set(editor, "paletteView", palette.gameObject);
+			Set(editor, "palette", paletteContent);
+			Set(editor, "paletteSearch", paletteSearch);
 			Set(editor, "errorView", errorPanel.gameObject);
 			Set(editor, "errorText", errorText);
 			Set(editor, "blockTabButton", blockTab);

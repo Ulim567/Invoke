@@ -50,6 +50,9 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("블록 목록(팔레트). 견본 블록이 이 아래에 만들어진다. 스크롤을 쓰면 Scroll Rect의 Content")]
 	RectTransform palette;
 
+	[SerializeField, Tooltip("블록 목록 위의 검색 칸 (#476). 비워 두면 검색 없이 모두 보여 준다")]
+	TMP_InputField paletteSearch;
+
 	[SerializeField, Tooltip("편집 영역 = 함수 몸통. BlockList가 붙어 있다")]
 	BlockList workspace;
 
@@ -261,6 +264,7 @@ public class BlockEditor : MonoBehaviour
 		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(RightTab.Errors));
 		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => ShowTab(RightTab.Reference));
 		if (referenceSearch != null) referenceSearch.onValueChanged.AddListener(_ => RebuildReference());
+		if (paletteSearch != null) paletteSearch.onValueChanged.AddListener(_ => RebuildPalette());
 		if (functionFrame != null && functionFrame.ReturnButton != null) functionFrame.ReturnButton.onClick.AddListener(OpenReturnTypeDropdown);
 		ShowErrors(new List<FunctionChecker.Error>());
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
@@ -889,8 +893,23 @@ public class BlockEditor : MonoBehaviour
 		if (referenceList == null || referenceCardPrefab == null) return;
 		for (int i = referenceList.childCount - 1; i >= 0; i--) Destroy(referenceList.GetChild(i).gameObject);
 		string query = referenceSearch != null ? referenceSearch.text : "";
-		foreach (BlockReferenceEntry entry in BlockReference.Search(query))
-			Instantiate(referenceCardPrefab, referenceList).Show(entry);
+		List<BlockReferenceEntry> found = BlockReference.Search(query);
+
+		// 블록 목록과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
+		// 블록 목록에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
+		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Category)).Distinct();
+		foreach (string category in categories)
+		{
+			List<BlockReferenceEntry> cards = found.Where(entry => entry.Category == category).ToList();
+			if (cards.Count == 0) continue;
+			if (headerPrefab != null)
+			{
+				// 분류 색 네모: 그 분류 블록의 색 (블록 목록의 머리글과 같다)
+				Color icon = cards[0].Sample != null ? BlockLabels.ColorOf(cards[0].Sample) : new Color(0, 0, 0, 0);
+				Instantiate(headerPrefab, referenceList).Show(category, null, icon);
+			}
+			foreach (BlockReferenceEntry entry in cards) Instantiate(referenceCardPrefab, referenceList).Show(entry);
+		}
 	}
 
 	static void SetTabLook(Button tab, bool active)
@@ -1211,32 +1230,45 @@ public class BlockEditor : MonoBehaviour
 		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
 			unlockedForPalette = new HashSet<string>(progress.Unlocked);
 
+		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
+
 		foreach ((string title, Func<BlockData>[] blocks) in PaletteGroups)
 		{
-			// 해금한 블록만 남긴다. 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			Func<BlockData>[] shown = blocks;
-			if (blocks != null && unlockedForPalette != null)
-			{
-				shown = blocks.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette)).ToArray();
-				if (shown.Length == 0) continue;
-			}
 			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
 			if (blocks == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
+
+			// 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476). 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
+			IEnumerable<Func<BlockData>> candidates = (IEnumerable<Func<BlockData>>)blocks ?? FunctionTemplates();
+			if (blocks != null && unlockedForPalette != null)
+				candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
+			Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, query)).ToArray();
+			if (shown.Length == 0) continue;
 
 			if (headerPrefab != null)
 			{
 				ListHeaderView header = Instantiate(headerPrefab, palette);
 				// 분류 색 네모: 그 분류 블록의 색
-				BlockData sample = shown != null ? shown[0]() : BlockData.CallPredefinedFunction("", new SlotData[0]);
-				header.Show(title, null, BlockLabels.ColorOf(sample));
+				header.Show(title, null, BlockLabels.ColorOf(shown[0]()));
 			}
 			// 분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로)
 			paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
-			if (shown == null) AddPredefinedTemplates();
-			else foreach (Func<BlockData> template in shown) AddTemplate(template);
+			foreach (Func<BlockData> template in shown) AddTemplate(template);
 		}
 		paletteTarget = palette;
 	}
+
+	// 블록 목록 검색 (#476): 비어 있거나, 분류 이름·칩 이름·스킬의 화면 이름(검 찌르기)·고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 분류 이름이 맞으면 그 분류의 블록을 모두 보여 준다. 예: 「제어」 → If, For, While …
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string query)
+	{
+		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(PaletteNameOf(block), query)) return true;
+		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
+		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
+			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));
+	}
+
+	static bool ContainsText(string text, string query) =>
+		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
 
 	RectTransform paletteTarget; // 견본 칩을 만들 곳 (BuildPalette 중의 분류 칸)
 
@@ -1258,43 +1290,44 @@ public class BlockEditor : MonoBehaviour
 		}
 	}
 
-	// C 스킬 등 사전 정의 함수: 파라미터 수만큼 빈 값 칸을 가진 함수 블록
-	void AddPredefinedTemplates()
+	// 「함수」 분류의 견본들: C 스킬 등 사전 정의 함수와 내가 만든 함수 부르기. 둘 다 파라미터 수만큼 빈 값 칸을 가진 함수 블록
+	// 칩을 바로 만들지 않고 목록으로 돌려준다. 검색에 맞는 블록이 없으면 분류 머리글도 만들지 않기 위함 (#476)
+	List<Func<BlockData>> FunctionTemplates()
 	{
+		var templates = new List<Func<BlockData>>();
 		IReadOnlyList<PredefinedFunction> functions = PredefinedFunctionRegistry.All;
-		if (functions == null)
+		if (functions == null) Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
+		else
 		{
-			Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
-			return;
-		}
-
-		foreach (PredefinedFunction function in functions)
-		{
-			// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
-			try
+			foreach (PredefinedFunction function in functions)
 			{
-				if (function == null) continue;
-				string id = function.Id;
-				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
-				// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
-				if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
-				int parameterCount = function.Parameters?.Count ?? 0;
-				AddTemplate(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
-			}
-			catch (Exception e)
-			{
-				Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
+				// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
+				try
+				{
+					if (function == null) continue;
+					string id = function.Id;
+					if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+					// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
+					if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
+					int parameterCount = function.Parameters?.Count ?? 0;
+					templates.Add(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
+				}
+				catch (Exception e)
+				{
+					Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
+				}
 			}
 		}
 
-		// 내가 만든 함수 부르기 (BlockData.CallUserFunction). 파라미터 수만큼 빈 값 칸
+		// 내가 만든 함수 부르기 (BlockData.CallUserFunction)
 		// 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않으므로 페이지 함수만 붙인다
 		foreach (FunctionData saved in PageFunctions())
 		{
 			string guid = saved.Guid;
 			int parameterCount = saved.Parameters?.Count ?? 0;
-			AddTemplate(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
+			templates.Add(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
 		}
+		return templates;
 	}
 
 	// 저장한 함수가 바뀌면 블록 목록의 「함수」 분류도 바뀌므로 다시 만든다

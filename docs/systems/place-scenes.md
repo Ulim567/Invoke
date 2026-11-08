@@ -63,6 +63,7 @@
   - 레이드 중인 파티원의 요청: 출구가 없어 보내는 클라이언트 코드는 없음. 받으면 그 장소로 옮기고 파티원 이탈로 봄
 - 서버의 이동 순서 (`TravelPlayer`)
   1. `FunctionExecutor.InterruptAll()`: 실행 중인 함수 모두 중단 (이전 장소에서 시전한 작업이 새 장소에서 이어지지 않도록)
+     - 갈 곳이 로비면 대신 로비 도착 처리 (#435): `FunctionExecutor.RestartProcess()`(작업 끊기, heap·소환검 비우기, 전역 변수 초기값) → `PlayerHealth.RestoreFullHp()`. 소환검을 옮기기 전에 해서 로비로는 검이 따라오지 않는다. 로비에서 다른 장소로 갈 때는 지금처럼 검이 따라간다
   2. 클라이언트에 이전 씬 `SceneMessage(UnloadAdditive)` (호스트 제외)
   3. `PutPlayerInScene`: 서버의 플레이어를 새 씬으로 이동, 클라이언트에 새 씬 `SceneMessage(LoadAdditive)`
   4. `NetworkTransformBase.ServerTeleport`: 서버·클라이언트의 플레이어 위치를 도착 위치로 변경
@@ -239,7 +240,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)` | 플레이어의 연결, 플레이어 오브젝트, 갈 씬 | - | 플레이어를 다른 장소로 이동 (실행 중인 함수 중단, 이전 씬 언로드 알림, 씬 이동, 도착 위치로 teleport, `TravelEndedMessage`). 레이드 시작·끝에는 `RaidParties`가 파티원마다 부름 |
+| `TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)` | 플레이어의 연결, 플레이어 오브젝트, 갈 씬 | - | 플레이어를 다른 장소로 이동 (실행 중인 함수 중단(로비로 오면 프로세스 재시작 + 체력 회복, #435), 이전 씬 언로드 알림, 씬 이동, 도착 위치로 teleport, `TravelEndedMessage`). 레이드 시작·끝에는 `RaidParties`가 파티원마다 부름 |
 | `DespawnPlayer(NetworkConnectionToClient conn)` | 플레이어의 연결 | - | 접속은 둔 채 그 연결의 플레이어를 없앰 (서버·모든 클라이언트). 연습장에 있었으면 그 연습장을 내림. 레이드 파티원이었으면 파티원 이탈. 같은 계정 중복 로그인으로 쫓겨난 연결에 `InvokeAuthenticator`가 부름 |
 | `PutPlayerInScene(NetworkConnectionToClient conn, GameObject player, Scene scene)` | 플레이어의 연결, 플레이어 오브젝트, 넣을 씬 | - | 서버: 플레이어를 그 씬으로 이동. 클라이언트: 그 씬을 불러오라고 알림. 위치 변경, 이전 씬 내리기는 하지 않음 (장소 사이 이동은 `TravelPlayer`) |
 | `LoadRaidDungeon(Action<Scene> onLoaded)` | 다 불러온 뒤 부를 함수 | - | 레이드 던전 씬을 한 번 더 불러옴 (`InstanceScenes.Load`). 다 불러오면 `onLoaded`에 그 `Scene` 값을 넘김. 요청은 한 번에 하나씩 처리 |

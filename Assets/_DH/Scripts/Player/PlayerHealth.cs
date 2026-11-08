@@ -241,6 +241,19 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	}
 
 	/// <summary>
+	/// [서버] 살아 있으면 체력을 최대 체력으로 채운다. 로비에 도착했을 때 InvokeNetworkManager가 부른다 (#435).<br/>
+	/// 죽어 있으면 무시한다 (부활할 때 최대 체력으로 살아난다). 클라이언트 체력 바는 [SyncVar]로 맞춰진다.
+	/// </summary>
+	public void RestoreFullHp()
+	{
+		if (!IsAuthority() || IsDead || Hp >= MaxHp) return;
+
+		Hp = MaxHp;
+		SyncState();
+		ShowHp();
+	}
+
+	/// <summary>
 	/// [서버] 미뤄 둔 부활을 실행한다. 옮기기가 끝난 직후 불러, 도착한 장소에서 살아나게 한다. 죽어 있지 않으면 무시한다.
 	/// </summary>
 	public void CompleteRespawn()

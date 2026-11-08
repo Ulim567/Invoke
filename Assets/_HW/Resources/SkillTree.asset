@@ -131,7 +131,7 @@ MonoBehaviour:
     cost:
     - materialId: bug_fragment
       count: 10
-    unlocksBlocks: 0b000000i
+    unlocksBlocks: 0b0000001100000012000000i
     description:
       summary: "\uAC19\uC740 \uD0C0\uC785\uC758 \uAC12 \uC5EC\uB7EC \uAC1C\uB97C \uD55C \uC904\uB85C \uB2F4\uC2B5\uB2C8\uB2E4."
       detail: "\uBC30\uC5F4 \uB9CC\uB4E4\uAE30 \uBE14\uB85D(int arr[3];)\uC73C\uB85C \uCE78 \uC218\uB97C \uC815\uD574 \uB9CC\uB4E4\uACE0, arr[i]\uB85C i\uBC88\uC9F8 \uCE78\uC744 \uC77D\uAC70\uB098 \uBC14\uAFC9\uB2C8\uB2E4. \uCE78 \uBC88\uD638\uB294 0\uBD80\uD130 \uC149\uB2C8\uB2E4."

@@ -1206,7 +1206,8 @@ public class BlockEditor : MonoBehaviour
 		}
 
 		// 내가 만든 함수 부르기 (BlockData.CallUserFunction). 파라미터 수만큼 빈 값 칸
-		foreach (FunctionData saved in savedFunctions)
+		// 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않으므로 페이지 함수만 붙인다
+		foreach (FunctionData saved in PageFunctions())
 		{
 			string guid = saved.Guid;
 			int parameterCount = saved.Parameters?.Count ?? 0;
@@ -1247,6 +1248,8 @@ public class BlockEditor : MonoBehaviour
 		// 동기·비동기 고르기 (FunctionData.IsAsync, function-data.md #132). 함수 이름 바로 뒤
 		asyncButton = AddTopButton("동기", ToggleAsync, saveButtonPrefab);
 		asyncButton.transform.SetSiblingIndex(1);
+		// 일단 항상 숨긴다 (#470). 버튼과 ToggleAsync는 남겨 두어, 다시 보일 때 이 줄만 지우면 된다
+		asyncButton.gameObject.SetActive(false);
 		functionNameField.Edited += text =>
 		{
 			text = text.Trim();

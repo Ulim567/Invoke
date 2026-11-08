@@ -27,6 +27,7 @@
 - 창이 열린 동안 Player·Attack 맵을 둘 다 끈다 (이우림과 정함). 슬롯 키가 눌리지 않으므로 SlotCaster가 대상 고르기를 끝내며 Player 맵을 다시 켜는 일이 없다
 - 창은 버튼으로 닫는다. 창이 꺼지거나 사라질 때도 맵을 다시 켠다
 - 로비 밖에서도 같은 방식을 쓴다 (#225): `PanelStation`(PlaceInteractable)이 ↑에 `InputBlockingPanel.OpenFor(player)`를 부른다. 연습장의 편집 터미널(`BlockEditorPanel`), 장착대(`SlotEquipPanel`)
+  - 숨기기 (#470): 내 캐릭터가 생긴 뒤 `PanelStation`이 `InputBlockingPanel.IsAvailableFor(player)`를 한 번 묻고, false면 내 화면에서 장소 오브젝트를 비활성화. 기본 true, 장착대는 임시 계정만 true
 - 창(`LobbyEntrancePanel`, `SkillTreePanel`)은 Lobby 씬에 하나씩 둔다. 입구 창은 입구들이 같이 쓰고, 스킬 트리 창은 HUD 버튼이 연다
 - 입구 그림 (#455): 문(게이트) 그림 `Assets/_HW/Lobby/Gates/gate_{hunting, training, raid}.png` (28×48픽셀 = 1.75×3칸, 캐릭터보다 조금 큼). 컨셉(노션 「10/15 컨셉 구체화」: 어두운 세계 + 빛나는 것들, 이끼 덮인 폐허)대로 남색 금속 문틀(#2B3150)에 이끼 덩굴, 위에 작은 모니터, 안쪽은 가는 곳 분위기로 빛나는 화면: 사냥터 청록 스캔 줄(산업 폐허의 깜빡이는 모니터), 연습장 하늘색 격자(깔끔한 테스트 서버), 레이드 마젠타 글리치 + 크리스털(감염된 코어). 각 장소의 출구(`PlaceExit`, 로비로 돌아감)는 그 장소로 들어온 입구와 같은 색 (같은 문의 양쪽)
   - 메뉴 Invoke → 맵 → 입구·출구 문 그림 바꾸기(`EntranceGateBuilder`): 장소 씬 네 개를 차례로 열어 입구는 `Destination`에 맞는 그림, 출구는 그 장소의 색. 아래 끝을 지금 그림의 아래 끝(땅)에 맞춤, 범위 1.5×2.75칸, ↑ 안내 자리 문 위 반 칸. 그림 가져오기 설정(16 PPU, Point, 기준점 아래 가운데)도 맞춘다. 씬을 저장하고 처음 씬으로 돌아온다. 프리팹은 그대로

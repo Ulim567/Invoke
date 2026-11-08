@@ -19,6 +19,7 @@
 - 연습장(TrainingRoom)의 편집 터미널(`PanelStation`)에서 ↑ → `BlockEditorPanel`이 편집 화면을 연다. 열린 동안 Player·Attack 액션 맵이 꺼진다 (`InputBlockingPanel`, lobby-places.md)
 - 저장하면 내 캐릭터의 `SlotLoadout.ReloadFunctions()`를 부른다. 슬롯에 넣어 둔 함수를 고쳐도 바로 고친 내용으로 시전되고, `FunctionExecutorNetwork`가 서버로 함수를 다시 보낸다 (slot-caster.md, network.md)
 - 슬롯 장착은 같은 연습장의 장착대(`SlotEquipPanel`)에서 한다: 위의 슬롯 칸을 고르고 아래 목록(저장한 함수, C 스킬)에서 누르면 들어간다. `SlotLoadout`의 `EquipFunction`, `EquipSkill`, `Unequip`, `CodeSize`, `Changed`만 쓴다 (박진우 #160)
+  - 장착대 표시 (#470): 임시 계정에서만 보임. 실제 계정은 슬롯이 늘 slot1~slot8이라 내 화면에서 장착대를 숨김 (`SlotEquipPanel.IsAvailableFor`)
 - 연습장 허수아비: `Monster`의 「체력 안 줄어듦」(`invulnerable`, 김도훈 #214) + `DamageNumberView`(맞으면 머리 위에 데미지 숫자)
   - 네트워크 오브젝트다 (#297): 프리팹 `Assets/_HW/Training/TrainingDummy`(NetworkIdentity, Base NetworkManager에 등록). 연습장 씬의 `DummySpawner`(`TrainingDummySpawner`)가 서버에서 자기 자리에 1마리 만들고, 연습장 씬이 내려가면 없앤다 (`NetworkSpawner.Spawn`/`Despawn`). 씬에 허수아비를 직접 두면 대상 배열 시전(전장 휩쓸기)이 서버에서 「대상 없음」이 된다
 
@@ -76,9 +77,10 @@
 - 블록 모양(`Assets/_HW/UI/BlockCoding/Shapes`): 문장 블록은 위 왼쪽 홈(`blk_stmt`), 값 블록은 알약(`blk_value`), 조건문·반복문은 왼쪽 기둥과 아래 막대로 안쪽을 감쌈(`blk_inner`), 값 칸은 어두운 알약(`blk_slot`), 이름 칸은 밑줄, 변수 칸은 점선 상자, 드롭다운은 밝은 네모 + ▾
 - 블록 목록은 칩(짧은 이름: If, For, Declare, Array Get, thrust…)을 분류별로 줄줄이 놓는다 (`FlowLayoutGroup`). 칩을 끌면 칸이 다 있는 블록이 나온다
 - 타입·연산자 칸은 드롭다운(`DropdownPopup` 프리팹): 타입 int/float/bool/char/string, 연산 + - * / %, 비교 > < == != >= <=, 논리 && ||
-- 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set), 내가 만든 함수 부르기(`CallUserFunction`, 「함수」 분류 끝)가 있다. malloc은 불러온 함수에서만 보인다
+- 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set), 내가 만든 함수 부르기(`CallUserFunction`, 「함수」 분류 끝)가 있다. 배열 블록 셋은 `syntax.list` 해금 뒤에 보인다 (#470). 함수 부르기 블록은 페이지 함수만 붙이고 슬롯 함수(slot1~slot8)는 붙이지 않는다 (#470, 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않음). malloc은 불러온 함수에서만 보인다
 - 값 칸에 `NULL`을 적으면 `SlotData.FromNull()`과 같은 값으로 넣는다 (function-data.md #120)
 - 위쪽 줄의 「동기 / 비동기」 버튼: `FunctionData.IsAsync`를 고른다 (#132). 슬롯 함수와 전역 변수는 바꿀 수 없음
+  - 지금은 항상 숨김 (#470). 버튼과 `ToggleAsync`는 남겨 둠, 저장된 `IsAsync` 값은 그대로
 - 끄는 동안: 블록이 반투명, 들어갈 자리에 보라색 줄(`InsertMarker`, 시작 위치에서 그 편집 영역·블록 영역의 오른쪽 끝까지, 두께 3. #432), 끼울 수 있는 값 칸은 보라색. 놓인 블록을 끌면 블록 목록 위에 빨간 휴지통 「여기에 놓으면 블록을 지워요」
 - 컴파일(`FunctionChecker`): 반복문 밖의 break·continue, return이 없는 길, 비어 있는 값 칸. 오류가 있으면 오른쪽 오류 창으로 바뀌고, 비어 있는 값 칸과 반복문 밖의 break·continue 블록을 빨갛게 표시. 고치면 표시를 지운다
 - 함수 틀 (#432): 편집 영역 위에 머리줄 「반환 타입 이름(파라미터) {」, 아래에 「}」 줄이 늘 있다 (`FunctionFrameView`). 편집 영역(`BlockList`)의 자식이 아니라 따로 둔 줄이다
@@ -108,7 +110,7 @@
 - 슬롯 함수는 이름을 바꿀 수 없다 (이름 칸을 끈다). 페이지 함수는 `ProgressRules.MaxPageFunctions`개까지 더할 수 있다 (넘으면 「새 함수」·저장을 막고 안내).
 - 저장: `RequestSaveFunction(Function)`을 부르고 「저장하는 중...」을 보인다. 결과는 `PlayerDataRequestAnswered`(저장됨, 개수 초과, 슬롯 함수 잠김, 데이터 오류)로 위쪽 줄에 보이고, 성공하면 `PlayerDataReceived`에서 목록을 다시 그린다.
 - 함수 버튼을 누르면 서버가 보낸 함수의 복사본(JSON 왕복)을 연다. 저장하지 않은 고친 내용이 목록에 섞이지 않게 한다.
-- 장착대(`SlotEquipPanel`)는 실제 계정이면 슬롯이 고정이므로 slot1~slot8 이름과 안내만 보이고 장착 목록을 만들지 않는다.
+- 장착대(`SlotEquipPanel`)는 실제 계정이면 슬롯이 고정이므로 내 화면에서 숨긴다 (#470). 창을 열게 되더라도 slot1~slot8 이름과 안내만 보이고 장착 목록을 만들지 않는다.
 - 장착 화면 배치: 위 슬롯 카드 8개(`SlotCardView`: 키 배지, 이름, 고른 칸은 금색 테두리), 아래 왼쪽 「내 함수」, 오른쪽 「C 스킬」(3열, 색 띠로 C 스킬·공통 이동 구분), 맨 아래 줄(고른 칸, 코드 영역, 안내, 「칸 비우기」)
 
 ### 저장·불러오기 (임시 계정, 이 컴퓨터 파일)

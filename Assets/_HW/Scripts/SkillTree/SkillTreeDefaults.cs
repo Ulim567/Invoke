@@ -51,7 +51,8 @@ public static class SkillTreeDefaults
 		nodes.Add(Syntax(While, "while문", For, 7, new[] { BlockKind.While }));
 		nodes.Add(Syntax(Function, "함수", While, 8, new[] { BlockKind.Return },
 			"사용자 정의 함수 만들기·부르기, return. 함수 블록(BlockKind.Function)은 C 스킬과 같은 종류라 여기서 막지 않는다"));
-		nodes.Add(Syntax(List, "list", Function, 10, new[] { BlockKind.ArrayDeclare }, "배열 만들기 블록을 같이 연다 (가정)"));
+		nodes.Add(Syntax(List, "list", Function, 10, new[] { BlockKind.ArrayDeclare, BlockKind.ArrayGet, BlockKind.ArraySet },
+			"배열 만들기·읽기·바꾸기 블록을 같이 연다. 노드에 없는 블록은 늘 열려 있으므로 배열 블록 셋을 모두 여기 둔다"));
 		nodes.Add(Syntax(TypeDefinition, "Type 정의", List, 12, null, "struct 만들기. 블록이 아직 없음"));
 
 		// 찌르기 --------------------------------------------------------------

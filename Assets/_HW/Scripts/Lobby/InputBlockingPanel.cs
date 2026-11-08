@@ -92,6 +92,12 @@ public abstract class InputBlockingPanel : MonoBehaviour
 	public virtual void OpenFor(PlayerInputReader player) => Show(player);
 
 	/// <summary>
+	/// 그 플레이어가 이 창을 쓸 수 있는지. false면 이 창을 여는 PanelStation이 내 화면에서 숨는다. 기본은 늘 true.
+	/// 계정 종류 등에 따라 쓸 수 없는 창(장착 화면: 임시 계정만)은 덮어쓴다.
+	/// </summary>
+	public virtual bool IsAvailableFor(PlayerInputReader player) => true;
+
+	/// <summary>
 	/// 창을 닫고 꺼 둔 액션 맵을 다시 켠다. 닫기 버튼의 On Click()에 연결한다.
 	/// 닫기 전에 물어야 하는 창(편집 화면: 저장하지 않은 변경)은 덮어쓰고, 닫을 때 base.Close()를 부른다.
 	/// </summary>

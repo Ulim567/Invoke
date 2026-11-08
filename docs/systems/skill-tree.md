@@ -42,7 +42,7 @@
 | 6 | `syntax.for` | for문 | for, break, continue | 조각 6 |
 | 7 | `syntax.while` | while문 | while | 조각 7 |
 | 8 | `syntax.function` | 함수 | return (사용자 함수 만들기) | 조각 8 |
-| 9 | `syntax.list` | list | 배열 만들기 | 조각 10 |
+| 9 | `syntax.list` | list | 배열 만들기·읽기·바꾸기 (Array, Array Get, Array Set) | 조각 10 |
 | 10 | `syntax.type` | Type 정의 | (블록 아직 없음) | 조각 12 |
 
 ### 스킬 노드 (C 캐릭터 - 1차 2, 3)

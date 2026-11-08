@@ -93,8 +93,9 @@ public abstract class InputBlockingPanel : MonoBehaviour
 
 	/// <summary>
 	/// 창을 닫고 꺼 둔 액션 맵을 다시 켠다. 닫기 버튼의 On Click()에 연결한다.
+	/// 닫기 전에 물어야 하는 창(편집 화면: 저장하지 않은 변경)은 덮어쓰고, 닫을 때 base.Close()를 부른다.
 	/// </summary>
-	public void Close()
+	public virtual void Close()
 	{
 		if (panelRoot != null) panelRoot.SetActive(false);
 		openPanels.Remove(this);

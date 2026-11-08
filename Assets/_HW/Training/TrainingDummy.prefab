@@ -172,6 +172,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5dcb3679c0d9e4a448d7024b3aaec3e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusEffects
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
 --- !u!114 &5257812509407206313
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -199,9 +202,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1f06d99450ff4499a7ae5b2874363fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DamageNumberView
-  numberPrefab: {fileID: 1180920948667820922, guid: 1dba43b1897e94f08b7ad1c64a3549d1, type: 3}
+  numberPrefab: {fileID: 0}
   heightAboveTop: 1.4
   jitter: 0.4
+  criticalScale: 1.3
+  bigDamage: 200
+  bigDamageScale: 1.4
 --- !u!114 &3368744665652650343
 MonoBehaviour:
   m_ObjectHideFlags: 0

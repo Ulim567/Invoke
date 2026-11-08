@@ -60,7 +60,7 @@
 | --- | --- |
 | Sword Prefab | `Assets/_JW/SummonedSword.prefab` (임시 그림: 하늘색 막대) |
 | Ground Layers | Ground, Platform |
-| Orbit Behind / Orbit Below Head Top | 0.8 / 0.4 (#399) |
+| Orbit Behind / Orbit Below Head Top | 1.3 / 0.4 (#399, 뒤로 1.3은 #451) |
 | Orbit Radius | 0.7 |
 | Orbit Angle Step | 30° |
 | Bob Height / Bob Speed | 0.06 / 2.5 |

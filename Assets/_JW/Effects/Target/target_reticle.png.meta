@@ -1,0 +1,495 @@
+fileFormatVersion: 2
+guid: d6d7554879c014d09bbf886bdab0cb86
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 1212275096647263410
+    second: target_reticle_0
+  - first:
+      213: -2759786919421064538
+    second: target_reticle_1
+  - first:
+      213: -4678679173417537684
+    second: target_reticle_2
+  - first:
+      213: -2046562460268997318
+    second: target_reticle_3
+  - first:
+      213: -4593582055640903303
+    second: target_reticle_4
+  - first:
+      213: -5892320714412728661
+    second: target_reticle_5
+  - first:
+      213: 226599441247024292
+    second: target_reticle_6
+  - first:
+      213: 1846821508783365703
+    second: target_reticle_7
+  - first:
+      213: -6329487574290722165
+    second: target_reticle_8
+  - first:
+      213: 5908956364117173495
+    second: target_reticle_9
+  - first:
+      213: -3066450979542846411
+    second: target_reticle_10
+  - first:
+      213: -6287518198129826113
+    second: target_reticle_11
+  - first:
+      213: 5852325322633524576
+    second: target_reticle_12
+  - first:
+      213: -1939772398828644523
+    second: target_reticle_13
+  - first:
+      213: 2591019372301935255
+    second: target_reticle_14
+  - first:
+      213: -7005025541683488436
+    second: target_reticle_15
+  - first:
+      213: 902018619403845388
+    second: target_reticle_16
+  - first:
+      213: 7125295453138956371
+    second: target_reticle_17
+  - first:
+      213: 1510961256321062942
+    second: target_reticle_18
+  - first:
+      213: -476125410155535518
+    second: target_reticle_19
+  - first:
+      213: -6213440514214656159
+    second: target_reticle_20
+  - first:
+      213: -1677818890965793045
+    second: target_reticle_21
+  - first:
+      213: 6064378489417631612
+    second: target_reticle_22
+  - first:
+      213: -638824988913342258
+    second: target_reticle_23
+  - first:
+      213: -3941079333718104218
+    second: target_reticle_24
+  - first:
+      213: -1384507028512442748
+    second: target_reticle_25
+  - first:
+      213: -4490141104552039231
+    second: target_reticle_26
+  - first:
+      213: -1755070035298474234
+    second: target_reticle_27
+  - first:
+      213: -7221284197622542235
+    second: target_reticle_28
+  - first:
+      213: 1660024067846166103
+    second: target_reticle_29
+  - first:
+      213: 7964861894246332032
+    second: target_reticle_30
+  - first:
+      213: 215996507690902553
+    second: target_reticle_31
+  - first:
+      213: -6895741536054358111
+    second: target_reticle_32
+  - first:
+      213: 7851140096543344637
+    second: target_reticle_33
+  - first:
+      213: 6662772592024306728
+    second: target_reticle_34
+  - first:
+      213: 2558485453368134986
+    second: target_reticle_35
+  - first:
+      213: -983278461078545735
+    second: target_reticle_36
+  - first:
+      213: -5065241839081323301
+    second: target_reticle_37
+  - first:
+      213: 2952011680723678536
+    second: target_reticle_38
+  - first:
+      213: 2710048997767812063
+    second: target_reticle_39
+  - first:
+      213: 3527374871266453205
+    second: target_reticle_40
+  - first:
+      213: -5839410189194590154
+    second: target_reticle_41
+  - first:
+      213: 1643647660555683649
+    second: target_reticle_42
+  - first:
+      213: 1405996849513279627
+    second: target_reticle_43
+  - first:
+      213: 3101256565677040313
+    second: target_reticle_44
+  - first:
+      213: -3424787806631563329
+    second: target_reticle_45
+  - first:
+      213: 3225634768165452364
+    second: target_reticle_46
+  - first:
+      213: 8265984420731516294
+    second: target_reticle_47
+  - first:
+      213: -2012991564531835244
+    second: target_reticle_48
+  - first:
+      213: 4780155087057917055
+    second: target_reticle_49
+  - first:
+      213: -4665419131897982990
+    second: target_reticle_50
+  - first:
+      213: 1438086318498250488
+    second: target_reticle_51
+  - first:
+      213: 8801387635542326856
+    second: target_reticle_52
+  - first:
+      213: 7377829593799596888
+    second: target_reticle_53
+  - first:
+      213: -3918838314692582334
+    second: target_reticle_54
+  - first:
+      213: -6315703261973823761
+    second: target_reticle_55
+  - first:
+      213: -2536821209301772435
+    second: target_reticle_56
+  - first:
+      213: 8917598965593563031
+    second: target_reticle_57
+  - first:
+      213: 4374145831677745764
+    second: target_reticle_58
+  - first:
+      213: 6431873003272715039
+    second: target_reticle_59
+  - first:
+      213: -3830430093140170738
+    second: target_reticle_60
+  - first:
+      213: -3695085712916951722
+    second: target_reticle_61
+  - first:
+      213: -2465680485276645594
+    second: target_reticle_62
+  - first:
+      213: 4467346517459034488
+    second: target_reticle_63
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 16
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationMethod: 0
+  spriteTessellationDetail: -1
+  spriteGeometrySubdivision: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: target_reticle_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5c355e102e3724a49a418ecd650cf4bc
+      internalID: 1212275096647263410
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_1
+      rect:
+        serializedVersion: 2
+        x: 48
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e1b55c69640304da48aff3f4b1598922
+      internalID: -2759786919421064538
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_2
+      rect:
+        serializedVersion: 2
+        x: 96
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1349b66ad91bb4761ad79eba917b4de7
+      internalID: -4678679173417537684
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_3
+      rect:
+        serializedVersion: 2
+        x: 144
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3908321fd9a584f8ba0b25449333d949
+      internalID: -2046562460268997318
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_4
+      rect:
+        serializedVersion: 2
+        x: 192
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 2d5902e9fdbb449a9a10c7b97f76bdfe
+      internalID: -4593582055640903303
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_5
+      rect:
+        serializedVersion: 2
+        x: 240
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b933567af862c4ac6a863198d8e26b1a
+      internalID: -5892320714412728661
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_6
+      rect:
+        serializedVersion: 2
+        x: 288
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c69ae5877c0d74bf288e2b45896c835e
+      internalID: 226599441247024292
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_7
+      rect:
+        serializedVersion: 2
+        x: 336
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: fabf8f7a2d4ce40b8acc05d8219a4981
+      internalID: 1846821508783365703
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 99991562184d447469ed858c9e5325e5
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      target_reticle_0: 1212275096647263410
+      target_reticle_1: -2759786919421064538
+      target_reticle_2: -4678679173417537684
+      target_reticle_3: -2046562460268997318
+      target_reticle_4: -4593582055640903303
+      target_reticle_5: -5892320714412728661
+      target_reticle_6: 226599441247024292
+      target_reticle_7: 1846821508783365703
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

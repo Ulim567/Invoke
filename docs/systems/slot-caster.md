@@ -146,7 +146,8 @@ sizeLabel.text = $"코드 영역 {loadout.CodeSize}";
 
 | 이름 | 설명 |
 | --- | --- |
-| `SlotTargetMarker` | 고른 대상 위에 노란 V, 찍은 대상 위에 하늘색 V를 OnGUI로 그리는 임시 표시. 실제 대상 표시 연출(임혜원)이 생기면 바꾼다. |
+| `SlotTargetMarker` | (#438) 고른 대상에 빨간 조준점, 찍은 대상에 하늘색 조준점을 대상 몸(콜라이더) 가운데에 겹쳐 띄운다 (48×48, 8프레임 숨쉬기 반복, Sorting Layer WorldUI). 고른 대상이 찍힌 대상이기도 하면 하늘색을 `Marked Under Scale`(1.25)배로 뒤에 깐다. 조준점은 대상의 자식이 아니고 매 프레임 따라가며, 대상이 없어지면 숨긴다. Inspector: `Reticle Prefab`/`Marked Prefab`(비우면 `Resources/TargetReticle`, `TargetReticleMarked`), `Scale`(0.5, 1.5칸). 프리팹은 메뉴 Invoke → JW → 조준점 프리팹 만들기(`Assets/_JW/Effects/Target` 시트). `SetTarget`, `SetMarked`는 테스트도 직접 부른다. |
+| `SlotTargetMarkerSimTest` | (#438) Test_JW의 ReticleTest. 켜고 Play → Host. 고른 대상 조준점 위치, 찍은 대상 2개·겹칠 때 크기, 끝나면 숨김, 대상이 꺼지면 숨김을 확인. 「[ReticleTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SlotMultiAreaSimTest` | Test_JW의 MultiTest. Play → Host, Game 창을 한 번 클릭. 슬롯 3(E)=전장 휩쓸기, 슬롯 4(R)=검 크게베기로 두 명 찍기, 안 찍고 떼기, 다시 찍어 빼기, 소환검 1개 제한, 범위를 확인. 시작할 때 검 소환을 2번 시전해 소환검 2개를 만들고(찍을 수 있는 인원 = 사용 가능한 소환검 수), 해제로 1개·0개로 줄인다. 「[MultiTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SlotLoadoutSimTest` | Test_JW의 LoadoutTest. 켜고 Play → Host (약 8초, 가짜 키 입력). 장착·거부·옮기기·자리 바꾸기·해제·코드 영역 크기, 저장 파일 다시 불러오기, W에 넣은 `Thrust(GetBug())`를 누른 채 고르고 떼면 고른 몬스터가 찔림, 슬롯 밖 시전은 가장 가까운 몬스터, E로 시전한 `while (true) { }`가 C로 `Cancelled`를 확인. 끝나면 원래 장착 내용으로 되돌리고 테스트 함수 파일을 지운다. 「[LoadoutTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SlotServerDataSimTest` | (#263) Test_JW의 ServerSlotTest. 켜고 Play → Host (약 3초). 서버가 보낸 것처럼 새 GUID 슬롯 함수 8개를 `SetEntries`로 넣고, 받은 GUID·`Changed(-1)`·파일로 덮어쓰지 않음, 받은 목록으로 원본 만들기·시전 `Completed`·`CodeSize`, 장착 바꾸기 거부·`SlotLoadout.json` 안 씀, `ReloadFunctions`·다시 `SetEntries` 뒤 새 원본, `UseLocalFiles`로 원래 장착 복귀를 확인. 「[ServerSlotTest] 전체 통과」면 통과. 테스트 씬은 임시 계정이라 `FunctionExecutorNetwork`가 가짜 슬롯을 서버로 다시 보내 「슬롯 N의 함수를 받지 못했습니다」 경고 8줄, 장착 거부 경고 4줄이 뜨는 것은 정상. 평소에는 꺼 둔다. |

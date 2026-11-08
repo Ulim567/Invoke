@@ -140,12 +140,14 @@ public class SlotEquipPanel : InputBlockingPanel
 		if (functionList != null)
 		{
 			GlobalVariablesData globals = GlobalVariablesStorage.Load();
-			foreach (FunctionData function in FunctionStorage.LoadAll())
+			// 사용자 정의 함수 블록의 파라미터 타입 검사에도 쓰므로 목록을 한 번만 읽어 둔다 (#474)
+			List<FunctionData> saved = FunctionStorage.LoadAll();
+			foreach (FunctionData function in saved)
 			{
 				string guid = function.Guid;
 				string name = function.Name;
 				// 컴파일 오류가 있는 함수는 흐리게 「오류」로 보이고 넣을 수 없다 (FunctionChecker, 편집 화면의 컴파일과 같은 검사)
-				if (FunctionChecker.HasErrors(function, globals))
+				if (FunctionChecker.HasErrors(function, globals, saved))
 				{
 					CreateItem(functionList, name, "오류", functionTagColor, () =>
 					{
@@ -254,7 +256,7 @@ public class SlotEquipPanel : InputBlockingPanel
 		if (entry.Kind == SlotLoadout.EntryKind.Skill) return SkillName(entry.Id);
 		FunctionData function = FunctionStorage.Load(entry.Id);
 		if (function == null) return "(지워진 함수)";
-		return FunctionChecker.HasErrors(function, GlobalVariablesStorage.Load()) ? $"{function.Name} (오류)" : function.Name;
+		return FunctionChecker.HasErrors(function, GlobalVariablesStorage.Load(), FunctionStorage.LoadAll()) ?$"{function.Name} (오류)" : function.Name;
 	}
 
 	static string SkillName(string id) => SkillTable.TryGet(id, out SkillData data) ? data.DisplayName : id;

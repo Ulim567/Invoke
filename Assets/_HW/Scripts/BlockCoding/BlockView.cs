@@ -73,15 +73,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		() => VariableType.PointerTo(VariableType.StructOf(PredefinedStructs.Sword)),
 	};
 
-	// 배열 만들기 블록의 원소 타입. 기본 타입만 둔다 (포인터 array는 아직 기획하지 않음)
-	static readonly Func<VariableType>[] ArrayElementTypes =
-	{
-		() => new VariableType(VariableTypeKind.Int),
-		() => new VariableType(VariableTypeKind.Float),
-		() => new VariableType(VariableTypeKind.Bool),
-		() => new VariableType(VariableTypeKind.Char),
-		() => new VariableType(VariableTypeKind.String),
-	};
+	// 배열 만들기 블록의 원소 타입. 선언과 같다 (#474). 실행기가 포인터 array를 받고, 원소의 처음 값은 NULL이다
+	// 예: Sword* swords[3]; 에 소환검 여러 개를 담아 두었다가 차례로 해제한다
+	static readonly Func<VariableType>[] ArrayElementTypes = DeclareTypes;
 
 	/// <summary>이 블록이 들고 있는 블록 데이터</summary>
 	public BlockData Data { get; private set; }
@@ -459,8 +453,19 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		string[] labels = Array.ConvertAll(types, type => BlockLabels.TypeName(type()));
 		TMP_Text label = AddDropdown(labels,
 			() => slot.Type == null ? -1 : Array.IndexOf(labels, BlockLabels.TypeName(slot.Type)),
-			picked => slot.Type = types[picked]());
+			picked => slot.Type = types[picked](),
+			WarnIfInitialValueDoesNotFit);
 		dynamicTexts.Add((label, () => BlockLabels.TypeName(slot.Type)));
+	}
+
+	// 선언의 타입을 바꾼 뒤, 이미 넣은 처음 값이 새 타입에 맞지 않으면 칸을 빨갛게 하고 상태 줄에 알린다 (#474)
+	// 값을 지우지 않는 이유: 타입을 잘못 골랐다가 되돌릴 때 플레이어가 넣은 값(끼운 블록 포함)을 잃지 않게 하기 위함. 맞지 않는 값은 저장할 때 컴파일이 막는다
+	void WarnIfInitialValueDoesNotFit()
+	{
+		if (initialValueSlot == null) return;
+		if (!initialValueSlot.HasWrongValue) return;
+		editor.MarkSlotError(initialValueSlot);
+		editor.ShowNotice($"처음 값이 {BlockLabels.TypeName(Data.Slots[0].Type)}에 맞지 않아요. 이 칸에는 {initialValueSlot.AcceptsText}만 넣을 수 있어요");
 	}
 
 	// malloc의 struct 고르기 (드롭다운): 게임이 정한 struct 목록 (PredefinedStructs.All)
@@ -475,8 +480,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		dynamicTexts.Add((label, () => slot.Type?.StructName ?? "?"));
 	}
 
-	// 누르면 고를 수 있는 것 목록이 아래에 열리는 칸. 고르면 pick을 부르고 글자를 다시 쓴다
-	TMP_Text AddDropdown(string[] labels, Func<int> current, Action<int> pick)
+	// 누르면 고를 수 있는 것 목록이 아래에 열리는 칸. 고르면 pick을 부르고 글자를 다시 쓴다.
+	// afterChange는 고친 것으로 친 뒤에 부른다 (NotifyChanged가 지우는 빨간 표시·상태 줄 안내를 그 뒤에 다시 보이기 위함)
+	TMP_Text AddDropdown(string[] labels, Func<int> current, Action<int> pick, Action afterChange = null)
 	{
 		Button button = editor.CreateButton(row);
 		var anchor = (RectTransform)button.transform;
@@ -485,6 +491,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			pick(picked);
 			RefreshTexts();
 			editor.NotifyChanged();
+			afterChange?.Invoke();
 		}));
 		return button.GetComponentInChildren<TMP_Text>();
 	}
@@ -572,7 +579,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	void ReturnToOrigin()
 	{
 		if (originList != null) originList.Insert(this, originIndex);
-		else if (originSlot != null && originSlot.CanAccept(Data)) originSlot.Accept(this);
+		// 원래 있던 칸이면 칸 규칙(SlotRules)과 상관없이 되돌린다. 규칙에 맞지 않는 예전 값이 끌다가 지워지지 않게
+		else if (originSlot != null && originSlot.Held == null) originSlot.Accept(this);
 		else editor.DestroyView(this);
 	}
 

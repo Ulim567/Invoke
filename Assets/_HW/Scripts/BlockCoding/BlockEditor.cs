@@ -623,7 +623,7 @@ public class BlockEditor : MonoBehaviour
 			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
 			if (!ok) errors.Add(new FunctionChecker.Error { Code = "Global Variables", Message = "int x = 3; 처럼 선언 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
 		}
-		else errors = FunctionChecker.Find(Function, CurrentGlobals());
+		else errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
 
 		ShowErrors(errors);
 		MarkErrors(errors);
@@ -663,7 +663,7 @@ public class BlockEditor : MonoBehaviour
 		if (editingGlobals) return;
 		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
 		{
-			if (!slot.IsMissingValue) continue;
+			if (!slot.IsMissingValue && !slot.HasWrongValue) continue;
 			slot.SetError(true);
 			errorSlots.Add(slot);
 		}
@@ -685,6 +685,15 @@ public class BlockEditor : MonoBehaviour
 		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>())
 			if (view.Data == block) return view;
 		return null;
+	}
+
+	/// <summary>
+	/// 값 칸 하나를 컴파일 오류처럼 빨갛게 표시한다 (예: 선언의 타입을 바꿨더니 처음 값이 맞지 않음, #474). 다음에 고치면 다른 표시와 함께 지워진다.
+	/// </summary>
+	public void MarkSlotError(BlockValueSlot slot)
+	{
+		slot.SetError(true);
+		errorSlots.Add(slot);
 	}
 
 	void ClearErrorMarks()
@@ -952,6 +961,21 @@ public class BlockEditor : MonoBehaviour
 		if (block.Kind != BlockKind.Function) return true;
 		VariableType returnType = ReturnTypeOf(block);
 		return returnType != null && returnType.Kind != VariableTypeKind.Void;
+	}
+
+	/// <summary>
+	/// owner 블록의 index번 값 칸이 받을 수 있는 것 (SlotRules, #474). 값 칸(BlockValueSlot)이 끼우기·적기를 판단할 때 부른다.
+	/// </summary>
+	public SlotRules.Rule RuleOf(BlockData owner, int index) =>
+		SlotRules.RuleOf(owner, index, editingGlobals ? null : Function?.ReturnType, editingGlobals, FindUserFunction);
+
+	/// <summary>
+	/// GUID로 사용자 정의 함수를 찾는다. 편집 중인 함수는 지금 내용으로. 없으면 null
+	/// </summary>
+	public FunctionData FindUserFunction(string guid)
+	{
+		if (Function != null && Function.Guid == guid) return Function;
+		return savedFunctions.FirstOrDefault(f => f.Guid == guid);
 	}
 
 	/// <summary>
@@ -1371,7 +1395,7 @@ public class BlockEditor : MonoBehaviour
 			{
 				FunctionData loaded = FunctionStorage.Load(slotGuid);
 				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(slotFunction, listGlobals));
+			}), false, FunctionChecker.HasErrors(slotFunction, listGlobals, savedFunctions));
 		}
 
 		// 페이지: 슬롯에 넣지 않은 저장한 함수. + 로 새 함수
@@ -1387,7 +1411,7 @@ public class BlockEditor : MonoBehaviour
 			{
 				FunctionData loaded = FunctionStorage.Load(guid);
 				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(saved, listGlobals));
+			}), false, FunctionChecker.HasErrors(saved, listGlobals, savedFunctions));
 		}
 		RebuildPalette();
 		Redraw();
@@ -1411,7 +1435,7 @@ public class BlockEditor : MonoBehaviour
 				continue;
 			}
 			string slotLabel = $"슬롯 {slot + 1} {function.Name}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
-			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals));
+			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
 		}
 		AddFunctionHeader($"페이지 {PageFunctions().Count()} / {ProgressRules.MaxPageFunctions}", NewFunction);
 		AddUnsavedEntry();
@@ -1419,7 +1443,7 @@ public class BlockEditor : MonoBehaviour
 		{
 			FunctionData page = function;
 			string pageLabel = $"페이지 {page.Name}";
-			AddFunctionEntry("-", page.Guid, page.Name, $"코드 {CodeSizeOf(page)}", () => RequestOpen(pageLabel, () => Open(Copy(page))), false, FunctionChecker.HasErrors(page, listGlobals));
+			AddFunctionEntry("-", page.Guid, page.Name, $"코드 {CodeSizeOf(page)}", () => RequestOpen(pageLabel, () => Open(Copy(page))), false, FunctionChecker.HasErrors(page, listGlobals, savedFunctions));
 		}
 		RebuildPalette();
 		Redraw();

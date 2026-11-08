@@ -89,9 +89,21 @@ public class BlockValueSlot : MonoBehaviour
 	}
 
 	/// <summary>
-	/// block을 이 칸에 끼울 수 있으면 true. 비어 있고, 값 칸에 들어가는 블록이어야 한다.
+	/// 이 칸에 넣은 값(적은 값, 변수, 끼운 블록)이 칸 규칙(SlotRules)에 맞지 않으면 true (컴파일 오류 표시, #474).
+	/// 선언의 타입이나 함수의 반환 타입을 나중에 바꾸면 이미 넣은 값이 맞지 않게 될 수 있다.
 	/// </summary>
-	public bool CanAccept(BlockData block) => Held == null && editor.CanBeValue(block);
+	public bool HasWrongValue => Slot != null && Slot.Kind == SlotKind.Value
+		&& !SlotRules.Fits(editor.RuleOf(ownerBlock.Data, slotIndex), Slot, editor.FindUserFunction);
+
+	/// <summary>이 칸에 넣을 수 있는 것을 플레이어에게 보일 글자. 예: 「정수」</summary>
+	public string AcceptsText => SlotRules.Describe(editor.RuleOf(ownerBlock.Data, slotIndex));
+
+	/// <summary>
+	/// block을 이 칸에 끼울 수 있으면 true. 비어 있고, 값 칸에 들어가는 블록이고, 칸 규칙(SlotRules)에 맞아야 한다 (#474).
+	/// </summary>
+	public bool CanAccept(BlockData block) =>
+		Held == null && editor.CanBeValue(block)
+		&& SlotRules.FitsBlock(editor.RuleOf(ownerBlock.Data, slotIndex), block, editor.FindUserFunction);
 
 	/// <summary>
 	/// 끌어다 놓은 블록을 이 칸에 끼운다. 적어 둔 값은 지워진다.
@@ -152,10 +164,20 @@ public class BlockValueSlot : MonoBehaviour
 		field.gameObject.SetActive(false);
 	}
 
+	// 적은 글자를 값으로 읽고, 칸 규칙에 맞지 않으면 넣지 않는다 (#474). 예: if의 조건 칸에 "abc"
+	// 맞지 않는 값도 모양이 틀린 글자(3x)처럼 칸 글자를 빨갛게 남기고 데이터는 비운다. 상태 줄에 이 칸에 넣을 수 있는 것을 알린다
 	void OnEdited(string text)
 	{
 		bool valid = BlockSlotText.TryApply(Slot, text);
-		field.SetInvalid(!valid);
+		bool fits = !valid || SlotRules.Fits(editor.RuleOf(ownerBlock.Data, slotIndex), Slot, editor.FindUserFunction);
+		if (!fits)
+		{
+			Slot.Type = null;
+			Slot.Literal = null;
+			Slot.VariableName = null;
+		}
+		field.SetInvalid(!valid || !fits);
 		editor.NotifyChanged();
+		if (!fits) editor.ShowNotice($"이 칸에는 {AcceptsText}만 넣을 수 있어요");
 	}
 }

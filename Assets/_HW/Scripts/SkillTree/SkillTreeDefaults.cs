@@ -7,7 +7,7 @@ using System.Collections.Generic;
 /// - 문법 노드: 1차 기획서 4.3 해금 요소. 순차 실행 → 변수 → 연산 → if문 → 논리 연산 → for문 → while문 → 함수 → list → Type 정의<br/>
 /// - 스킬 노드: 「C 캐릭터 - 1차」 2. 해금 구조, 3. 스킬트리<br/>
 /// - 재료 수는 전부 임시. bug_fragment(버그 조각, 잡몹), field_boss_core(사냥터 보스 코어), boss_core(레이드 보스 코어)<br/>
-/// - 박진우와 맞춤 (#91): 패링은 검 소환 없이 재료만으로, 검 소환은 사냥터 보스 재료가 있어야 열림
+/// - 박진우와 맞춤 (#91): 패링은 검 소환 없이 재료만으로, 검 소환은 보스 재료가 있어야 열림 (사냥터 보스가 없는 동안은 레이드 보스 코어)
 /// </para>
 /// </summary>
 public static class SkillTreeDefaults
@@ -15,7 +15,7 @@ public static class SkillTreeDefaults
 	/// <summary>잡몹에게서 얻는 재료 (임시 ID)</summary>
 	public const string BugFragment = "bug_fragment";
 
-	/// <summary>사냥터 보스에게서 얻는 재료 (임시 ID). 검 소환처럼 게임이 좀 진행된 뒤에 열 노드에 쓴다. 어느 보스인지는 기획에서 정한다</summary>
+	/// <summary>사냥터 보스에게서 얻는 재료 (임시 ID). 어느 보스인지는 기획에서 정한다. 떨어뜨리는 몬스터가 아직 없어서 지금은 어느 노드도 쓰지 않는다</summary>
 	public const string FieldBossCore = "field_boss_core";
 
 	/// <summary>레이드 보스에게서 얻는 재료 (임시 ID). 마지막 단계 스킬에 쓴다</summary>
@@ -80,11 +80,11 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.BattlefieldSweep, 10, 1, PredefinedFunctionIds.MultiSlash));
 
 		// 소환 ----------------------------------------------------------------
-		// 검 소환은 초반에 열리지 않게 사냥터 보스 재료로 막는다 (박진우와 맞춤. 레벨·진행도가 생기면 그 조건으로 바꾼다)
-		var summonCost = new List<MaterialCost>(Cost(8, 0)) { new MaterialCost(FieldBossCore, 1) };
+		// 검 소환은 초반에 열리지 않게 보스 재료로 막는다 (박진우와 맞춤. 레벨·진행도가 생기면 그 조건으로 바꾼다)
+		// 사냥터 보스가 아직 없어서 field_boss_core를 얻을 수 없으므로, 지금 있는 보스(Gateway)가 주는 boss_core로 막는다
 		nodes.Add(new SkillTreeNode(PredefinedFunctionIds.SummonSword, SkillTreeNodeKind.Skill, null, null, false,
-			summonCost.ToArray(), new[] { BlockKind.Malloc, BlockKind.Free },
-			"스킬 선행 없음. 사냥터 보스 재료로 막음. malloc·free 블록도 같이 연다 (malloc → 검 소환)"));
+			Cost(8, 1), new[] { BlockKind.Malloc, BlockKind.Free },
+			"스킬 선행 없음. 레이드 보스 재료로 막음 (사냥터 보스가 생기면 사냥터 보스 재료로). malloc·free 블록도 같이 연다 (malloc → 검 소환)"));
 		// 검 소환을 해금하면 해제가 같이 열린다
 		nodes.Add(Together(PredefinedFunctionIds.FreeSword, PredefinedFunctionIds.SummonSword));
 		// 패링은 소환검을 쓰지 않으므로 검 소환 전에도 재료만으로 연다 (박진우와 맞춤)

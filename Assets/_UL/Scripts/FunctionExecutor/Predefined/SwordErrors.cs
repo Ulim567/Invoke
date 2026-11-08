@@ -6,7 +6,8 @@
 /// </summary>
 public class UnarmedError : SkillError
 {
-	public override string Message => "맨손";
+	// HUD 알림에 그대로 보인다(#480). 무엇이 잘못됐는지와 어떻게 하면 되는지를 함께 적는다
+	public override string Message => "손에 검이 없어 공격 스킬을 쓸 수 없습니다. 떨어진 검을 Z로 줍거나 검 돌아오기 스킬을 쓰세요";
 }
 
 /// <summary>
@@ -14,5 +15,5 @@ public class UnarmedError : SkillError
 /// </summary>
 public class NoSummonedSwordError : SkillError
 {
-	public override string Message => "소환검 없음";
+	public override string Message => "쓸 수 있는 소환검이 없습니다. 먼저 검 소환 스킬이나 malloc(Sword)로 소환검을 만드세요";
 }

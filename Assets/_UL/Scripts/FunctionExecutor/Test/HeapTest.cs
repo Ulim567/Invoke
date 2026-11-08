@@ -71,7 +71,7 @@ public class HeapTest : MonoBehaviour
 				break;
 
 			case 6 when tick >= 22:
-				// 기대: 전역 포인터 목록이 비어 NullPointer를 free하므로, 틱 23에 Failed: SkillFailed - 잘못된 포인터 0
+				// 기대: 전역 포인터 목록이 비어 NullPointer를 free하므로, 틱 23에 Failed: SkillFailed - InvalidPointerError(포인터 0)의 문장
 				executor.Cast(new TestFreeFunction());
 				break;
 

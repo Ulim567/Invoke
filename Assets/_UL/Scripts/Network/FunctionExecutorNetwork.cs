@@ -27,6 +27,7 @@ using UnityEngine;
 /// - 내 화면은 RequestCast(슬롯, 대상) 또는 RequestCast(슬롯, 대상 배열), RequestCancel(슬롯)로 서버에 부탁한다. FunctionExecutor.Cast, Cancel을 직접 부르지 않는다.<br/>
 /// - 서버의 답은 시전한 사람에게만 온다: 성공이면 CastAccepted(슬롯, 작업 번호), 거부면 CastRejected(슬롯, 이유).<br/>
 /// - 작업이 시작하고 끝나면 모든 화면에 TaskStarted(작업 번호, 슬롯, 함수 이름), TaskEnded(작업 번호, 끝난 이유)가 불린다.<br/>
+/// - 작업이 끝나면 시전한 사람의 화면에만 그보다 먼저 OwnTaskEnded(작업 번호, 끝난 이유와 실패 내용)가 불린다 (#480).<br/>
 /// - 네트워크를 켜지 않은 테스트에서도 같은 함수와 event로 동작한다. 이때는 서버로 보내지 않고 그 자리에서 실행기를 부른다.
 /// </para>
 /// <para>
@@ -51,6 +52,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	ProcessMemory memory;
 	// 해금 목록을 읽는 곳. 저장 요청의 해금 검사에 쓴다
 	PlayerProgress progress;
+	// 시전자 캐릭터의 언어. 실패가 compile error인지 runtime error인지 정해 시전한 사람에게 보낼 때 쓴다 (#480)
+	LanguageRule language;
 
 	// [서버] 슬롯마다 시전할 원본. ApplyPlayerData만 바꾼다. 빈 슬롯이나 실행할 수 없는 함수는 null
 	// 같은 슬롯은 같은 원본을 계속 써야 쿨타임, 실행 중 검사, 취소가 이어진다(function-executor.md)
@@ -147,7 +150,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	/// <summary>
 	/// [로직] 내가 부탁한 시전을 서버가 거부했을 때 (슬롯 번호, 거부 이유). 시전한 사람의 화면에서만 불린다.<br/>
-	/// 이유: OnCooldown(실행 중이거나 쿨타임 중), NotEnoughMemory(메모리 부족), NoFunction(서버에 그 슬롯의 함수가 없음).
+	/// 이유: OnCooldown(실행 중이거나 쿨타임 중), NotEnoughMemory(메모리 부족), NoFunction(서버에 그 슬롯의 함수가 없음), CannotAct(죽었거나 경직 중), InNoCastPlace(공격할 수 없는 장소).<br/>
+	/// HUD 알림 문장은 FailureNotice.ForRejection으로 만든다 (#480).
 	/// </summary>
 	public event Action<int, CastRejection> CastRejected;
 
@@ -161,6 +165,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// [로직] 이 캐릭터의 작업이 끝났을 때 (작업 번호, 끝난 이유). 모든 화면에서 불린다. 진행을 시작하기 전에 끊긴 작업은 TaskStarted 없이 이것만 불린다.
 	/// </summary>
 	public event Action<int, FunctionTaskEndReason> TaskEnded;
+
+	/// <summary>
+	/// [표시] 내 작업이 끝났을 때 (작업 번호, 끝난 이유와 실패 내용). 시전한 사람의 화면에서만 불린다. TaskEnded보다 먼저 불린다.<br/>
+	/// 실패 종류, 분류(compile/runtime), 스킬 에러는 이것으로만 온다. HUD가 FailureNotice.ForTaskEnd로 알림 문장을 만든다 (#480).
+	/// </summary>
+	// TaskEnded에 더하지 않고 따로 두는 이유: 실패 내용은 시전한 사람만 보면 되므로, 모든 화면에 보내는 TaskEnded에 실으면 쓸데없이 보내게 되기 때문
+	public event Action<int, TaskEndInfo> OwnTaskEnded;
 
 	/// <summary>
 	/// [로직] 내 작업이 입력 함수를 만나 입력을 기다리기 시작했을 때 (작업 번호, 입력 함수 ID, 슬롯 번호). 시전한 사람의 화면에서만 불린다.<br/>
@@ -179,6 +190,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		memory = GetComponent<ProcessMemory>();
 		progress = GetComponent<PlayerProgress>();
 		health = GetComponent<PlayerHealth>();
+		language = GetComponent<LanguageRule>();
 	}
 
 	// 실행기의 event는 실행기가 돌고 있는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불린다. 받아서 화면들에 전한다
@@ -886,8 +898,18 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	void OnExecutorTaskEnded(FunctionTask task)
 	{
-		if (IsOffline) TaskEnded?.Invoke(task.Id, task.EndReason);
-		else if (isServer) RpcTaskEnded(task.Id, task.EndReason);
+		// 끝난 이유는 실패 내용(OwnTaskEnded)을 먼저 보낸다. 화면이 TaskEnded에서 작업 기록을 지우기 전에 알림을 띄울 수 있게 하기 위함
+		if (IsOffline)
+		{
+			OwnTaskEnded?.Invoke(task.Id, TaskEndInfo.From(task, language));
+			TaskEnded?.Invoke(task.Id, task.EndReason);
+		}
+		else if (isServer)
+		{
+			// 서버만 있는 오브젝트(접속한 사람이 없음)에는 보낼 곳이 없다
+			if (connectionToClient != null) TargetOwnTaskEnded(task.Id, TaskEndInfo.From(task, language));
+			RpcTaskEnded(task.Id, task.EndReason);
+		}
 	}
 
 	// 입력 요청은 그 작업을 시전한 사람에게만 보낸다. 고르는 일은 그 사람의 화면에서 하기 때문
@@ -922,6 +944,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	[ClientRpc]
 	void RpcTaskEnded(int taskId, FunctionTaskEndReason reason) => TaskEnded?.Invoke(taskId, reason);
+
+	// 실패 내용은 시전한 사람에게만 보낸다. 다른 플레이어의 실패 이유는 내 화면에 알릴 필요가 없기 때문
+	[TargetRpc]
+	void TargetOwnTaskEnded(int taskId, TaskEndInfo info) => OwnTaskEnded?.Invoke(taskId, info);
 
 	[TargetRpc]
 	void TargetInputRequested(int taskId, string inputFunctionId, int slot) => InputRequested?.Invoke(taskId, inputFunctionId, slot);

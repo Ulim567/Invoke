@@ -5,7 +5,7 @@ using System.Collections.Generic;
 /// <para>
 /// - 길이는 만들 때 정하고 바뀌지 않는다.<br/>
 /// - 원소를 바꿔도 변수의 값(이 저장소를 가리키는 값)은 그대로다. 그래서 array를 함수에 넘기면 불린 함수와 부른 함수가 같은 원소를 본다(C에서 array가 포인터로 넘어가는 것과 같음).<br/>
-/// - 메모리 칸은 이 저장소가 아니라, 이 array를 만든 함수의 스택 프레임이 길이만큼 가진다(FunctionDataConverter가 프레임 크기에 더함).
+/// - 메모리 칸은 이 저장소가 아니라, 지역 array는 만든 함수의 스택 프레임이(FunctionDataConverter가 프레임 크기에 더함), 전역 array는 데이터 영역이(ProcessMemory.DataUsed, #478) 길이만큼 가진다.
 /// </para>
 /// </summary>
 // RuntimeValue는 바꿀 수 없는 값이라 원소를 담지 못한다. arr[i] = 값으로 원소가 바뀌어야 하므로 원소는 따로 둔다
@@ -39,7 +39,7 @@ internal class ArrayStorage
 	/// 이름이 name인 array의 원소를 찾는다. 지금 함수의 지역 변수를 먼저 찾고, 없으면 캐릭터의 전역 변수를 찾는다. 원소 읽기·쓰기 블록이 쓴다.<br/>
 	/// 변수가 없으면 UndeclaredVariable, array가 아니면(예: int x에 x[0]) TypeMismatch를 기록하고 false를 돌려준다.
 	/// </summary>
-	// 전역 array는 만들 수 없지만 전역 변수도 찾는다. 전역 int x에 x[0]을 쓰면 「선언되지 않음」이 아니라 「array가 아님」으로 알려 주기 위함
+	// 전역 변수도 찾는다. 전역 array의 원소를 읽고 쓰고(#478), 전역 int x에 x[0]을 쓰면 「선언되지 않음」이 아니라 「array가 아님」으로 알려 주기 위함
 	public static bool TryFind(FunctionContext context, string name, out ArrayStorage storage)
 	{
 		storage = null;

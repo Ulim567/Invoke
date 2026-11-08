@@ -35,6 +35,18 @@ public static class FunctionDataConverter
 		return function != null;
 	}
 
+	// 배열 길이 칸의 값. 직접 입력한 1 이상의 int만 받는다
+	// 변수나 블록을 받지 않는 이유: 함수가 시작할 때 프레임을 한 번에 받으므로, 길이를 실행 전에 알아야 하기 때문(C89와 같음)
+	// internal인 이유: 전역 array(GlobalVariablesConverter)도 같은 길이 규칙을 따르게 하기 위함 (#478)
+	internal static bool TryGetArrayLength(SlotData slot, out int length)
+	{
+		length = 0;
+		if (slot == null || slot.Block != null || slot.VariableName != null || slot.Literal == null) return false;
+		if (slot.Type?.Kind != VariableTypeKind.Int) return false;
+		return int.TryParse(slot.Literal, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out length)
+			&& length >= 1;
+	}
+
 	// 한 번의 TryConvert에서 쓰는 기록. 부르는 함수를 GUID로 찾고, 이미 바꾼 함수를 다시 바꾸지 않게 한다
 	// static 저장소에 두지 않는 이유: 사용자 정의 함수는 캐릭터마다 다르므로, 서버 한 곳에서 여러 캐릭터의 함수를 바꿀 때 섞이지 않게 하기 위함
 	class Conversion
@@ -112,17 +124,6 @@ public static class FunctionDataConverter
 			StructName = type.StructName,
 			TargetKind = type.TargetKind,
 		};
-
-		// 배열 길이 칸의 값. 직접 입력한 1 이상의 int만 받는다
-		// 변수나 블록을 받지 않는 이유: 함수가 시작할 때 프레임을 한 번에 받으므로, 길이를 실행 전에 알아야 하기 때문(C89와 같음)
-		static bool TryGetArrayLength(SlotData slot, out int length)
-		{
-			length = 0;
-			if (slot == null || slot.Block != null || slot.VariableName != null || slot.Literal == null) return false;
-			if (slot.Type?.Kind != VariableTypeKind.Int) return false;
-			return int.TryParse(slot.Literal, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out length)
-				&& length >= 1;
-		}
 
 		// 파라미터마다 이름이 있고, 이름이 겹치지 않고, 실행할 수 있는 타입인지 본다
 		// 편집 화면이 막을 일이지만 저장된 데이터를 한 번 더 확인한다. 실행 중에는 파라미터 선언이 실패하지 않게 하기 위함

@@ -1,0 +1,495 @@
+fileFormatVersion: 2
+guid: 3e6e5e44e30fd4f90bfc1f9c9de4cdad
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 364635628161964137
+    second: target_reticle_marked_0
+  - first:
+      213: 4898150648115314999
+    second: target_reticle_marked_1
+  - first:
+      213: -7925781293435319453
+    second: target_reticle_marked_2
+  - first:
+      213: -2741874442330712527
+    second: target_reticle_marked_3
+  - first:
+      213: -8021671962484494782
+    second: target_reticle_marked_4
+  - first:
+      213: 1273679259407036708
+    second: target_reticle_marked_5
+  - first:
+      213: 508485806381132688
+    second: target_reticle_marked_6
+  - first:
+      213: -9117097348136081335
+    second: target_reticle_marked_7
+  - first:
+      213: 2710531886531195067
+    second: target_reticle_marked_8
+  - first:
+      213: 1657487716628113951
+    second: target_reticle_marked_9
+  - first:
+      213: -453299012886372921
+    second: target_reticle_marked_10
+  - first:
+      213: -759257190509474997
+    second: target_reticle_marked_11
+  - first:
+      213: -8702081182868214022
+    second: target_reticle_marked_12
+  - first:
+      213: -795425799546128907
+    second: target_reticle_marked_13
+  - first:
+      213: -4499828863124303035
+    second: target_reticle_marked_14
+  - first:
+      213: -1298050405195737172
+    second: target_reticle_marked_15
+  - first:
+      213: -8179331971790441809
+    second: target_reticle_marked_16
+  - first:
+      213: -7826652041407976246
+    second: target_reticle_marked_17
+  - first:
+      213: -6211540983314251884
+    second: target_reticle_marked_18
+  - first:
+      213: 7699666605991745929
+    second: target_reticle_marked_19
+  - first:
+      213: 3787279096525445238
+    second: target_reticle_marked_20
+  - first:
+      213: 7545715885236328759
+    second: target_reticle_marked_21
+  - first:
+      213: -5817761868266562870
+    second: target_reticle_marked_22
+  - first:
+      213: 5844119802804594270
+    second: target_reticle_marked_23
+  - first:
+      213: 6556133935997194677
+    second: target_reticle_marked_24
+  - first:
+      213: 6905980158674216842
+    second: target_reticle_marked_25
+  - first:
+      213: 580978891685790686
+    second: target_reticle_marked_26
+  - first:
+      213: -4852603229029705573
+    second: target_reticle_marked_27
+  - first:
+      213: -5266791728362573514
+    second: target_reticle_marked_28
+  - first:
+      213: 2999112914628786937
+    second: target_reticle_marked_29
+  - first:
+      213: 1496078150103470738
+    second: target_reticle_marked_30
+  - first:
+      213: -7903693135615180057
+    second: target_reticle_marked_31
+  - first:
+      213: -8204089706179865806
+    second: target_reticle_marked_32
+  - first:
+      213: -1258356379065971434
+    second: target_reticle_marked_33
+  - first:
+      213: -3030001405947222456
+    second: target_reticle_marked_34
+  - first:
+      213: 4240470096526177284
+    second: target_reticle_marked_35
+  - first:
+      213: -2464724131181211690
+    second: target_reticle_marked_36
+  - first:
+      213: 3629637444939886805
+    second: target_reticle_marked_37
+  - first:
+      213: 8696162121978820036
+    second: target_reticle_marked_38
+  - first:
+      213: 2098565694899310176
+    second: target_reticle_marked_39
+  - first:
+      213: -7041924952962863794
+    second: target_reticle_marked_40
+  - first:
+      213: 1057090289647463224
+    second: target_reticle_marked_41
+  - first:
+      213: 2566100150429466821
+    second: target_reticle_marked_42
+  - first:
+      213: 4664684685752623383
+    second: target_reticle_marked_43
+  - first:
+      213: 7071596658412055068
+    second: target_reticle_marked_44
+  - first:
+      213: -4187206133196358978
+    second: target_reticle_marked_45
+  - first:
+      213: 4411646445438822072
+    second: target_reticle_marked_46
+  - first:
+      213: 4535238326154332007
+    second: target_reticle_marked_47
+  - first:
+      213: 4954947397818241861
+    second: target_reticle_marked_48
+  - first:
+      213: 1049478710567332313
+    second: target_reticle_marked_49
+  - first:
+      213: 5231092192871774991
+    second: target_reticle_marked_50
+  - first:
+      213: 265514042359581061
+    second: target_reticle_marked_51
+  - first:
+      213: 2260310117394731500
+    second: target_reticle_marked_52
+  - first:
+      213: -182469251735043044
+    second: target_reticle_marked_53
+  - first:
+      213: -5395861521826602526
+    second: target_reticle_marked_54
+  - first:
+      213: 477787586979537043
+    second: target_reticle_marked_55
+  - first:
+      213: 2964377423621550620
+    second: target_reticle_marked_56
+  - first:
+      213: 5368073040164273926
+    second: target_reticle_marked_57
+  - first:
+      213: -3446430809890795670
+    second: target_reticle_marked_58
+  - first:
+      213: 3383231298939238134
+    second: target_reticle_marked_59
+  - first:
+      213: 1879688495602890862
+    second: target_reticle_marked_60
+  - first:
+      213: -2648602652340195983
+    second: target_reticle_marked_61
+  - first:
+      213: 5670037203521699040
+    second: target_reticle_marked_62
+  - first:
+      213: 4617359761153401564
+    second: target_reticle_marked_63
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 16
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationMethod: 0
+  spriteTessellationDetail: -1
+  spriteGeometrySubdivision: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: target_reticle_marked_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: dcd38950aaf3647ed84f493a53aaf4b0
+      internalID: 364635628161964137
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_1
+      rect:
+        serializedVersion: 2
+        x: 48
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 35d70e90669224986b066729e31d45b1
+      internalID: 4898150648115314999
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_2
+      rect:
+        serializedVersion: 2
+        x: 96
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 241c30b6083f4459fad1711dd8894438
+      internalID: -7925781293435319453
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_3
+      rect:
+        serializedVersion: 2
+        x: 144
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5e5611367de414c3b8db2c60cf27cbc3
+      internalID: -2741874442330712527
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_4
+      rect:
+        serializedVersion: 2
+        x: 192
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 63695283c309c4d2694ef8e5956843e6
+      internalID: -8021671962484494782
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_5
+      rect:
+        serializedVersion: 2
+        x: 240
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5d1516ae440c74caca1ca79fabd83185
+      internalID: 1273679259407036708
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_6
+      rect:
+        serializedVersion: 2
+        x: 288
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 0cf4ad01d897845fabeb1d17e1c9c0ff
+      internalID: 508485806381132688
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: target_reticle_marked_7
+      rect:
+        serializedVersion: 2
+        x: 336
+        y: 0
+        width: 48
+        height: 48
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5a6ab2a906f914836a3567b8d9e86a50
+      internalID: -9117097348136081335
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 2a4d993a24be14c978753926b44a14e4
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      target_reticle_marked_0: 364635628161964137
+      target_reticle_marked_1: 4898150648115314999
+      target_reticle_marked_2: -7925781293435319453
+      target_reticle_marked_3: -2741874442330712527
+      target_reticle_marked_4: -8021671962484494782
+      target_reticle_marked_5: 1273679259407036708
+      target_reticle_marked_6: 508485806381132688
+      target_reticle_marked_7: -9117097348136081335
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

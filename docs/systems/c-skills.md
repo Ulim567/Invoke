@@ -145,7 +145,7 @@
 | `FinishAsMiss()` | - | - | 진행 중이면 `Miss`로 끝낸다. 슬롯을 떼서 시전하기 직전에 `SlotCaster`가 부른다 (#223) |
 | `TakeResult()` | - | `VitalStrikeResult` | 급소공략이 시작할 때 부른다. 가져가면 지워짐. 진행 중이면 `Miss`로 끝냄 |
 
-- `VitalStrikeMinigameView`: (임시) 머리 위에 다이얼을 OnGUI로 그린다. 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘. 실제 그림(임혜원)은 위 event와 값을 읽어 바꾼다.
+- `VitalStrikeMinigameView`: (임시) 머리 위에 다이얼을 OnGUI로 그린다. 캐릭터가 화면 끝에 있어 다이얼·글자가 화면 밖으로 나가면 화면 안쪽으로 밀어 넣는다 (#456, 위로 넘치면 아래로). 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘. 실제 그림(임혜원)은 위 event와 값을 읽어 바꾼다.
 
 ### 찌르기 2: 상처 공략·검 깊이찌르기·소환검 찌르기 (#165)
 - 상처 공략: 검 찌르기와 같고(`ThrustSkill`), 대상이 출혈이면 `BonusRate = DamageBonus.BleedWoundExploit`(+100%, 2.0배).

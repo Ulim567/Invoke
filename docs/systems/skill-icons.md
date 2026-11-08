@@ -14,7 +14,7 @@
 | `SkillIcons.Get(string skillId)` | 스킬 ID (`c.thrust` 등) | `Sprite` (없으면 `null`) | 아이콘. `Resources/SkillIcons/{스킬 ID}`에서 불러오고 한 번 찾은 것은 기억한다 |
 | `SkillIcons.Has(string skillId)` | 스킬 ID | `bool` | 아이콘이 있으면 `true` |
 
-- 그림: `Assets/_JW/Resources/SkillIcons/{스킬 ID}.png` (24×24, 판은 가운데 약 20px). 넣기만 하면 `SkillIconImporter`(에디터 전용)가 가져오기 설정(Sprite Single, 16 PPU, Point, 압축 없음)을 자동으로 한다.
+- 그림: `Assets/_JW/Resources/SkillIcons/{스킬 ID}.png` (24×24, 그림은 가운데 20×20 꽉 찬 네모). HUD 슬롯 테두리(22×22) 안쪽에 딱 맞도록 아이콘 자체 테두리·둥근 모서리는 없다 (#467). 남는 자리는 계열 배경색. 넣기만 하면 `SkillIconImporter`(에디터 전용)가 가져오기 설정(Sprite Single, 16 PPU, Point, 압축 없음)을 자동으로 한다.
 - 새 스킬: 같은 스타일로 24×24 아이콘을 만들어 스킬 ID 이름으로 넣는다.
 - 테스트: `SkillIconsSimTest` (아무 씬, Play, Host 필요 없음, 「[SkillIconTest] 전체 통과」). 스킬 트리의 스킬 노드마다 아이콘이 있는지, 24×24·Point인지, 문법 노드·없는 ID는 `null`인지 본다.
 

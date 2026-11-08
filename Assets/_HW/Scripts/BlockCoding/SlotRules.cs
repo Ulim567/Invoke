@@ -6,7 +6,7 @@ using System.Globalization;
 /// 값 칸마다 무엇을 받을 수 있는지 정한 표 (#474). 블록을 끌어다 놓을 때, 키보드로 값을 적을 때, 저장 전 컴파일할 때 함께 쓴다.
 /// <para>
 /// - 칸 규칙(Rule)은 블록 종류와 칸 번호로 정한다. 예: if의 조건 칸은 참·거짓, for의 시작·끝은 정수, thrust의 target은 대상.<br/>
-/// - 변수와 원소 읽기(arr[i])는 편집 화면이 타입을 알 수 없으므로 어느 칸이든 받는다 (직접 적은 값만 받는 칸은 제외).<br/>
+/// - 변수와 원소 읽기(arr[i])는 그 자리에서 보이는 변수의 타입으로 검사한다(VariableScopes). 타입을 모르면 막지 않는다 (직접 적은 값만 받는 칸은 제외).<br/>
 /// - 숫자(int, float, char)끼리는 C처럼 서로 받는다. 예: int x = 0.5; (실행기가 0으로 바꾼다)
 /// </para>
 /// <para>
@@ -43,9 +43,11 @@ public static class SlotRules
 	/// <summary>
 	/// owner 블록의 index번 칸의 규칙.
 	/// returnType은 편집 중인 함수의 반환 타입(return 칸에 씀), globals는 전역 변수 파일을 고치는 중인지,
-	/// findUserFunction은 GUID로 사용자 정의 함수를 찾는 함수(함수 블록의 파라미터 타입에 씀. null이면 사용자 정의 함수의 파라미터는 아무 값이나 받음).
+	/// findUserFunction은 GUID로 사용자 정의 함수를 찾는 함수(함수 블록의 파라미터 타입에 씀. null이면 사용자 정의 함수의 파라미터는 아무 값이나 받음),
+	/// variableType은 그 자리에서 보이는 변수의 타입을 이름으로 찾는 함수(대입·원소 쓰기의 값에 씀. null이거나 못 찾으면 아무 값이나 받음, #474 5단계).
 	/// </summary>
-	public static Rule RuleOf(BlockData owner, int index, VariableType returnType, bool globals, Func<string, FunctionData> findUserFunction)
+	public static Rule RuleOf(BlockData owner, int index, VariableType returnType, bool globals, Func<string, FunctionData> findUserFunction,
+		Func<string, VariableType> variableType = null)
 	{
 		switch (owner.Kind)
 		{
@@ -68,6 +70,11 @@ public static class SlotRules
 			case BlockKind.ArrayGet when index == 1:
 			case BlockKind.ArraySet when index == 1:
 				return new Rule { Expect = Expect.Integer };
+			// 대입의 값은 왼쪽 변수의 타입, 원소 쓰기의 값은 array의 원소 타입 (#474 5단계). 변수를 모르면 아무 값이나
+			case BlockKind.Assign when index == 1:
+				return new Rule { Expect = Expect.Typed, Type = VariableTypeOf(owner, 0, variableType, false) };
+			case BlockKind.ArraySet when index == 2:
+				return new Rule { Expect = Expect.Typed, Type = VariableTypeOf(owner, 0, variableType, true) };
 			case BlockKind.Free:
 				return new Rule { Expect = Expect.Pointer };
 			case BlockKind.Function:
@@ -82,11 +89,11 @@ public static class SlotRules
 	/// <summary>
 	/// 칸 데이터(적은 값, 변수, 끼운 블록)가 규칙에 맞으면 true. 빈 칸은 true (빈 칸은 컴파일의 「비어 있는 값 칸」 검사가 따로 본다).
 	/// </summary>
-	public static bool Fits(Rule rule, SlotData content, Func<string, FunctionData> findUserFunction)
+	public static bool Fits(Rule rule, SlotData content, Func<string, FunctionData> findUserFunction, Func<string, VariableType> variableType = null)
 	{
 		if (content == null) return true;
-		if (content.Block != null) return FitsBlock(rule, content.Block, findUserFunction);
-		if (!string.IsNullOrEmpty(content.VariableName)) return !rule.LiteralOnly && !IsVoid(rule);
+		if (content.Block != null) return FitsBlock(rule, content.Block, findUserFunction, variableType);
+		if (!string.IsNullOrEmpty(content.VariableName)) return FitsVariable(rule, variableType?.Invoke(content.VariableName));
 		if (string.IsNullOrEmpty(content.Literal)) return true;
 
 		if (rule.Expect == Expect.ArrayLength)
@@ -100,7 +107,7 @@ public static class SlotRules
 	/// <summary>
 	/// 값 블록(연산, 비교, malloc, 값을 돌려주는 함수 등)을 이 칸에 끼울 수 있으면 true. 직접 적은 값만 받는 칸은 false.
 	/// </summary>
-	public static bool FitsBlock(Rule rule, BlockData block, Func<string, FunctionData> findUserFunction)
+	public static bool FitsBlock(Rule rule, BlockData block, Func<string, FunctionData> findUserFunction, Func<string, VariableType> variableType = null)
 	{
 		if (rule.LiteralOnly) return false;
 		switch (block.Kind)
@@ -109,8 +116,10 @@ public static class SlotRules
 			case BlockKind.Compare:
 			case BlockKind.Logic:
 			case BlockKind.Not: return FitsKind(rule, Kind.Bool, null);
-			// 원소 읽기는 array 변수의 타입을 알아야 하므로 변수처럼 받는다
-			case BlockKind.ArrayGet: return !IsVoid(rule);
+			// 원소 읽기는 array 변수의 원소 타입. 변수를 모르면 막지 않는다
+			case BlockKind.ArrayGet:
+				VariableType element = VariableTypeOf(block, 0, variableType, true);
+				return element == null ? !IsVoid(rule) : FitsKind(rule, KindOf(element), element);
 			case BlockKind.Malloc:
 				VariableType pointer = VariableType.PointerTo(block.Slots.Count > 0 ? block.Slots[0]?.Type : null);
 				return FitsKind(rule, Kind.Pointer, pointer);
@@ -122,6 +131,25 @@ public static class SlotRules
 			default:
 				return false;
 		}
+	}
+
+	/// <summary>
+	/// 타입이 type인 변수를 이 칸에 넣을 수 있으면 true. type이 null(모르는 변수)이면 막지 않는다. 직접 적은 값만 받는 칸은 false.
+	/// 값 칸의 「변수 고르기」 목록을 거를 때도 쓴다 (#474 5단계).
+	/// </summary>
+	public static bool FitsVariable(Rule rule, VariableType type)
+	{
+		if (rule.LiteralOnly || IsVoid(rule)) return false;
+		return type == null || FitsKind(rule, KindOf(type), type);
+	}
+
+	// block의 index번 변수 칸에 적힌 변수의 타입. element면 array의 원소 타입. 모르면 null
+	static VariableType VariableTypeOf(BlockData block, int index, Func<string, VariableType> variableType, bool element)
+	{
+		if (variableType == null || index >= block.Slots.Count) return null;
+		VariableType type = variableType(block.Slots[index]?.VariableName);
+		if (!element) return type;
+		return type?.Kind == VariableTypeKind.Array ? type.ElementType : null;
 	}
 
 	/// <summary>

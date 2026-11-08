@@ -200,7 +200,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 				AddInitialValue(2);
 				break;
 			case BlockKind.Assign:
-				AddVariableField(0);
+				AddVariableOption(0, false);
 				AddText("=");
 				AddValue(1);
 				AddText(";");
@@ -266,13 +266,13 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 				AddText("];");
 				break;
 			case BlockKind.ArrayGet:
-				AddVariableField(0);
+				AddVariableOption(0, true);
 				AddText("[");
 				AddValue(1);
 				AddText("]");
 				break;
 			case BlockKind.ArraySet:
-				AddVariableField(0);
+				AddVariableOption(0, true);
 				AddText("[");
 				AddValue(1);
 				AddText("] =");
@@ -415,26 +415,43 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (field != null) field.SetInvalid(false);
 	}
 
-	// 변수 칸 (대입의 왼쪽). 이름으로 쓸 수 없는 글자면 원래 이름으로 되돌린다
-	void AddVariableField(int index)
+	// 변수 칸 (대입의 왼쪽, 원소 읽기·쓰기의 array 이름): 이름을 적지 않고, 이 블록 자리에서 보이는 변수 중에서 드롭다운으로 고른다 (#474 5단계)
+	// 대입은 array가 아닌 변수만, 원소 읽기·쓰기는 array 변수만 보인다. array를 통째로 대입하면 실행기가 TypeMismatch를 내기 때문
+	// 목록은 누를 때마다 다시 만든다. 위에 선언을 더하거나 블록을 옮기면 보이는 변수가 바뀌기 때문
+	void AddVariableOption(int index, bool arrays)
 	{
 		SlotData slot = Data.Slots[index];
-		BlockField field = editor.CreateField(row);
-		field.SetBackground(variableFieldSprite, fieldLineColor);
-		field.Text = slot.VariableName;
-		field.Edited += text =>
+		Button button = editor.CreateButton(row);
+		var anchor = (RectTransform)button.transform;
+		TMP_Text label = button.GetComponentInChildren<TMP_Text>();
+		button.onClick.AddListener(() =>
 		{
-			text = text.Trim();
-			if (!BlockSlotText.IsIdentifier(text))
+			var names = new List<string>();
+			var labels = new List<string>();
+			foreach (KeyValuePair<string, VariableType> variable in editor.VisibleVariables(Data))
 			{
-				RejectText(field, slot.VariableName, "변수 칸에는 변수 이름만 적을 수 있어요 (숫자나 값은 안 돼요)");
+				bool isArray = variable.Value?.Kind == VariableTypeKind.Array;
+				if (isArray != arrays) continue;
+				names.Add(variable.Key);
+				VariableType shown = isArray ? variable.Value.ElementType : variable.Value;
+				labels.Add($"{BlockLabels.TypeName(shown)} {variable.Key}{(isArray ? "[]" : "")}");
+			}
+			if (names.Count == 0)
+			{
+				editor.ShowNotice(arrays ? "고를 수 있는 array가 없어요. 이 블록보다 위에서 Array로 먼저 만드세요"
+					: "고를 수 있는 변수가 없어요. 이 블록보다 위에서 Declare로 먼저 선언하세요");
 				return;
 			}
-			if (text == slot.VariableName) return; // 바꾸지 않았으면 고친 것으로 치지 않는다
-			slot.VariableName = text;
-			field.Text = slot.VariableName;
-			editor.NotifyChanged();
-		};
+			editor.ShowDropdown(anchor, labels.ToArray(), names.IndexOf(slot.VariableName), picked =>
+			{
+				if (names[picked] == slot.VariableName) return; // 같은 변수를 다시 고르면 고친 것으로 치지 않는다
+				slot.VariableName = names[picked];
+				RefreshTexts();
+				editor.NotifyChanged();
+			});
+		});
+		// 아직 고르지 않았으면 「변수」라고 보인다
+		if (label != null) dynamicTexts.Add((label, () => string.IsNullOrEmpty(slot.VariableName) ? "변수" : slot.VariableName));
 	}
 
 	// 연산자 고르기 (드롭다운). 데이터에는 enum 이름("Add")을 넣는다

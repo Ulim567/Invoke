@@ -127,7 +127,7 @@ public static class BlockReference
 		("Declare", "변수", () => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"), "int x = 3;",
 			"타입과 이름을 골라 변수를 만들고, 원하면 처음 값을 넣습니다."),
 		("Assign", "변수", () => BlockData.Assign("x", SlotData.EmptyValue()), "x = 5;",
-			"이미 만든 변수에 새 값을 담습니다. 왼쪽 칸에는 변수 이름만 적을 수 있습니다."),
+			"이미 만든 변수에 새 값을 담습니다. 왼쪽 칸을 눌러 위에서 선언한 변수를 고릅니다."),
 		("Array", "변수", () => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")), "int arr[3];",
 			"타입과 칸 수를 정해 같은 타입의 값 여러 개를 담는 배열을 만듭니다."),
 		("Array Get", "변수", () => BlockData.ArrayGet("arr", SlotData.EmptyValue()), "arr[i]",
@@ -226,7 +226,7 @@ public static class BlockReference
 		["Assign"] = ("변수 = 값;",
 			new[]
 			{
-				"변수 — 이미 만든 변수의 이름만 적을 수 있습니다.",
+				"변수 — 눌러서 이 블록보다 위에서 선언한 변수 중에 고릅니다.",
 				"값 — 담을 값입니다. 숫자, 변수, 값 블록을 넣습니다.",
 			},
 			"오른쪽 값을 계산한 뒤 변수에 담아, 이전에 담겨 있던 값을 바꿉니다.",
@@ -245,7 +245,7 @@ public static class BlockReference
 		["Array Get"] = ("배열[번호]",
 			new[]
 			{
-				"배열 — 읽을 배열의 변수 이름입니다.",
+				"배열 — 눌러서 위에서 만든 배열 중에 고릅니다.",
 				"번호 — 읽을 칸의 번호입니다. 0부터 셉니다.",
 			},
 			"배열의 그 번호 칸에 담긴 값을 돌려줍니다. 값 칸에 끼워 씁니다.",
@@ -254,7 +254,7 @@ public static class BlockReference
 		["Array Set"] = ("배열[번호] = 값;",
 			new[]
 			{
-				"배열 — 값을 담을 배열의 변수 이름입니다.",
+				"배열 — 눌러서 위에서 만든 배열 중에 고릅니다.",
 				"번호 — 값을 담을 칸의 번호입니다. 0부터 셉니다.",
 				"값 — 그 칸에 담을 값입니다.",
 			},

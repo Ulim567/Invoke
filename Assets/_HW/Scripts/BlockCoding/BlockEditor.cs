@@ -190,10 +190,11 @@ public class BlockEditor : MonoBehaviour
 		("변수", new Func<BlockData>[]
 		{
 			() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
-			() => BlockData.Assign("x", SlotData.EmptyValue()),
+			// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
+			() => BlockData.Assign("", SlotData.EmptyValue()),
 			() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
-			() => BlockData.ArrayGet("arr", SlotData.EmptyValue()),
-			() => BlockData.ArraySet("arr", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			() => BlockData.ArrayGet("", SlotData.EmptyValue()),
+			() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
 		}),
 		// 값 칸에 끼우는 블록
 		("값", new Func<BlockData>[]
@@ -330,6 +331,8 @@ public class BlockEditor : MonoBehaviour
 		{
 			bool saved = result == PlayerDataRequestResult.Saved;
 			if (saved && editingGlobals) dirty = false;
+			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
+			if (saved) ReloadSavedFunctions();
 			SetMessage(saved ? "저장됨" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
 			Redraw();
 			return;
@@ -446,6 +449,8 @@ public class BlockEditor : MonoBehaviour
 	/// </summary>
 	public void Open(FunctionData function)
 	{
+		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수를 고치다 저장하지 않고 왔으면 저장된 것으로 되돌려 둔다 (#474)
+		listGlobals = CurrentGlobals();
 		workspace.ClearViews();
 		editingGlobals = false;
 		unsavedNewPage = false;
@@ -538,7 +543,12 @@ public class BlockEditor : MonoBehaviour
 			return;
 		}
 		bool ok = executor.TrySaveGlobalVariables(globals);
-		if (ok) dirty = false;
+		if (ok)
+		{
+			dirty = false;
+			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
+			ReloadSavedFunctions();
+		}
 		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인. 콘솔 참고)", !ok);
 		Redraw();
 	}
@@ -968,7 +978,43 @@ public class BlockEditor : MonoBehaviour
 	/// owner 블록의 index번 값 칸이 받을 수 있는 것 (SlotRules, #474). 값 칸(BlockValueSlot)이 끼우기·적기를 판단할 때 부른다.
 	/// </summary>
 	public SlotRules.Rule RuleOf(BlockData owner, int index) =>
-		SlotRules.RuleOf(owner, index, editingGlobals ? null : Function?.ReturnType, editingGlobals, FindUserFunction);
+		SlotRules.RuleOf(owner, index, editingGlobals ? null : Function?.ReturnType, editingGlobals, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록의 index번 값 칸에 content(적은 값, 변수, 끼운 블록)를 넣을 수 있으면 true (칸 규칙 + 그 자리에서 보이는 변수의 타입).
+	/// </summary>
+	public bool Fits(BlockData owner, int index, SlotData content) =>
+		SlotRules.Fits(RuleOf(owner, index), content, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록의 index번 값 칸에 값 블록 block을 끼울 수 있으면 true.
+	/// </summary>
+	public bool FitsBlock(BlockData owner, int index, BlockData block) =>
+		SlotRules.FitsBlock(RuleOf(owner, index), block, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록 자리에서 쓸 수 있는 변수 (이름 → 타입). C처럼 위에서 선언했고 그 자리에서 보이는 것만 (VariableScopes, #474 5단계).
+	/// 함수에 들어 있지 않은 블록(끄는 중인 블록 등)이면 비어 있다.
+	/// </summary>
+	public Dictionary<string, VariableType> VisibleVariables(BlockData owner)
+	{
+		Dictionary<string, VariableType> found;
+		if (editingGlobals) found = VariableScopes.VisibleAt(globals?.Declarations, new VariableScopes.Stack(), owner);
+		else found = VariableScopes.VisibleAt(Function?.Blocks, VariableScopes.Start(Function, listGlobals), owner);
+		return found ?? new Dictionary<string, VariableType>();
+	}
+
+	// owner 자리에서 변수 이름으로 타입을 찾는 함수. 칸 규칙(SlotRules)에 넘긴다. 못 찾으면 null(막지 않음)
+	Func<string, VariableType> VariableTypeLookup(BlockData owner)
+	{
+		Dictionary<string, VariableType> visible = null;
+		return name =>
+		{
+			if (string.IsNullOrEmpty(name)) return null;
+			visible ??= VisibleVariables(owner); // 필요할 때 한 번만 찾는다
+			return visible.TryGetValue(name, out VariableType type) ? type : null;
+		};
+	}
 
 	/// <summary>
 	/// GUID로 사용자 정의 함수를 찾는다. 편집 중인 함수는 지금 내용으로. 없으면 null

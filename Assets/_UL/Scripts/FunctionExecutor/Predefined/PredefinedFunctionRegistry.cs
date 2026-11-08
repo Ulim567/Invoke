@@ -20,7 +20,7 @@ using UnityEngine;
 public static class PredefinedFunctionRegistry
 {
 	// 분류.영어_이름 (소문자, 밑줄). 분류를 더하면 PredefinedFunctionIds의 설명도 함께 고친다
-	static readonly Regex IdFormat = new Regex(@"^(c|common|input|test)\.[a-z]+(_[a-z]+)*$");
+	static readonly Regex IdFormat = new Regex(@"^(c|common|input|game|test)\.[a-z]+(_[a-z]+)*$");
 
 	static Dictionary<string, PredefinedFunction> functionsById;
 	static List<PredefinedFunction> allFunctions;

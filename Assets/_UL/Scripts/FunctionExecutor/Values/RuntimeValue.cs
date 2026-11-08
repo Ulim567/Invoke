@@ -111,7 +111,7 @@ public readonly struct RuntimeValue
 	/// <summary>
 	/// 「대상 없음」이면 true. 죽었거나 오브젝트가 없어진 대상은 「대상 없음」이 아니다.
 	/// </summary>
-	// C의 해제한 포인터가 NULL이 아닌 것과 같다. 그래서 if (b != NULL)을 지나도, 스킬에 넘기는 순간 InvalidTarget이 난다
+	// 플레이어는 Target을 NULL과 비교하지 않고 is_valid_target(b)로 확인한다(#474). 그 함수는 이 값이 아니라 IsUsableTarget을 쓴다
 	// Unity의 == 대신 object로 비교한다. Unity의 ==는 없어진 오브젝트도 null로 보기 때문
 	public bool IsNoTarget => Type?.Kind == VariableTypeKind.Target && (object)value == null;
 

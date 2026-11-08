@@ -99,6 +99,13 @@ public class CompareTest : MonoBehaviour
 			stored && VariableStore.IsSameType(storedNull.Type, SwordPointer) && storedNull.AsPointer() == HeapStorage.NullPointer,
 			stored ? $"실제 {storedNull}" : "바꾸지 못함");
 		Check("int에 NULL을 넣을 수 없음", !NumericRules.TryConvertForStore(RuntimeValue.Null, Int, c, out _));
+
+		// 대상(Target)은 포인터가 아니므로 NULL과 비교하지 않는다. 쓸 수 있는지는 is_valid_target으로 확인한다 (#474)
+		RuntimeValue noTarget = RuntimeValue.NoTarget(VariableType.TargetOf(TargetKind.Bug));
+		CheckCompareFails(c, "「대상 없음」 == NULL", noTarget, CompareOperator.Equal, RuntimeValue.Null);
+		CheckCompareFails(c, "NULL != 「대상 없음」", RuntimeValue.Null, CompareOperator.NotEqual, noTarget);
+		CheckCompare(c, "「대상 없음」 == 「대상 없음」", noTarget, CompareOperator.Equal, noTarget, true);
+		Check("Target에 NULL을 넣을 수 없음", !NumericRules.TryConvertForStore(RuntimeValue.Null, VariableType.TargetOf(TargetKind.Bug), c, out _));
 	}
 
 	// 테스트 3: C가 아닌 언어의 규칙(이후 다른 언어를 더할 때 쓸 규칙)

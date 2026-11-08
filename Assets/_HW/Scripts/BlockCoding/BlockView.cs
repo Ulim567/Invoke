@@ -60,11 +60,23 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
 	float dragAlpha = 0.75f;
 
-	// 고르기 버튼에서 차례로 바꿔 가며 고르는 타입
-	static readonly VariableTypeKind[] DeclareTypes =
+	// 선언 블록에서 고를 수 있는 타입. 고를 때마다 새 VariableType을 만들도록 함수로 둔다 (블록끼리 같은 타입 객체를 나눠 쓰지 않게)
+	// Sword*: 소환검 포인터를 담아 두었다가 free_sword(s)처럼 해제하기 위함. 스킬 파라미터는 반드시 채워야 하기 때문 (#474)
+	// Target: get_bug()로 고른 몬스터를 담아 두고 여러 스킬에 넘기기 위함. 몬스터가 죽었는지는 is_valid_target(b)로 확인한다 (#474)
+	static readonly Func<VariableType>[] DeclareTypes =
 	{
-		VariableTypeKind.Int, VariableTypeKind.Float, VariableTypeKind.Bool, VariableTypeKind.Char, VariableTypeKind.String,
+		() => new VariableType(VariableTypeKind.Int),
+		() => new VariableType(VariableTypeKind.Float),
+		() => new VariableType(VariableTypeKind.Bool),
+		() => new VariableType(VariableTypeKind.Char),
+		() => new VariableType(VariableTypeKind.String),
+		() => VariableType.PointerTo(VariableType.StructOf(PredefinedStructs.Sword)),
+		() => VariableType.TargetOf(TargetKind.Bug),
 	};
+
+	// 배열 만들기 블록의 원소 타입. 선언과 같다 (#474). 실행기가 포인터 array를 받고, 원소의 처음 값은 NULL이다
+	// 예: Sword* swords[3]; 에 소환검 여러 개를 담아 두었다가 차례로 해제한다. Target targets[3]; 은 battlefield_sweep의 targets에 넘긴다
+	static readonly Func<VariableType>[] ArrayElementTypes = DeclareTypes;
 
 	/// <summary>이 블록이 들고 있는 블록 데이터</summary>
 	public BlockData Data { get; private set; }
@@ -87,6 +99,12 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 	// 데이터가 바뀌면 다시 써야 하는 글자들 (예: for의 "i <"는 이름 칸을 고치면 바뀜)
 	readonly List<(TMP_Text text, Func<string> content)> dynamicTexts = new List<(TMP_Text, Func<string>)>();
+
+	// 선언 블록의 처음 값: 「=」 글자, 값 칸, 펼치기·접기 버튼 글자, 지금 펼쳤는지 (#474). 선언 블록이 아니면 null
+	GameObject initialEquals;
+	BlockValueSlot initialValueSlot;
+	TMP_Text initialToggleLabel;
+	bool initialValueOpen;
 
 	void Awake()
 	{
@@ -177,14 +195,12 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		switch (Data.Kind)
 		{
 			case BlockKind.Declare:
-				AddTypeOption(0);
+				AddTypeOption(0, DeclareTypes);
 				AddNameField(1);
-				AddText("=");
-				AddValue(2);
-				AddText(";");
+				AddInitialValue(2);
 				break;
 			case BlockKind.Assign:
-				AddVariableField(0);
+				AddVariableOption(0, false);
 				AddText("=");
 				AddValue(1);
 				AddText(";");
@@ -243,20 +259,20 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 				AddText("continue;");
 				break;
 			case BlockKind.ArrayDeclare:
-				AddTypeOption(0);
+				AddTypeOption(0, ArrayElementTypes);
 				AddNameField(1);
 				AddText("[");
 				AddValue(2);
 				AddText("];");
 				break;
 			case BlockKind.ArrayGet:
-				AddVariableField(0);
+				AddVariableOption(0, true);
 				AddText("[");
 				AddValue(1);
 				AddText("]");
 				break;
 			case BlockKind.ArraySet:
-				AddVariableField(0);
+				AddVariableOption(0, true);
 				AddText("[");
 				AddValue(1);
 				AddText("] =");
@@ -310,6 +326,57 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		editor.CreateValueSlot(row).Bind(editor, this, index);
 	}
 
+	// 선언의 처음 값 (#474): 비어 있으면 「int x; [>]」로 접어 두고, > 버튼을 누르면 「int x = [값] ; [<]」로 펼친다. < 버튼으로 접으면 넣은 값을 지운다
+	// 접을 때 값을 지우는 이유: 값을 숨겨 두기만 하면 화면은 int x;인데 그 값으로 실행되어, 화면과 동작이 달라지기 때문
+	// 펼쳤는지는 데이터에 저장하지 않는다. 처음 값 칸이 비었으면 접힌 것으로 보고, 함수를 다시 열면 접힌 모양으로 만든다
+	void AddInitialValue(int index)
+	{
+		if (index >= Data.Slots.Count) return;
+
+		TMP_Text equals = editor.CreateText(row);
+		equals.text = "=";
+		initialEquals = equals.gameObject;
+		initialValueSlot = editor.CreateValueSlot(row);
+		initialValueSlot.Bind(editor, this, index);
+		AddText(";");
+
+		Button toggle = editor.CreateButton(row);
+		// 버튼 프리팹의 ▾(드롭다운 표시)는 숨긴다. 누르면 목록이 아니라 칸이 펼쳐지는 버튼이기 때문
+		Transform arrow = toggle.transform.Find("Arrow");
+		if (arrow != null) arrow.gameObject.SetActive(false);
+		initialToggleLabel = toggle.GetComponentInChildren<TMP_Text>();
+		// <를 태그의 시작으로 읽지 않게 한다
+		if (initialToggleLabel != null) initialToggleLabel.richText = false;
+		toggle.onClick.AddListener(() => SetInitialValueOpen(!initialValueOpen));
+
+		SetInitialValueOpen(!IsEmpty(Data.Slots[index]));
+	}
+
+	// 처음 값 칸을 펼치거나 접는다. 접으면 칸을 비운다 (값이 있었으면 고친 것으로 친다)
+	void SetInitialValueOpen(bool open)
+	{
+		initialValueOpen = open;
+		initialEquals.SetActive(open);
+		initialValueSlot.gameObject.SetActive(open);
+		if (initialToggleLabel != null) initialToggleLabel.text = open ? "<" : ">";
+		if (!open) initialValueSlot.Clear();
+		editor.RefreshLayout();
+	}
+
+	/// <summary>
+	/// 선언 블록의 처음 값 칸을 펼쳐 두고 비워 두었으면 접는다. 저장할 때 BlockEditor가 부른다 (#474).
+	/// 빈 처음 값은 실행기가 기본값으로 채우므로, 저장한 함수가 화면에서도 int x;로 보이게 하기 위함이다.
+	/// </summary>
+	public void CollapseEmptyInitialValue()
+	{
+		if (initialValueSlot == null || !initialValueOpen || !IsEmpty(initialValueSlot.Slot)) return;
+		SetInitialValueOpen(false);
+	}
+
+	// 값 칸에 아무것도 없으면 true (적은 값, 변수, 끼운 블록 모두 없음)
+	static bool IsEmpty(SlotData slot) =>
+		slot == null || (slot.Block == null && string.IsNullOrEmpty(slot.Literal) && string.IsNullOrEmpty(slot.VariableName));
+
 	// 새 이름 칸 (선언의 변수 이름, for의 i). 이름으로 쓸 수 없는 글자면 원래 이름으로 되돌린다
 	void AddNameField(int index)
 	{
@@ -348,26 +415,43 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (field != null) field.SetInvalid(false);
 	}
 
-	// 변수 칸 (대입의 왼쪽). 이름으로 쓸 수 없는 글자면 원래 이름으로 되돌린다
-	void AddVariableField(int index)
+	// 변수 칸 (대입의 왼쪽, 원소 읽기·쓰기의 array 이름): 이름을 적지 않고, 이 블록 자리에서 보이는 변수 중에서 드롭다운으로 고른다 (#474 5단계)
+	// 대입은 array가 아닌 변수만, 원소 읽기·쓰기는 array 변수만 보인다. array를 통째로 대입하면 실행기가 TypeMismatch를 내기 때문
+	// 목록은 누를 때마다 다시 만든다. 위에 선언을 더하거나 블록을 옮기면 보이는 변수가 바뀌기 때문
+	void AddVariableOption(int index, bool arrays)
 	{
 		SlotData slot = Data.Slots[index];
-		BlockField field = editor.CreateField(row);
-		field.SetBackground(variableFieldSprite, fieldLineColor);
-		field.Text = slot.VariableName;
-		field.Edited += text =>
+		Button button = editor.CreateButton(row);
+		var anchor = (RectTransform)button.transform;
+		TMP_Text label = button.GetComponentInChildren<TMP_Text>();
+		button.onClick.AddListener(() =>
 		{
-			text = text.Trim();
-			if (!BlockSlotText.IsIdentifier(text))
+			var names = new List<string>();
+			var labels = new List<string>();
+			foreach (KeyValuePair<string, VariableType> variable in editor.VisibleVariables(Data))
 			{
-				RejectText(field, slot.VariableName, "변수 칸에는 변수 이름만 적을 수 있어요 (숫자나 값은 안 돼요)");
+				bool isArray = variable.Value?.Kind == VariableTypeKind.Array;
+				if (isArray != arrays) continue;
+				names.Add(variable.Key);
+				VariableType shown = isArray ? variable.Value.ElementType : variable.Value;
+				labels.Add($"{BlockLabels.TypeName(shown)} {variable.Key}{(isArray ? "[]" : "")}");
+			}
+			if (names.Count == 0)
+			{
+				editor.ShowNotice(arrays ? "고를 수 있는 array가 없어요. 이 블록보다 위에서 Array로 먼저 만드세요"
+					: "고를 수 있는 변수가 없어요. 이 블록보다 위에서 Declare로 먼저 선언하세요");
 				return;
 			}
-			if (text == slot.VariableName) return; // 바꾸지 않았으면 고친 것으로 치지 않는다
-			slot.VariableName = text;
-			field.Text = slot.VariableName;
-			editor.NotifyChanged();
-		};
+			editor.ShowDropdown(anchor, labels.ToArray(), names.IndexOf(slot.VariableName), picked =>
+			{
+				if (names[picked] == slot.VariableName) return; // 같은 변수를 다시 고르면 고친 것으로 치지 않는다
+				slot.VariableName = names[picked];
+				RefreshTexts();
+				editor.NotifyChanged();
+			});
+		});
+		// 아직 고르지 않았으면 「변수」라고 보인다
+		if (label != null) dynamicTexts.Add((label, () => string.IsNullOrEmpty(slot.VariableName) ? "변수" : slot.VariableName));
 	}
 
 	// 연산자 고르기 (드롭다운). 데이터에는 enum 이름("Add")을 넣는다
@@ -379,15 +463,27 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		dynamicTexts.Add((label, () => BlockLabels.OperatorText(slot.Option)));
 	}
 
-	// 타입 고르기 (드롭다운): int, float, bool, char, string
-	void AddTypeOption(int index)
+	// 타입 고르기 (드롭다운): types 목록 (선언은 int, float, bool, char, string, Sword*)
+	// 지금 타입은 화면 글자로 찾는다. Sword*처럼 Kind만으로는 구분되지 않는 타입(가리키는 struct)도 글자는 서로 다르기 때문
+	void AddTypeOption(int index, Func<VariableType>[] types)
 	{
 		SlotData slot = Data.Slots[index];
-		string[] labels = Array.ConvertAll(DeclareTypes, kind => BlockLabels.TypeName(new VariableType(kind)));
+		string[] labels = Array.ConvertAll(types, type => BlockLabels.TypeName(type()));
 		TMP_Text label = AddDropdown(labels,
-			() => slot.Type == null ? -1 : Array.IndexOf(DeclareTypes, slot.Type.Kind),
-			picked => slot.Type = new VariableType(DeclareTypes[picked]));
+			() => slot.Type == null ? -1 : Array.IndexOf(labels, BlockLabels.TypeName(slot.Type)),
+			picked => slot.Type = types[picked](),
+			WarnIfInitialValueDoesNotFit);
 		dynamicTexts.Add((label, () => BlockLabels.TypeName(slot.Type)));
+	}
+
+	// 선언의 타입을 바꾼 뒤, 이미 넣은 처음 값이 새 타입에 맞지 않으면 칸을 빨갛게 하고 상태 줄에 알린다 (#474)
+	// 값을 지우지 않는 이유: 타입을 잘못 골랐다가 되돌릴 때 플레이어가 넣은 값(끼운 블록 포함)을 잃지 않게 하기 위함. 맞지 않는 값은 저장할 때 컴파일이 막는다
+	void WarnIfInitialValueDoesNotFit()
+	{
+		if (initialValueSlot == null) return;
+		if (!initialValueSlot.HasWrongValue) return;
+		editor.MarkSlotError(initialValueSlot);
+		editor.ShowNotice($"처음 값이 {BlockLabels.TypeName(Data.Slots[0].Type)}에 맞지 않아요. 이 칸에는 {initialValueSlot.AcceptsText}만 넣을 수 있어요");
 	}
 
 	// malloc의 struct 고르기 (드롭다운): 게임이 정한 struct 목록 (PredefinedStructs.All)
@@ -402,8 +498,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		dynamicTexts.Add((label, () => slot.Type?.StructName ?? "?"));
 	}
 
-	// 누르면 고를 수 있는 것 목록이 아래에 열리는 칸. 고르면 pick을 부르고 글자를 다시 쓴다
-	TMP_Text AddDropdown(string[] labels, Func<int> current, Action<int> pick)
+	// 누르면 고를 수 있는 것 목록이 아래에 열리는 칸. 고르면 pick을 부르고 글자를 다시 쓴다.
+	// afterChange는 고친 것으로 친 뒤에 부른다 (NotifyChanged가 지우는 빨간 표시·상태 줄 안내를 그 뒤에 다시 보이기 위함)
+	TMP_Text AddDropdown(string[] labels, Func<int> current, Action<int> pick, Action afterChange = null)
 	{
 		Button button = editor.CreateButton(row);
 		var anchor = (RectTransform)button.transform;
@@ -412,6 +509,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			pick(picked);
 			RefreshTexts();
 			editor.NotifyChanged();
+			afterChange?.Invoke();
 		}));
 		return button.GetComponentInChildren<TMP_Text>();
 	}
@@ -465,12 +563,14 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		if (!dragging) return;
 		dragging = false;
+		// 놓을 자리는 클릭 통과를 되돌리기 전에 찾는다. 되돌린 뒤에 찾으면 마우스 아래의 이 블록 자신이 걸려,
+		// 미리보기와 다른 자리(자기 자신의 블록 영역)에 들어가거나 지워지기 때문 (#474)
+		Component target = FindDropTarget(eventData);
 		canvasGroup.blocksRaycasts = true;
 		canvasGroup.alpha = 1f;
 		editor.ShowTrash(false);
 		editor.HideDropPreview();
 
-		Component target = FindDropTarget(eventData);
 		if (target == null)
 		{
 			// 블록 목록이나 빈 곳에 놓으면 지운다
@@ -499,7 +599,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	void ReturnToOrigin()
 	{
 		if (originList != null) originList.Insert(this, originIndex);
-		else if (originSlot != null && originSlot.CanAccept(Data)) originSlot.Accept(this);
+		// 원래 있던 칸이면 칸 규칙(SlotRules)과 상관없이 되돌린다. 규칙에 맞지 않는 예전 값이 끌다가 지워지지 않게
+		else if (originSlot != null && originSlot.Held == null) originSlot.Accept(this);
 		else editor.DestroyView(this);
 	}
 
@@ -518,6 +619,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		EventSystem.current.RaycastAll(eventData, results);
 		foreach (RaycastResult result in results)
 		{
+			// 끄는 블록 자신과 그 안쪽(칸, 블록 영역)은 놓을 자리가 아니다. 자기 안에 들어가면 데이터가 자기 자신을 담게 되기 때문 (#474)
+			if (result.gameObject.transform.IsChildOf(transform)) continue;
 			for (Transform t = result.gameObject.transform; t != null; t = t.parent)
 			{
 				if (t.TryGetComponent(out BlockValueSlot slot))

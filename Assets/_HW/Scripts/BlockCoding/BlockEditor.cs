@@ -190,10 +190,11 @@ public class BlockEditor : MonoBehaviour
 		("변수", new Func<BlockData>[]
 		{
 			() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
-			() => BlockData.Assign("x", SlotData.EmptyValue()),
+			// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
+			() => BlockData.Assign("", SlotData.EmptyValue()),
 			() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
-			() => BlockData.ArrayGet("arr", SlotData.EmptyValue()),
-			() => BlockData.ArraySet("arr", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			() => BlockData.ArrayGet("", SlotData.EmptyValue()),
+			() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
 		}),
 		// 값 칸에 끼우는 블록
 		("값", new Func<BlockData>[]
@@ -217,7 +218,8 @@ public class BlockEditor : MonoBehaviour
 	};
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
-	static readonly string[] PaletteFunctionPrefixes = { "c.", "common.", "input." };
+	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
+	static readonly string[] PaletteFunctionPrefixes = { "c.", "common.", "input.", "game." };
 
 	static SlotData Int(string value) => SlotData.FromLiteral(new VariableType(VariableTypeKind.Int), value);
 
@@ -329,6 +331,8 @@ public class BlockEditor : MonoBehaviour
 		{
 			bool saved = result == PlayerDataRequestResult.Saved;
 			if (saved && editingGlobals) dirty = false;
+			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
+			if (saved) ReloadSavedFunctions();
 			SetMessage(saved ? "저장됨" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
 			Redraw();
 			return;
@@ -445,6 +449,8 @@ public class BlockEditor : MonoBehaviour
 	/// </summary>
 	public void Open(FunctionData function)
 	{
+		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수를 고치다 저장하지 않고 왔으면 저장된 것으로 되돌려 둔다 (#474)
+		listGlobals = CurrentGlobals();
 		workspace.ClearViews();
 		editingGlobals = false;
 		unsavedNewPage = false;
@@ -537,7 +543,12 @@ public class BlockEditor : MonoBehaviour
 			return;
 		}
 		bool ok = executor.TrySaveGlobalVariables(globals);
-		if (ok) dirty = false;
+		if (ok)
+		{
+			dirty = false;
+			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
+			ReloadSavedFunctions();
+		}
 		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인. 콘솔 참고)", !ok);
 		Redraw();
 	}
@@ -548,6 +559,9 @@ public class BlockEditor : MonoBehaviour
 	/// </summary>
 	public void SaveFunction()
 	{
+		// 펼쳐 두고 비운 선언의 처음 값 칸을 접는다. 빈 처음 값은 기본값으로 실행되므로 저장한 모양을 int x;로 맞춘다 (#474)
+		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.CollapseEmptyInitialValue();
+
 		if (editingGlobals)
 		{
 			SaveGlobals();
@@ -620,7 +634,7 @@ public class BlockEditor : MonoBehaviour
 			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
 			if (!ok) errors.Add(new FunctionChecker.Error { Code = "Global Variables", Message = "int x = 3; 처럼 선언 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
 		}
-		else errors = FunctionChecker.Find(Function, CurrentGlobals());
+		else errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
 
 		ShowErrors(errors);
 		MarkErrors(errors);
@@ -660,7 +674,7 @@ public class BlockEditor : MonoBehaviour
 		if (editingGlobals) return;
 		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
 		{
-			if (!slot.IsMissingValue) continue;
+			if (!slot.IsMissingValue && !slot.HasWrongValue) continue;
 			slot.SetError(true);
 			errorSlots.Add(slot);
 		}
@@ -682,6 +696,15 @@ public class BlockEditor : MonoBehaviour
 		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>())
 			if (view.Data == block) return view;
 		return null;
+	}
+
+	/// <summary>
+	/// 값 칸 하나를 컴파일 오류처럼 빨갛게 표시한다 (예: 선언의 타입을 바꿨더니 처음 값이 맞지 않음, #474). 다음에 고치면 다른 표시와 함께 지워진다.
+	/// </summary>
+	public void MarkSlotError(BlockValueSlot slot)
+	{
+		slot.SetError(true);
+		errorSlots.Add(slot);
 	}
 
 	void ClearErrorMarks()
@@ -952,6 +975,57 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	/// <summary>
+	/// owner 블록의 index번 값 칸이 받을 수 있는 것 (SlotRules, #474). 값 칸(BlockValueSlot)이 끼우기·적기를 판단할 때 부른다.
+	/// </summary>
+	public SlotRules.Rule RuleOf(BlockData owner, int index) =>
+		SlotRules.RuleOf(owner, index, editingGlobals ? null : Function?.ReturnType, editingGlobals, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록의 index번 값 칸에 content(적은 값, 변수, 끼운 블록)를 넣을 수 있으면 true (칸 규칙 + 그 자리에서 보이는 변수의 타입).
+	/// </summary>
+	public bool Fits(BlockData owner, int index, SlotData content) =>
+		SlotRules.Fits(RuleOf(owner, index), content, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록의 index번 값 칸에 값 블록 block을 끼울 수 있으면 true.
+	/// </summary>
+	public bool FitsBlock(BlockData owner, int index, BlockData block) =>
+		SlotRules.FitsBlock(RuleOf(owner, index), block, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록 자리에서 쓸 수 있는 변수 (이름 → 타입). C처럼 위에서 선언했고 그 자리에서 보이는 것만 (VariableScopes, #474 5단계).
+	/// 함수에 들어 있지 않은 블록(끄는 중인 블록 등)이면 비어 있다.
+	/// </summary>
+	public Dictionary<string, VariableType> VisibleVariables(BlockData owner)
+	{
+		Dictionary<string, VariableType> found;
+		if (editingGlobals) found = VariableScopes.VisibleAt(globals?.Declarations, new VariableScopes.Stack(), owner);
+		else found = VariableScopes.VisibleAt(Function?.Blocks, VariableScopes.Start(Function, listGlobals), owner);
+		return found ?? new Dictionary<string, VariableType>();
+	}
+
+	// owner 자리에서 변수 이름으로 타입을 찾는 함수. 칸 규칙(SlotRules)에 넘긴다. 못 찾으면 null(막지 않음)
+	Func<string, VariableType> VariableTypeLookup(BlockData owner)
+	{
+		Dictionary<string, VariableType> visible = null;
+		return name =>
+		{
+			if (string.IsNullOrEmpty(name)) return null;
+			visible ??= VisibleVariables(owner); // 필요할 때 한 번만 찾는다
+			return visible.TryGetValue(name, out VariableType type) ? type : null;
+		};
+	}
+
+	/// <summary>
+	/// GUID로 사용자 정의 함수를 찾는다. 편집 중인 함수는 지금 내용으로. 없으면 null
+	/// </summary>
+	public FunctionData FindUserFunction(string guid)
+	{
+		if (Function != null && Function.Guid == guid) return Function;
+		return savedFunctions.FirstOrDefault(f => f.Guid == guid);
+	}
+
+	/// <summary>
 	/// 함수 블록에 보여 줄 함수 이름. 사용자 정의 함수는 저장한 함수에서 이름을 찾는다.
 	/// </summary>
 	public string FunctionNameOf(BlockData block)
@@ -990,6 +1064,14 @@ public class BlockEditor : MonoBehaviour
 		ClearErrorMarks(); // 고쳤으면 지난 컴파일의 빨간 표시를 지운다
 		SetMessage(""); // 「저장됨」을 지우고 「저장하지 않은 변경 있음」을 보인다
 		Redraw();
+	}
+
+	/// <summary>
+	/// 데이터는 그대로이고 블록 모양만 바뀌었을 때 레이아웃만 다시 계산한다 (예: 선언의 처음 값 칸 펼치기). 고친 것으로 치지 않는다.
+	/// </summary>
+	public void RefreshLayout()
+	{
+		if (layoutRoot != null) LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
 	}
 
 	// 화면 글자만 다시 그린다 (고친 것으로 치지 않음)
@@ -1360,7 +1442,7 @@ public class BlockEditor : MonoBehaviour
 			{
 				FunctionData loaded = FunctionStorage.Load(slotGuid);
 				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(slotFunction, listGlobals));
+			}), false, FunctionChecker.HasErrors(slotFunction, listGlobals, savedFunctions));
 		}
 
 		// 페이지: 슬롯에 넣지 않은 저장한 함수. + 로 새 함수
@@ -1376,7 +1458,7 @@ public class BlockEditor : MonoBehaviour
 			{
 				FunctionData loaded = FunctionStorage.Load(guid);
 				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(saved, listGlobals));
+			}), false, FunctionChecker.HasErrors(saved, listGlobals, savedFunctions));
 		}
 		RebuildPalette();
 		Redraw();
@@ -1400,7 +1482,7 @@ public class BlockEditor : MonoBehaviour
 				continue;
 			}
 			string slotLabel = $"슬롯 {slot + 1} {function.Name}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
-			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals));
+			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
 		}
 		AddFunctionHeader($"페이지 {PageFunctions().Count()} / {ProgressRules.MaxPageFunctions}", NewFunction);
 		AddUnsavedEntry();
@@ -1408,7 +1490,7 @@ public class BlockEditor : MonoBehaviour
 		{
 			FunctionData page = function;
 			string pageLabel = $"페이지 {page.Name}";
-			AddFunctionEntry("-", page.Guid, page.Name, $"코드 {CodeSizeOf(page)}", () => RequestOpen(pageLabel, () => Open(Copy(page))), false, FunctionChecker.HasErrors(page, listGlobals));
+			AddFunctionEntry("-", page.Guid, page.Name, $"코드 {CodeSizeOf(page)}", () => RequestOpen(pageLabel, () => Open(Copy(page))), false, FunctionChecker.HasErrors(page, listGlobals, savedFunctions));
 		}
 		RebuildPalette();
 		Redraw();

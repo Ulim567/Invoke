@@ -39,7 +39,11 @@ public static class BlockLabels
 		switch (block.Kind)
 		{
 			case BlockKind.Declare:
-				return $"{TypeName(Slot(block, 0)?.Type)} {Slot(block, 1)?.Name} = {Value(Slot(block, 2))};";
+				// 처음 값이 비었으면 int x; (편집 화면의 선언 블록도 처음 값 칸을 접어 같은 모양으로 보인다, #474)
+				string declared = $"{TypeName(Slot(block, 0)?.Type)} {Slot(block, 1)?.Name}";
+				SlotData initial = Slot(block, 2);
+				bool noInitial = initial == null || (initial.Block == null && BlockSlotText.ToText(initial).Length == 0);
+				return noInitial ? $"{declared};" : $"{declared} = {Value(initial)};";
 			case BlockKind.Assign:
 				return $"{Slot(block, 0)?.VariableName} = {Value(Slot(block, 1))};";
 			case BlockKind.Arithmetic:

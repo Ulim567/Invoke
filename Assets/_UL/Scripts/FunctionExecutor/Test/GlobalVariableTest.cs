@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 전역 변수 테스트용 컴포넌트(#139). 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
 /// 단계를 차례로 진행한다. 한 단계의 작업이 끝나면 다음 단계를 시작한다.<br/>
-/// - 저장 검사: 칸 부족, 대상 타입, malloc 초기값을 거부 (콘솔 오류 3개가 정상)<br/>
+/// - 저장 검사: 칸 부족, NULL을 넣은 대상 타입, malloc 초기값을 거부 (콘솔 오류 3개가 정상). 처음 값 없는 대상 타입은 저장 (#474)<br/>
 /// - 저장: int count = 3; Sword* mySword; → DataUsed 2, 초기값<br/>
 /// - AddCount: count = count + 1; → 다음 함수 ReadCount가 4를 읽음<br/>
 /// - Shadow: 지역 int count = 10을 선언하면 함수 안에서는 10, 전역 count는 4 그대로<br/>
@@ -50,7 +50,10 @@ public class GlobalVariableTest : MonoBehaviour
 			tooMany.Declarations.Add(BlockData.Declare(Int, $"v{i}"));
 		Check("칸보다 많은 전역 변수 거부", !executor.TrySaveGlobalVariables(tooMany));
 
-		Check("대상 타입 전역 변수 거부", !executor.TrySaveGlobalVariables(FileOf(BlockData.Declare(new VariableType(VariableTypeKind.Target), "t"))));
+		// 대상 타입 전역 변수는 받는다 (#474). 처음 값은 비워 두는 것만 된다. Target은 포인터가 아니라 NULL을 넣을 수 없기 때문
+		Check("대상 타입 전역 변수 (처음 값 없음) 저장", executor.TrySaveGlobalVariables(FileOf(BlockData.Declare(VariableType.TargetOf(TargetKind.Bug), "t"))));
+		Check("대상 타입 전역 변수에 NULL 처음 값 거부", !executor.TrySaveGlobalVariables(FileOf(
+			BlockData.Declare(VariableType.TargetOf(TargetKind.Bug), "t", SlotData.FromNull()))));
 
 		Check("malloc 초기값 거부", !executor.TrySaveGlobalVariables(FileOf(
 			BlockData.Declare(SwordPointer, "p", SlotData.FromBlock(BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)))))));

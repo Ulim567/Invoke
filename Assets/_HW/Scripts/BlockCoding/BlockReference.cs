@@ -70,7 +70,7 @@ public class BlockReferenceEntry
 public static class BlockReference
 {
 	// 블록 목록에 나오는 사전 정의 함수의 고정 ID 앞부분 (BlockEditor.PaletteFunctionPrefixes와 같다)
-	static readonly string[] FunctionPrefixes = { "c.", "common.", "input." };
+	static readonly string[] FunctionPrefixes = { "c.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
 
@@ -127,7 +127,7 @@ public static class BlockReference
 		("Declare", "변수", () => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"), "int x = 3;",
 			"타입과 이름을 골라 변수를 만들고, 원하면 처음 값을 넣습니다."),
 		("Assign", "변수", () => BlockData.Assign("x", SlotData.EmptyValue()), "x = 5;",
-			"이미 만든 변수에 새 값을 담습니다. 왼쪽 칸에는 변수 이름만 적을 수 있습니다."),
+			"이미 만든 변수에 새 값을 담습니다. 왼쪽 칸을 눌러 위에서 선언한 변수를 고릅니다."),
 		("Array", "변수", () => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")), "int arr[3];",
 			"타입과 칸 수를 정해 같은 타입의 값 여러 개를 담는 배열을 만듭니다."),
 		("Array Get", "변수", () => BlockData.ArrayGet("arr", SlotData.EmptyValue()), "arr[i]",
@@ -213,12 +213,12 @@ public static class BlockReference
 			"for (int i = 0; i < 5; i++) {\n  if (i == 2) {\n    continue;\n  }\n  thrust(get_bug());\n}",
 			"for, while 안쪽에서만 쓸 수 있습니다. 밖에 놓으면 컴파일 오류입니다."),
 
-		["Declare"] = ("타입 이름 = 처음 값;",
+		["Declare"] = ("타입 이름;\n타입 이름 = 처음 값;",
 			new[]
 			{
-				"타입 — int, float, bool, char, string 중에서 고릅니다.",
+				"타입 — int, float, bool, char, string, Sword*, Target 중에서 고릅니다. Sword*에는 summon_sword()가 돌려준 소환검을, Target에는 get_bug()가 돌려준 몬스터를 담습니다.",
 				"이름 — 새 변수의 이름입니다. 영문자, 숫자, 밑줄만 쓰고 숫자로 시작할 수 없습니다.",
-				"처음 값 — 변수에 처음 담을 값입니다. 비워 둘 수 있습니다.",
+				"처음 값 — 변수에 처음 담을 값입니다. 블록 끝의 > 버튼으로 칸을 펼치고, < 버튼으로 접습니다(넣은 값은 지워집니다). 비워 두면 그 타입의 기본값으로 시작합니다.",
 			},
 			"변수를 만들고 처음 값을 담습니다. 이후 그 이름으로 값을 읽고, Assign으로 값을 바꿉니다.",
 			"int hp = 10;",
@@ -226,7 +226,7 @@ public static class BlockReference
 		["Assign"] = ("변수 = 값;",
 			new[]
 			{
-				"변수 — 이미 만든 변수의 이름만 적을 수 있습니다.",
+				"변수 — 눌러서 이 블록보다 위에서 선언한 변수 중에 고릅니다.",
 				"값 — 담을 값입니다. 숫자, 변수, 값 블록을 넣습니다.",
 			},
 			"오른쪽 값을 계산한 뒤 변수에 담아, 이전에 담겨 있던 값을 바꿉니다.",
@@ -245,7 +245,7 @@ public static class BlockReference
 		["Array Get"] = ("배열[번호]",
 			new[]
 			{
-				"배열 — 읽을 배열의 변수 이름입니다.",
+				"배열 — 눌러서 위에서 만든 배열 중에 고릅니다.",
 				"번호 — 읽을 칸의 번호입니다. 0부터 셉니다.",
 			},
 			"배열의 그 번호 칸에 담긴 값을 돌려줍니다. 값 칸에 끼워 씁니다.",
@@ -254,7 +254,7 @@ public static class BlockReference
 		["Array Set"] = ("배열[번호] = 값;",
 			new[]
 			{
-				"배열 — 값을 담을 배열의 변수 이름입니다.",
+				"배열 — 눌러서 위에서 만든 배열 중에 고릅니다.",
 				"번호 — 값을 담을 칸의 번호입니다. 0부터 셉니다.",
 				"값 — 그 칸에 담을 값입니다.",
 			},
@@ -323,12 +323,13 @@ public static class BlockReference
 	static readonly Dictionary<string, string> FunctionSummaries = new Dictionary<string, string>
 	{
 		["input.get_bug"] = "플레이어가 고른 몬스터 한 명을 대상으로 돌려줍니다.",
+		["game.is_valid_target"] = "대상이 스킬에 넘길 수 있는 몬스터인지(있고, 살아 있는지) 알려 줍니다.",
 	};
 
 	// 파라미터 이름 → 무엇을 넣는지 (코드에서 알 수 없는 사용 지식)
 	static readonly Dictionary<string, string> ParameterMeanings = new Dictionary<string, string>
 	{
-		["target"] = "공격할 몬스터 한 명입니다. get_bug()로 얻습니다.",
+		["target"] = "몬스터 한 명입니다. get_bug()를 넣거나, get_bug()를 담아 둔 Target 변수를 넣습니다.",
 		["targets"] = "공격할 몬스터 여러 명입니다. 슬롯에서 시전하면 여러 명을 고르게 해 줍니다.",
 		["sword"] = "쓸 소환검의 포인터입니다. summon_sword()가 돌려준 값을 넣습니다.",
 	};
@@ -338,10 +339,11 @@ public static class BlockReference
 	{
 		[PredefinedFunctionIds.SummonSword] = "만든 소환검의 포인터입니다. 만들지 못하면 NULL입니다.",
 		[PredefinedFunctionIds.GetBug] = "플레이어가 고른 몬스터입니다. 고를 몬스터가 없으면 「대상 없음」입니다.",
+		[PredefinedFunctionIds.IsValidTarget] = "스킬에 넘길 수 있으면 true, 「대상 없음」이거나 죽었거나 없어진 몬스터면 false입니다.",
 	};
 
 	// 파라미터에 무엇을 넣는지 한 문장 (접힌 카드에 보인다). 파라미터가 없으면 호출 모양만으로 충분해 한 줄 안내만 둔다
-	const string SingleTarget = "target에는 get_bug()가 돌려준 대상을 넣습니다.";
+	const string SingleTarget = "target에는 get_bug()가 돌려준 대상이나 Target 변수를 넣습니다.";
 	const string NoParameter = "값을 넣지 않고 이름();으로 부릅니다.";
 	const string NeedsSword = " 소환검이 있어야 씁니다.";
 
@@ -372,6 +374,7 @@ public static class BlockReference
 		[PredefinedFunctionIds.DoubleJump] = NoParameter,
 		[PredefinedFunctionIds.SwordRide] = NoParameter + NeedsSword,
 		[PredefinedFunctionIds.GetBug] = "Target b = get_bug(); 처럼 쓰면 플레이어가 대상을 고를 때까지 기다린 뒤 그 대상을 돌려줍니다. 고를 몬스터가 없으면 「대상 없음」을 돌려주고, 그 값을 스킬에 넘기면 실패합니다.",
+		[PredefinedFunctionIds.IsValidTarget] = "if (!is_valid_target(b)) b = get_bug(); 처럼 담아 둔 몬스터가 죽었으면 새로 고릅니다. Target은 포인터가 아니라 NULL과 비교할 수 없습니다.",
 	};
 
 	static List<BlockReferenceEntry> Build()

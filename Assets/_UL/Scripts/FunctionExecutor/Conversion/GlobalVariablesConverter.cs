@@ -13,7 +13,7 @@ using UnityEngine;
 /// <para>
 /// 거부(false)하는 파일. 콘솔 오류를 남긴다.<br/>
 /// - 선언 수가 capacity보다 많음<br/>
-/// - 선언 블록이 아닌 블록, 지금 실행기가 다룰 수 없는 타입, array, 대상(Target) 타입<br/>
+/// - 선언 블록이 아닌 블록, 지금 실행기가 다룰 수 없는 타입, array<br/>
 /// - 이름이 비었거나 같은 이름이 두 번 있음<br/>
 /// - 초기값이 직접 입력한 값이 아님(연산, 변수, malloc 등), 읽을 수 없는 글자열, 변수 타입으로 바꿀 수 없는 값
 /// </para>
@@ -43,8 +43,8 @@ public static class GlobalVariablesConverter
 			string name = block.Slots[1].Name;
 			if (!RuntimeValue.IsSupportedType(type)) return Reject($"{type?.Kind} 타입의 전역 변수는 아직 만들 수 없습니다.");
 			if (type.Kind == VariableTypeKind.Array) return Reject("전역 array는 아직 만들 수 없습니다.");
-			// 전역 변수에 담아 둔 몬스터가 죽으면 전역 변수가 없는 몬스터를 가리키게 되므로, 그 처리를 정하기 전까지 막는다
-			if (type.Kind == VariableTypeKind.Target) return Reject("대상 타입은 전역 변수로 선언할 수 없습니다.");
+			// 대상(Target) 전역 변수는 받는다 (#474). 담아 둔 몬스터가 죽거나 없어지면 플레이어가 is_valid_target(b)로 확인하고,
+			// 그대로 스킬에 넘기면 InvalidTarget이 난다. 처음 값은 비워 두는 것만 된다(「대상 없음」). 대상은 직접 적을 수 있는 값이 없기 때문
 			if (string.IsNullOrEmpty(name)) return Reject("선언 블록의 이름 칸이 비어 있습니다.");
 			if (!names.Add(name)) return Reject($"전역 변수 {name}이(가) 두 번 선언되었습니다.");
 

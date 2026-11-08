@@ -19,7 +19,7 @@
 
 ### 고정 ID
 - 형식: `분류.영어_이름` (소문자, 밑줄)
-  - 분류: `c`(C 스킬), `common`(세 캐릭터 공통 function), `input`(입력 function), `test`(테스트용 function)
+  - 분류: `c`(C 스킬), `common`(세 캐릭터 공통 function), `input`(입력 function), `game`(게임 상태를 묻는 function, #474), `test`(테스트용 function)
   - 예: `c.thrust`, `common.dash`, `input.get_position`, `test.function_a`
 - 한 번 정한 ID: 바꾸기, 지우기 금지 (예전에 저장한 함수 데이터가 그 function을 찾지 못함)
 - 같은 ID 두 개: 금지
@@ -247,6 +247,15 @@ protected override void OnEnd(FunctionContext context)
 | 고정 ID | 이름 | 반환 타입 | 하는 일 |
 | --- | --- | --- | --- |
 | `input.get_bug` | `GetBug` | `Target`(종류 `Bug`) | 플레이어가 고른 몬스터를 돌려줌. 고를 몬스터가 없으면 「대상 없음」. `TickCount` 1 |
+
+### 게임 상태를 묻는 function (#474)
+- 고정 ID: `game.`으로 시작. 입력을 기다리지 않고 바로 값을 돌려줌. 편집 화면의 블록 목록과 Reference 창에 나옴. 스킬 트리 노드가 없어 늘 보이고 서버 저장 검사도 통과
+
+| 고정 ID | 클래스 | 파라미터 | 반환 타입 | 하는 일 |
+| --- | --- | --- | --- | --- |
+| `game.is_valid_target` | `IsValidTarget` | `target`(`Target`, 종류 없음) | `bool` | 스킬에 넘길 수 있는 대상이면 true. 「대상 없음」·죽음·없어짐이면 false. 값을 넘기지 않으면(슬롯 직접 시전) false. `TickCount` 1 |
+
+- `ValidatesTargets` (`PredefinedFunction`, 기본 true): false면 시작 전 Target argument 검사(`InvalidTarget`)를 건너뜀. `is_valid_target`만 false. 쓸 수 없는 대상을 받아 false를 돌려줘야 하기 때문
 
 ```csharp
 // GetBug의 실행 단계

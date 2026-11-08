@@ -19,9 +19,10 @@ using UnityEngine.SceneManagement;
 /// - host: 직접 레이드 던전 요청 거절, 로비에서 보낸 레이드 포기 무시 → [클리어] 방 만들기·시작 → 던전 도착 → 보스를 바로 죽여 클리어 → 로비로 돌아옴 → 던전 내림
 /// → [포기] 한 판 더 시작해 포기(호스트만이면 호스트가, 클라이언트가 있으면 클라이언트가)하면 실패 결과 화면 뒤(Result Delay 이상 지나서) 모두 로비로 돌아오는지 본다
 /// → [이탈] 클라이언트가 있으면 한 판 더 시작하고, 클라이언트가 던전에서 접속을 끊으면(파티원 이탈) 실패 결과 화면 뒤 로비로 돌아오는지 본다.<br/>
-/// - [클리어] 판의 보스: 호스트가 먼저 100을 주고, 2페이즈로 깎아 전체 공격 모으기를 낸 뒤(터지기 전에) 죽인다. member는 보스 몸에 자기 캐릭터를 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않는지,
+/// - 실패 판([포기]·[이탈])은 실패 결과 화면과 함께 던전에 남은 파티원이 모두 쓰러지고, 로비에 도착한 뒤 최대 체력으로 살아나는지도 본다 (#428).<br/>
+/// - [클리어] 판의 보스: 호스트가 먼저 100을 주고, 50% 아래로 깎아 전체 공격 모으기를 낸 뒤(터지기 전에) 죽인다 (페이즈: 70% 기둥, 50% 전체 공격, 30% 진짜 찾기, #380). member는 보스 몸에 자기 캐릭터를 겹쳐도 이 화면에서 따로 접촉 피해를 받지 않는지,
 /// 보스 체력·피격·사망 연출, 공격 연출, 모으기 연출이 이 화면에도 오는지 본다. 호스트가 웜 소환을 직접 부르고, member는 웜이 움직이며 플레이어 쪽을 보는지, 보스가 플레이어 쪽을 보는지 본다 (#310).<br/>
-/// - [포기] 판(클라이언트가 있을 때): 호스트가 보스를 40% 아래로 깎아 3페이즈로 보낸다. member는 분신 2마리, 진짜의 순간이동(10칸 간격), 같은 방향을 본 뒤 포기한다 (#310).<br/>
+/// - [포기] 판(클라이언트가 있을 때): 호스트가 보스를 30% 아래로 깎아 진짜 찾기(4페이즈)로 보낸다. member는 분신 2마리, 진짜의 순간이동(10칸 간격), 같은 방향을 본 뒤 포기한다 (#310).<br/>
 /// - [사냥터 부활] 판 (#310, [포기]와 [이탈] 사이): 사냥터에서 죽은 캐릭터(호스트만이면 호스트, 아니면 클라이언트)가 부활하면서 로비로 옮겨지는지, 체력이 최대인지 본다.<br/>
 /// - member: 방에 들어가 준비 → 던전 도착 → 보스 동기화 확인 → 클리어 결과 화면 이벤트 → 로비로 돌아옴 → 다시 들어가 던전에서 포기 → 실패 결과 화면 이벤트 뒤 로비로 돌아옴 → 다시 들어가 던전에 도착하면 접속을 끊는다.<br/>
 /// - 결과 화면은 그 던전의 RaidJudge.ResultEffectPlayed로 확인한다 (클라이언트에서는 RaidParties가 서버의 결과로 PlayResultOnly를 부를 때 불림).<br/>
@@ -143,14 +144,40 @@ public class RaidPartyTest : MonoBehaviour
 		resultTime = Time.realtimeSinceStartup;
 	}
 
-	// 실패 결과 화면 이벤트를 기다린 뒤, 결과 화면이 보이는 시간(Result Delay)이 지나서 로비에 왔는지 본다
+	// 실패 결과 화면 이벤트를 기다린 뒤, 결과 화면이 보이는 시간(Result Delay)이 지나서 로비에 왔는지 본다.
+	// 실패 결과 화면과 함께 던전에 남은 파티원이 모두 쓰러지고, 로비에 도착한 뒤 최대 체력으로 살아나는지도 본다 (#428)
 	IEnumerator WaitFailResultThenLobby(string round, Func<bool> inLobby)
 	{
 		yield return Wait(round + "실패 결과 화면", () => result == false);
+		yield return Wait(round + "실패 결과 화면과 함께 던전의 파티원 모두 쓰러짐 (#428)", AllInMyPlaceDead);
 		yield return Wait(round + "결과 화면 뒤 로비로 돌아옴", inLobby);
 		if (failedCount > 0) yield break;
 		float shown = Time.realtimeSinceStartup - resultTime;
 		Check($"{round}결과 화면이 {MinResultSeconds}초 이상 보인 뒤 이동 ({shown:0.00}초)", shown >= MinResultSeconds);
+		yield return Wait(round + "로비에 도착한 뒤 살아나고 체력이 최대 (#428)", LocalAliveWithFullHp);
+	}
+
+	// 이 화면의 내 장소(던전)에 있는 플레이어가 한 명 이상이고 모두 죽었으면 true (#428).
+	// 클라이언트는 사망을 [SyncVar]로 받으므로 결과 화면보다 조금 늦을 수 있어 Wait로 기다린다
+	static bool AllInMyPlaceDead()
+	{
+		int count = 0;
+		IReadOnlyList<PlayerHealth> players = PlayerRoster.Players;
+		for (int i = 0; i < players.Count; i++)
+		{
+			if (!PlayerRoster.IsInMyPlace(players[i])) continue;
+			count++;
+			if (!players[i].IsDead) return false;
+		}
+		return count > 0;
+	}
+
+	// 내 캐릭터가 살아 있고 체력이 최대면 true (#428)
+	static bool LocalAliveWithFullHp()
+	{
+		NetworkIdentity me = NetworkClient.localPlayer;
+		PlayerHealth health = me != null ? me.GetComponent<PlayerHealth>() : null;
+		return health != null && !health.IsDead && health.Hp == health.MaxHp;
 	}
 
 	#region 호스트
@@ -283,14 +310,14 @@ public class RaidPartyTest : MonoBehaviour
 			}
 			else
 			{
-				// 클라이언트가 보스를 찾은 뒤, 체력을 40% 아래로 한 번에 깎아 3페이즈(진짜 찾기)로 보낸다 (순간이동·분신 방향 동기화, #310).
-				// 한 번에 여러 문턱을 넘으면 2페이즈 전체 공격 없이 3페이즈로 간다. 클라이언트는 분신을 확인한 뒤 포기한다
+				// 클라이언트가 보스를 찾은 뒤, 체력을 30% 아래로 한 번에 깎아 4페이즈(진짜 찾기)로 보낸다 (순간이동·분신 방향 동기화, #310, #380).
+				// 한 번에 여러 문턱을 넘으면 기둥·전체 공격 없이 가장 낮은 페이즈로 간다. 클라이언트는 분신을 확인한 뒤 포기한다
 				Monster boss = null;
 				yield return Wait(round + "보스 생성", () => (boss = FindBossInHostScene()) != null);
 				if (boss == null) yield break;
 				yield return new WaitForSeconds(2f);
-				boss.TakeDamage(boss.Hp - Mathf.FloorToInt(boss.MaxHp * 0.35f));
-				yield return Wait(round + "3페이즈에서 분신 2마리", () => CountClonesInHostScene() == 2);
+				boss.TakeDamage(boss.Hp - Mathf.FloorToInt(boss.MaxHp * 0.25f));
+				yield return Wait(round + "진짜 찾기 페이즈에서 분신 2마리", () => CountClonesInHostScene() == 2);
 			}
 			string who = withMember ? "파티원이" : "호스트가";
 			yield return WaitFailResultThenLobby(round + who + " 포기하면 ", () => HostScene() == PlaceScenes.Lobby);
@@ -337,13 +364,14 @@ public class RaidPartyTest : MonoBehaviour
 				yield return new WaitForSeconds(1.5f);
 			}
 
-			// 체력을 2페이즈 문턱(70%) 아래로 깎아 전체 공격 모으기 연출을 낸다.
+			// 체력을 전체 공격 문턱(50%) 아래, 진짜 찾기 문턱(30%) 위로 깎아 전체 공격 모으기 연출을 낸다 (#380).
+			// 70%·50%를 한 번에 넘으므로 기둥 없이 전체 공격으로 간다
 			// 터지기(모으기 3초) 전에 보스를 죽인다. 전체 공격과 보스 공격이 겹쳐 모두 죽으면 클리어가 아니라 실패가 되기 때문이다
 			GatewayPhases phases = boss.GetComponent<GatewayPhases>();
 			hostChargeSeen = false;
 			phases.ChargeEffectPlayed += OnHostCharge;
-			boss.TakeDamage(boss.Hp - Mathf.FloorToInt(boss.MaxHp * 0.65f));
-			yield return Wait(round + "2페이즈에서 보스가 전체 공격을 모음", () => hostChargeSeen);
+			boss.TakeDamage(boss.Hp - Mathf.FloorToInt(boss.MaxHp * 0.45f));
+			yield return Wait(round + "50% 아래에서 보스가 전체 공격을 모음", () => hostChargeSeen);
 			phases.ChargeEffectPlayed -= OnHostCharge;
 			// 클라이언트가 모으기 연출을 받을 시간
 			yield return new WaitForSeconds(0.5f);

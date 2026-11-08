@@ -15,7 +15,6 @@ public static class SettingsUIBuilder
 	const string PrefabPath = Dir + "/SettingsCanvas.prefab";
 	const string MixerPath = "Assets/_HW/Audio/InvokeMixer.mixer";
 	const string FontPath = "Assets/Fonts/Galmuri11 TMP.asset";
-	const string KeySpritePath = "Assets/_HW/UI/Hud/hud_key.png";
 
 	static readonly Color Teal = Hex("5EF2D6");
 	static readonly Color Label = Hex("B8BED6");
@@ -73,13 +72,10 @@ public static class SettingsUIBuilder
 		TMP_Text backText = Text(back.transform, "Text", "돌아가기", 9, Color.white, TextAlignmentOptions.MidlineLeft);
 		Stretch(backText.rectTransform, 0);
 		backText.rectTransform.offsetMin = new Vector2(10, 0);
+		// 키 표시: 상자 없이 오른쪽에 흐린 글자 (#430, key-badge.md와 같은 방식)
 		RectTransform esc = NewUI("Esc", back.transform);
-		Place(esc, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-8, 0), new Vector2(16, 11));
-		Image escImage = esc.gameObject.AddComponent<Image>();
-		escImage.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(KeySpritePath);
-		escImage.type = Image.Type.Sliced;
-		escImage.raycastTarget = false;
-		TMP_Text escText = Text(esc, "Text", "Esc", 6, Label, TextAlignmentOptions.Center);
+		Place(esc, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-10, 0), new Vector2(30, 11));
+		TMP_Text escText = Text(esc, "Text", "ESC", 7, new Color(1f, 1f, 1f, 0.5f), TextAlignmentOptions.MidlineRight);
 		Stretch(escText.rectTransform, 0);
 
 		// 로그아웃 / 레이드 포기

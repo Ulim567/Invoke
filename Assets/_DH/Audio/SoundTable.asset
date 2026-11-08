@@ -32,6 +32,10 @@ MonoBehaviour:
     fire:
     - {fileID: 8300000, guid: 47054ac0d7645c84283183d72c45db06, type: 3}
     summon: []
+    charge: []
+    overload:
+    - {fileID: 8300000, guid: f0393e633f81b5a42b3e2530046ba958, type: 3}
+    groggy: []
   - monster: Pillar
     appear:
     - {fileID: 8300000, guid: 9e1a70f3b942ec64db22e39185176bc9, type: 3}
@@ -40,6 +44,9 @@ MonoBehaviour:
     slam: []
     fire: []
     summon: []
+    charge: []
+    overload: []
+    groggy: []
   - monster: Leak
     appear: []
     hit: []
@@ -49,6 +56,9 @@ MonoBehaviour:
     slam: []
     fire: []
     summon: []
+    charge: []
+    overload: []
+    groggy: []
   - monster: Worm
     appear: []
     hit: []
@@ -57,6 +67,20 @@ MonoBehaviour:
     slam: []
     fire: []
     summon: []
+    charge: []
+    overload: []
+    groggy: []
+  - monster: Loop
+    appear: []
+    hit: []
+    death:
+    - {fileID: 8300000, guid: 8a488d85ea9250144a23b9e5807d1849, type: 3}
+    slam: []
+    fire: []
+    summon: []
+    charge: []
+    overload: []
+    groggy: []
   skills:
   - skillId: c.thrust
     fired:
@@ -106,3 +130,11 @@ MonoBehaviour:
   - skillId: c.sword_dance
     fired:
     - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}
+  common:
+    playerHit: []
+    playerDeath:
+    - {fileID: 8300000, guid: 4f321a32d70a44646875e13e6ee69917, type: 3}
+    uiClick:
+    - {fileID: 8300000, guid: 22711d200c3fa074cb95af809e9fd555, type: 3}
+    skillUnlock:
+    - {fileID: 8300000, guid: a222ba22d197fc2449218d833525b08c, type: 3}

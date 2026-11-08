@@ -65,6 +65,7 @@
 - 보스 체력은 던전 안 인원에 맞춘다 (#380, `Hp Rate By Players`: 1명 40%, 2명 70%, 3명 100% → 1200 / 2100 / 3000). 파티원이 몇 초 차이로 들어오므로 보스가 처음 맞기 전까지 0.25초마다 다시 맞추고, 처음 맞으면 그대로 둔다 (`Monster.TrySetMaxHpRate`, 최대 체력은 `MonsterNetwork`가 클라이언트에 전함)
 - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다
 - 파티원 이탈·레이드 포기 실패 (#300 뒤): 서버의 `RaidParties`(이우림)가 `FailByServer()`를 부른다. 모두 죽었을 때와 똑같이 끝난다 (결과 화면 → 3초 → `ReportEnd(던전 씬, false)`)
+- 실패하면 전원 사망 (#428): 실패로 끝나는 순간(전멸·이탈·포기 모두) 던전의 살아 있는 플레이어를 `PlayerHealth.Kill()`로 모두 사망시킨다. 결과 화면 3초 동안 쓰러진 채 관전하고, 로비에 도착해서 최대 체력으로 부활한다. 모두 쓰러졌으므로 보스도 더 공격하지 않는다. 클리어는 아무도 죽지 않는다
 - 클라이언트의 결과 화면: `RaidJudge`는 씬에 놓인 오브젝트라 `[ClientRpc]`를 쓰지 않는다 (겹쳐 불러온 던전 씬에서 Mirror가 켜지 않음). 서버의 `RaidParties`가 `ResultEffectPlayed`를 받아 파티원 클라이언트에 `RaidResultMessage`를 보내고, 클라이언트의 `RaidParties`가 자기가 불러온 던전의 `PlayResultOnly(클리어 여부)`를 부른다 (`place-scenes.md` 「결과 화면 전달」)
   - 한 던전에서 결과 화면 이벤트는 한 번만 불린다. Host는 서버에서 이미 불렸으므로 `PlayResultOnly`를 불러도 무시한다
 
@@ -98,7 +99,7 @@ Inspector: `Boss Prefab`(Gateway), `Ground Layers`(Ground), `Hover Height`(0)
 | --- | --- | --- | --- |
 | `IsEnded` | - | `bool` | 레이드가 끝났으면 `true` |
 | `ResultEffectPlayed` (event) | `bool` (클리어면 `true`) | - | [연출] 레이드가 끝난 순간. 결과 화면("레이드 성공/실패")에 쓴다. 서버에서는 판정 때, 클라이언트에서는 `PlayResultOnly` 때 불린다. 한 던전에서 한 번만 |
-| `FailByServer()` | - | - | [서버] 레이드를 실패로 끝낸다. 파티원 이탈·레이드 포기 때 `RaidParties`가 부른다. 모두 죽었을 때와 같음: `ResultEffectPlayed(false)` → `Result Delay` 뒤 `RaidFlow.ReportEnd(던전 씬, false)`. 이미 끝났으면(`IsEnded`) 아무것도 안 함. 클라이언트에서 부르면 경고 로그만 |
+| `FailByServer()` | - | - | [서버] 레이드를 실패로 끝낸다. 파티원 이탈·레이드 포기 때 `RaidParties`가 부른다. 모두 죽었을 때와 같음: 살아 있는 파티원 모두 `Kill()`(#428) → `ResultEffectPlayed(false)` → `Result Delay` 뒤 `RaidFlow.ReportEnd(던전 씬, false)`. 이미 끝났으면(`IsEnded`) 아무것도 안 함. 클라이언트에서 부르면 경고 로그만 |
 | `PlayResultOnly(bool)` | 클리어면 `true` | - | [클라이언트] 판정·`ReportEnd` 없이 `ResultEffectPlayed`만 부른다. `RaidResultMessage`를 받은 클라이언트에서 `RaidParties`가 부른다. 이 던전에서 이미 불렀으면(Host 등) 무시 |
 
 Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
@@ -156,6 +157,8 @@ Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
 | `Close()` | - | - | `InputBlockingPanel`의 닫기. 액션 맵 다시 활성화 |
 
 - 화면의 닫기 버튼과 ESC(#324 `OnCancelKey`): 방에 있으면 `RequestLeave` 뒤 닫기
+- 방 만들기·비밀번호 창 (#430, 임혜원): 화면 전체를 어둡게 덮는 바탕(`CreatePopup`, `PasswordPopup`, 켜고 끄는 오브젝트) 안에 창(`Window`). 뒤의 방 목록을 가리고 마우스를 막는다 (뒤의 「방 만들기」 버튼과 겹쳐 보이던 것). 메뉴 「레이드 방 화면 만들기」
+- Enter·ESC (#430, 임혜원, key-badge.md): 떠 있는 창부터. 만들기·비밀번호 창은 Enter = 확인, ESC = 창 닫기. 파티방은 Enter = 시작(파티장)/준비(파티원), ESC = 나가기(방 목록으로). 방 목록은 Enter = 방 만들기 창, ESC = 닫기. 입력칸에서 Enter도 확인 (`onSubmit`)
 - 시작으로 내 방이 목록에서 사라지면 화면이 스스로 닫힘
 - 오브젝트 구조: `RaidLobbyUI`가 붙은 오브젝트는 늘 켜 둠. 네 창(방 목록, 파티방, 방 만들기 창, 비밀번호 창)은 `Panel Root` 아래
 

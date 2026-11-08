@@ -241,6 +241,20 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	}
 
 	/// <summary>
+	/// [서버] 무적·경직과 상관없이 바로 사망시킨다. 레이드가 실패로 끝날 때 RaidJudge가 던전의 살아 있는 플레이어 모두에게 부른다 (#428).<br/>
+	/// 죽는 순서는 체력이 0이 될 때와 같다 (Died → 사망 연출 → 숨김 → 부활 시각에 RespawnDue). 이미 죽어 있으면 무시한다.
+	/// </summary>
+	public void Kill()
+	{
+		if (!IsAuthority() || IsDead) return;
+
+		Hp = 0;
+		SyncState();
+		ShowHp();
+		Die();
+	}
+
+	/// <summary>
 	/// [서버] 살아 있으면 체력을 최대 체력으로 채운다. 로비에 도착했을 때 InvokeNetworkManager가 부른다 (#435).<br/>
 	/// 죽어 있으면 무시한다 (부활할 때 최대 체력으로 살아난다). 클라이언트 체력 바는 [SyncVar]로 맞춰진다.
 	/// </summary>

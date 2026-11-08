@@ -4,7 +4,7 @@ using UnityEngine;
 /// (임시) 급소공략 미니게임 다이얼을 OnGUI로 그린다 (#161). 실제 그림(임혜원)이 생기면 바꾼다.
 /// <para>
 /// - VitalStrikeMinigame의 Started / Finished, NeedleAngle, EyeZoneStart, AnkleZoneStart, ZoneDegrees만 읽는다 (표시 전용).<br/>
-/// - 캐릭터 머리 위에 원을 점으로 그린다. 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘.<br/>
+/// - 캐릭터 머리 위에 원을 점으로 그린다. 빨간 칸 = 눈, 파란 칸 = 발목, 노란 선 = 바늘. 화면 밖으로 나가면 화면 안쪽으로 밀어 넣는다 (#456).<br/>
 /// - 끝나면 결과 글자를 잠깐 보여 준다.
 /// </para>
 /// </summary>
@@ -63,7 +63,7 @@ public class VitalStrikeMinigameView : MonoBehaviour
 		if (cam == null) return;
 		Vector3 screen = cam.WorldToScreenPoint(transform.position + worldOffset);
 		if (screen.z < 0f) return;
-		Vector2 center = new Vector2(screen.x, Screen.height - screen.y);
+		Vector2 center = ClampToScreen(new Vector2(screen.x, Screen.height - screen.y));
 
 		// 다이얼: 5도마다 점 하나
 		for (float a = 0f; a < 360f; a += 5f)
@@ -81,6 +81,16 @@ public class VitalStrikeMinigameView : MonoBehaviour
 		Label(center + Dir(minigame.EyeZoneStart + minigame.ZoneDegrees * 0.5f) * (radius + 16f), "눈", EyeColor, style);
 		Label(center + Dir(minigame.AnkleZoneStart + minigame.ZoneDegrees * 0.5f) * (radius + 16f), "발목", AnkleColor, style);
 		if (resultText != null) Label(center + new Vector2(0f, -radius - 26f), resultText, Color.white, style);
+	}
+
+	// 다이얼과 글자(눈·발목·결과)가 화면 밖으로 나가지 않게 안쪽으로 밀어 넣는다 (#456). 위로 넘치면 아래로 내려온다
+	Vector2 ClampToScreen(Vector2 center)
+	{
+		float marginX = radius + 40f; // 좌우 글자 폭
+		float marginY = radius + 38f; // 위 결과 글자, 아래 글자
+		center.x = Mathf.Clamp(center.x, marginX, Mathf.Max(marginX, Screen.width - marginX));
+		center.y = Mathf.Clamp(center.y, marginY, Mathf.Max(marginY, Screen.height - marginY));
+		return center;
 	}
 
 	bool InZone(float angle, float start) => angle >= start && angle <= start + minigame.ZoneDegrees;

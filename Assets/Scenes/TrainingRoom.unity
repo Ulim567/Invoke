@@ -17474,9 +17474,41 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1728395719455848919, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: 66a91f5785b134f5696c37bd96f6d343, type: 3}
+    - target: {fileID: 1728395719455848919, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Color.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1728395719455848919, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Color.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1728395719455848919, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Color.r
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3836736419082428296, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
       propertyPath: m_Name
       value: PlaceExit
+      objectReference: {fileID: 0}
+    - target: {fileID: 6627034411502576483, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 7184953761393862954, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Size.x
+      value: 1.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 7184953761393862954, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Size.y
+      value: 2.75
+      objectReference: {fileID: 0}
+    - target: {fileID: 7184953761393862954, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
+      propertyPath: m_Offset.y
+      value: 1.375
       objectReference: {fileID: 0}
     - target: {fileID: 7938328661652576790, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -17484,7 +17516,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7938328661652576790, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -3.25
+      value: -4
       objectReference: {fileID: 0}
     - target: {fileID: 7938328661652576790, guid: 38fbd11d4339cd541a0d8f6c28e2929f, type: 3}
       propertyPath: m_LocalPosition.z
@@ -21721,6 +21753,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PanelStation
   prompt: {fileID: 1366372841929019775}
+  showIdleMarker: 1
   panel: {fileID: 1294490325}
 --- !u!4 &8558586984521007271
 Transform:
@@ -21786,6 +21819,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PanelStation
   prompt: {fileID: 3466209955900791291}
+  showIdleMarker: 1
   panel: {fileID: 577707149}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

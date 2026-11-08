@@ -99,6 +99,8 @@ public class StatusIconView : MonoBehaviour
 			return null;
 		}
 		StatusIcon icon = Instantiate(iconPrefab, transform);
+		// 대상 크기가 1이 아니어도(Leak 1.5×1) 아이콘은 원래 비율로 (#456)
+		icon.transform.localScale = Vector3.Scale(iconPrefab.transform.localScale, StatusEffectView.InverseScale(transform));
 		icon.Show(type);
 		return icon;
 	}

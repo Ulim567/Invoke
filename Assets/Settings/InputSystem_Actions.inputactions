@@ -605,6 +605,16 @@
                     "interactions": "",
                     "initialStateCheck": false,
                     "priority": 0
+                },
+                {
+                    "name": "NextField",
+                    "type": "Button",
+                    "id": "2c114678-fa3f-4af1-9f79-02248a58fa64",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
                 }
             ],
             "bindings": [
@@ -946,6 +956,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "Shortcut2",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "fb6e675d-67a2-4583-8bb6-8b49c8dd2d77",
+                    "path": "<Keyboard>/tab",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "NextField",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

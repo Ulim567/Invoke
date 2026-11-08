@@ -17,7 +17,9 @@ using UnityEngine;
 /// <para>
 /// 아래 끝 (#431)<br/>
 /// - 점프로 카메라가 올라가면 땅은 화면에서 그만큼 내려가지만 배경은 Vertical Factor만큼 같이 올라가서 덜 내려간다. 그대로 두면 폐허 그림 아래 끝이 땅 위로 떠서 그 틈으로 하늘이 보인다.<br/>
-/// - 그래서 그림 아래 끝이 Max Bottom Y(바닥 윗면보다 조금 아래)에 닿으면 더 올라가지 않고 땅과 같이 움직인다. 아래로 갈 때는 그대로.
+/// - 그래서 그림 아래 끝이 Max Bottom Y(바닥 윗면보다 조금 아래)에 닿으면 더 올라가지 않고 땅과 같이 움직인다. 아래로 갈 때는 그대로.<br/>
+/// - 하늘처럼 아래 끝이 바닥보다 훨씬 아래(Bottom Check Range 4칸 넘게)에 있는 그림은 막지 않는다. 막으면 높이 올라갔을 때 하늘 위쪽 끝이 보인다.<br/>
+/// - 하늘은 거꾸로 위쪽 끝이 화면 위 끝보다 아래로 내려오지 않게 한다. 하늘은 카메라보다 조금 덜 올라가서, 높이 올라가면 위쪽 끝과 그 위의 카메라 바탕색이 보였다.
 /// </para>
 /// </summary>
 [DefaultExecutionOrder(1000)]
@@ -35,7 +37,13 @@ public class Parallax : MonoBehaviour
 	[SerializeField, Tooltip("그림 아래 끝이 이 높이보다 위로 올라가지 않는다 (#431). 바닥 윗면(-4)보다 조금 아래. 점프로 카메라가 올라갈 때 폐허 그림이 땅보다 덜 내려가서 그 사이로 하늘이 보이지 않게 한다")]
 	float maxBottomY = -4.5f;
 
+	[SerializeField, Min(0f), Tooltip("처음 아래 끝이 Max Bottom Y보다 이만큼 넘게 아래에 있는 그림(하늘)은 막지 않는다. 하늘은 위로 올라가지 않으면 위쪽 끝이 보인다")]
+	float bottomCheckRange = 4f;
+
 	Transform cam;
+	Camera viewCamera;
+	bool keepsTopAbove; // 하늘: 위쪽 끝이 화면 위 끝보다 아래로 내려오지 않게 한다
+	float topOffset;    // 위치에서 그림 위쪽 끝까지
 	Vector3 startPosition;
 	Vector3 cameraStart;
 	float maxRise = float.PositiveInfinity; // 시작 위치에서 위로 올라갈 수 있는 거리
@@ -46,17 +54,31 @@ public class Parallax : MonoBehaviour
 		if (cam == null)
 		{
 			if (Camera.main == null) return;
-			cam = Camera.main.transform;
+			viewCamera = Camera.main;
+			cam = viewCamera.transform;
 			startPosition = transform.position;
 			cameraStart = cam.position;
-			// 처음부터 아래 끝이 그 높이보다 위에 있는 그림은 더 올라가지만 않게 한다
-			if (TryGetComponent(out SpriteRenderer sprite)) maxRise = Mathf.Max(0f, maxBottomY - sprite.bounds.min.y);
+			if (TryGetComponent(out SpriteRenderer sprite))
+			{
+				// 폐허: 처음부터 아래 끝이 그 높이보다 위에 있는 그림은 더 올라가지만 않게 한다
+				if (sprite.bounds.min.y >= maxBottomY - bottomCheckRange) maxRise = Mathf.Max(0f, maxBottomY - sprite.bounds.min.y);
+				// 하늘: 아래 끝은 폐허·땅 뒤에 숨어 있으므로, 위쪽 끝만 화면 밖에 있게 한다
+				else
+				{
+					keepsTopAbove = true;
+					topOffset = sprite.bounds.max.y - transform.position.y;
+				}
+			}
 		}
 
 		Vector3 moved = cam.position - cameraStart;
+		float y = startPosition.y + Mathf.Min(moved.y * verticalFactor, maxRise);
+		// 하늘이 카메라보다 덜 올라가서 위쪽 끝(그 위는 카메라 바탕색)이 화면에 들어오면 그만큼 올린다 (#434)
+		if (keepsTopAbove && viewCamera != null && viewCamera.orthographic)
+			y = Mathf.Max(y, cam.position.y + viewCamera.orthographicSize - topOffset + 1f / PixelsPerUnit);
 		transform.position = new Vector3(
 			SnapToPixel(startPosition.x + moved.x * factor),
-			SnapToPixel(startPosition.y + Mathf.Min(moved.y * verticalFactor, maxRise)),
+			keepsTopAbove ? Mathf.Ceil(y * PixelsPerUnit) / PixelsPerUnit : SnapToPixel(y), // 하늘은 올려서 맞춘다 (위쪽 끝이 1픽셀 비지 않게)
 			startPosition.z);
 	}
 

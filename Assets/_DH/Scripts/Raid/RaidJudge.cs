@@ -10,6 +10,7 @@ using UnityEngine;
 /// - 실패: 던전 안 플레이어가 한 명 이상 있고, 모두 죽었으면(PlayerHealth.IsDead).<br/>
 /// - 던전에 들어온 플레이어는 죽어도 부활하지 않고 관전한다(SetAutoRespawn(false)). 던전을 나가거나 레이드가 끝나면 다시 켠다.<br/>
 /// - 끝나면 ResultEffectPlayed(결과 화면용)를 부르고, Result Delay초 뒤 RaidFlow.ReportEnd(레이드 끝)를 부른다. 한 던전에서 한 번만 끝난다.<br/>
+/// - 실패로 끝나면(전멸, 파티원 이탈·레이드 포기의 FailByServer) 던전의 살아 있는 플레이어를 모두 사망시킨다(PlayerHealth.Kill, #428). 클리어는 아무도 죽지 않는다.<br/>
 /// - 보스 체력은 던전 안 인원에 맞춘다 (Hp Rate By Players: 1명 40%, 2명 70%, 3명 100%). 보스가 한 번도 맞지 않은 동안만 다시 맞추고, 처음 맞으면 그대로 둔다.<br/>
 /// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 판정한다. 플레이어는 이 씬의 최상위 오브젝트 중 PlayerHealth가 붙은 것이다.<br/>
 /// - 바깥에서 부르는 함수: FailByServer(서버, 파티원 이탈·레이드 포기로 실패), PlayResultOnly(클라이언트, 서버가 보낸 결과로 결과 화면만). 둘 다 RaidParties(이우림)가 부른다.
@@ -162,7 +163,17 @@ public class RaidJudge : MonoBehaviour
 		ended = true;
 		cleared = isCleared;
 		reportTime = Time.time + resultDelay;
+		// 실패면 남은 파티원도 결과 화면과 함께 쓰러진다. 레이드 끝까지 부활하지 않고(관전 중), 로비에 도착해서 부활한다
+		if (!isCleared) KillAll();
 		PlayResultEffect(isCleared);
+	}
+
+	// 던전의 살아 있는 플레이어를 모두 사망시킨다. 방금 들어온 플레이어도 빠지지 않게 목록을 먼저 다시 센다
+	void KillAll()
+	{
+		RefreshPlayers();
+		for (int i = 0; i < players.Count; i++)
+			if (players[i] != null && !players[i].IsDead) players[i].Kill();
 	}
 
 	// 결과를 보여 준 뒤 레이드 끝을 알린다. 죽은 파티원도 부활하도록 먼저 되돌린다

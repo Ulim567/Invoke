@@ -62,7 +62,7 @@ public static class HudUIBuilder
 		barLayout.childForceExpandWidth = barLayout.childForceExpandHeight = false;
 		bar.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-		// 설정 버튼: 「설정」 + Esc 키 표시
+		// 설정 버튼: 「설정」 + ESC 키 표시
 		RectTransform settings = NewUI("SettingsButton", bar);
 		HorizontalLayoutGroup settingsLayout = settings.gameObject.AddComponent<HorizontalLayoutGroup>();
 		settingsLayout.spacing = 3;
@@ -74,12 +74,9 @@ public static class HudUIBuilder
 		Button settingsButton = settings.gameObject.AddComponent<Button>();
 		settingsButton.targetGraphic = settingsHit;
 		Fit(Text(settings, "Label", "설정", 8, Color.white), 22);
-		RectTransform esc = NewUI("Esc", settings);
-		SetImage(esc.gameObject, "hud_key");
-		Layout(esc.gameObject, 16, 11);
-		TMP_Text escText = Text(esc, "Text", "Esc", 6, Label);
-		Stretch(escText.rectTransform);
-		escText.alignment = TextAlignmentOptions.Center;
+		// 키 표시: 상자 없이 흐린 글자 「설정  ESC」 (#430, key-badge.md와 같은 방식)
+		TMP_Text escText = Text(settings, "Esc", "ESC", 7, new Color(1f, 1f, 1f, 0.5f));
+		Fit(escText, 16);
 
 		// 레이드 던전에서는 숨긴다 (시안 8-3: 설정만)
 		var hideInRaid = new System.Collections.Generic.List<GameObject>();

@@ -17,5 +17,6 @@ public class InvalidPointerError : SkillError
 		Pointer = pointer;
 	}
 
-	public override string Message => $"잘못된 포인터 {Pointer}";
+	// HUD 알림에 그대로 보인다(#480)
+	public override string Message => $"쓸 수 없는 포인터 {Pointer}";
 }

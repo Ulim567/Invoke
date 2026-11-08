@@ -164,6 +164,7 @@ void CmdPickUp()
 | `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음), `CannotAct`(시전자가 죽었거나 경직 중, #310), `InNoCastPlace`(시전자가 공격할 수 없는 장소에 있음, #313) |
 | `TaskStarted` (event) | `int` 작업 번호, `int` 슬롯(비동기 작업 -1), `string` 함수 이름 | - | [연출] 작업이 진행 시작. 모든 클라이언트. 시전 모션 |
 | `TaskEnded` (event) | `int` 작업 번호, `FunctionTaskEndReason` | - | [로직] 작업이 끝남. 모든 클라이언트. 시작 전에 끊긴 작업은 이것만 |
+| `OwnTaskEnded` (event) | `int` 작업 번호, `TaskEndInfo` | - | [표시] 내 작업이 끝남. 소유 클라이언트에만, `TaskEnded`보다 먼저. `TaskEndInfo`: 끝난 이유, 실패 종류·분류(`Failed`일 때), 스킬 에러 클래스 이름·`Message`(`SkillFailed`일 때). HUD 알림 문장은 `FailureNotice.ForTaskEnd` (#480, [function-executor.md](function-executor.md)) |
 | `InputRequested` (event) | `int` 작업 번호, `string` 입력 함수 ID, `int` 슬롯(비동기 작업 -1) | - | [로직] 이 플레이어의 작업이 입력을 기다림. 소유 클라이언트에만. 이 안에서 바로 `ProvideTarget`을 불러도 됨 |
 | `IsDataReady` | - | `bool` | 서버가 이 플레이어의 함수 데이터를 처음 다 받아 시전 준비가 됨. 로딩 화면이 기다림 |
 | `DataReady` (event) | - | - | [표시] `IsDataReady`가 true가 될 때 한 번. 소유 클라이언트(호스트 포함) |
@@ -195,6 +196,11 @@ void CmdPickUp()
 - 박진우에게 요청 (#238, `SlotCaster`)
   - 슬롯 여러 명 선택이 끝날 때: `RequestCast(슬롯, 고른 몬스터들의 GameObject 배열)`
   - 거부·결과: 단일 대상과 같이 `CastRejected`, `TaskEnded`
+- 이우림 결정 (#480)
+  - 실패 내용(실패 종류, 분류, 스킬 에러): `TaskEnded`에 싣지 않고 소유 클라이언트에만 `OwnTaskEnded`로. 다른 플레이어의 실패 이유는 내 화면에 필요 없음
+  - 분류(compile/runtime)는 서버가 시전자의 `LanguageRule`로 정해 보냄
+  - 스킬 에러는 객체가 아니라 클래스 이름과 `Message`만. 새 스킬 에러가 생겨도 네트워크 코드는 그대로
+  - Client 화면 확인: 빌드 없이 코드로만 확인. Host 시험은 같은 `TargetRpc`를 거침
 - 임혜원에게 요청 (#173)
   - `PlayerAnimator`: 시전 모션 event `FunctionExecutor.TaskStarted` → `FunctionExecutorNetwork.TaskStarted`
   - `MemoryGauge`: `DataUsed` 그리기(#139 요청과 같음). 읽는 값은 그대로 `ProcessMemory`

@@ -236,6 +236,22 @@ public static class HudUIBuilder
 		Button levelUp = Shortcut(shortcuts, "LevelUpButton", "레벨업", "2", new Vector2(46, 0));
 		hideInRaid.Add(shortcuts.gameObject);
 
+		// 실패 알림 (#480): 왼쪽 아래 띠 위, 왼쪽 정렬. 첫 줄 「[Runtime Error] 이름」, 둘째 줄 「설명」 (FailureNotice가 줄을 나눔)
+		// 바탕 크기는 글자에 맞춘다. 문장이 짧아 감싸지 않아도 되기 때문
+		RectTransform notice = NewUI("Notice", root);
+		Place(notice, new Vector2(0, 0), new Vector2(0, 0), new Vector2(12, 64), Vector2.zero);
+		Image noticeImage = SetImage(notice.gameObject, "hud_gauge"); // 슬롯 말풍선과 같은 바탕 (뒤의 게임 화면이 비치지 않게)
+		noticeImage.raycastTarget = false;
+		VerticalLayoutGroup noticeLayout = notice.gameObject.AddComponent<VerticalLayoutGroup>();
+		noticeLayout.padding = new RectOffset(6, 6, 3, 3);
+		noticeLayout.childControlWidth = noticeLayout.childControlHeight = true;
+		noticeLayout.childForceExpandWidth = noticeLayout.childForceExpandHeight = false;
+		ContentSizeFitter noticeFit = notice.gameObject.AddComponent<ContentSizeFitter>();
+		noticeFit.horizontalFit = noticeFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+		TMP_Text noticeText = Text(notice, "Text", "", 7, Color.white);
+		noticeText.alignment = TextAlignmentOptions.TopLeft;
+		notice.gameObject.SetActive(false);
+
 		// 칸 연결 ------------------------------------------------------------------
 		var so = new SerializedObject(view);
 		Set(so, "root", root.gameObject);
@@ -265,6 +281,8 @@ public static class HudUIBuilder
 		Set(so, "slotRejectedSprite", LoadSprite("hud_slot_rejected"));
 		Set(so, "skillTreeButton", skillTree);
 		Set(so, "levelUpButton", levelUp);
+		Set(so, "noticePanel", notice.gameObject);
+		Set(so, "noticeText", noticeText);
 		so.ApplyModifiedPropertiesWithoutUndo();
 
 		// Esc: 다른 화면이 열려 있지 않을 때 설정 열기 (UIShortcut #298, 맨 위 화면만 반응)

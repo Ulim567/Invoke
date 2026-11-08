@@ -21,6 +21,7 @@
 | 아래 가운데 | HP 막대·숫자. 닳으면 흰 잔상이 0.3초 남았다가 줄어든다 (#431, 몬스터·보스 체력 바와 같은 방식. 회복은 바로) | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
 | | 슬롯 8칸 Q W E R A S D F | 아래 「슬롯 상태」 |
+| 왼쪽 아래 띠 위 | 실패 알림 3초 (#480). 아래 「실패 알림」 | `FunctionExecutorNetwork.CastRejected`, `OwnTaskEnded` |
 | 오른쪽 아래 | 스킬 트리(1) · 레벨업(2) 바로가기. 아이콘 자리에 숫자 키 | 누르거나 숫자 1·2를 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비에 있을 때만, 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게, 키도 안 먹음). 숫자 키는 HUD의 `UIShortcut` On Shortcut 1·2 (#431, player-input.md)라 다른 창이 열려 있으면 반응하지 않음 |
 
 ### 슬롯 상태
@@ -41,6 +42,19 @@
 - 창(`InputBlockingPanel`을 물려받은 로비 입구, 스킬 트리, 편집, 장착, 레이드 방)은 ESC로 닫힌다. 로비 입구 창은 Enter로 들어간다. 창마다 바꾸려면 `OnCancelKey()` / `OnSubmitKey()`를 덮어쓴다
 - 시안의 버프·디버프 칸은 아직 기획 전이라 넣지 않음
 
+### 실패 알림 (#480)
+- 모양: 두 줄, 왼쪽 정렬. 첫 줄 `[분류] 이름`(분류 글자만 빨강), 둘째 줄 현상 설명. 예: `[Runtime Error] UnarmedError` / `손에 검이 없음`
+- 자리: 왼쪽 아래 띠 바로 위(왼쪽에서 12, 아래에서 64). 바탕(`hud_gauge`)은 글자 크기에 맞춤
+- 시간: 3초(`HudView` Inspector의 `Notice Time`). 새 알림이 오면 이전 알림을 덮어씀
+- 문장: `FailureNotice`(이우림, [function-executor.md](function-executor.md))가 만들고, HUD는 받은 문장을 띄우기만 함
+
+| 알리는 것 | 받는 곳 |
+| --- | --- |
+| 시전 거부 중 `NotEnoughMemory`만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
+| 내 작업의 실행 중단(`Interrupted`), runtime error로 분류된 실패(스킬 에러 포함) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
+
+- 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 개발자 책임(`InternalError`), compile error(편집 화면이 저장할 때 잡음)
+
 - 아래 띠 (#431): 띠 전체를 칠하지 않는다 (바닥을 너무 가림). 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자(`hud_band_fade`)
 
 ## 다른 시스템이 쓰는 것
@@ -52,6 +66,7 @@
 | `HudView.PlaceName(씬 이름)` (static) | 씬 이름 | `string` | 장소 한글 이름 |
 
 ## 맞춘 결과
+- 이우림이 고친 것 (#480): `HudView`에 실패 알림, `HudUIBuilder`에 알림 칸(`Notice`). HUD 프리팹은 메뉴로 다시 만듦
 - 소환검 개수(`SummonedSwordHud`, 박진우)와 체력 바(`TempHealthBar`, 김도훈)의 임시 표시는 이 HUD가 대신할 예정. 그때 각자 끈다
 
 ## 레이드 던전 (시안 8-3, #337)

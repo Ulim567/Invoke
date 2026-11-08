@@ -17,11 +17,11 @@
 
 | 폴더 | 파일 | 맡는 일 |
 | --- | --- | --- |
-| `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임 |
+| `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger`, `TaskEndInfo` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임, 화면에 알릴 끝난 이유 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
 | `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `InputFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors`, `Input/GetBug` | 스킬 작성자가 쓰는 것, 입력 함수 |
-| `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules` | 언어 규칙 |
+| `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules`, `FailureNotice` | 언어 규칙, 실패 알림 문장 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance`, `StructObjectRegistry` | stack, heap, malloc할 struct 객체 등록 |
 | `Values` | `RuntimeValue`, `VariableStore`, `ArrayStorage` | 실행 중의 값, 지역 변수, array 원소 |
 | `Conversion` | `FunctionDataConverter` | 함수 데이터 → `UserFunction` |
@@ -458,6 +458,44 @@
 | --- | --- | --- | --- |
 | `GetFailureCategory(FunctionFailure failure)` | 실패 종류 | `FailureCategory` | 이 캐릭터 언어에서 그 실패가 `CompileError`인지 `RuntimeError`인지. `TaskEnded`에서 `Failed`로 끝난 `task.Failure`를 화면에 보여 줄 때 쓴다. `Failed`로 끝난 작업은 언제나 표에 줄이 있음. 줄이 없는 실패 종류를 넘기면 `RuntimeError` (#90) |
 
+### `TaskEndInfo` (화면에 알릴 끝난 이유, #480)
+
+서버가 작업이 끝날 때 시전한 사람에게 보내는 값(`FunctionExecutorNetwork.OwnTaskEnded`, [network.md](network.md)). public 필드만 가진 struct라 Mirror가 그대로 보냄
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `EndReason` | `FunctionTaskEndReason` | 끝난 이유 |
+| `Failure` | `FunctionFailure` | 실패 종류. `EndReason`이 `Failed`일 때만 뜻이 있음 |
+| `Category` | `FailureCategory` | 시전자 언어에서의 분류(`LanguageRule.GetFailureCategory`). `Failed`일 때만 |
+| `ErrorName`, `ErrorMessage` | `string` | 스킬 에러 클래스 이름(예: `UnarmedError`)과 `SkillError.Message`. `SkillFailed`일 때만, 그 밖에는 빈 글자열 |
+| `From(FunctionTask task, LanguageRule language)` (static) | `TaskEndInfo` | 끝난 작업에서 값을 모음. `language`가 없으면 분류는 `RuntimeError` |
+
+### `FailureNotice` (실패 알림 문장, #480)
+
+시전 거부와 끝난 작업을 HUD 알림 문장으로 바꿈. 형식은 두 줄 `[분류] 이름` / 현상 설명. 알리지 않는 것이면 `null`
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `ForRejection(CastRejection rejection)` (static) | 시전 거부 이유 | `string` | `NotEnoughMemory`만 `[Cast Rejected] NotEnoughMemory` / `남은 메모리가 함수 크기보다 적음`. 그 밖의 거부는 `null`(슬롯 덮개, 빨간 테두리, 무채색이 이미 보여 줌) |
+| `ForTaskEnd(TaskEndInfo info)` (static) | 끝난 이유 | `string` | `Interrupted`, runtime error로 분류된 `Failed`만. 정상 종료, `Cancelled`, `InternalError`, compile error는 `null` |
+
+- 문장 표
+
+| 첫 줄 | 둘째 줄 |
+| --- | --- |
+| `[Cast Rejected] NotEnoughMemory` | 남은 메모리가 함수 크기보다 적음 |
+| `[Runtime Error] Interrupted` | 실행 중단 공격으로 함수가 멈춤 |
+| `[Runtime Error] Overflow` | stack이 가득 차 프로세스 재시작 |
+| `[Runtime Error] DivideByZero` | 0으로 나눔 |
+| `[Runtime Error] InvalidPointer` | free할 수 없는 포인터를 free함 |
+| `[Runtime Error] InvalidTarget` | 대상이 없거나 죽음 |
+| `[Runtime Error] IndexOutOfRange` | array 범위 밖 index |
+| `[Runtime Error]` + 스킬 에러 클래스 이름 | 그 에러의 `Message` (`UnarmedError` 손에 검이 없음, `NoSummonedSwordError` 쓸 수 있는 소환검이 없음, `InvalidPointerError` 쓸 수 없는 포인터 N) |
+
+- 스킬 에러의 설명은 이 표에 두지 않음. 새 스킬 에러는 `Message`만 덮어쓰면 됨([predefined-function.md](predefined-function.md)). `Message`는 현상만 짧게(예: 「손에 검이 없음」)
+- 표에 설명이 없는 runtime error(다른 언어에서 runtime error가 되는 실패)는 첫 줄만
+- compile error를 알리지 않는 이유: 편집 화면이 저장할 때 잡고, 실행 중에는 runtime error만 나야 함(이우림 결정 11/1, 11/9). 저장 검사가 놓치는 compile error(`DuplicateVariable`, 연산의 `TypeMismatch`, `InvalidLiteral`)는 별도 이슈
+
 ### `LanguageRuleData` (언어 규칙 파일)
 
 캐릭터 언어 하나의 규칙 파일이다.
@@ -700,3 +738,8 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
   - 서버에 없는 몬스터: 「대상 없음」(`null`) 원소. 죽은 대상은 시작할 때 실행기가 `InvalidTarget`
   - 첫 파라미터가 `Target` array가 아닌 스킬: argument 없이 시전(단일 대상 `RequestCast`와 같은 규칙)
   - 거부·결과: `CastRejected`, `TaskEnded`. 함수 목록은 [network.md](network.md)
+- 박진우에게 알릴 것 (#480)
+  - 스킬 에러 `Message`가 HUD 실패 알림의 둘째 줄에 그대로 보임. `UnarmedError`는 「손에 검이 없음」, `NoSummonedSwordError`는 「쓸 수 있는 소환검이 없음」으로 바꿈(`SwordErrors.cs`)
+  - 새 스킬 에러를 만들면 `Message`를 현상만 짧게 덮어씀. 덮어쓰지 않으면 클래스 이름만 보임
+- 임혜원에게 알릴 것 (#480)
+  - `HudView`, `HudUIBuilder`를 이우림이 고침: 왼쪽 아래 실패 알림 칸. 문장은 `FailureNotice`, 받는 곳은 `CastRejected`, `OwnTaskEnded` ([hud.md](hud.md))

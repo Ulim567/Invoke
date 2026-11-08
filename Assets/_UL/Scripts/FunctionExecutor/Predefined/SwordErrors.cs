@@ -6,7 +6,8 @@
 /// </summary>
 public class UnarmedError : SkillError
 {
-	public override string Message => "맨손";
+	// HUD 알림에 그대로 보인다(#480). 일어난 현상만 짧게 적는다
+	public override string Message => "손에 검이 없음";
 }
 
 /// <summary>
@@ -14,5 +15,5 @@ public class UnarmedError : SkillError
 /// </summary>
 public class NoSummonedSwordError : SkillError
 {
-	public override string Message => "소환검 없음";
+	public override string Message => "쓸 수 있는 소환검이 없음";
 }

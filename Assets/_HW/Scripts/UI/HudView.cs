@@ -16,6 +16,8 @@ using UnityEngine.UI;
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 걷히고 「x.x sec」) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
 ///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks (함수 칸은 안의 C 스킬 중 가장 긴 것). 거부: CastRejected.<br/>
+/// - 실패 알림 (#480): 왼쪽 아래 띠 위에 「[Runtime Error] 이름」과 그 아래 「설명」을 잠깐 띄운다. 문장은 FailureNotice가 만든다.
+///   시전 거부는 CastRejected(메모리 부족만), 내 작업의 실행 중단·runtime error는 FunctionExecutorNetwork.OwnTaskEnded.<br/>
 /// - 오른쪽 아래: 스킬 트리(1) · 레벨업(2) 바로가기. 누르거나 숫자 키를 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비에서만, 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
 /// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. HUD를 숨기는 창(InputBlockingPanel.HudHidden)이 열린 동안에도 숨긴다.
 ///   로비 창(입구, 스킬 트리)처럼 HUD를 남기는 창이 열린 동안은 보이기만 하고 누를 수 없다 (#431). HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
@@ -81,6 +83,12 @@ public class HudView : MonoBehaviour
 	[SerializeField] Button skillTreeButton;
 	[SerializeField] Button levelUpButton;
 
+	[Header("실패 알림 (#480)")]
+	[SerializeField, Tooltip("왼쪽 아래 띠 위의 알림 바탕. 알림이 없으면 숨긴다")] GameObject noticePanel;
+	[SerializeField] TMP_Text noticeText;
+	[SerializeField, Min(0f), Tooltip("알림을 보여 주는 시간(초)")] float noticeTime = 3f;
+	[SerializeField, Tooltip("알림 앞의 [Runtime Error], [Cast Rejected] 글자 색")] Color noticeLabelColor = new Color32(0xE0, 0x70, 0x70, 0xFF);
+
 	[Header("값")]
 	[SerializeField, Min(0f), Tooltip("시전 거부 빨간 테두리를 보여 주는 시간(초)")]
 	float rejectFlashTime = 0.5f;
@@ -103,6 +111,9 @@ public class HudView : MonoBehaviour
 	readonly Dictionary<int, int> runningTaskSlot = new Dictionary<int, int>(); // 작업 번호 → 슬롯
 	readonly float[] rejectedUntil = new float[SlotCount];
 	readonly int[] cooldownTotal = new int[SlotCount]; // 이번 쿨타임이 처음 보였을 때의 tick 수 (덮개 비율의 기준)
+
+	// 실패 알림을 숨길 시각. 새 알림이 오면 이전 알림을 덮어쓰고 다시 센다
+	float noticeUntil;
 
 	// HP 잔상
 	float hpTrailValue = -1f;
@@ -160,6 +171,7 @@ public class HudView : MonoBehaviour
 		RefreshSlots();
 		RefreshShortcuts();
 		RefreshSwords();
+		RefreshNotice();
 	}
 
 	// 연결 ---------------------------------------------------------------------
@@ -181,6 +193,7 @@ public class HudView : MonoBehaviour
 			network.CastAccepted += OnCastAccepted;
 			network.CastRejected += OnCastRejected;
 			network.TaskEnded += OnTaskEnded;
+			network.OwnTaskEnded += OnOwnTaskEnded;
 		}
 	}
 
@@ -191,10 +204,13 @@ public class HudView : MonoBehaviour
 			network.CastAccepted -= OnCastAccepted;
 			network.CastRejected -= OnCastRejected;
 			network.TaskEnded -= OnTaskEnded;
+			network.OwnTaskEnded -= OnOwnTaskEnded;
 		}
 		network = null;
 		player = null;
 		runningTaskSlot.Clear();
+		// 다른 캐릭터로 바뀌면(다시 접속 등) 이전 캐릭터의 알림을 남기지 않는다
+		noticeUntil = 0f;
 		hpTrailValue = hpLastValue = -1f;
 	}
 
@@ -209,9 +225,32 @@ public class HudView : MonoBehaviour
 	{
 		// 쿨타임 중에 누른 것은 덮개가 이미 보여 주므로 빨간 테두리를 띄우지 않는다
 		if (slot >= 0 && slot < SlotCount && reason != CastRejection.OnCooldown) rejectedUntil[slot] = Time.time + rejectFlashTime;
+		ShowNotice(FailureNotice.ForRejection(reason));
+	}
+
+	// [내 화면] 내 작업이 끝남. 실행 중단, runtime error면 이유를 알린다 (#480)
+	void OnOwnTaskEnded(int taskId, TaskEndInfo info) => ShowNotice(FailureNotice.ForTaskEnd(info));
+
+	// 알림 문장을 띄운다. null이면(알리지 않는 이유) 아무것도 하지 않는다
+	// 앞의 [분류] 글자만 색을 바꾼다. 무엇이 일어났는지보다 에러라는 것을 먼저 보이게 하기 위함
+	void ShowNotice(string message)
+	{
+		if (string.IsNullOrEmpty(message) || noticeText == null) return;
+		int labelEnd = message.StartsWith("[") ? message.IndexOf(']') : -1;
+		noticeText.text = labelEnd > 0
+			? $"<color=#{ColorUtility.ToHtmlStringRGB(noticeLabelColor)}>{message.Substring(0, labelEnd + 1)}</color>{message.Substring(labelEnd + 1)}"
+			: message;
+		noticeUntil = Time.time + noticeTime;
 	}
 
 	// 그리기 -------------------------------------------------------------------
+
+	void RefreshNotice()
+	{
+		if (noticePanel == null) return;
+		bool show = Time.time < noticeUntil;
+		if (noticePanel.activeSelf != show) noticePanel.SetActive(show);
+	}
 
 	void RefreshTop()
 	{

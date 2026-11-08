@@ -10,6 +10,7 @@ using UnityEngine;
 /// - 대상: 파라미터 target (슬롯에서 고른 몬스터, 블록에서 넘긴 대상). 값이 없으면 바라보는 방향 사거리 안의 가장 가까운 몬스터. 그것도 없으면 허공을 찌른다(빗나감).<br/>
 /// - 대상이 사거리(Reach, 임시 2.5칸)보다 멀면 대상 앞까지 돌진한 뒤 찌른다 (PlayerMovement.StartLunge).<br/>
 /// - 사거리 안에 들어온 틱에 한 번 찌른다. 스킬이 끝날 때까지 못 닿으면(벽에 막힘 등) 빗나간다.<br/>
+/// - 찌르기는 몸 높이에서 가로로 나간다. 그 순간 대상 몸이 찌르기 높이(몸 가운데 ± HitHalfHeight)에 걸치지 않으면(위·아래 발판) 허공을 찌르고 빗나간다 (#437).<br/>
 /// - 데미지: DamageCalculator(공격력 × 스킬 표 배율 + BonusRate) → IDamageable.TakeDamage. 맞은 대상마다 SkillEffectEvents.Hit.<br/>
 /// - 판정은 시전자가 속한 장소 씬의 물리 세계에 묻는다 (place-scenes.md).
 /// </para>
@@ -18,6 +19,9 @@ public abstract class ThrustSkill : DataDrivenSkill
 {
 	/// <summary>찌르기 사거리 (유닛, 임시). 몸 중심에서 대상 콜라이더의 가장 가까운 점까지 좌우 거리</summary>
 	public const float Reach = 2.5f;
+
+	/// <summary>찌르기 판정 높이의 절반 (유닛, #437). 시전자 몸 가운데에서 위아래로 이만큼 안에 대상 몸이 걸쳐야 맞는다</summary>
+	public const float HitHalfHeight = 1.25f;
 
 	// 돌진할 때 대상 앞 어디에 멈출지 (사거리 안쪽으로 조금 들어가게)
 	const float LungeStopRatio = 0.6f;
@@ -61,7 +65,9 @@ public abstract class ThrustSkill : DataDrivenSkill
 		{
 			resolved = true;
 			StopLunge(task);
-			Strike(task);
+			// 좌우로는 닿았어도 높이가 다르면(위·아래 발판) 찌르기가 대상 위나 아래로 지나간다 (#437)
+			if (InThrustHeight(task.Caster, target)) Strike(task);
+			else Miss(task);
 		}
 	}
 
@@ -113,6 +119,28 @@ public abstract class ThrustSkill : DataDrivenSkill
 			effects?.RaiseHit(Id, monster.gameObject, point, result);
 		}
 	}
+
+	// 높이가 안 맞아 허공을 찌른다: 이펙트만 대상 쪽으로, 데미지 없음
+	void Miss(FunctionContext task)
+	{
+		GameObject caster = task.Caster;
+		int dir = target.transform.position.x >= caster.transform.position.x ? 1 : -1;
+		Effects(task)?.RaiseFired(Id, BodyCenter(caster), new Vector2(dir, 0f));
+	}
+
+	// 대상 몸(콜라이더)이 찌르기 높이에 걸치는지
+	static bool InThrustHeight(GameObject caster, Monster monster)
+	{
+		Collider2D col = monster.GetComponentInChildren<Collider2D>();
+		if (col == null) return true;
+		return OverlapsThrustHeight(BodyCenter(caster).y, col.bounds.min.y, col.bounds.max.y);
+	}
+
+	/// <summary>
+	/// 시전자 몸 가운데 높이(casterCenterY) ± HitHalfHeight 구간과 대상 몸 높이(targetMinY ~ targetMaxY)가 겹치면 true (#437). 테스트도 쓴다.
+	/// </summary>
+	public static bool OverlapsThrustHeight(float casterCenterY, float targetMinY, float targetMaxY) =>
+		targetMaxY >= casterCenterY - HitHalfHeight && targetMinY <= casterCenterY + HitHalfHeight;
 
 	// 찌르기가 나가는 높이: 시전자 몸 콜라이더의 가운데
 	static Vector2 BodyCenter(GameObject caster)

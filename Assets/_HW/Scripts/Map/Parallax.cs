@@ -11,7 +11,7 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// 픽셀 떨림 막기<br/>
-/// - 위치를 1/16 단위(1픽셀, PPU 16)로 반올림한다. 카메라도 PixelPerfectCamera로 픽셀에 맞추므로 둘이 같은 칸에 맞는다.<br/>
+/// - 위치를 1/16 단위(1픽셀, PPU 16)로 반올림한다. 카메라도 CameraBounds가 1픽셀 단위로 맞추므로 둘이 같은 칸에 맞는다.<br/>
 /// - 카메라를 옮기는 PlayerCameraFollow(LateUpdate)보다 뒤에 실행되도록 실행 순서를 늦춘다. 먼저 실행되면 한 프레임 늦게 따라와서 떨린다.
 /// </para>
 /// </summary>

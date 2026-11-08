@@ -1,0 +1,108 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50ec13a85eed6e54d97c0b1a0ca6920a, type: 3}
+  m_Name: SoundTable
+  m_EditorClassIdentifier: Assembly-CSharp::SoundTable
+  bgm:
+  - place: Lobby
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
+  - place: HuntingGround
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
+  - place: TrainingRoom
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
+  - place: RaidDungeon
+    clip: {fileID: 8300000, guid: dd1c464af8b0b644c8fa2e78d3a7525c, type: 3}
+  monsters:
+  - monster: Gateway
+    appear: []
+    hit: []
+    death:
+    - {fileID: 8300000, guid: 83ba9508df6fcd74eb835b68875dfc6b, type: 3}
+    slam:
+    - {fileID: 8300000, guid: d13e06fe92a8b5b4792ae7e36420eb71, type: 3}
+    fire:
+    - {fileID: 8300000, guid: 47054ac0d7645c84283183d72c45db06, type: 3}
+    summon: []
+  - monster: Pillar
+    appear:
+    - {fileID: 8300000, guid: 9e1a70f3b942ec64db22e39185176bc9, type: 3}
+    hit: []
+    death: []
+    slam: []
+    fire: []
+    summon: []
+  - monster: Leak
+    appear: []
+    hit: []
+    death:
+    - {fileID: 8300000, guid: c4f97df42d550ed4498ef5b895649eb8, type: 3}
+    - {fileID: 8300000, guid: 8b6d394a4640d6242b559ccdcf41a0cd, type: 3}
+    slam: []
+    fire: []
+    summon: []
+  - monster: Worm
+    appear: []
+    hit: []
+    death:
+    - {fileID: 8300000, guid: f977897edc6cc984eace31fdb31f6911, type: 3}
+    slam: []
+    fire: []
+    summon: []
+  skills:
+  - skillId: c.thrust
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.focused_thrust
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.vital_strike
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.skewer
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.summoned_thrust
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.wound_exploit
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.sword_throw
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.summoned_throw
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.sword_slash
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.summoned_slash
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.wound_slash
+    fired:
+    - {fileID: 8300000, guid: aa1f82daa34b7f049a8065bff033cb21, type: 3}
+  - skillId: c.deep_thrust
+    fired:
+    - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}
+  - skillId: c.wide_slash
+    fired:
+    - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}
+  - skillId: c.multi_slash
+    fired:
+    - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}
+  - skillId: c.battlefield_sweep
+    fired:
+    - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}
+  - skillId: c.sword_dance
+    fired:
+    - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}

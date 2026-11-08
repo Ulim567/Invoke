@@ -427,7 +427,12 @@ public class SkillTreeView : MonoBehaviour
 				: $"<color=#{ColorUtility.ToHtmlStringRGB(LockedText)}>{node.DisplayName}</color>";
 			string text = others.Count == 0 ? title : $"{title}\n<size=60%>{string.Join(" ", others)}</size>";
 
-			if (p.View != null) p.View.Show(fill, border, selected ? 2f : 1f, text);
+			if (p.View != null)
+			{
+				p.View.Show(fill, border, selected ? 2f : 1f, text);
+				// 스킬 노드에만 아이콘 (#444, 박진우 SkillIcons). 잠긴 노드(아직 열 수 없음)는 어둡게
+				p.View.ShowIcon(node.Kind == SkillTreeNodeKind.Skill ? SkillIcons.Get(node.Id) : null, !isUnlocked && !available);
+			}
 			foreach ((Image line, string from) in p.Lines) line.color = have.Contains(from) ? LineOn : LineOff;
 		}
 		RefreshDetail();

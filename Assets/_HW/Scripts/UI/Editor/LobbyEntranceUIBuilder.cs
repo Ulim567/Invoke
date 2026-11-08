@@ -23,7 +23,6 @@ public static class LobbyEntranceUIBuilder
 
 	static readonly Color Teal = Hex("5EF2D6");
 	static readonly Color Label = Hex("B8BED6");
-	static readonly Color Muted = Hex("8A84A8");
 	static readonly Color Line = Hex("443F53");
 	static readonly Color Dark = Hex("1A1E3A");
 
@@ -67,9 +66,7 @@ public static class LobbyEntranceUIBuilder
 			description.textWrappingMode = TextWrappingModes.Normal;
 			TopStretch(description.rectTransform, 36, 36, 129, 120);
 
-			// 아래: 왼쪽에 키 안내, 오른쪽에 닫기 · 들어가기
-			TMP_Text hint = GetOrText(window, "KeyHint", "Enter 들어가기   Esc 닫기", 18, Muted, TextAlignmentOptions.MidlineLeft);
-			Place(hint.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(36, 33), new Vector2(330, 60));
+			// 아래 오른쪽: 닫기 · 들어가기. 확인은 오른쪽(주황), 취소는 왼쪽(테두리)으로 모든 창이 같다 (#430). 키 표시(Enter, ESC)는 KeyBadgeInstaller가 버튼에 붙인다 (#430)
 
 			Transform enter = window.Find("EnterButton");
 			Button enterButton = SetButton(enter, Orange, null);
@@ -77,12 +74,12 @@ public static class LobbyEntranceUIBuilder
 			colors.highlightedColor = new Color(1.08f, 1.08f, 1.08f, 1);
 			colors.disabledColor = new Color(0.45f, 0.45f, 0.45f, 0.85f);
 			enterButton.colors = colors;
-			Place((RectTransform)enter, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-36, 33), new Vector2(195, 63));
+			Place((RectTransform)enter, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-36, 33), new Vector2(240, 63)); // 확인(들어가기)은 오른쪽: 게임 전체 규칙 (#430)
 			Style(enter.GetComponentInChildren<TMP_Text>(), "들어가기", 24, Dark, TextAlignmentOptions.Center, true);
 
 			Transform close = window.Find("CloseButton");
 			SetButton(close, Outline, OutlineOn);
-			Place((RectTransform)close, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-36 - 195 - 18, 33), new Vector2(150, 63));
+			Place((RectTransform)close, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-36 - 240 - 18, 33), new Vector2(150, 63)); // 취소(닫기)는 왼쪽
 			Style(close.GetComponentInChildren<TMP_Text>(), "닫기", 24, Color.white, TextAlignmentOptions.Center, false);
 
 			foreach (TMP_Text label in new[] { enter.GetComponentInChildren<TMP_Text>(), close.GetComponentInChildren<TMP_Text>() })
@@ -95,6 +92,7 @@ public static class LobbyEntranceUIBuilder
 
 			PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
 			Debug.Log("[LobbyEntranceUIBuilder] 로비 입구 창을 다른 창과 같은 모양으로 바꿈 (LobbyUI 프리팹)");
+			KeyBadgeInstaller.InstallLater(); // 키 표시(#430)를 다시 붙인다
 		}
 		finally
 		{

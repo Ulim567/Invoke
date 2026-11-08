@@ -102,6 +102,11 @@ public class RaidLobbyUI : InputBlockingPanel
 		startButton.onClick.AddListener(StartRaid);
 		leaveButton.onClick.AddListener(LeaveRoom);
 
+		// 입력칸에서 Enter (#430, 임혜원): 입력칸이 선택되어 있으면 UIShortcut이 Enter를 양보하므로 입력칸의 onSubmit으로 받는다
+		createNameInput.onSubmit.AddListener(_ => Press(createConfirmButton));
+		if (createPasswordInput != null) createPasswordInput.onSubmit.AddListener(_ => Press(createConfirmButton));
+		joinPasswordInput.onSubmit.AddListener(_ => Press(joinConfirmButton));
+
 		if (addFakeRoomButton != null) addFakeRoomButton.onClick.AddListener(AddFakeRoom);
 		if (addFakeMemberButton != null) addFakeMemberButton.onClick.AddListener(AddFakeMember);
 		if (toggleFakeReadyButton != null) toggleFakeReadyButton.onClick.AddListener(ToggleFakeReady);
@@ -137,8 +142,29 @@ public class RaidLobbyUI : InputBlockingPanel
 		else ShowRoomList();
 	}
 
-	// ESC (#324): 닫기 버튼과 같이 방에서도 나간다
-	protected override void OnCancelKey() => CloseAndLeave();
+	// ESC (#430, 임혜원): 떠 있는 창부터 닫는다. 만들기·비밀번호 창 → 닫기, 파티방 → 나가기(방 목록으로), 방 목록 → 화면 닫기(#324)
+	protected override void OnCancelKey()
+	{
+		if (createPopup.activeSelf) createPopup.SetActive(false);
+		else if (passwordPopup.activeSelf) passwordPopup.SetActive(false);
+		else if (partyPanel.activeSelf) Press(leaveButton);
+		else CloseAndLeave();
+	}
+
+	// Enter (#430, 임혜원): 만들기 창 → 만들기, 비밀번호 창 → 입장, 파티방 → 시작(파티장) 또는 준비(파티원), 방 목록 → 방 만들기 창 열기
+	protected override void OnSubmitKey()
+	{
+		if (createPopup.activeSelf) Press(createConfirmButton);
+		else if (passwordPopup.activeSelf) Press(joinConfirmButton);
+		else if (partyPanel.activeSelf) Press(startButton.gameObject.activeInHierarchy ? startButton : readyButton);
+		else if (roomListPanel.activeSelf) Press(createButton);
+	}
+
+	// 버튼을 누른 것과 같이. 꺼져 있거나 누를 수 없으면(시작: 모두 준비 전) 아무것도 안 한다
+	static void Press(Button button)
+	{
+		if (button != null && button.isActiveAndEnabled && button.interactable) button.onClick.Invoke();
+	}
 
 	// 닫기 버튼. 화면을 닫으면 방에서 나간다 (방에 들어간 채로 다른 장소에 가지 않게)
 	void CloseAndLeave()
@@ -213,6 +239,7 @@ public class RaidLobbyUI : InputBlockingPanel
 		createNameInput.text = $"{MyName}의 레이드";
 		if (createPasswordInput != null) createPasswordInput.text = "";
 		createPopup.SetActive(true);
+		createNameInput.Select(); // 바로 이름을 고치고 Tab으로 비밀번호 칸에 갈 수 있게 (#430)
 	}
 
 	// 성공하면 OnRoomsChanged가 파티방으로 넘어가고, 실패하면 창을 연 채 이유를 보여 준다
@@ -237,6 +264,7 @@ public class RaidLobbyUI : InputBlockingPanel
 			joiningRoom = room;
 			joinPasswordInput.text = "";
 			passwordPopup.SetActive(true);
+			joinPasswordInput.Select(); // 바로 비밀번호를 치고 Enter로 들어갈 수 있게 (#430)
 			return;
 		}
 		RaidRooms.RequestJoin(room, null);

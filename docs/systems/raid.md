@@ -156,6 +156,8 @@ Inspector: `Check Interval`(0.25초), `Result Delay`(3초)
 | `Close()` | - | - | `InputBlockingPanel`의 닫기. 액션 맵 다시 활성화 |
 
 - 화면의 닫기 버튼과 ESC(#324 `OnCancelKey`): 방에 있으면 `RequestLeave` 뒤 닫기
+- 방 만들기·비밀번호 창 (#430, 임혜원): 화면 전체를 어둡게 덮는 바탕(`CreatePopup`, `PasswordPopup`, 켜고 끄는 오브젝트) 안에 창(`Window`). 뒤의 방 목록을 가리고 마우스를 막는다 (뒤의 「방 만들기」 버튼과 겹쳐 보이던 것). 메뉴 「레이드 방 화면 만들기」
+- Enter·ESC (#430, 임혜원, key-badge.md): 떠 있는 창부터. 만들기·비밀번호 창은 Enter = 확인, ESC = 창 닫기. 파티방은 Enter = 시작(파티장)/준비(파티원), ESC = 나가기(방 목록으로). 방 목록은 Enter = 방 만들기 창, ESC = 닫기. 입력칸에서 Enter도 확인 (`onSubmit`)
 - 시작으로 내 방이 목록에서 사라지면 화면이 스스로 닫힘
 - 오브젝트 구조: `RaidLobbyUI`가 붙은 오브젝트는 늘 켜 둠. 네 창(방 목록, 파티방, 방 만들기 창, 비밀번호 창)은 `Panel Root` 아래
 

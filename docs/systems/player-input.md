@@ -95,6 +95,7 @@
 | `GameInput.UI.CancelPressed` | - | `bool` | 이번 프레임에 취소 키(ESC)를 눌렀으면 true. Attack 액션 맵의 취소(C, `PlayerInputReader.CancelPressed`)와 다른 키 |
 | `GameInput.UI.Shortcut1Pressed` | - | `bool` | 이번 프레임에 숫자 1을 눌렀으면 true (#431). 화면에서는 `UIShortcut`의 On Shortcut 1을 씀 |
 | `GameInput.UI.Shortcut2Pressed` | - | `bool` | 이번 프레임에 숫자 2를 눌렀으면 true (#431). 화면에서는 `UIShortcut`의 On Shortcut 2를 씀 |
+| `GameInput.UI.NextFieldPressed` | - | `bool` | 이번 프레임에 Tab을 눌렀으면 true (#430). 화면 안의 다음 입력칸으로 넘어갈 때 씀 (`TabFieldNavigator`, key-badge.md) |
 
 ### 화면 단축키 (`UIShortcut`, #298)
 
@@ -129,6 +130,8 @@
     - 왼쪽 Shift: 달리기(`Run`). 달리기 속도 적용은 박진우(`PlayerMovement`)
     - 검 줍기: Z(`PickUp`), 상호작용: ↑(`Interact`), 여러 명 선택의 대상 찍기: Space(`Mark`)
     - 키 사용자 지정: 추후 결정
+- Tab 이동 (#430, 임혜원)
+  - 바인딩: UI 액션 맵에 NextField(`<Keyboard>/tab`) 추가. 받는 쪽은 `TabFieldNavigator` (key-badge.md)
 - HUD 바로가기 1·2 (#431, 임혜원)
   - 바인딩: UI 액션 맵에 Shortcut1(`<Keyboard>/1`), Shortcut2(`<Keyboard>/2`) 추가
   - `UIShortcut`의 On Shortcut 1 / 2로 받으므로 「맨 위 화면만」 규칙이 그대로 적용됨. HUD는 다른 창이 열려 있으면 맨 위가 아니라 반응하지 않음

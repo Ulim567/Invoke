@@ -188,6 +188,7 @@ public static class LevelUpUIBuilder
 		Object.DestroyImmediate(canvasObject);
 		AssetDatabase.SaveAssets();
 		Debug.Log($"[LevelUpUIBuilder] {PrefabPath}를 만듦. Base 씬에 끌어다 놓으세요.");
+		KeyBadgeInstaller.InstallLater(); // 키 표시(#430)를 다시 붙인다
 	}
 
 	// 표 한 칸 (오른쪽 정렬)

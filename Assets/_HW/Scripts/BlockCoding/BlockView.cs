@@ -60,10 +60,27 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
 	float dragAlpha = 0.75f;
 
-	// 고르기 버튼에서 차례로 바꿔 가며 고르는 타입
-	static readonly VariableTypeKind[] DeclareTypes =
+	// 선언 블록에서 고를 수 있는 타입. 고를 때마다 새 VariableType을 만들도록 함수로 둔다 (블록끼리 같은 타입 객체를 나눠 쓰지 않게)
+	// Sword*: 소환검 포인터를 담아 두었다가 free_sword(s)처럼 해제하기 위함. 스킬 파라미터는 반드시 채워야 하기 때문 (#474)
+	// Target은 넣지 않는다: 담아 둔 몬스터가 죽었는지 플레이어가 확인할 방법이 없어서, 대상은 get_bug()를 스킬 칸에 바로 넣어 쓴다 (#474)
+	static readonly Func<VariableType>[] DeclareTypes =
 	{
-		VariableTypeKind.Int, VariableTypeKind.Float, VariableTypeKind.Bool, VariableTypeKind.Char, VariableTypeKind.String,
+		() => new VariableType(VariableTypeKind.Int),
+		() => new VariableType(VariableTypeKind.Float),
+		() => new VariableType(VariableTypeKind.Bool),
+		() => new VariableType(VariableTypeKind.Char),
+		() => new VariableType(VariableTypeKind.String),
+		() => VariableType.PointerTo(VariableType.StructOf(PredefinedStructs.Sword)),
+	};
+
+	// 배열 만들기 블록의 원소 타입. 기본 타입만 둔다 (포인터 array는 아직 기획하지 않음)
+	static readonly Func<VariableType>[] ArrayElementTypes =
+	{
+		() => new VariableType(VariableTypeKind.Int),
+		() => new VariableType(VariableTypeKind.Float),
+		() => new VariableType(VariableTypeKind.Bool),
+		() => new VariableType(VariableTypeKind.Char),
+		() => new VariableType(VariableTypeKind.String),
 	};
 
 	/// <summary>이 블록이 들고 있는 블록 데이터</summary>
@@ -177,7 +194,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		switch (Data.Kind)
 		{
 			case BlockKind.Declare:
-				AddTypeOption(0);
+				AddTypeOption(0, DeclareTypes);
 				AddNameField(1);
 				AddText("=");
 				AddValue(2);
@@ -243,7 +260,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 				AddText("continue;");
 				break;
 			case BlockKind.ArrayDeclare:
-				AddTypeOption(0);
+				AddTypeOption(0, ArrayElementTypes);
 				AddNameField(1);
 				AddText("[");
 				AddValue(2);
@@ -379,14 +396,15 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		dynamicTexts.Add((label, () => BlockLabels.OperatorText(slot.Option)));
 	}
 
-	// 타입 고르기 (드롭다운): int, float, bool, char, string
-	void AddTypeOption(int index)
+	// 타입 고르기 (드롭다운): types 목록 (선언은 int, float, bool, char, string, Sword*)
+	// 지금 타입은 화면 글자로 찾는다. Sword*처럼 Kind만으로는 구분되지 않는 타입(가리키는 struct)도 글자는 서로 다르기 때문
+	void AddTypeOption(int index, Func<VariableType>[] types)
 	{
 		SlotData slot = Data.Slots[index];
-		string[] labels = Array.ConvertAll(DeclareTypes, kind => BlockLabels.TypeName(new VariableType(kind)));
+		string[] labels = Array.ConvertAll(types, type => BlockLabels.TypeName(type()));
 		TMP_Text label = AddDropdown(labels,
-			() => slot.Type == null ? -1 : Array.IndexOf(DeclareTypes, slot.Type.Kind),
-			picked => slot.Type = new VariableType(DeclareTypes[picked]));
+			() => slot.Type == null ? -1 : Array.IndexOf(labels, BlockLabels.TypeName(slot.Type)),
+			picked => slot.Type = types[picked]());
 		dynamicTexts.Add((label, () => BlockLabels.TypeName(slot.Type)));
 	}
 

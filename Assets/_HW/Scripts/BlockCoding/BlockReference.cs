@@ -216,7 +216,7 @@ public static class BlockReference
 		["Declare"] = ("타입 이름 = 처음 값;",
 			new[]
 			{
-				"타입 — int, float, bool, char, string 중에서 고릅니다.",
+				"타입 — int, float, bool, char, string, Sword* 중에서 고릅니다. Sword*에는 summon_sword()가 돌려준 소환검을 담습니다.",
 				"이름 — 새 변수의 이름입니다. 영문자, 숫자, 밑줄만 쓰고 숫자로 시작할 수 없습니다.",
 				"처음 값 — 변수에 처음 담을 값입니다. 비워 둘 수 있습니다.",
 			},
@@ -371,7 +371,7 @@ public static class BlockReference
 		[PredefinedFunctionIds.Dash] = NoParameter,
 		[PredefinedFunctionIds.DoubleJump] = NoParameter,
 		[PredefinedFunctionIds.SwordRide] = NoParameter + NeedsSword,
-		[PredefinedFunctionIds.GetBug] = "Target b = get_bug(); 처럼 쓰면 플레이어가 대상을 고를 때까지 기다린 뒤 그 대상을 돌려줍니다. 고를 몬스터가 없으면 「대상 없음」을 돌려주고, 그 값을 스킬에 넘기면 실패합니다.",
+		[PredefinedFunctionIds.GetBug] = "thrust(get_bug()); 처럼 스킬의 target 칸에 넣으면 플레이어가 대상을 고를 때까지 기다린 뒤 그 대상을 돌려줍니다. 고를 몬스터가 없으면 「대상 없음」을 돌려주고, 그 값을 스킬에 넘기면 실패합니다.",
 	};
 
 	static List<BlockReferenceEntry> Build()

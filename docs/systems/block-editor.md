@@ -63,7 +63,10 @@
 - 값 블록을 끼우면 `SlotData.Block`에 넣고 적은 값은 지운다. 빼면 `Block`을 null로.
 - 이름 칸(선언의 이름, for의 i), 변수 칸(대입의 왼쪽): 영문자·숫자·밑줄만, 숫자로 시작 불가. 아니면 원래 이름으로 되돌리고, 글자를 1초 빨갛게 보이며 상태 줄에 이유를 알림 (#432). 바꾸지 않고 나오면 고친 것으로 치지 않음
 - 함수 이름 칸: 글자(한글 포함)·숫자·밑줄만, 숫자로 시작 불가 (`BlockSlotText.IsFunctionName`, #432). 이름은 실행에 쓰이지 않지만(함수는 GUID로 부름) 화면의 글자 칸이 `<`를 태그로 읽어 깨지므로 막는다. 아니면 이름은 그대로 두고 상태 줄에 이유를 알림
-- 타입 버튼: 누를 때마다 int → float → bool → char → string
+- 타입 칸: 드롭다운 (아래 「화면 배치」)
+  - 선언(지역 변수, 전역 변수): int, float, bool, char, string, `Sword*` (#474). `Sword*`는 `VariableType.PointerTo(StructOf("Sword"))`
+  - 배열 만들기의 원소 타입: int, float, bool, char, string
+  - `Target`은 선언할 수 없음 (#474): 담아 둔 몬스터가 죽었는지 확인할 방법이 없음. 대상은 `get_bug()`를 스킬 칸에 바로 넣음 (예: `thrust(get_bug());`)
 - 연산자 버튼: 누를 때마다 `BlockOptions`의 enum 순서대로. 데이터에는 enum 이름(`"Add"`)
 - if·else if·else는 블록 목록에서 따로 고르고, 놓은 뒤에는 바꾸지 않는다.
 
@@ -76,7 +79,7 @@
 - 그림: `Assets/_HW/UI/Frame/`의 9-slice 스프라이트(창, 제목줄, 패널, 머리글, 버튼, 목록 줄, 슬롯 카드, 키 배지, 격자)
 - 블록 모양(`Assets/_HW/UI/BlockCoding/Shapes`): 문장 블록은 위 왼쪽 홈(`blk_stmt`), 값 블록은 알약(`blk_value`), 조건문·반복문은 왼쪽 기둥과 아래 막대로 안쪽을 감쌈(`blk_inner`), 값 칸은 어두운 알약(`blk_slot`), 이름 칸은 밑줄, 변수 칸은 점선 상자, 드롭다운은 밝은 네모 + ▾
 - 블록 목록은 칩(짧은 이름: If, For, Declare, Array Get, thrust…)을 분류별로 줄줄이 놓는다 (`FlowLayoutGroup`). 칩을 끌면 칸이 다 있는 블록이 나온다
-- 타입·연산자 칸은 드롭다운(`DropdownPopup` 프리팹): 타입 int/float/bool/char/string, 연산 + - * / %, 비교 > < == != >= <=, 논리 && ||
+- 타입·연산자 칸은 드롭다운(`DropdownPopup` 프리팹): 타입(위 「칸 고치기」의 타입 칸), 연산 + - * / %, 비교 > < == != >= <=, 논리 && ||
 - 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set), 내가 만든 함수 부르기(`CallUserFunction`, 「함수」 분류 끝)가 있다. 배열 블록 셋은 `syntax.list` 해금 뒤에 보인다 (#470). 함수 부르기 블록은 페이지 함수만 붙이고 슬롯 함수(slot1~slot8)는 붙이지 않는다 (#470, 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않음). malloc은 불러온 함수에서만 보인다
 - 값 칸에 `NULL`을 적으면 `SlotData.FromNull()`과 같은 값으로 넣는다 (function-data.md #120)
 - 위쪽 줄의 「동기 / 비동기」 버튼: `FunctionData.IsAsync`를 고른다 (#132). 슬롯 함수와 전역 변수는 바꿀 수 없음

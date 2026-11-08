@@ -52,12 +52,36 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 	Color baseColor;
 	bool highlighted;
 	bool error;
+	bool ghostShown; // 끄는 동안의 반투명 미리보기를 이 칸에 보이는 중인지 (#476)
 
 	/// <summary>끌고 있는 값 블록을 여기에 놓을 수 있다는 표시 (BlockEditor가 부른다)</summary>
 	public void SetHighlight(bool on)
 	{
 		highlighted = on;
 		ApplyColor();
+	}
+
+	/// <summary>
+	/// 끄는 동안의 반투명 미리보기(BlockEditor가 만든다, #476)를 이 칸에 끼운 것처럼 보인다. 적는 칸과 변수 고르기 버튼은 그동안 숨긴다.
+	/// 칸 데이터는 바꾸지 않는다.
+	/// </summary>
+	public void ShowGhost(RectTransform ghost)
+	{
+		ghost.SetParent(transform, false);
+		ghost.SetAsLastSibling();
+		ghostShown = true;
+		field.gameObject.SetActive(false);
+		if (pickButton != null) pickButton.gameObject.SetActive(false);
+	}
+
+	/// <summary>미리보기를 거둘 때 적는 칸과 변수 고르기 버튼을 다시 보인다 (BlockEditor가 미리보기를 다른 곳으로 옮긴 뒤 부른다)</summary>
+	public void HideGhost()
+	{
+		if (!ghostShown) return;
+		ghostShown = false;
+		if (Held != null) return; // 블록을 끼운 칸이면 원래 숨겨 둔 상태
+		field.gameObject.SetActive(true);
+		if (pickButton != null) pickButton.gameObject.SetActive(true);
 	}
 
 	/// <summary>컴파일 오류(비어 있는 칸) 표시 (BlockEditor가 부른다)</summary>

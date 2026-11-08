@@ -60,6 +60,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
 	float dragAlpha = 0.75f;
 
+	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 크기 (원래 크기의 배수, #476)")]
+	float dragScale = 0.6f;
+
 	// 선언 블록에서 고를 수 있는 타입. 고를 때마다 새 VariableType을 만들도록 함수로 둔다 (블록끼리 같은 타입 객체를 나눠 쓰지 않게)
 	// Sword*: 소환검 포인터를 담아 두었다가 free_sword(s)처럼 해제하기 위함. 스킬 파라미터는 반드시 채워야 하기 때문 (#474)
 	// Target: get_bug()로 고른 몬스터를 담아 두고 여러 스킬에 넘기기 위함. 몬스터가 죽었는지는 is_valid_target(b)로 확인한다 (#474)
@@ -561,6 +564,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		dragging = true;
 		canvasGroup.alpha = dragAlpha; // 아직 놓이지 않았다는 표시
+		// 마우스를 따라오는 블록은 작게 (#476). 놓은 뒤의 실제 크기는 들어갈 자리의 반투명 미리보기가 보여 주므로, 큰 블록이 미리보기를 가리지 않게
+		transform.localScale = Vector3.one * dragScale;
 		// 끄는 블록이 마우스를 가리면 아래에 있는 놓을 자리를 찾을 수 없으므로 클릭을 통과시킨다
 		canvasGroup.blocksRaycasts = false;
 		MoveTo(eventData);
@@ -570,7 +575,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		if (!dragging) return;
 		MoveTo(eventData);
-		editor.ShowDropPreview(this, FindDropTarget(eventData), eventData); // 들어갈 자리 줄, 끼울 수 있는 값 칸 표시
+		editor.ShowDropPreview(this, FindDropTarget(eventData), eventData); // 들어갈 자리의 반투명 미리보기, 끼울 수 있는 값 칸 표시
 	}
 
 	public void OnEndDrag(PointerEventData eventData)
@@ -580,8 +585,12 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		// 놓을 자리는 클릭 통과를 되돌리기 전에 찾는다. 되돌린 뒤에 찾으면 마우스 아래의 이 블록 자신이 걸려,
 		// 미리보기와 다른 자리(자기 자신의 블록 영역)에 들어가거나 지워지기 때문 (#474)
 		Component target = FindDropTarget(eventData);
+		// 들어갈 자리 번호도 미리보기를 지우기 전에 센다. 지운 뒤에는 블록들이 아직 미리보기만큼 밀려난 위치에 있어서,
+		// 미리보기에 보인 자리와 다른 자리가 나올 수 있기 때문 (#476)
+		int index = target is BlockList targetList ? targetList.GetInsertIndex(eventData.position, eventData.pressEventCamera) : -1;
 		canvasGroup.blocksRaycasts = true;
 		canvasGroup.alpha = 1f;
+		transform.localScale = Vector3.one; // 끄는 동안 작게 보이던 것을 원래 크기로
 		editor.ShowTrash(false);
 		editor.HideDropPreview();
 
@@ -599,7 +608,6 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		}
 
 		BlockList list = (BlockList)target;
-		int index = list.GetInsertIndex(eventData.position, eventData.pressEventCamera);
 		if (list.CanInsert(Data, index))
 		{
 			list.Insert(this, index);

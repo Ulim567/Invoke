@@ -94,7 +94,7 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("타입·연산자 드롭다운 (DropdownPopup 프리팹: 화면 전체를 덮는 투명 Button + 자식 List)")]
 	RectTransform dropdownPrefab;
 
-	[SerializeField, Tooltip("블록을 끄는 동안 들어갈 자리에 보이는 줄 (InsertMarker 프리팹)")]
+	[SerializeField, Tooltip("블록을 끄는 동안 들어갈 자리에 보이는 줄 (InsertMarker 프리팹). #476부터 반투명 미리보기로 바꾸어 쓰지 않는다")]
 	RectTransform insertMarkerPrefab;
 
 	[Header("휴지통·오류 창")]
@@ -249,7 +249,26 @@ public class BlockEditor : MonoBehaviour
 	FunctionExecutorNetwork server;
 	static readonly string[] SlotKeys = { "Q", "W", "E", "R", "A", "S", "D", "F" };
 	RectTransform openDropdown;
-	RectTransform insertMarker;
+
+	// 편집 영역 스크롤 (#476): 블록 자리(Content)의 가장 작은 크기를 맞추는 칸과 마지막으로 맞춘 보이는 칸 크기
+	LayoutElement workspaceMinSize;
+	Vector2 fittedViewportSize;
+
+	// 마우스가 올라가 있는 블록·값 칸들. 블록 안의 값 칸, 값 칸 안의 블록처럼 겹치므로 가장 안쪽의 설명을 보인다
+	readonly List<(Component owner, RectTransform anchor, Func<string> text)> hovered = new List<(Component, RectTransform, Func<string>)>();
+	float hoverSince;
+	Component tooltipOwner;
+	BlockTooltipView tooltip;
+
+	// 마우스를 올리고 이만큼 멈춰 있어야 설명창을 띄운다. 블록 위를 지나가기만 할 때 깜빡이지 않게
+	const float TooltipDelay = 0.4f;
+
+	// 끄는 동안 들어갈 자리에 보이는 반투명 미리보기 블록 (#476). 끌기 하나에 하나를 만들고, 놓으면 지운다
+	RectTransform dropGhost;
+
+	// 반투명 미리보기의 불투명도. 놓인 블록과 구분되면서 모양은 알아볼 수 있게
+	const float GhostAlpha = 0.4f;
+
 	BlockValueSlot highlightedSlot;
 	Button asyncButton;
 	bool paletteBuilt;
@@ -298,9 +317,6 @@ public class BlockEditor : MonoBehaviour
 
 	// 편집 영역 스크롤 (#476) ----------------------------------------------------
 
-	LayoutElement workspaceMinSize;
-	Vector2 fittedViewportSize;
-
 	// 블록 자리(Content)의 가장 작은 크기를 보이는 칸(Viewport) 크기로 맞춘다. 블록이 적어도 편집 영역 전체가 블록 자리여서,
 	// 블록 아래 빈 곳에 놓아도 지워지지 않고 맨 끝에 들어가게 하기 위함 (예전에는 편집 영역 자체가 블록 자리였다)
 	void FitWorkspaceToViewport()
@@ -315,15 +331,6 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	// 설명창 (#476) -------------------------------------------------------------
-
-	// 마우스가 올라가 있는 블록·값 칸들. 블록 안의 값 칸, 값 칸 안의 블록처럼 겹치므로 가장 안쪽의 설명을 보인다
-	readonly List<(Component owner, RectTransform anchor, Func<string> text)> hovered = new List<(Component, RectTransform, Func<string>)>();
-	float hoverSince;
-	Component tooltipOwner;
-	BlockTooltipView tooltip;
-
-	// 마우스를 올리고 이만큼 멈춰 있어야 설명창을 띄운다. 블록 위를 지나가기만 할 때 깜빡이지 않게
-	const float TooltipDelay = 0.4f;
 
 	/// <summary>
 	/// 블록·값 칸에 마우스가 들어왔을 때 부른다 (BlockView, BlockValueSlot). 잠깐 멈추면 text()의 글자로 설명창을 띄운다.
@@ -906,13 +913,16 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 블록을 끄는 동안 놓을 자리를 보여 준다 (BlockView가 부른다): 블록 자리면 들어갈 곳에 줄, 값 칸이면 그 칸을 보라색으로.
+	/// 블록을 끄는 동안 놓을 자리를 보여 준다 (BlockView가 부른다, #476).
+	/// 들어갈 자리에 끄는 블록과 같은 모양의 반투명 블록을 실제로 끼워, 놓은 뒤의 모습(아래 블록이 밀려나는 것, 값 칸이 넓어지는 것)을 미리 보인다.
+	/// 값 칸이면 그 칸도 보라색으로 표시한다. 놓을 수 없는 곳이면 아무것도 보이지 않는다.
 	/// </summary>
 	public void ShowDropPreview(BlockView dragged, Component target, UnityEngine.EventSystems.PointerEventData eventData)
 	{
 		if (highlightedSlot != null && !ReferenceEquals(target, highlightedSlot))
 		{
 			highlightedSlot.SetHighlight(false);
+			highlightedSlot.HideGhost();
 			highlightedSlot = null;
 		}
 
@@ -920,59 +930,83 @@ public class BlockEditor : MonoBehaviour
 		{
 			slot.SetHighlight(true);
 			highlightedSlot = slot;
-			SetMarker(false);
+			MoveGhost(slot.transform, () => slot.ShowGhost(GhostOf(dragged)));
 			return;
 		}
 
-		if (target is BlockList list && insertMarkerPrefab != null)
+		if (target is BlockList list)
 		{
 			int index = list.GetInsertIndex(eventData.position, eventData.pressEventCamera);
-			if (!list.CanInsert(dragged.Data, index))
+			if (list.CanInsert(dragged.Data, index))
 			{
-				SetMarker(false);
+				MoveGhost(list.transform, () => list.PlaceGhost(GhostOf(dragged), index));
 				return;
 			}
-			SetMarker(true);
-			var corners = new Vector3[4];
-			Transform t = list.transform;
-			if (t.childCount == 0) ((RectTransform)t).GetWorldCorners(corners);
-			else ((RectTransform)t.GetChild(Mathf.Min(index, t.childCount - 1))).GetWorldCorners(corners);
-			// 맨 끝이면 마지막 블록 아래(왼쪽 아래 모서리), 아니면 그 자리 블록 위(왼쪽 위 모서리)
-			insertMarker.position = t.childCount > 0 && index >= t.childCount ? corners[0] : corners[1];
-
-			// 줄을 시작 위치에서 이 블록 자리(편집 영역 또는 블록 영역)의 오른쪽 끝까지 늘려서, 어디에 들어가는지 멀리서도 보이게 한다
-			var listCorners = new Vector3[4];
-			((RectTransform)t).GetWorldCorners(listCorners);
-			float width = (listCorners[2].x - insertMarker.position.x) / insertMarker.lossyScale.x;
-			insertMarker.sizeDelta = new Vector2(Mathf.Max(MarkerMinWidth, width), MarkerThickness);
-			insertMarker.SetAsFirstSibling(); // 끄는 블록보다 아래에 그린다
-			return;
 		}
 
-		SetMarker(false);
+		ParkGhost();
 	}
 
-	/// <summary>놓을 자리 표시를 모두 끈다</summary>
+	/// <summary>놓을 자리 표시(반투명 미리보기, 보라색 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
 	public void HideDropPreview()
 	{
-		if (highlightedSlot != null) highlightedSlot.SetHighlight(false);
+		if (highlightedSlot != null)
+		{
+			highlightedSlot.SetHighlight(false);
+			highlightedSlot.HideGhost();
+		}
 		highlightedSlot = null;
-		SetMarker(false);
+		DestroyGhost();
 	}
 
-	// 들어갈 자리 줄의 가장 짧은 길이와 두께 (캔버스 기준 960×540 픽셀)
-	const float MarkerMinWidth = 40f;
-	const float MarkerThickness = 3f;
-
-	// 들어갈 자리 줄. 처음 쓸 때 한 번만 프리팹에서 만든다
-	void SetMarker(bool show)
+	// 미리보기를 place로 옮기고, 자리나 순서가 바뀌었을 때만 레이아웃을 다시 계산한다 (끄는 동안 매 프레임 다시 계산하지 않게)
+	void MoveGhost(Transform place, Action move)
 	{
-		if (insertMarker == null)
+		Transform oldParent = dropGhost != null ? dropGhost.parent : null;
+		int oldIndex = dropGhost != null ? dropGhost.GetSiblingIndex() : -1;
+		bool wasActive = dropGhost != null && dropGhost.gameObject.activeSelf;
+		move();
+		dropGhost.gameObject.SetActive(true);
+		if (!wasActive || oldParent != place || oldIndex != dropGhost.GetSiblingIndex()) RefreshLayout();
+	}
+
+	// 끄는 블록과 같은 모양의 반투명 블록. 끌기 하나에 한 번만 만든다 (블록 UI를 복사한 것이라 데이터는 없다)
+	// 클릭을 통과시켜, 놓을 자리를 찾을 때 미리보기 자신이 걸리지 않게 한다
+	RectTransform GhostOf(BlockView dragged)
+	{
+		if (dropGhost != null) return dropGhost;
+		GameObject copy = Instantiate(dragged.gameObject, dragLayer);
+		copy.name = "DropGhost";
+		dropGhost = (RectTransform)copy.transform;
+		dropGhost.localScale = Vector3.one; // 끄는 블록은 작게 보이지만, 미리보기는 놓은 뒤의 실제 크기
+		if (copy.TryGetComponent(out CanvasGroup group))
 		{
-			if (!show || insertMarkerPrefab == null) return;
-			insertMarker = Instantiate(insertMarkerPrefab, dragLayer);
+			group.alpha = GhostAlpha;
+			group.blocksRaycasts = false;
+			group.interactable = false;
 		}
-		insertMarker.gameObject.SetActive(show);
+		return dropGhost;
+	}
+
+	// 놓을 수 없는 곳: 미리보기를 숨겨 둔다 (다시 놓을 수 있는 곳에 오면 다시 쓴다)
+	void ParkGhost()
+	{
+		if (dropGhost == null || !dropGhost.gameObject.activeSelf) return;
+		dropGhost.gameObject.SetActive(false);
+		dropGhost.SetParent(dragLayer, false);
+		RefreshLayout();
+	}
+
+	// 미리보기를 지운다. Destroy는 프레임 끝에 지우므로, 그 전에 블록 자리에서 빼고 꺼 둔다
+	// (같은 프레임에 블록을 넣고 자리 번호를 셀 때, 편집 영역의 블록 목록에 미리보기가 섞이지 않게)
+	void DestroyGhost()
+	{
+		if (dropGhost == null) return;
+		dropGhost.gameObject.SetActive(false);
+		dropGhost.SetParent(dragLayer, false);
+		Destroy(dropGhost.gameObject);
+		dropGhost = null;
+		RefreshLayout();
 	}
 
 	void ToggleAsync()

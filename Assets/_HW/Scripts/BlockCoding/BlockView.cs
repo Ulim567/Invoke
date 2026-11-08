@@ -105,6 +105,12 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	// 데이터가 바뀌면 다시 써야 하는 글자들 (예: for의 "i <"는 이름 칸을 고치면 바뀜)
 	readonly List<(TMP_Text text, Func<string> content)> dynamicTexts = new List<(TMP_Text, Func<string>)>();
 
+	// 선언 블록의 처음 값: 「=」 글자, 값 칸, 펼치기·접기 버튼 글자, 지금 펼쳤는지 (#474). 선언 블록이 아니면 null
+	GameObject initialEquals;
+	BlockValueSlot initialValueSlot;
+	TMP_Text initialToggleLabel;
+	bool initialValueOpen;
+
 	void Awake()
 	{
 		canvasGroup = GetComponent<CanvasGroup>();
@@ -196,9 +202,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			case BlockKind.Declare:
 				AddTypeOption(0, DeclareTypes);
 				AddNameField(1);
-				AddText("=");
-				AddValue(2);
-				AddText(";");
+				AddInitialValue(2);
 				break;
 			case BlockKind.Assign:
 				AddVariableField(0);
@@ -326,6 +330,57 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (index >= Data.Slots.Count) return;
 		editor.CreateValueSlot(row).Bind(editor, this, index);
 	}
+
+	// 선언의 처음 값 (#474): 비어 있으면 「int x; [>]」로 접어 두고, > 버튼을 누르면 「int x = [값] ; [<]」로 펼친다. < 버튼으로 접으면 넣은 값을 지운다
+	// 접을 때 값을 지우는 이유: 값을 숨겨 두기만 하면 화면은 int x;인데 그 값으로 실행되어, 화면과 동작이 달라지기 때문
+	// 펼쳤는지는 데이터에 저장하지 않는다. 처음 값 칸이 비었으면 접힌 것으로 보고, 함수를 다시 열면 접힌 모양으로 만든다
+	void AddInitialValue(int index)
+	{
+		if (index >= Data.Slots.Count) return;
+
+		TMP_Text equals = editor.CreateText(row);
+		equals.text = "=";
+		initialEquals = equals.gameObject;
+		initialValueSlot = editor.CreateValueSlot(row);
+		initialValueSlot.Bind(editor, this, index);
+		AddText(";");
+
+		Button toggle = editor.CreateButton(row);
+		// 버튼 프리팹의 ▾(드롭다운 표시)는 숨긴다. 누르면 목록이 아니라 칸이 펼쳐지는 버튼이기 때문
+		Transform arrow = toggle.transform.Find("Arrow");
+		if (arrow != null) arrow.gameObject.SetActive(false);
+		initialToggleLabel = toggle.GetComponentInChildren<TMP_Text>();
+		// <를 태그의 시작으로 읽지 않게 한다
+		if (initialToggleLabel != null) initialToggleLabel.richText = false;
+		toggle.onClick.AddListener(() => SetInitialValueOpen(!initialValueOpen));
+
+		SetInitialValueOpen(!IsEmpty(Data.Slots[index]));
+	}
+
+	// 처음 값 칸을 펼치거나 접는다. 접으면 칸을 비운다 (값이 있었으면 고친 것으로 친다)
+	void SetInitialValueOpen(bool open)
+	{
+		initialValueOpen = open;
+		initialEquals.SetActive(open);
+		initialValueSlot.gameObject.SetActive(open);
+		if (initialToggleLabel != null) initialToggleLabel.text = open ? "<" : ">";
+		if (!open) initialValueSlot.Clear();
+		editor.RefreshLayout();
+	}
+
+	/// <summary>
+	/// 선언 블록의 처음 값 칸을 펼쳐 두고 비워 두었으면 접는다. 저장할 때 BlockEditor가 부른다 (#474).
+	/// 빈 처음 값은 실행기가 기본값으로 채우므로, 저장한 함수가 화면에서도 int x;로 보이게 하기 위함이다.
+	/// </summary>
+	public void CollapseEmptyInitialValue()
+	{
+		if (initialValueSlot == null || !initialValueOpen || !IsEmpty(initialValueSlot.Slot)) return;
+		SetInitialValueOpen(false);
+	}
+
+	// 값 칸에 아무것도 없으면 true (적은 값, 변수, 끼운 블록 모두 없음)
+	static bool IsEmpty(SlotData slot) =>
+		slot == null || (slot.Block == null && string.IsNullOrEmpty(slot.Literal) && string.IsNullOrEmpty(slot.VariableName));
 
 	// 새 이름 칸 (선언의 변수 이름, for의 i). 이름으로 쓸 수 없는 글자면 원래 이름으로 되돌린다
 	void AddNameField(int index)

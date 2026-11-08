@@ -121,6 +121,27 @@ public class BlockValueSlot : MonoBehaviour
 		editor.NotifyChanged();
 	}
 
+	/// <summary>
+	/// 칸을 비운다: 끼운 블록은 지우고, 적은 값과 칸 글자도 지운다. 데이터가 바뀌었을 때만 고친 것으로 친다.
+	/// 선언의 처음 값 칸을 접을 때 BlockView가 부른다 (#474).
+	/// </summary>
+	public void Clear()
+	{
+		bool changed = Held != null || Slot.Type != null || Slot.Literal != null || Slot.VariableName != null;
+		if (Held != null)
+		{
+			BlockView view = Held;
+			Detach(view);
+			editor.DestroyView(view);
+		}
+		Slot.Type = null;
+		Slot.Literal = null;
+		Slot.VariableName = null;
+		field.Text = "";
+		field.SetInvalid(false);
+		if (changed) editor.NotifyChanged();
+	}
+
 	void Hold(BlockView view)
 	{
 		Held = view;

@@ -548,6 +548,9 @@ public class BlockEditor : MonoBehaviour
 	/// </summary>
 	public void SaveFunction()
 	{
+		// 펼쳐 두고 비운 선언의 처음 값 칸을 접는다. 빈 처음 값은 기본값으로 실행되므로 저장한 모양을 int x;로 맞춘다 (#474)
+		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.CollapseEmptyInitialValue();
+
 		if (editingGlobals)
 		{
 			SaveGlobals();
@@ -990,6 +993,14 @@ public class BlockEditor : MonoBehaviour
 		ClearErrorMarks(); // 고쳤으면 지난 컴파일의 빨간 표시를 지운다
 		SetMessage(""); // 「저장됨」을 지우고 「저장하지 않은 변경 있음」을 보인다
 		Redraw();
+	}
+
+	/// <summary>
+	/// 데이터는 그대로이고 블록 모양만 바뀌었을 때 레이아웃만 다시 계산한다 (예: 선언의 처음 값 칸 펼치기). 고친 것으로 치지 않는다.
+	/// </summary>
+	public void RefreshLayout()
+	{
+		if (layoutRoot != null) LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
 	}
 
 	// 화면 글자만 다시 그린다 (고친 것으로 치지 않음)

@@ -3,12 +3,15 @@ using Mirror;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>
 /// 효과음을 낸다 (#436). 몬스터와 플레이어 스킬의 연출 이벤트에 SoundTable의 소리를 붙인다. 소리만 내고 게임 값은 바꾸지 않는다.
 /// <para>
 /// - 몬스터: Monster.Appeared(이 화면에 나타남)를 받아, 그 몬스터의 피격·사망·내려찍기·던지기·소환 연출 이벤트에 소리를 붙이고 나타남 소리를 낸다.<br/>
-/// - 플레이어 스킬: PlayerRoster.PlayerAdded를 받아, 그 플레이어의 SkillEffectEvents.Fired(판정이 나간 순간)에 스킬 소리를 붙인다.<br/>
+/// - 플레이어: PlayerRoster.PlayerAdded를 받아, 그 플레이어의 SkillEffectEvents.Fired(판정이 나간 순간)에 스킬 소리, PlayerHealth의 피격·사망 연출에 공통 소리를 붙인다.
+///   내 캐릭터면 PlayerProgress.UnlockAnswered(스킬 해금 성공)에도 붙인다.<br/>
+/// - UI: Ui Scan Interval초마다 열린 씬의 Button을 찾아, 처음 본 버튼의 onClick에 클릭 소리를 붙인다 (나중에 생기는 방 목록 줄 같은 버튼도 잡힘).<br/>
 /// - 내 캐릭터와 같은 장소의 소리만 낸다 (호스트는 다른 파티의 레이드 던전도 띄워 두기 때문). 내 캐릭터가 없으면(네트워크 없는 테스트) 모두 낸다.<br/>
 /// - 같은 소리가 Min Gap초 안에 다시 나면 건너뛴다 (여러 명을 한꺼번에 맞히는 스킬 등).<br/>
 /// - 연출 이벤트는 모든 화면에서 불리므로 네트워크를 따로 붙이지 않는다.
@@ -32,10 +35,16 @@ public class SfxPlayer : MonoBehaviour
 	[SerializeField, Min(0f), Tooltip("같은 소리를 다시 내기까지 최소 간격(초)")]
 	float minGap = 0.06f;
 
+	[SerializeField, Min(0.1f), Tooltip("새로 생긴 UI 버튼을 찾는 간격(초)")]
+	float uiScanInterval = 0.5f;
+
 	static SfxPlayer instance;
 
 	AudioSource source;
 	readonly Dictionary<AudioClip, float> lastPlayed = new Dictionary<AudioClip, float>();
+	// 클릭 소리를 이미 붙인 버튼
+	readonly HashSet<Button> hookedButtons = new HashSet<Button>();
+	float nextUiScanTime;
 
 	/// <summary>Base 씬의 소리 표. 없으면 null.</summary>
 	public static SoundTable Table => instance != null ? instance.table : null;
@@ -83,6 +92,32 @@ public class SfxPlayer : MonoBehaviour
 		source.PlayOneShot(clip, volume);
 	}
 
+	void Update()
+	{
+		float now = Time.unscaledTime;
+		if (now < nextUiScanTime) return;
+		nextUiScanTime = now + uiScanInterval;
+		HookNewButtons();
+	}
+
+	// ── UI ──
+
+	// 열린 씬의 버튼 중 아직 소리를 붙이지 않은 것에 클릭 소리를 붙인다. 꺼져 있는 버튼도 미리 붙인다
+	void HookNewButtons()
+	{
+		if (table == null || table.Common.uiClick == null || table.Common.uiClick.Length == 0) return;
+
+		hookedButtons.RemoveWhere(b => b == null);
+		Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include);
+		for (int i = 0; i < buttons.Length; i++)
+		{
+			if (!hookedButtons.Add(buttons[i])) continue;
+			buttons[i].onClick.AddListener(PlayUiClick);
+		}
+	}
+
+	void PlayUiClick() => Play(table != null ? table.Common.uiClick : null, default);
+
 	// 내 캐릭터가 있는 씬이면 true. 내 캐릭터가 없으면(네트워크 없는 테스트) 늘 true
 	static bool IsMyScene(Scene scene)
 	{
@@ -111,17 +146,48 @@ public class SfxPlayer : MonoBehaviour
 		}
 		if (s.fire != null && s.fire.Length > 0 && monster.TryGetComponent(out ProjectileAttack thrower))
 			thrower.FireEffectPlayed += _ => Play(s.fire, scene);
+
+		if (monster.TryGetComponent(out GatewayPhases phases))
+		{
+			if (s.charge != null && s.charge.Length > 0) phases.ChargeEffectPlayed += _ => Play(s.charge, scene);
+			if (s.overload != null && s.overload.Length > 0) phases.OverloadEffectPlayed += () => Play(s.overload, scene);
+			if (s.groggy != null && s.groggy.Length > 0) phases.GroggyEffectPlayed += _ => Play(s.groggy, scene);
+		}
 	}
 
 	// ── 플레이어 스킬 ──
 
 	void OnPlayerAdded(PlayerHealth player)
 	{
-		if (player == null || !player.TryGetComponent(out SkillEffectEvents effects)) return;
-		effects.Fired += (skillId, origin, direction) =>
+		if (player == null) return;
+
+		// 피격·사망 (내 장소의 플레이어만). 플레이어가 없어지면 이벤트도 같이 사라진다
+		player.HitEffectPlayed += _ =>
 		{
-			if (table == null || !PlayerRoster.IsInMyPlace(player)) return;
-			Play(table.SkillFiredOf(skillId), default);
+			if (table != null && PlayerRoster.IsInMyPlace(player)) Play(table.Common.playerHit, default);
 		};
+		player.DeathEffectPlayed += () =>
+		{
+			if (table != null && PlayerRoster.IsInMyPlace(player)) Play(table.Common.playerDeath, default);
+		};
+
+		// 스킬 판정
+		if (player.TryGetComponent(out SkillEffectEvents effects))
+		{
+			effects.Fired += (skillId, origin, direction) =>
+			{
+				if (table == null || !PlayerRoster.IsInMyPlace(player)) return;
+				Play(table.SkillFiredOf(skillId), default);
+			};
+		}
+
+		// 스킬 해금 성공 (내 캐릭터만. 결과는 소유 클라이언트에서 불림)
+		if (PlayerRoster.IsLocal(player) && player.TryGetComponent(out PlayerProgress progress))
+		{
+			progress.UnlockAnswered += (nodeId, result) =>
+			{
+				if (table != null && result == UnlockResult.Unlocked) Play(table.Common.skillUnlock, default);
+			};
+		}
 	}
 }

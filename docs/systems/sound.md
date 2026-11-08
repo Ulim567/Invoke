@@ -16,6 +16,11 @@
 - 효과음
   - 몬스터: `Monster.Appeared`(이 화면에 나타남, 모든 화면)를 받아, 프리팹 이름으로 표를 찾아 그 몬스터의 연출 이벤트에 소리를 붙인다.
     - 나타남 → `appear`, `Monster.HitEffectPlayed` → `hit`, `Monster.DeathEffectPlayed` → `death`, `GatewayAI.SlamEffectPlayed` → `slam`, `GatewayAI.SummonEffectPlayed` → `summon`, `ProjectileAttack.FireEffectPlayed` → `fire`
+    - 보스 기믹 (#457): `GatewayPhases.ChargeEffectPlayed` → `charge`, `OverloadEffectPlayed` → `overload`, `GroggyEffectPlayed` → `groggy`
+  - 공통 소리 (`Common`, #457)
+    - 플레이어 피격·사망: `PlayerRoster.PlayerAdded`로 받은 플레이어의 `PlayerHealth.HitEffectPlayed` → `playerHit`, `DeathEffectPlayed` → `playerDeath`. 내 장소의 플레이어만
+    - 스킬 해금: 내 캐릭터의 `PlayerProgress.UnlockAnswered`가 `UnlockResult.Unlocked`면 `skillUnlock`
+    - UI 클릭: `Ui Scan Interval`(0.5초)마다 열린 씬의 `Button`(꺼진 것 포함)을 찾아, 처음 본 버튼의 `onClick`에 `uiClick`을 붙인다. 나중에 생기는 버튼(방 목록 줄 등)도 잡힌다
   - 플레이어 스킬: `PlayerRoster.PlayerAdded`를 받아 `SkillEffectEvents.Fired`(판정이 나간 순간, 스킬 ID)에 표의 스킬 소리를 붙인다. 진우 코드는 고치지 않는다.
   - 칸에 소리를 여러 개 넣으면 그중 하나를 랜덤으로. 비워 두면 소리 없음.
   - 내 캐릭터와 같은 장소의 소리만 낸다 (호스트는 다른 파티의 던전도 띄워 두므로).
@@ -35,6 +40,15 @@
 | Worm 사망 | `worm_death` |
 | 찌르기·베기·던지기 스킬 | `sword_swing_1_2` |
 | 큰 스킬(깊게 찌르기, 넓게 베기, 다중 베기, 전장 휩쓸기, 검무) | `sword_swing_3` |
+
+## 2차 (#457)
+| 곳 | 소리 |
+| --- | --- |
+| Loop 사망 | `loop_death` |
+| Gateway 전체 공격 폭발 | `boss_boom` |
+| 플레이어 사망 | `player_death` |
+| 스킬 트리 해금 성공 | `skill_unlock` |
+| UI 버튼 클릭 | `ui_click` |
 
 ## 다른 시스템이 쓰는 것
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |

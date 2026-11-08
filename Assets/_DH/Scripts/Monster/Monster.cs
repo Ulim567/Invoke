@@ -84,10 +84,17 @@ public class Monster : MonoBehaviour, IDamageable
 	/// </summary>
 	public event Action MaxHpChanged;
 
+	/// <summary>
+	/// [연출] 몬스터가 이 화면에 나타난 순간(Start). 모든 화면(서버·호스트·클라이언트)에서 불린다. 소리(SfxPlayer)가 몬스터마다 연출 이벤트를 붙일 때 쓴다 (#436).
+	/// </summary>
+	public static event Action<Monster> Appeared;
+
 	// 사망 연출을 이미 했으면 true. 클라이언트에서 서버의 사망 알림이 늦게 와도 한 번만 부르기 위함
 	bool deathPlayed;
 	// Inspector의 최대 체력. 인원에 따라 바꿀 때 이 값에 비율을 곱한다
 	int baseMaxHp;
+
+	void Start() => Appeared?.Invoke(this);
 
 	void Awake()
 	{

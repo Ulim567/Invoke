@@ -229,7 +229,7 @@ public class GatewayAI : NetworkBehaviour
 		if (summonPending && now >= summonTime)
 		{
 			summonPending = false;
-			SpawnWorms(summonIgnoresLimit);
+			SpawnWorms();
 		}
 		if (smashPending && now >= smashTime)
 		{
@@ -355,9 +355,12 @@ public class GatewayAI : NetworkBehaviour
 
 	// ── 웜 소환 ──
 
-	// 보스 양옆에 번갈아, 그 아래 땅 위에 웜을 만든다 (웜 그림 Pivot은 발밑). 벌칙 공격이면 웜 수 제한을 무시한다
-	void SpawnWorms(bool ignoreLimit)
+	// 보스 양옆에 번갈아, 그 아래 땅 위에 웜을 만든다 (웜 그림 Pivot은 발밑). 벌칙 공격(summonIgnoresLimit)이면 웜 수 제한을 무시한다
+	// 인자를 받지 않는 이유: RaidPartyTest(이우림)가 이 함수를 이름으로 찾아 인자 없이 부른다
+	void SpawnWorms()
 	{
+		bool ignoreLimit = summonIgnoresLimit;
+		summonIgnoresLimit = false;
 		Vector2 boss = transform.position;
 		for (int i = 0; i < wormsPerSummon && (ignoreLimit || AliveWorms() < maxWorms); i++)
 		{

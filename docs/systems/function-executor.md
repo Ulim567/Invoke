@@ -223,7 +223,7 @@
   - 직접 입력한 값이 아닌 초기값(연산, 변수, `malloc`), 읽을 수 없는 글자열, 변수 타입으로 바꿀 수 없는 값
 - 초기화(`FunctionExecutor.RestartProcess`): 프로세스를 새로 시작
   - 순서: 진행 중인 작업 모두 끊기(`Interrupted`) → heap 비우기(`Clear`, 숨은 시스템 전역 포함) → 전역 변수 파일의 초기값으로 전역 변수 다시 만들기
-  - 부르는 곳: 전역 변수 파일 저장, 사망(박진우), 재부팅(재부팅 이슈), 장소 이동(사냥터 ↔ 로비, 장소 이동 이슈), 연습장 초기화
+  - 부르는 곳: 전역 변수 파일 저장, 사망(박진우), 재부팅(재부팅 이슈), 로비 도착(`InvokeNetworkManager.TravelPlayer`가 갈 곳이 로비면 `InterruptAll` 대신 부름, #435), 연습장 초기화
   - 접속: `FunctionExecutor.Start`가 전역 변수만 만듦. 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전한 작업을 끊지 않기 위함
 - 전역 변수 파일 저장 위치: 이 컴퓨터의 `GlobalVariables.json` 하나(`GlobalVariablesStorage`). 서버 저장 전까지의 임시 저장소
 - 초기화 때 읽는 파일 (#173): `SetGlobalVariablesFile`로 정한 파일. 정하지 않았으면 이 컴퓨터의 파일
@@ -404,7 +404,7 @@
 | `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
 | `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
 | `Cancel(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 원본으로 시전한 `FunctionTask`만 `Cancelled`로 끊는다(진행 중, 다음 tick을 기다리는 것 모두). 끊은 작업이 있으면 `true`, 없으면 `false`. 플레이어가 그 슬롯의 작업을 취소할 때 부른다. 스킬 슬롯은 같은 스킬이 다른 function 안에서 실행 중이어도 끊지 않으므로, `IsRunning`이 `true`여도 `false`일 수 있다. 처리는 「끊기는 경우」 (#143) |
-| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화에서 부른다. (#139) |
+| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 로비 도착(`TravelPlayer`, #435), 연습장 초기화에서 부른다. (#139) |
 | `SetGlobalVariablesFile(GlobalVariablesData file)` | 전역 변수 파일 (`null`이면 이 컴퓨터의 파일) | - | 초기화 때 읽을 전역 변수 파일을 정한다. 정하기만 하고 초기화하지 않는다. 서버가 플레이어가 보낸 파일로 전역 변수를 만들 때 쓴다 (#173) |
 | `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장한 뒤 `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
 | `CanUseGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | `TrySaveGlobalVariables`와 같은 검사만 한다. 저장·반영하지 않음. 서버가 DB에 저장하기 전에 쓴다(`FunctionExecutorNetwork`). (#205) |

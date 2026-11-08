@@ -295,6 +295,7 @@ public class InvokeNetworkManager : NetworkManager
 	/// 서버에서 플레이어를 다른 장소 씬으로 옮긴다. 서버에서만 부른다.
 	/// <para>
 	/// - 서버: 플레이어가 실행 중인 함수를 모두 끊고, 그 씬으로 옮기고, 도착 위치(ArrivalPoint)로 순간이동시킨다.<br/>
+	/// - 로비로 오면 함수를 끊는 대신 프로세스를 재시작하고(소환검·heap·전역 변수 초기화) 체력을 채운다 (#435, ResetOnLobbyArrival).<br/>
 	/// - 클라이언트: 이전 씬 언로드 → 새 씬 로드 → teleport → TravelEndedMessage 순서로 받는다.<br/>
 	/// - 이전 씬이 연습장이면 그 연습장을 내린다.<br/>
 	/// - 이전 씬이 레이드 던전이면 RaidParties에 알린다. 던전을 내릴지는 RaidParties가 정한다.
@@ -306,7 +307,9 @@ public class InvokeNetworkManager : NetworkManager
 	public void TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)
 	{
 		// 이전 씬에서 시전한 함수가 새 씬에서 계속 실행되지 않도록 끊는다 (몬스터를 기다리던 작업, 이전 씬에 만들 검 등)
-		if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll();
+		// 로비로 오면 끊는 대신 프로세스를 재시작하고 체력을 채운다. 소환검을 새 씬으로 옮기기(아래 MoveToScene) 전에 해야 검이 따라오지 않는다 (#435)
+		if (target.name == PlaceScenes.Lobby) ResetOnLobbyArrival(player);
+		else if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll();
 
 		Scene previous = player.scene;
 
@@ -339,6 +342,14 @@ public class InvokeNetworkManager : NetworkManager
 		TrainingRooms.OnLeftRoom(conn, previous);
 		// 레이드가 끝나 로비로 온 것이면 기록에서 빠지고, 레이드 도중이면 파티원 이탈이다. 남은 파티원이 없으면 RaidParties가 던전을 내린다
 		if (InstanceScenes.IsRaidScene(previous)) RaidParties.OnLeftDungeon(conn, previous);
+	}
+
+	// [서버] 로비에 도착한 플레이어를 정리한다 (#435). 프로세스 재시작(작업 끊기, heap·소환검 비우기, 전역 변수 초기값) → 체력 채우기.
+	// 죽은 채로 온 플레이어는 체력을 채우지 않고, 아래 CompleteRespawn이 최대 체력으로 살린다
+	static void ResetOnLobbyArrival(GameObject player)
+	{
+		if (player.TryGetComponent(out FunctionExecutor executor)) executor.RestartProcess();
+		if (player.TryGetComponent(out PlayerHealth health)) health.RestoreFullHp();
 	}
 
 	// [서버] 플레이어가 부활할 때가 된 순간(PlayerHealth.RespawnDue). 옮길 곳이 있으면 죽은 채로 두고, 로딩 화면이 덮인 뒤 옮기고 나서 살린다 (#310, #391)

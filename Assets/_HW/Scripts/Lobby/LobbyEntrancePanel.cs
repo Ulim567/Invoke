@@ -24,7 +24,7 @@ public class LobbyEntrancePanel : InputBlockingPanel
 	{
 		if (IsOpen) return;
 		current = entrance;
-		if (titleText != null) titleText.text = entrance.DisplayName;
+		if (titleText != null) titleText.text = "> " + entrance.DisplayName; // 다른 창 제목과 같은 「> 」 (#434)
 		if (descriptionText != null) descriptionText.text = entrance.Description;
 		Show(player);
 	}

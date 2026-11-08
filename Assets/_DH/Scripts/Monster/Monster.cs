@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -93,6 +94,14 @@ public class Monster : MonoBehaviour, IDamageable
 	bool deathPlayed;
 	// Inspector의 최대 체력. 인원에 따라 바꿀 때 이 값에 비율을 곱한다
 	int baseMaxHp;
+	// [서버] 때린 플레이어별 누적 피해량 (#484). 처음 때린 순서대로 쌓여서, 피해량이 같으면 앞에 있는 사람이 먼저 때린 사람이다
+	readonly List<AttackerRecord> attackers = new List<AttackerRecord>(4);
+
+	struct AttackerRecord
+	{
+		public GameObject Attacker;
+		public int Damage;
+	}
 
 	void Start() => Appeared?.Invoke(this);
 
@@ -127,16 +136,69 @@ public class Monster : MonoBehaviour, IDamageable
 	/// damage만큼 체력을 줄인다. 0 이하이거나 이미 죽었으면 무시한다. 체력이 0이 되면 사망한다.
 	/// Invulnerable이면 체력은 그대로 두고 Damaged·HitEffectPlayed만 부른다.
 	/// </summary>
-	public void TakeDamage(int damage)
+	public void TakeDamage(int damage) => TakeDamage(damage, null);
+
+	/// <summary>
+	/// [서버] TakeDamage(damage)와 같고, 체력을 실제로 줄인 양을 attacker의 누적 피해량에 더한다 (#484).
+	/// MonsterReward가 이 기록으로 처치 보상을 받을 사람을 정한다. attacker가 null이거나 Invulnerable이면 기록하지 않는다.
+	/// </summary>
+	public void TakeDamage(int damage, GameObject attacker)
 	{
 		if (damage <= 0 || IsDead) return;
 
 		// 허수아비는 체력을 그대로 두지만, 데미지 숫자를 띄울 수 있게 이벤트는 똑같이 부른다
-		if (!invulnerable) Hp = Mathf.Max(Hp - damage, 0);
+		if (!invulnerable)
+		{
+			int before = Hp;
+			Hp = Mathf.Max(Hp - damage, 0);
+			// 남은 체력보다 큰 마지막 한 방이 순위를 뒤집지 않도록 실제로 줄인 양만 센다
+			RecordAttacker(attacker, before - Hp);
+		}
 		Damaged?.Invoke(damage);
 		PlayHitEffect(damage);
 
 		if (Hp == 0) Die();
+	}
+
+	/// <summary>[서버] attacker가 이 몬스터에게 준 누적 피해량. 때린 적이 없으면 0.</summary>
+	public int DamageDealtBy(GameObject attacker)
+	{
+		if (attacker == null) return 0;
+		for (int i = 0; i < attackers.Count; i++)
+			if (attackers[i].Attacker == attacker) return attackers[i].Damage;
+		return 0;
+	}
+
+	/// <summary>
+	/// [서버] 때린 플레이어를 누적 피해량이 큰 순서로, 같으면 먼저 때린 순서로 result에 채운다 (result는 비우고 채운다).
+	/// 없어진 오브젝트(접속 끊김)는 뺀다. MonsterReward가 받을 사람을 고를 때 쓴다.
+	/// </summary>
+	public void GetAttackerRanking(List<GameObject> result)
+	{
+		result.Clear();
+		// 삽입 정렬: 피해량이 더 큰 사람 앞에만 끼운다. 같으면 뒤에 붙으므로 먼저 때린 사람이 앞에 남는다
+		for (int i = 0; i < attackers.Count; i++)
+		{
+			AttackerRecord record = attackers[i];
+			if (record.Attacker == null) continue;
+			int at = result.Count;
+			while (at > 0 && DamageDealtBy(result[at - 1]) < record.Damage) at--;
+			result.Insert(at, record.Attacker);
+		}
+	}
+
+	void RecordAttacker(GameObject attacker, int dealt)
+	{
+		if (attacker == null || dealt <= 0) return;
+		for (int i = 0; i < attackers.Count; i++)
+		{
+			if (attackers[i].Attacker != attacker) continue;
+			AttackerRecord record = attackers[i];
+			record.Damage += dealt;
+			attackers[i] = record;
+			return;
+		}
+		attackers.Add(new AttackerRecord { Attacker = attacker, Damage = dealt });
 	}
 
 	void Die()

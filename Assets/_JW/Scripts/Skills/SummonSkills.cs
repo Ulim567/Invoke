@@ -323,7 +323,7 @@ public class CSwordDance : DataDrivenSkill
 				Effects(task)?.RaiseFired(Id, center, Vector2.zero);
 			}
 			SummonDamage.Deal(Id, Data, caster, target, s.transform.position, 0f);
-			StatusEffects.TryApply(target.gameObject, StatusType.Bleed);
+			StatusEffects.TryApply(target.gameObject, StatusType.Bleed, caster);
 			if (target.IsDead) break;
 		}
 	}
@@ -356,7 +356,7 @@ static class SummonDamage
 		float multiplier = data != null ? data.DamageMultiplier : 1f;
 		DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = bonusRate };
 		DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
-		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage);
+		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(skillId, monster.gameObject, point, result);
 	}
 }

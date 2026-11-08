@@ -149,9 +149,15 @@
   - 실명(`IsBlinded`): 공격이 빗나간다. `ContactDamage`는 피해를 주지 않는다. 실명 중에 쏜 투사체는 `Misses`가 켜져 플레이어를 통과한다(날아가는 중에 실명이 풀려도 빗나감). 땅·발판에는 그대로 막힌다.
 
 - 처치 보상 (`MonsterReward`)
-  - 몬스터가 죽으면(`Died`) 죽은 자리에서 `Reward Range`(잡몹 20칸) 안의 살아 있는 플레이어 모두에게 경험치·돈·재료를 준다. 때린 사람은 따로 세지 않는다 (`TakeDamage`에 때린 사람 정보가 없어서, 알파에서는 근처 모두에게 준다).
-  - `Whole Scene`을 켜면(레이드 보스) 거리·생사와 상관없이 같은 씬의 플레이어 모두가 받는다. 죽어서 관전 중인 파티원도 받는다.
-  - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴려서 받는 플레이어 모두에게 같은 것을 준다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다.
+  - 받는 플레이어 (#484): 몬스터가 죽으면(`Died`) 누적 피해량이 가장 큰 플레이어 한 명이 경험치·돈·재료를 모두 받는다.
+    - 누적 피해량이 같으면: 먼저 때린 플레이어
+    - 누적 피해량: 체력을 실제로 줄인 양. 남은 체력보다 큰 마지막 한 방은 남은 체력만큼만 센다
+    - 출혈 피해: 출혈을 건 플레이어의 피해로 센다 (`status-effects.md`)
+    - 받을 플레이어가 죽었거나 몬스터의 씬을 떠났으면(접속 끊김 포함): 같은 씬에 살아 있는 플레이어 중 다음 순위
+    - 때린 플레이어가 없거나 모두 받을 수 없으면: 아무도 받지 않음
+    - 피해 기록: `Monster`가 `TakeDamage(int, GameObject attacker)`로 받은 피해만 기록. 때린 사람 없이 받은 피해(`TakeDamage(int)`)는 세지 않음
+  - `Whole Scene`을 켜면(레이드 보스) 피해량·거리·생사와 상관없이 같은 씬의 플레이어 모두가 받는다. 죽어서 관전 중인 파티원도 받는다.
+  - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴린다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다.
   - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
   - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다.
   - 재료 ID: `bug_fragment`(버그 조각), `boss_core`(보스 코어). 이름표는 `SkillTreeDefaults`(임혜원)와 같다.
@@ -159,8 +165,8 @@
 
     | 몬스터 | 경험치 | 돈 | 재료 | 받는 플레이어 |
     | --- | --- | --- | --- | --- |
-    | Leak | 10 | 5 | 버그 조각 1개 (50%) | 20칸 안, 살아 있는 플레이어 |
-    | Loop | 15 | 8 | 버그 조각 1개 (60%) | 20칸 안, 살아 있는 플레이어 |
+    | Leak | 10 | 5 | 버그 조각 1개 (50%) | 가장 많이 때린 플레이어 한 명 |
+    | Loop | 15 | 8 | 버그 조각 1개 (60%) | 가장 많이 때린 플레이어 한 명 |
     | Gateway | 200 | 100 | 보스 코어 1개 (100%), 버그 조각 5개 (100%) | 같은 씬 모두 (`Whole Scene`) |
 
   - 기둥·분신·웜·허수아비에는 `MonsterReward`를 붙이지 않는다 (보상 없음).
@@ -174,6 +180,7 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `TakeDamage(int damage)` | 데미지 (배율·반올림까지 끝낸 정수) | - | 피해를 준다. 0 이하이거나 이미 죽은 대상이면 아무 일도 일어나지 않는다. |
+| `TakeDamage(int damage, GameObject attacker)` | 데미지, 때린 플레이어 | - | (#484) 때린 플레이어와 함께 피해를 준다. 몬스터는 처치 보상을 정할 때 이 기록을 쓴다. 플레이어(`PlayerHealth`)는 `TakeDamage(int)`와 같다. 플레이어 스킬은 이 함수에 시전자(`caster`)를 넘긴다 |
 
 ### `Monster`
 
@@ -181,7 +188,10 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0이 되면 사망한다. |
+| `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0이 되면 사망한다. 피해 기록에는 남지 않는다 |
+| `TakeDamage(int damage, GameObject attacker)` | 데미지, 때린 플레이어 | - | (#484) 체력을 줄이고, 실제로 줄인 양을 `attacker`의 누적 피해량에 더한다. `attacker`가 `null`이거나 `Invulnerable`이면 기록하지 않는다. 서버에서만 |
+| `DamageDealtBy(GameObject attacker)` | 때린 플레이어 | `int` | (#484) 그 플레이어의 누적 피해량. 없으면 0. 서버에서만 |
+| `GetAttackerRanking(List<GameObject> result)` | 채울 목록 | - | (#484) 때린 플레이어를 누적 피해량이 큰 순서로, 같으면 먼저 때린 순서로 `result`에 채운다 (비우고 채움). 없어진 오브젝트는 뺀다. `MonsterReward`가 받을 사람을 고를 때 쓴다. 서버에서만 |
 | `Hp` | - | `int` | 지금 체력. 읽기만 한다. |
 | `MaxHp` | - | `int` | 최대 체력 (Inspector 값) |
 | `IsDead` | - | `bool` | 죽었으면 `true` |
@@ -329,7 +339,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 ### `MonsterReward`
 
-보상을 줄 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다. Inspector에서 `Player Layers`는 Player로 둔다. `NetworkBehaviour`라서 프리팹에 `NetworkIdentity`가 있어야 한다 (#404).
+보상을 줄 몬스터 프리팹 최상위에 `Monster`와 함께 붙인다. `NetworkBehaviour`라서 프리팹에 `NetworkIdentity`가 있어야 한다 (#404).
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
@@ -339,9 +349,9 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 | --- | --- |
 | `Exp`, `Money` | 받는 플레이어마다 주는 경험치, 돈 |
 | `Drops` | 재료 드롭 목록 (`Material Id`, `Count`, `Chance`) |
-| `Reward Range` | 죽은 자리에서 이 거리 안의 살아 있는 플레이어가 받는다. 몬스터를 선택하면 노란 원으로 보인다 |
-| `Player Layers` | Player |
-| `Whole Scene` | 켜면 같은 씬의 플레이어 모두 (레이드 보스) |
+| `Whole Scene` | 켜면 같은 씬의 플레이어 모두 (레이드 보스). 끄면 가장 많이 때린 플레이어 한 명 (#484) |
+
+- `Reward Range`, `Player Layers`는 #484에서 없앴다. 프리팹에 남은 값은 Unity가 무시한다
 
 ### `FallingPacket`
 

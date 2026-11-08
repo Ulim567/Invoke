@@ -96,20 +96,21 @@ public class SfxPlayer : MonoBehaviour
 	{
 		if (table == null || monster == null || !table.TryGetMonster(monster.name, out SoundTable.MonsterSounds s)) return;
 
+		// 씬은 지금 기억해 둔다. 몬스터가 없어진 뒤 이벤트가 와도 없어진 오브젝트를 읽지 않게 하기 위함 (몬스터는 장소를 옮기지 않음)
 		Scene scene = monster.gameObject.scene;
 		Play(s.appear, scene);
 
 		// 몬스터가 없어지면 이벤트도 같이 사라지므로 따로 떼지 않는다
-		if (s.hit != null && s.hit.Length > 0) monster.HitEffectPlayed += _ => Play(s.hit, monster.gameObject.scene);
-		if (s.death != null && s.death.Length > 0) monster.DeathEffectPlayed += () => Play(s.death, monster.gameObject.scene);
+		if (s.hit != null && s.hit.Length > 0) monster.HitEffectPlayed += _ => Play(s.hit, scene);
+		if (s.death != null && s.death.Length > 0) monster.DeathEffectPlayed += () => Play(s.death, scene);
 
 		if (monster.TryGetComponent(out GatewayAI ai))
 		{
-			if (s.slam != null && s.slam.Length > 0) ai.SlamEffectPlayed += () => Play(s.slam, monster.gameObject.scene);
-			if (s.summon != null && s.summon.Length > 0) ai.SummonEffectPlayed += () => Play(s.summon, monster.gameObject.scene);
+			if (s.slam != null && s.slam.Length > 0) ai.SlamEffectPlayed += () => Play(s.slam, scene);
+			if (s.summon != null && s.summon.Length > 0) ai.SummonEffectPlayed += () => Play(s.summon, scene);
 		}
 		if (s.fire != null && s.fire.Length > 0 && monster.TryGetComponent(out ProjectileAttack thrower))
-			thrower.FireEffectPlayed += _ => Play(s.fire, monster.gameObject.scene);
+			thrower.FireEffectPlayed += _ => Play(s.fire, scene);
 	}
 
 	// ── 플레이어 스킬 ──

@@ -75,7 +75,7 @@
 몬스터 프리팹 최상위 오브젝트(`StatusEffects`와 같은 곳)에 붙인다. `StatusEffects`가 없으면 자동으로 붙는다 (RequireComponent).
 
 - `StatusApplied` / `StatusRemoved`를 받아 걸린 상태마다 아이콘 하나를 띄운다. 값은 바꾸지 않는다 (표시 전용).
-- 아이콘은 몬스터의 자식으로 만들어져 몬스터를 따라다니고, 몬스터가 사라지면 같이 사라진다.
+- 아이콘은 몬스터의 자식으로 만들어져 몬스터를 따라다니고, 몬스터가 사라지면 같이 사라진다. 몬스터 프리팹 크기가 1이 아니어도(Leak 1.5×1) 아이콘은 원래 비율로 보인다 (#456).
 - 위치: 콜라이더 윗변에서 `heightAboveTop`(1.4) 위(그 아래에 몬스터 체력 바가 뜬다, monster-health-bar.md). 여러 개면 걸린 순서대로 `spacing`(1.1) 간격으로 가로로 놓고, 몸 가운데에 맞춰 정렬한다.
 - 같은 상태를 다시 걸어도 아이콘은 늘지 않는다. 풀리면 그 아이콘만 사라지고 남은 것이 다시 가운데 정렬된다.
 - 아이콘 프리팹: `Assets/_JW/Resources/StatusIcon.prefab` (SpriteRenderer, Sorting Layer `WorldUI`). 인스펙터 `iconPrefab`이 비어 있으면 이걸 불러온다.
@@ -96,7 +96,7 @@
   - 이속 감소: `Slow Tint`(파란색)를 곱한다. 실명과 같이 걸리면 둘 다 곱한다
   - 출혈: 데미지가 들어갈 때마다 `Bleed Flash Seconds`(0.15초) 동안 `Bleed Flash Color`(빨강)로 번쩍인다. 서버·Host는 `BleedTicked`(실제 데미지)에 맞추고, 클라이언트는 걸린 순간부터 `BleedInterval`(1초)마다 번쩍인다
   - 색은 상태가 걸린 동안만 `LateUpdate`에서 칠하고, 모두 풀리면 처음 색(`Awake` 때 색)으로 한 번 되돌린다. 그 뒤로는 색을 건드리지 않는다
-- 그림 효과: 걸린 동안 대상의 자식으로 띄우고, 풀리면 없앤다. Inspector 칸이 비어 있으면 기본 그림 `Assets/_JW/Resources/StatusEffects/{상태 이름}.prefab`(Bleed, Mark, Stun, Blind, Slow, #363)을 쓴다. 그래서 몬스터 프리팹마다 칸을 채우지 않아도 된다. 기본 그림도 없으면 색 효과만 낸다
+- 그림 효과: 걸린 동안 대상의 자식으로 띄우고, 풀리면 없앤다. 대상 크기가 1이 아니어도(Leak 1.5×1) 그림은 원래 비율로 보이게 크기를 되돌린다 (#456, `StatusEffectView.InverseScale`). Inspector 칸이 비어 있으면 기본 그림 `Assets/_JW/Resources/StatusEffects/{상태 이름}.prefab`(Bleed, Mark, Stun, Blind, Slow, #363)을 쓴다. 그래서 몬스터 프리팹마다 칸을 채우지 않아도 된다. 기본 그림도 없으면 색 효과만 낸다
   | 칸 | 상태 | 자리 |
   | --- | --- | --- |
   | `Bleed Effect` | 출혈 (핏방울) | 몸 가운데 |

@@ -9,7 +9,7 @@ using UnityEngine;
 /// - 색 효과: 실명은 어두운 틴트, 이속 감소는 파란 틴트. 둘 다 걸리면 곱해서 섞는다. 출혈은 데미지가 들어갈 때마다(1초마다) 빨갛게 번쩍인다.<br/>
 ///   · 서버·Host는 StatusEffects.BleedTicked(실제 데미지)에 맞춰 번쩍인다. 클라이언트에는 BleedTicked가 없어서, 출혈이 걸린 순간부터 BleedInterval마다 번쩍인다.<br/>
 ///   · 색은 상태가 걸린 동안만 바꾸고, 모두 풀리면 처음 색으로 되돌린다.<br/>
-/// - 그림 효과(핏방울, 표식, 머리 위 별, 검은 연기, 발밑 얼음): 걸린 동안 대상의 자식으로 띄운다. Inspector 칸이 비어 있으면 기본 그림(Resources/StatusEffects/상태 이름, #363)을 쓰고, 그것도 없으면 색 효과만 낸다.<br/>
+/// - 그림 효과(핏방울, 표식, 머리 위 별, 검은 연기, 발밑 얼음): 걸린 동안 대상의 자식으로 띄운다. 대상 크기가 1이 아니어도 그림은 원래 비율 (#456). Inspector 칸이 비어 있으면 기본 그림(Resources/StatusEffects/상태 이름, #363)을 쓰고, 그것도 없으면 색 효과만 낸다.<br/>
 /// - 보여 주기만 하는 오브젝트라 네트워크 오브젝트가 아니다. 각 화면이 직접 만들고 없앤다.
 /// </para>
 /// </summary>
@@ -171,6 +171,8 @@ public class StatusEffectView : MonoBehaviour
 		if (prefab == null || HasEffectObject(type)) return;
 		GameObject obj = Instantiate(prefab, transform);
 		obj.transform.position = AnchorOf(type);
+		// 대상 크기가 1이 아니어도(Leak 1.5×1) 그림은 원래 비율로 보이게 되돌린다 (#456)
+		obj.transform.localScale = Vector3.Scale(prefab.transform.localScale, InverseScale(transform));
 		effects[type] = obj;
 	}
 
@@ -206,6 +208,13 @@ public class StatusEffectView : MonoBehaviour
 			defaults[type] = prefab;
 		}
 		return prefab;
+	}
+
+	/// <summary>parent 자식의 크기를 parent 크기만큼 되돌리는 배율 (#456). 몬스터 프리팹 크기가 (1.5, 1)이어도 자식 그림이 늘어나지 않게.</summary>
+	public static Vector3 InverseScale(Transform parent)
+	{
+		Vector3 s = parent.lossyScale;
+		return new Vector3(1f / Mathf.Max(0.0001f, Mathf.Abs(s.x)), 1f / Mathf.Max(0.0001f, Mathf.Abs(s.y)), 1f);
 	}
 
 	// 효과를 놓을 자리: 별은 머리 위, 연기는 머리 쪽, 발밑 기운은 발밑, 나머지는 몸 가운데

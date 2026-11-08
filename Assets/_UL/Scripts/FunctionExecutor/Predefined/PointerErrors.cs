@@ -18,5 +18,5 @@ public class InvalidPointerError : SkillError
 	}
 
 	// HUD 알림에 그대로 보인다(#480)
-	public override string Message => $"포인터 {Pointer}은 쓸 수 없습니다. NULL이거나, 이미 free했거나, 다른 타입의 객체를 가리킵니다";
+	public override string Message => $"쓸 수 없는 포인터 {Pointer}";
 }

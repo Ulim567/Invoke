@@ -219,7 +219,7 @@ protected override void OnEnd(FunctionContext context)
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `Message` | `string` | 로그와 화면에 보여 줄 설명. 덮어쓰지 않으면 클래스 이름 |
+| `Message` | `string` | 로그와 화면에 보여 줄 설명. 덮어쓰지 않으면 클래스 이름. HUD 실패 알림의 둘째 줄에 그대로 보임(첫 줄은 `[Runtime Error] 클래스 이름`, #480). 현상만 짧게 적음(예: 「손에 검이 없음」, 「~하세요」 같은 해결 방법은 넣지 않음) |
 | `SourceName` | `string` | 에러를 낸 스킬의 이름. `Fail`이 채움 |
 
 - 있는 에러

@@ -161,12 +161,21 @@ public static class HudUIBuilder
 		var names = new TMP_Text[8];
 		var cooldowns = new Image[8];
 		var running = new Image[8];
+		var icons = new Image[8];
 		for (int i = 0; i < 8; i++)
 		{
 			RectTransform slot = NewUI("Slot" + Keys[i], center);
 			Place(slot, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-99 + i * 28, 5), new Vector2(22, 22));
 			frames[i] = SetImage(slot.gameObject, "hud_slot");
 			frames[i].raycastTarget = false;
+
+			// 스킬 아이콘 (#444, 박진우): 칸 가운데 24×24 (판 20px이 칸 안쪽에 맞음). 실행 중·쿨타임 덮개와 키 글자가 위에 그려진다
+			RectTransform iconRect = NewUI("Icon", slot);
+			Place(iconRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(24, 24));
+			icons[i] = iconRect.gameObject.AddComponent<Image>();
+			icons[i].raycastTarget = false;
+			icons[i].preserveAspect = true;
+			icons[i].enabled = false;
 
 			RectTransform runRect = NewUI("Running", slot);
 			Stretch(runRect, 1);
@@ -246,6 +255,7 @@ public static class HudUIBuilder
 		Array(so, "slotNames", names);
 		Array(so, "slotCooldowns", cooldowns);
 		Array(so, "slotRunning", running);
+		Array(so, "slotIcons", icons);
 		Set(so, "slotSprite", LoadSprite("hud_slot"));
 		Set(so, "slotEmptySprite", LoadSprite("hud_slot_empty"));
 		Set(so, "slotRejectedSprite", LoadSprite("hud_slot_rejected"));

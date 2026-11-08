@@ -27,6 +27,7 @@ GameObject:
   - component: {fileID: 6040740301031971895}
   - component: {fileID: 241456783796053641}
   - component: {fileID: 7922331635189388338}
+  - component: {fileID: 9217091507412607838}
   m_Layer: 9
   m_Name: Gateway
   m_TagString: Untagged
@@ -422,6 +423,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8a0a3091a750d46479b7c78e23994ba5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MonsterReward
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
   exp: 200
   money: 100
   drops:
@@ -503,3 +507,21 @@ MonoBehaviour:
   maxPerMaterial: 10
   popSpeedX: {x: -2.5, y: 2.5}
   popSpeedY: {x: 6, y: 8}
+--- !u!114 &9217091507412607838
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1495201610127570355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1f06d99450ff4499a7ae5b2874363fa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DamageNumberView
+  numberPrefab: {fileID: 0}
+  heightAboveTop: 2.2
+  jitter: 0.4
+  criticalScale: 1.3
+  bigDamage: 200
+  bigDamageScale: 1.4

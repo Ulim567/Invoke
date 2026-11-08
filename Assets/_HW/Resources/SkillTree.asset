@@ -381,7 +381,7 @@ MonoBehaviour:
     cost:
     - materialId: bug_fragment
       count: 8
-    - materialId: field_boss_core
+    - materialId: boss_core
       count: 1
     unlocksBlocks: 0c0000000d000000i
     description:

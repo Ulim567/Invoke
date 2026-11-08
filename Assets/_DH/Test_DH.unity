@@ -1602,6 +1602,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RaidJudge
   checkInterval: 0.25
   resultDelay: 3
+  hpRateByPlayers:
+  - 0.4
+  - 0.7
+  - 1
 --- !u!114 &878968548
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -5,7 +5,8 @@ using UnityEngine.UI;
 /// <summary>
 /// 스킬 트리 화면의 노드 하나 (SkillTreeNode 프리팹). SkillTreeView가 만들고 색·글자를 정한다. 보여 주기만 한다.
 /// <para>
-/// 프리팹 구성: 최상위에 Image + Button + Outline + 이 컴포넌트, 자식에 Text - TextMeshPro(Raycast Target 끔).
+/// 프리팹 구성: 최상위에 Image + Button + Outline + 이 컴포넌트, 자식에 Text - TextMeshPro(Raycast Target 끔).<br/>
+/// 이름이 칸보다 길면 줄을 바꾸지 않고 글자를 줄인다 (프리팹 글자 크기의 60%까지).
 /// </para>
 /// </summary>
 public class SkillTreeNodeView : MonoBehaviour
@@ -28,6 +29,11 @@ public class SkillTreeNodeView : MonoBehaviour
 	// 노드 높이(48)에 맞춘 아이콘 크기와, 아이콘이 있을 때 글자 왼쪽 여백
 	const float IconSize = 40f, IconLeft = 4f;
 
+	// 긴 이름(예: 소환검 휘두르기)이 아이콘 옆 좁은 칸에서 두 줄로 꺾이지 않게, 줄을 바꾸는 대신 글자를 줄인다.
+	// 가장 작게는 프리팹 글자 크기의 이만큼
+	const float MinFontScale = 0.6f;
+	float baseFontSize; // 프리팹에 정한 글자 크기 (자동 크기의 최대)
+
 	public RectTransform Rect => (RectTransform)transform;
 	public Button Button => button;
 
@@ -45,8 +51,19 @@ public class SkillTreeNodeView : MonoBehaviour
 		if (label != null)
 		{
 			label.color = Color.white; // 어두운 바탕에서 읽히게. 잠긴 노드의 회색은 글자 안의 색 태그로 준다
+			FitLabel();
 			label.text = text;
 		}
+	}
+
+	// 노드 칸에 글자를 맞춘다: 자동 줄바꿈은 끄고(「+ 검 소환」 같은 \n 줄은 그대로), 넘치면 TMP 자동 크기로 줄인다
+	void FitLabel()
+	{
+		if (baseFontSize <= 0f) baseFontSize = label.enableAutoSizing ? label.fontSizeMax : label.fontSize;
+		label.textWrappingMode = TextWrappingModes.NoWrap;
+		label.enableAutoSizing = true;
+		label.fontSizeMax = baseFontSize;
+		label.fontSizeMin = baseFontSize * MinFontScale;
 	}
 
 	/// <summary>

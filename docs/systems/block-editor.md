@@ -164,7 +164,9 @@
 - 함수 목록의 `Global Variables`를 누르면 전역 변수 선언(`GlobalVariablesData.Declarations`)을 같은 편집 영역에서 고친다. 함수 이름 칸은 끈다
 - 불러오기: 실제 계정은 `ReceivedGlobals`의 복사본, 임시 계정은 `GlobalVariablesStorage.Load()`
 - 저장: 실제 계정은 `RequestSaveGlobals`(결과 `PlayerDataRequestAnswered`의 `SaveGlobals`), 임시 계정은 내 캐릭터의 `FunctionExecutor.TrySaveGlobalVariables`(검사 → 저장 → 초기화). 검사에 걸리면 상태 줄에 빨갛게 알린다
-- 선언 블록(`int x = 3;`)만 넣는다. 다른 블록이 있으면 저장 검사에서 거부된다 (function-executor.md 「전역 변수」)
+- 선언 블록(`int x = 3;`)과 배열 만들기 블록(`int arr[5];`, #478)만 넣는다. 다른 블록이 있으면 저장 검사에서 거부된다 (function-executor.md 「전역 변수」)
+  - 배열 만들기 블록은 함수 화면과 같이 `syntax.list` 해금 뒤에 블록 목록에 보인다
+- 위쪽 정보 글자: 「전역 변수 n개   데이터 영역 m칸」. m은 `GlobalVariablesConverter.CountCells`(선언 1칸, 배열 만들기는 길이만큼, #478)
 
 ### 실제 계정 (서버 저장)
 - 내 캐릭터(`NetworkClient.localPlayer`)의 `FunctionExecutorNetwork.UsesServerData`가 true면 서버 모드다. 편집 화면을 열 때마다(`BlockEditorPanel.OpenFor` → `BlockEditor.Refresh`) 다시 확인한다.

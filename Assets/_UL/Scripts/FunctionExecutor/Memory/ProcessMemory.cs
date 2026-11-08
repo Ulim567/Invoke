@@ -13,7 +13,7 @@ using UnityEngine;
 /// 끝나는 순서 때문에 생기는 빈칸은 따지지 않으므로, 스택과 힙은 각각 칸 수만 센다. 그래서 위아래 방향은 계산에 쓰지 않는다.
 /// </para>
 /// <para>
-/// 데이터 영역은 전역 변수 하나에 1칸이다. 초기화부터 다음 초기화까지 칸을 계속 쓰고, 함수가 끝나도 돌려주지 않는다.
+/// 데이터 영역은 전역 변수 하나에 1칸, 전역 array는 길이만큼이다(#478). 초기화부터 다음 초기화까지 칸을 계속 쓰고, 함수가 끝나도 돌려주지 않는다.
 /// </para>
 /// <para>
 /// 힙은 여기서 칸 수만 센다. 어떤 객체가 그 칸을 쓰는지는 Heap(힙 객체 저장소)이 안다.<br/>
@@ -26,6 +26,9 @@ public class ProcessMemory : MonoBehaviour
 	PlayerStats stats;
 	int stackUsed;
 	int heapUsed;
+	// 전역 변수들이 데이터 영역에서 쓰는 칸 수 합계. 전역 변수를 만들 때(ResetGlobals)만 정한다
+	// 변수 수와 따로 두는 이유: 전역 array는 변수 하나가 길이만큼 칸을 쓰기 때문 (#478)
+	int dataUsed;
 
 	// 서버에서 받은 값으로 답하는지. 멀티플레이에서 실행기를 멈춘 화면(클라이언트)만 켠다(SetDisplayedValues)
 	// 그 화면의 이 컴포넌트는 함수를 실행하지 않아 자기 값이 늘 0이므로, 서버의 값을 받아 메모리 게이지에 보여 주기 위함
@@ -41,14 +44,14 @@ public class ProcessMemory : MonoBehaviour
 	/// <summary>
 	/// 이 캐릭터의 전역 변수 저장소. 블록은 실행 문맥(FunctionContext)을 거쳐 값을 읽고 쓴다.
 	/// </summary>
-	// 전역 변수 선언은 이 컴포넌트의 초기화 함수만 한다. 선언 수가 곧 DataUsed라서, 다른 곳에서 선언하면 칸 검사 없이 데이터 영역이 늘어나기 때문
+	// 전역 변수 선언은 이 컴포넌트의 초기화 함수만 한다. 거기서 DataUsed도 함께 정하므로, 다른 곳에서 선언하면 칸 검사 없이 데이터 영역이 늘어나기 때문
 	internal VariableStore Globals { get; private set; }
 
 	/// <summary>
-	/// 지금 데이터 영역이 쓰고 있는 칸 수. 선언한 전역 변수 수와 같다.
+	/// 지금 데이터 영역이 쓰고 있는 칸 수. 전역 변수 하나에 1칸, 전역 array는 길이만큼 더한 값이다. 클라이언트 화면에서는 서버가 알려 준 값이다.
 	/// </summary>
-	// 따로 세지 않고 전역 변수 저장소에서 읽는다. 두 값을 따로 두면 선언·초기화 때 어긋날 수 있기 때문
-	public int DataUsed => usesDisplayedValues ? displayedDataUsed : Globals.Count;
+	// 전역 변수는 실행 중에 늘거나 줄지 않고 array 길이도 바뀌지 않으므로, 만들 때 한 번 센 값을 그대로 쓴다
+	public int DataUsed => usesDisplayedValues ? displayedDataUsed : dataUsed;
 
 	/// <summary>
 	/// 지금 스택이 쓰고 있는 칸 수. 실행 중인 모든 함수의 프레임 크기 합이다. 클라이언트 화면에서는 서버가 알려 준 값이다.
@@ -137,13 +140,20 @@ public class ProcessMemory : MonoBehaviour
 	internal void ResetGlobals(IEnumerable<(string Name, VariableType Type, RuntimeValue Value)> variables)
 	{
 		VariableStore globals = new VariableStore();
+		int cells = 0;
 		foreach ((string variableName, VariableType type, RuntimeValue value) in variables)
 		{
 			// 검사를 통과한 목록이므로 실패하지 않아야 한다. 실패하면 검사와 선언 규칙이 어긋난 코드 실수이므로 조용히 넘기지 않는다
 			if (!globals.TryDeclare(variableName, type, value))
+			{
 				Debug.LogError($"{name}: 전역 변수 {variableName}({type?.Kind})을(를) 만들지 못했습니다. GlobalVariablesConverter의 검사와 VariableStore.TryDeclare의 규칙이 어긋났습니다.", this);
+				continue;
+			}
+			// 저장 검사(GlobalVariablesConverter)와 같은 함수로 센다. 검사한 칸 수와 실제로 잡는 칸 수가 어긋나지 않게 하기 위함
+			cells += GlobalVariablesConverter.CellsOf(value);
 		}
 		Globals = globals;
+		dataUsed = cells;
 	}
 
 	void Awake()

@@ -89,6 +89,8 @@ public class OverflowRestartTest : MonoBehaviour
 				else Debug.LogError($"[OverflowRestartTest] 실패 {failedCount}개");
 
 				RestoreFile();
+				// TrySaveGlobalVariables가 정해 둔 테스트 파일 대신 되돌린 파일을 읽게 한다 (#478)
+				executor.SetGlobalVariablesFile(null);
 				executor.RestartProcess();
 				Debug.Log($"[OverflowRestartTest] 끝. 시작할 때의 전역 변수 파일로 되돌림 (DataUsed {memory.DataUsed})");
 				break;

@@ -106,6 +106,7 @@
 - 공통(`ThrustSkill`)
   - 대상: 파라미터 `target`(슬롯에서 고른 몬스터, 블록에서 넘긴 대상)을 `TryGetArgument("target")`로 읽는다. 값이 없으면 바라보는 방향 사거리 안의 가장 가까운 몬스터, 그것도 없으면 허공을 찌른다(빗나감, `Fired`만).
   - 사거리 `ThrustSkill.Reach` 2.5유닛 (임시). 몸 중심에서 대상 콜라이더의 가장 가까운 점까지 좌우 거리.
+  - 높이 (#437): 찌르기와 돌진은 몸 높이에서 가로로만 나간다. 사거리 안에 들어온 틱에 대상 몸(콜라이더)이 시전자 몸 가운데 ± `ThrustSkill.HitHalfHeight`(1.25유닛)에 걸쳐야 맞는다. 안 걸치면(위·아래 발판의 대상) 허공을 찌르고 데미지 없이 끝난다(`Fired`만). 꼬챙이는 첫 대상이 맞아야 뒤쪽도 맞는다.
   - 대상이 사거리보다 멀면 대상 앞까지 돌진한다 (`PlayerMovement.StartLunge`, player-movement.md). 사거리 안에 들어온 틱에 한 번 찌른다.
   - 스킬이 끝날 때(20틱)까지 닿지 못하면 빗나간다. 돌진은 몬스터 몸에 막힌다 (뒤쪽 몬스터를 고르면 앞의 몬스터에 막혀 빗나감).
   - 데미지: `new DamageRequest(PlayerStats.AttackPower, 표 배율) { BonusRate }` → `DamageCalculator.Calculate(request, DamageTarget.FromMonster)` → `IDamageable.TakeDamage`. 표식은 계산기가 자동으로 더한다.

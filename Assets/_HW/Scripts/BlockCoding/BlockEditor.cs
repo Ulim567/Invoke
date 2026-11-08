@@ -429,13 +429,24 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 지금 함수를 저장하고 저장한 함수 목록을 다시 읽는다.
+	/// 지금 함수를 저장하고 저장한 함수 목록을 다시 읽는다. 저장하기 전에 컴파일(Compile과 같은 검사)을 하고, 오류가 있으면 저장하지 않는다.
+	/// 전역 변수는 컴파일 대신 저장 검사(FunctionExecutor.CanUseGlobalVariables)가 막는다.
 	/// </summary>
 	public void SaveFunction()
 	{
 		if (editingGlobals)
 		{
 			SaveGlobals();
+			return;
+		}
+
+		// 저장하기 전에 항상 컴파일한다. 오류가 있으면 서버에도 파일에도 저장하지 않고, 오류 창과 빨간 표시를 보여 준다 (#432)
+		// 저장하지 않은 내용은 편집 화면에 그대로 남으므로, 고친 뒤 다시 저장하면 된다
+		int compileErrors = RunCompile();
+		if (compileErrors > 0)
+		{
+			SetMessage($"컴파일 오류 {compileErrors}개가 있어 저장하지 않았습니다", true);
+			Redraw();
 			return;
 		}
 
@@ -481,7 +492,10 @@ public class BlockEditor : MonoBehaviour
 	/// 비어 있는 값 칸. 전역 변수는 FunctionExecutor.CanUseGlobalVariables (function-data.md, function-executor.md).
 	/// </para>
 	/// </summary>
-	public void Compile()
+	public void Compile() => RunCompile();
+
+	// 컴파일 버튼과 저장이 함께 쓰는 검사. 오류 수를 돌려준다 (0이면 성공)
+	int RunCompile()
 	{
 		List<FunctionChecker.Error> errors;
 		if (editingGlobals)
@@ -500,6 +514,7 @@ public class BlockEditor : MonoBehaviour
 		else ShowSuccess();
 		SetMessage(errors.Count == 0 ? "컴파일 성공" : $"컴파일 오류 {errors.Count}개", errors.Count > 0);
 		Redraw();
+		return errors.Count;
 	}
 
 	string OpenKey => editingGlobals ? GlobalsKey : Function?.Guid;
@@ -660,6 +675,12 @@ public class BlockEditor : MonoBehaviour
 			else ((RectTransform)t.GetChild(Mathf.Min(index, t.childCount - 1))).GetWorldCorners(corners);
 			// 맨 끝이면 마지막 블록 아래(왼쪽 아래 모서리), 아니면 그 자리 블록 위(왼쪽 위 모서리)
 			insertMarker.position = t.childCount > 0 && index >= t.childCount ? corners[0] : corners[1];
+
+			// 줄을 시작 위치에서 이 블록 자리(편집 영역 또는 블록 영역)의 오른쪽 끝까지 늘려서, 어디에 들어가는지 멀리서도 보이게 한다
+			var listCorners = new Vector3[4];
+			((RectTransform)t).GetWorldCorners(listCorners);
+			float width = (listCorners[2].x - insertMarker.position.x) / insertMarker.lossyScale.x;
+			insertMarker.sizeDelta = new Vector2(Mathf.Max(MarkerMinWidth, width), MarkerThickness);
 			insertMarker.SetAsFirstSibling(); // 끄는 블록보다 아래에 그린다
 			return;
 		}
@@ -674,6 +695,10 @@ public class BlockEditor : MonoBehaviour
 		highlightedSlot = null;
 		SetMarker(false);
 	}
+
+	// 들어갈 자리 줄의 가장 짧은 길이와 두께 (캔버스 기준 960×540 픽셀)
+	const float MarkerMinWidth = 40f;
+	const float MarkerThickness = 3f;
 
 	// 들어갈 자리 줄. 처음 쓸 때 한 번만 프리팹에서 만든다
 	void SetMarker(bool show)
@@ -923,6 +948,16 @@ public class BlockEditor : MonoBehaviour
 	{
 		IEnumerable<FunctionData> owned = Function == null ? savedFunctions : savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function);
 		return CodeSizeCalculator.Calculate(new[] { function.Guid }, new string[0], owned);
+	}
+
+	/// <summary>
+	/// 위쪽 줄의 상태 글자에 안내를 보인다. 칸에 잘못 적었을 때처럼 데이터를 바꾸지 않고 알리기만 할 때 쓴다 (BlockView가 부른다).
+	/// 고친 것으로 치지 않으므로 「저장하지 않은 변경」 표시는 바뀌지 않는다.
+	/// </summary>
+	public void ShowNotice(string text, bool error = true)
+	{
+		SetMessage(text, error);
+		Redraw();
 	}
 
 	void SetMessage(string text, bool error = false)

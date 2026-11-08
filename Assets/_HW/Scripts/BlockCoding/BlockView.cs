@@ -320,11 +320,32 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		field.Edited += text =>
 		{
 			text = text.Trim();
-			if (BlockSlotText.IsIdentifier(text)) slot.Name = text;
+			if (!BlockSlotText.IsIdentifier(text))
+			{
+				RejectText(field, slot.Name, "이름에는 영문자, 숫자, 밑줄만 쓸 수 있고 숫자로 시작할 수 없어요");
+				return;
+			}
+			if (text == slot.Name) return; // 바꾸지 않았으면 고친 것으로 치지 않는다 (저장하지 않은 변경 표시)
+			slot.Name = text;
 			field.Text = slot.Name;
 			RefreshTexts();
 			editor.NotifyChanged();
 		};
+	}
+
+	// 잘못 적은 글자는 원래 값으로 되돌리고, 글자를 잠깐 빨갛게 보이며 상태 줄에 이유를 알린다 (데이터는 바꾸지 않는다)
+	void RejectText(BlockField field, string original, string reason)
+	{
+		field.Text = original;
+		editor.ShowNotice(reason);
+		StartCoroutine(FlashInvalid(field));
+	}
+
+	System.Collections.IEnumerator FlashInvalid(BlockField field)
+	{
+		field.SetInvalid(true);
+		yield return new WaitForSeconds(1f);
+		if (field != null) field.SetInvalid(false);
 	}
 
 	// 변수 칸 (대입의 왼쪽). 이름으로 쓸 수 없는 글자면 원래 이름으로 되돌린다
@@ -337,7 +358,13 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		field.Edited += text =>
 		{
 			text = text.Trim();
-			if (BlockSlotText.IsIdentifier(text)) slot.VariableName = text;
+			if (!BlockSlotText.IsIdentifier(text))
+			{
+				RejectText(field, slot.VariableName, "변수 칸에는 변수 이름만 적을 수 있어요 (숫자나 값은 안 돼요)");
+				return;
+			}
+			if (text == slot.VariableName) return; // 바꾸지 않았으면 고친 것으로 치지 않는다
+			slot.VariableName = text;
 			field.Text = slot.VariableName;
 			editor.NotifyChanged();
 		};

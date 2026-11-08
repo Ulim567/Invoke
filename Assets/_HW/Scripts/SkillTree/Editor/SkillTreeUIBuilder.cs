@@ -8,7 +8,7 @@ using UnityEngine.UI;
 /// <para>
 /// 메뉴 Invoke → UI → 스킬 트리 화면 시안대로. 여러 번 눌러도 된다.<br/>
 /// - 창: 민트 테두리, 왼쪽 위 「> 스킬 트리」, 오른쪽 위 버그 조각 개수(MaterialCountText)와 X, 아래 구분선<br/>
-/// - 「문법 / 스킬」 탭, 트리, 오른쪽 설명 칸(왼쪽 선), 주황 「해금」 버튼, 아래 범례<br/>
+/// - 「문법 / 스킬」 탭, 트리(오른쪽 끝 세로 스크롤 막대), 오른쪽 설명 칸(왼쪽 선, 제목·내용을 쌓고 넘치면 스크롤), 주황 「해금」 버튼, 아래 범례<br/>
 /// - 크기는 시안 9(640×360)를 LobbyUI 캔버스(1920×1080) 기준으로 3배 한 값. 노드 색과 설명 글자는 SkillTreeView가 그린다.
 /// </para>
 /// </summary>
@@ -89,6 +89,7 @@ public static class SkillTreeUIBuilder
 			Stretch(tree, 36, 480 + 24, 192, 72);
 			Image treeImage = tree.GetComponent<Image>();
 			if (treeImage != null) treeImage.color = new Color(0, 0, 0, 0);
+			BuildScrollbar(tree);
 
 			// 설명 칸 (오른쪽, 왼쪽에 세로선)
 			RectTransform detail = (RectTransform)window.Find("Detail");
@@ -107,17 +108,20 @@ public static class SkillTreeUIBuilder
 			detailLine.offsetMax = new Vector2(3, 0);
 			Solid(detailLine.gameObject, Line);
 
-			TMP_Text detailTitle = detail.Find("DetailTitle").GetComponent<TMP_Text>();
-			Style(detailTitle, detailTitle.text, 27, Color.white, TextAlignmentOptions.MidlineLeft, true);
-			TopStretch(detailTitle.rectTransform, 36, 30, 24, 48);
-			TMP_Text detailBody = detail.Find("DetailBody").GetComponent<TMP_Text>();
+			// 제목과 설명은 Content에 위에서부터 쌓는다 (Vertical Layout Group). 제목이 두 줄이 되면 설명이 그만큼 밀린다.
+			// 해금 버튼 위까지가 보이는 칸이고, 넘치면 세로 스크롤 (DetailScroll)
+			RectTransform content = BuildDetailScroll(detail);
+			TMP_Text detailTitle = Find(detail, "DetailTitle").GetComponent<TMP_Text>();
+			Style(detailTitle, detailTitle.text, 27, Color.white, TextAlignmentOptions.TopLeft, true);
+			detailTitle.textWrappingMode = TextWrappingModes.Normal;
+			TMP_Text detailBody = Find(detail, "DetailBody").GetComponent<TMP_Text>();
 			Style(detailBody, detailBody.text, 20, Color.white, TextAlignmentOptions.TopLeft, false);
 			detailBody.lineSpacing = 28;
 			detailBody.textWrappingMode = TextWrappingModes.Normal;
-			detailBody.rectTransform.anchorMin = Vector2.zero;
-			detailBody.rectTransform.anchorMax = Vector2.one;
-			detailBody.rectTransform.offsetMin = new Vector2(36, 120);
-			detailBody.rectTransform.offsetMax = new Vector2(-30, -90);
+			detailTitle.transform.SetParent(content, false);
+			detailBody.transform.SetParent(content, false);
+			detailTitle.transform.SetSiblingIndex(0);
+			detailBody.transform.SetSiblingIndex(1);
 
 			Transform unlock = detail.Find("UnlockButton");
 			Button unlockButton = SetButton(unlock, Orange, null);
@@ -158,6 +162,90 @@ public static class SkillTreeUIBuilder
 		{
 			PrefabUtility.UnloadPrefabContents(root);
 		}
+	}
+
+	// 설명 칸의 스크롤 영역: DetailScroll(Scroll Rect) → Viewport(Rect Mask 2D) → Content(Vertical Layout Group + Content Size Fitter).
+	// 설명 칸 위쪽부터 해금 버튼 바로 위까지. Content를 돌려주고, 제목·설명 글자는 부르는 쪽이 Content 아래로 옮긴다
+	static RectTransform BuildDetailScroll(RectTransform detail)
+	{
+		RectTransform area = Child(detail, "DetailScroll");
+		Stretch(area, 0, 0, 24, 120); // 아래 120: 해금 버튼(아래 36, 높이 72) 위 12
+
+		RectTransform viewport = Child(area, "Viewport");
+		Stretch(viewport, 0, 0, 0, 0);
+		if (!viewport.TryGetComponent(out RectMask2D _)) viewport.gameObject.AddComponent<RectMask2D>();
+		// 빈 곳에서도 휠·끌기가 먹도록 보이지 않는 Image를 깐다
+		Image viewportImage = Solid(viewport.gameObject, new Color(0, 0, 0, 0));
+		viewportImage.raycastTarget = true;
+
+		RectTransform content = Child(viewport, "Content");
+		content.anchorMin = new Vector2(0, 1);
+		content.anchorMax = new Vector2(1, 1);
+		content.pivot = new Vector2(0.5f, 1);
+		content.anchoredPosition = Vector2.zero;
+		content.sizeDelta = Vector2.zero;
+		if (!content.TryGetComponent(out VerticalLayoutGroup column)) column = content.gameObject.AddComponent<VerticalLayoutGroup>();
+		column.padding = new RectOffset(36, 30, 0, 0); // 예전 글자 칸의 왼쪽 36, 오른쪽 30
+		column.spacing = 18; // 예전 제목 아래(72)와 설명 위(90) 사이
+		column.childAlignment = TextAnchor.UpperLeft;
+		column.childControlWidth = column.childControlHeight = true;
+		column.childForceExpandWidth = true;
+		column.childForceExpandHeight = false;
+		if (!content.TryGetComponent(out ContentSizeFitter fitter)) fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+		fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+		fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+		if (!area.TryGetComponent(out ScrollRect scroll)) scroll = area.gameObject.AddComponent<ScrollRect>();
+		scroll.content = content;
+		scroll.viewport = viewport;
+		scroll.horizontal = false;
+		scroll.vertical = true;
+		scroll.movementType = ScrollRect.MovementType.Clamped; // 짧은 내용이 튕기지 않게
+		scroll.scrollSensitivity = 10; // 트리 칸과 같은 휠 감도 (SkillTreeView.WheelSensitivity)
+
+		BuildScrollbar(area);
+		return content;
+	}
+
+	// 스크롤 영역 오른쪽 끝의 세로 스크롤 막대 (트리 칸, 설명 칸). 내용이 칸보다 길 때 더 내려갈 수 있다는 것을 보여 준다.
+	// 보이기·숨기기는 Scroll Rect가 한다 (AutoHide: 내용이 칸보다 길 때만 보임). 이미 있으면 다시 꾸미기만 한다
+	static void BuildScrollbar(RectTransform area)
+	{
+		ScrollRect scroll = area.GetComponent<ScrollRect>();
+		if (scroll == null)
+		{
+			Debug.LogError($"[SkillTreeUIBuilder] {area.name}에 Scroll Rect가 없어서 스크롤 막대를 만들지 못함");
+			return;
+		}
+
+		// 너비 12: 캔버스 9의 얇은 막대(8px, 1280 기준)를 1920 기준으로 키운 값
+		RectTransform bar = Child(area, "Scrollbar");
+		bar.anchorMin = new Vector2(1, 0);
+		bar.anchorMax = new Vector2(1, 1);
+		bar.pivot = new Vector2(1, 0.5f);
+		bar.offsetMin = new Vector2(-12, 0);
+		bar.offsetMax = Vector2.zero;
+		bar.SetAsLastSibling(); // Viewport보다 위에 그린다
+		Image track = Solid(bar.gameObject, Hex("1A1228"));
+		track.raycastTarget = true; // 막대 바탕을 누르면 그쪽으로 이동
+
+		RectTransform slidingArea = Child(bar, "Sliding Area");
+		Stretch(slidingArea, 0, 0, 0, 0);
+		RectTransform handle = Child(slidingArea, "Handle");
+		Stretch(handle, 0, 0, 0, 0);
+		Image handleImage = Solid(handle.gameObject, Line);
+		handleImage.raycastTarget = true; // 끌기
+
+		// ??는 쓰지 않는다. 에디터에서 없는 컴포넌트의 GetComponent는 진짜 null이 아닌 값을 돌려줄 수 있음
+		if (!bar.TryGetComponent(out Scrollbar scrollbar)) scrollbar = bar.gameObject.AddComponent<Scrollbar>();
+		scrollbar.direction = Scrollbar.Direction.BottomToTop;
+		scrollbar.handleRect = handle;
+		scrollbar.targetGraphic = handleImage;
+		// Tab·방향키 이동이 막대에 멈추지 않게 한다
+		scrollbar.navigation = new Navigation { mode = Navigation.Mode.None };
+
+		scroll.verticalScrollbar = scrollbar;
+		scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
 	}
 
 	static void LegendItem(RectTransform legend, Color fill, Color border, string label)

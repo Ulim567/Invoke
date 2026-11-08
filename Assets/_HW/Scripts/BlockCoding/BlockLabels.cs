@@ -137,8 +137,17 @@ public static class BlockLabels
 	{
 		if (string.IsNullOrEmpty(block.FunctionId)) return "함수";
 		if (block.IsUserFunction) return "함수";
-		int dot = block.FunctionId.IndexOf('.');
-		return dot >= 0 ? block.FunctionId.Substring(dot + 1) : block.FunctionId;
+		return PredefinedFunctionName(block.FunctionId);
+	}
+
+	/// <summary>
+	/// 사전 정의 함수의 고정 ID를 블록에 보이는 함수 이름으로. 점 뒤 이름만. 예: "c.thrust" → "thrust".
+	/// 스킬 트리 설명 칸도 이 이름을 써서 블록 편집기와 같게 보인다.
+	/// </summary>
+	public static string PredefinedFunctionName(string functionId)
+	{
+		int dot = functionId.IndexOf('.');
+		return dot >= 0 ? functionId.Substring(dot + 1) : functionId;
 	}
 
 	static SlotData Slot(BlockData block, int index) =>

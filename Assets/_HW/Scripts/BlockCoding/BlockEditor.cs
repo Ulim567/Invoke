@@ -128,6 +128,22 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("컴파일 성공 알림 (편집 영역 위의 초록 알약. 처음엔 꺼 둔다)")]
 	GameObject compileOkBadge;
 
+	[Header("참고 창 (비워 두면 참고 탭을 쓰지 않는다)")]
+	[SerializeField, Tooltip("참고 창 (오른쪽 세로 막대의 「참고」를 누르면 보임. 처음엔 꺼 둔다)")]
+	GameObject referenceView;
+
+	[SerializeField, Tooltip("세로 막대의 「참고」 버튼")]
+	Button referenceTabButton;
+
+	[SerializeField, Tooltip("참고 창의 검색 칸")]
+	TMP_InputField referenceSearch;
+
+	[SerializeField, Tooltip("참고 창에서 카드가 쌓이는 곳 (Vertical Layout Group. 스크롤을 쓰면 Scroll Rect의 Content)")]
+	RectTransform referenceList;
+
+	[SerializeField, Tooltip("참고 창의 카드 하나 (ReferenceCard 프리팹)")]
+	ReferenceCardView referenceCardPrefab;
+
 	[SerializeField, Tooltip("블록 수·코드 크기 글자 (위쪽 줄 오른쪽). 비워 두면 위쪽 줄에 만든다")]
 	TMP_Text infoLabel;
 
@@ -229,11 +245,13 @@ public class BlockEditor : MonoBehaviour
 	void Start()
 	{
 		if (trashZone != null) trashZone.SetActive(false);
-		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => ShowTab(false));
-		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(true));
+		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => ShowTab(RightTab.Blocks));
+		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(RightTab.Errors));
+		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => ShowTab(RightTab.Reference));
+		if (referenceSearch != null) referenceSearch.onValueChanged.AddListener(_ => RebuildReference());
 		ShowErrors(new List<FunctionChecker.Error>());
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
-		ShowTab(false);
+		ShowTab(RightTab.Blocks);
 
 		// 편집 영역부터 연다. 블록 목록을 만들다 문제가 생겨도 편집은 되도록
 		BuildTopBar();
@@ -349,7 +367,8 @@ public class BlockEditor : MonoBehaviour
 		compileFailedKey = null;
 		ClearErrorMarks();
 		ShowErrors(new List<FunctionChecker.Error>());
-		ShowTab(false);
+		// 지난 오류 창만 블록 목록으로 돌린다. 참고 창을 보던 중이면 그대로 둔다
+		if (rightTab == RightTab.Errors) ShowTab(RightTab.Blocks);
 		if (successRoutine != null) StopCoroutine(successRoutine);
 		successRoutine = null;
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
@@ -477,7 +496,7 @@ public class BlockEditor : MonoBehaviour
 		ShowErrors(errors);
 		MarkErrors(errors);
 		compileFailedKey = errors.Count > 0 ? OpenKey : null;
-		if (errors.Count > 0) ShowTab(true);
+		if (errors.Count > 0) ShowTab(RightTab.Errors);
 		else ShowSuccess();
 		SetMessage(errors.Count == 0 ? "컴파일 성공" : $"컴파일 오류 {errors.Count}개", errors.Count > 0);
 		Redraw();
@@ -682,13 +701,33 @@ public class BlockEditor : MonoBehaviour
 		if (trashZone != null) trashZone.SetActive(show);
 	}
 
-	// 오른쪽: 블록 목록(false) 또는 오류 창(true)
-	void ShowTab(bool errors)
+	// 오른쪽 세로 막대가 고르는 창 세 가지
+	enum RightTab { Blocks, Errors, Reference }
+
+	RightTab rightTab = RightTab.Blocks;
+
+	// 오른쪽: 블록 목록, 오류 창, 참고 창 중 하나만 보인다
+	void ShowTab(RightTab tab)
 	{
-		if (paletteView != null) paletteView.SetActive(!errors);
-		if (errorView != null) errorView.SetActive(errors);
-		SetTabLook(blockTabButton, !errors);
-		SetTabLook(errorTabButton, errors);
+		rightTab = tab;
+		if (paletteView != null) paletteView.SetActive(tab == RightTab.Blocks);
+		if (errorView != null) errorView.SetActive(tab == RightTab.Errors);
+		if (referenceView != null) referenceView.SetActive(tab == RightTab.Reference);
+		SetTabLook(blockTabButton, tab == RightTab.Blocks);
+		SetTabLook(errorTabButton, tab == RightTab.Errors);
+		SetTabLook(referenceTabButton, tab == RightTab.Reference);
+		// 참고 탭을 열 때마다 카드를 다시 만든다. 스킬 트리 설명이나 해금 상태가 바뀌어도 다음에 열 때 맞춰진다
+		if (tab == RightTab.Reference) RebuildReference();
+	}
+
+	// 참고 창: 검색 칸의 글자에 맞는 카드를 처음부터 다시 만든다 (BlockReference.Search)
+	void RebuildReference()
+	{
+		if (referenceList == null || referenceCardPrefab == null) return;
+		for (int i = referenceList.childCount - 1; i >= 0; i--) Destroy(referenceList.GetChild(i).gameObject);
+		string query = referenceSearch != null ? referenceSearch.text : "";
+		foreach (BlockReferenceEntry entry in BlockReference.Search(query))
+			Instantiate(referenceCardPrefab, referenceList).Show(entry);
 	}
 
 	static void SetTabLook(Button tab, bool active)

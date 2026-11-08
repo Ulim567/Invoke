@@ -7,7 +7,7 @@ using UnityEngine.UI;
 /// 편집 화면(BlockEditorCanvas)과 장착 화면(SlotEquipCanvas), 블록 프리팹을 이우림의 「블록 견본」 디자인으로 한 번에 바꾸는 에디터 도구. 게임에는 들어가지 않는다.
 /// <para>
 /// 메뉴 Invoke → UI → 편집·장착 화면 새 디자인으로 만들기.<br/>
-/// - Assets/_HW/UI/Common에 ListItem, EquipItem, ListHeader, SaveButton, CompileButton, PaletteGroup, SlotCard 프리팹을 만든다 (있으면 다시 만든다).<br/>
+/// - Assets/_HW/UI/Common에 ListItem, EquipItem, ListHeader, SaveButton, CompileButton, PaletteGroup, SlotCard, ReferenceCard 프리팹을 만든다 (있으면 다시 만든다).<br/>
 /// - 블록 프리팹(Block, BlockValueSlot, BlockField, BlockButton)에 블록 모양 그림(Assets/_HW/UI/BlockCoding/Shapes)을 넣는다.<br/>
 /// - 두 캔버스 프리팹의 배치·그림(Assets/_HW/UI/Frame)을 바꾸고, BlockEditor·SlotEquipPanel의 칸을 채운다.<br/>
 /// - 여러 번 눌러도 된다. 결과가 마음에 안 들면 git으로 되돌린다 (git restore Assets/_HW/UI).
@@ -54,9 +54,10 @@ public static class InvokeUIBuilder
 		ErrorItemView errorItem = BuildErrorItem();
 		RectTransform errorFrame = BuildErrorFrame();
 		SlotCardView card = BuildSlotCard();
+		ReferenceCardView referenceCard = BuildReferenceCard();
 
 		StyleBlockPrefabs();
-		BuildEditorCanvas(item, header, save, compile, paletteGroup, dropdown, marker, errorItem, errorFrame);
+		BuildEditorCanvas(item, header, save, compile, paletteGroup, dropdown, marker, errorItem, errorFrame, referenceCard);
 		BuildEquipCanvas(equipItem, card);
 
 		AssetDatabase.SaveAssets();
@@ -246,6 +247,167 @@ public static class InvokeUIBuilder
 		return SavePrefab(root, "ErrorItem").GetComponent<ErrorItemView>();
 	}
 
+	// 참고 창의 카드 하나: 이름과 분류 태그 한 줄, 설명, 사용법(없으면 숨김), C 표기·칸·놓는 곳
+	static ReferenceCardView BuildReferenceCard()
+	{
+		GameObject root = NewUI("ReferenceCard", null);
+		SetImage(root, "ui_card", Image.Type.Sliced);
+		VerticalLayoutGroup layout = root.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(7, 6, 5, 5);
+		layout.spacing = 3;
+		layout.childAlignment = TextAnchor.UpperLeft;
+		layout.childControlWidth = layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		root.AddComponent<LayoutElement>().flexibleHeight = 0;
+
+		// 이름 + 분류 태그
+		GameObject titleRow = NewUI("Title", root.transform);
+		HorizontalLayoutGroup row = titleRow.AddComponent<HorizontalLayoutGroup>();
+		row.spacing = 6;
+		row.childAlignment = TextAnchor.MiddleLeft;
+		row.childControlWidth = row.childControlHeight = true;
+		row.childForceExpandWidth = row.childForceExpandHeight = false;
+		TMP_Text nameText = Text(titleRow.transform, "Name", "If", 11, Color.white, TextAlignmentOptions.MidlineLeft);
+		nameText.fontStyle = FontStyles.Bold;
+		nameText.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+
+		GameObject tag = NewUI("Tag", titleRow.transform);
+		Image tagImage = SetImage(tag, "ui_card", Image.Type.Sliced);
+		tagImage.raycastTarget = false;
+		LayoutElement tagSize = tag.AddComponent<LayoutElement>();
+		tagSize.preferredWidth = 34;
+		tagSize.preferredHeight = 13;
+		tagSize.flexibleWidth = 0;
+		TMP_Text tagText = Text(tag.transform, "Text", "제어", 8, Color.white, TextAlignmentOptions.Center);
+		tagText.overflowMode = TextOverflowModes.Overflow;
+		Stretch(tagText.rectTransform, 0, 0, 0, 1);
+
+		TMP_Text summary = WrappedText(root.transform, "Summary", "조건이 참일 때만 안쪽 블록을 실행합니다.", Color.white);
+		TMP_Text usage = WrappedText(root.transform, "Usage", "사용법", Hex("8B9CFF"));
+		TMP_Text details = WrappedText(root.transform, "Details", "C 표기  if (hp > 5) { … }", Hex("C8CEEA"));
+		details.richText = true;
+		// 펼쳤을 때만 보이는 자세한 내용 (처음엔 꺼 둔다)
+		TMP_Text expanded = WrappedText(root.transform, "Expanded", "", Hex("C8CEEA"));
+		expanded.richText = true;
+		expanded.gameObject.SetActive(false);
+		TMP_Text hint = WrappedText(root.transform, "Hint", "눌러서 자세히 ▾", Muted);
+		hint.fontSize = 8;
+
+		// 카드 전체를 누르면 펼치고 접는다. 키보드 이동은 쓰지 않는다 (선택된 버튼이 Enter를 먼저 받지 않도록)
+		Button cardButton = root.AddComponent<Button>();
+		cardButton.targetGraphic = root.GetComponent<Image>();
+		cardButton.navigation = new Navigation { mode = Navigation.Mode.None };
+
+		ReferenceCardView view = root.AddComponent<ReferenceCardView>();
+		Set(view, "nameText", nameText);
+		Set(view, "categoryTag", tagImage);
+		Set(view, "categoryText", tagText);
+		Set(view, "summaryText", summary);
+		Set(view, "usageText", usage);
+		Set(view, "detailsText", details);
+		Set(view, "expandedText", expanded);
+		Set(view, "hintText", hint);
+		return SavePrefab(root, "ReferenceCard").GetComponent<ReferenceCardView>();
+	}
+
+	// 여러 줄로 이어 쓰는 글자 (카드 안의 설명)
+	static TMP_Text WrappedText(Transform parent, string name, string value, Color color)
+	{
+		TMP_Text text = Text(parent, name, value, 9, color, TextAlignmentOptions.TopLeft);
+		text.textWrappingMode = TextWrappingModes.Normal;
+		text.overflowMode = TextOverflowModes.Overflow;
+		text.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+		return text;
+	}
+
+	// 참고 창의 검색 칸. 이미 만들어 둔 것이 있으면 그것을 쓴다
+	static TMP_InputField GetOrBuildSearchField(Transform panel)
+	{
+		RectTransform fieldRect = Child(panel, "SearchField");
+		TopStretch(fieldRect, 6, 6, -26, 18);
+		if (fieldRect.TryGetComponent(out TMP_InputField existing)) return existing;
+
+		SetImage(fieldRect.gameObject, "ui_field", Image.Type.Sliced);
+		TMP_InputField input = fieldRect.gameObject.AddComponent<TMP_InputField>();
+
+		// 글자가 칸 밖으로 나가지 않게 자르는 영역
+		RectTransform area = Child(fieldRect, "Text Area");
+		Stretch(area, 5, 5, 0, 0);
+		GetOrAdd<RectMask2D>(area.gameObject);
+
+		TMP_Text placeholder = Text(area, "Placeholder", "블록 이름으로 검색", 9, Muted, TextAlignmentOptions.MidlineLeft);
+		placeholder.overflowMode = TextOverflowModes.Overflow;
+		Stretch(placeholder.rectTransform, 0, 0, 0, 0);
+		TMP_Text text = Text(area, "Text", "", 9, Color.white, TextAlignmentOptions.MidlineLeft);
+		text.overflowMode = TextOverflowModes.Overflow;
+		text.raycastTarget = true;
+		Stretch(text.rectTransform, 0, 0, 0, 0);
+		// Galmuri 픽셀 글자가 깨지지 않게 Extra Padding을 끈다 (BlockField 프리팹과 같음)
+		((TextMeshProUGUI)text).extraPadding = false;
+		((TextMeshProUGUI)placeholder).extraPadding = false;
+
+		input.textViewport = area;
+		input.textComponent = text;
+		input.placeholder = placeholder;
+		input.targetGraphic = fieldRect.GetComponent<Image>();
+		return input;
+	}
+
+	// 참고 창의 카드 목록: 세로 스크롤. 카드가 쌓이는 Content를 돌려준다
+	static RectTransform GetOrBuildCardScroll(Transform panel)
+	{
+		RectTransform scroll = Child(panel, "Scroll");
+		Stretch(scroll, 4, 4, 48, 4);
+		// 카드 사이 빈 곳에서도 마우스 휠이 먹도록 투명한 바탕을 둔다
+		Image back = GetOrAdd<Image>(scroll.gameObject);
+		back.color = new Color(0, 0, 0, 0);
+		ScrollRect scrollRect = GetOrAdd<ScrollRect>(scroll.gameObject);
+
+		RectTransform viewport = Child(scroll, "Viewport");
+		Stretch(viewport, 0, 0, 0, 0);
+		GetOrAdd<RectMask2D>(viewport.gameObject);
+
+		RectTransform content = Child(viewport, "Content");
+		content.anchorMin = new Vector2(0, 1);
+		content.anchorMax = new Vector2(1, 1);
+		content.pivot = new Vector2(0.5f, 1);
+		content.offsetMin = new Vector2(0, content.offsetMin.y);
+		content.offsetMax = new Vector2(0, 0);
+		VerticalList(content.gameObject, 4);
+		GetOrAdd<ContentSizeFitter>(content.gameObject).verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+		scrollRect.viewport = viewport;
+		scrollRect.content = content;
+		scrollRect.horizontal = false;
+		scrollRect.vertical = true;
+		scrollRect.movementType = ScrollRect.MovementType.Clamped;
+		scrollRect.scrollSensitivity = 20;
+
+		// 오른쪽 가장자리의 세로 스크롤바. 내용이 목록보다 길 때만 보이고, 그때는 카드가 바에 가리지 않게 Scroll Rect가 목록 폭을 줄인다
+		RectTransform bar = Child(scroll, "Scrollbar");
+		bar.anchorMin = new Vector2(1, 0);
+		bar.anchorMax = new Vector2(1, 1);
+		bar.pivot = new Vector2(1, 0.5f);
+		bar.sizeDelta = new Vector2(4, 0);
+		bar.anchoredPosition = Vector2.zero;
+		GetOrAdd<Image>(bar.gameObject).color = new Color(1, 1, 1, 0.08f);
+		Scrollbar scrollbar = GetOrAdd<Scrollbar>(bar.gameObject);
+		scrollbar.direction = Scrollbar.Direction.BottomToTop;
+		RectTransform slidingArea = Child(bar, "Sliding Area");
+		Stretch(slidingArea, 0, 0, 0, 0);
+		RectTransform handle = Child(slidingArea, "Handle");
+		Stretch(handle, 0, 0, 0, 0);
+		Image handleImage = GetOrAdd<Image>(handle.gameObject);
+		handleImage.color = Hex("8B9CFF");
+		scrollbar.handleRect = handle;
+		scrollbar.targetGraphic = handleImage;
+		scrollRect.verticalScrollbar = scrollbar;
+		scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+		scrollRect.verticalScrollbarSpacing = 2;
+		return content;
+	}
+
 	// 오류가 난 블록에 씌우는 빨간 테두리와 오른쪽 위 !
 	static RectTransform BuildErrorFrame()
 	{
@@ -429,7 +591,7 @@ public static class InvokeUIBuilder
 
 	// 편집 화면 ------------------------------------------------------------------
 
-	static void BuildEditorCanvas(ListItemView item, ListHeaderView header, Button save, Button compile, RectTransform paletteGroup, RectTransform dropdown, RectTransform marker, ErrorItemView errorItem, RectTransform errorFrame)
+	static void BuildEditorCanvas(ListItemView item, ListHeaderView header, Button save, Button compile, RectTransform paletteGroup, RectTransform dropdown, RectTransform marker, ErrorItemView errorItem, RectTransform errorFrame, ReferenceCardView referenceCard)
 	{
 		GameObject root = PrefabUtility.LoadPrefabContents(EditorCanvasPath);
 		try
@@ -506,12 +668,20 @@ public static class InvokeUIBuilder
 			Stretch(errorList, 4, 4, 20, 4);
 			VerticalList(errorList.gameObject, 4);
 
-			// 오른쪽 끝 세로 막대: 블록 / 오류
+			// 참고 창 (블록 목록과 같은 자리): 위에 검색 칸, 아래에 블록 설명 카드 목록
+			Transform referencePanel = Panel(window, "ReferenceView", "참고", 22, 11);
+			RightStretch(Rect(referencePanel), LayoutStrip, LayoutPalette, LayoutTop, 0);
+			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel);
+			RectTransform referenceList = GetOrBuildCardScroll(referencePanel);
+			referencePanel.gameObject.SetActive(false); // 처음엔 꺼 둔다. 「참고」 탭을 누르면 BlockEditor가 켠다
+
+			// 오른쪽 끝 세로 막대: 블록 / 오류 / 참고
 			RectTransform strip = Child(window, "TabStrip");
 			RightStretch(strip, 0, LayoutStrip, LayoutTop, 0);
 			SetImage(strip.gameObject, "ui_titlebar", Image.Type.Sliced).raycastTarget = false;
 			Button blockTab = Tab(strip, "BlockTab", "블\n록", 6, 54);
 			Button errorTab = Tab(strip, "ErrorTab", "오\n류", 66, 66);
+			Button referenceTab = Tab(strip, "ReferenceTab", "참\n고", 138, 54);
 			// 오류 수 빨간 동그라미 (오류 탭 아래쪽)
 			RectTransform tabBadge = Child(errorTab.transform, "Badge");
 			Place(tabBadge, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 3), new Vector2(10, 10));
@@ -596,6 +766,11 @@ public static class InvokeUIBuilder
 			Set(editor, "errorList", errorList);
 			Set(editor, "errorFramePrefab", errorFrame);
 			Set(editor, "compileOkBadge", okBadge.gameObject);
+			Set(editor, "referenceView", referencePanel.gameObject);
+			Set(editor, "referenceTabButton", referenceTab);
+			Set(editor, "referenceSearch", referenceSearch);
+			Set(editor, "referenceList", referenceList);
+			Set(editor, "referenceCardPrefab", referenceCard);
 
 			PrefabUtility.SaveAsPrefabAsset(root, EditorCanvasPath);
 		}

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -15,7 +16,7 @@ using UnityEngine.UI;
 /// 블록을 놓을 수 있도록 Image의 Raycast Target을 켠다. 글자 칸(BlockField)은 BlockEditor가 만들어 넣는다.
 /// </para>
 /// </summary>
-public class BlockValueSlot : MonoBehaviour
+public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
 	BlockEditor editor;
 	BlockView ownerBlock;
@@ -51,12 +52,36 @@ public class BlockValueSlot : MonoBehaviour
 	Color baseColor;
 	bool highlighted;
 	bool error;
+	bool ghostShown; // 끄는 동안의 반투명 미리보기를 이 칸에 보이는 중인지 (#476)
 
 	/// <summary>끌고 있는 값 블록을 여기에 놓을 수 있다는 표시 (BlockEditor가 부른다)</summary>
 	public void SetHighlight(bool on)
 	{
 		highlighted = on;
 		ApplyColor();
+	}
+
+	/// <summary>
+	/// 끄는 동안의 반투명 미리보기(BlockEditor가 만든다, #476)를 이 칸에 끼운 것처럼 보인다. 적는 칸과 변수 고르기 버튼은 그동안 숨긴다.
+	/// 칸 데이터는 바꾸지 않는다.
+	/// </summary>
+	public void ShowGhost(RectTransform ghost)
+	{
+		ghost.SetParent(transform, false);
+		ghost.SetAsLastSibling();
+		ghostShown = true;
+		field.gameObject.SetActive(false);
+		if (pickButton != null) pickButton.gameObject.SetActive(false);
+	}
+
+	/// <summary>미리보기를 거둘 때 적는 칸과 변수 고르기 버튼을 다시 보인다 (BlockEditor가 미리보기를 다른 곳으로 옮긴 뒤 부른다)</summary>
+	public void HideGhost()
+	{
+		if (!ghostShown) return;
+		ghostShown = false;
+		if (Held != null) return; // 블록을 끼운 칸이면 원래 숨겨 둔 상태
+		field.gameObject.SetActive(true);
+		if (pickButton != null) pickButton.gameObject.SetActive(true);
 	}
 
 	/// <summary>컴파일 오류(비어 있는 칸) 표시 (BlockEditor가 부른다)</summary>
@@ -91,6 +116,30 @@ public class BlockValueSlot : MonoBehaviour
 
 		if (Slot.Block != null) Hold(editor.CreateView(Slot.Block, transform));
 		else field.Text = BlockSlotText.ToText(Slot);
+		RefreshPlaceholder();
+	}
+
+	/// <summary>
+	/// 빈 칸에 흐리게 보일 안내 글자를 다시 쓴다 (#476). 이 칸이 받는 타입 (예: int, bool, Target, Sword*).
+	/// 선언의 타입이나 대입의 변수를 바꾸면 받는 타입이 바뀌므로 BlockEditor가 고칠 때마다 부른다.
+	/// </summary>
+	public void RefreshPlaceholder()
+	{
+		if (field == null) return;
+		field.Placeholder = SlotRules.ShortLabel(editor.RuleOf(ownerBlock.Data, slotIndex));
+	}
+
+	// 마우스를 올리면 잠깐 뒤에 설명창 (#476): 이 칸에 넣을 수 있는 것. 함수의 파라미터면 이름·타입·설명도.
+	// 칸에 블록을 끼웠으면 그 블록의 설명이 위에 겹쳐 보인다 (BlockEditor가 가장 안쪽 것을 보인다)
+	public void OnPointerEnter(PointerEventData eventData)
+	{
+		if (editor == null || eventData.dragging) return;
+		editor.EnterHover(this, (RectTransform)transform, () => editor.SlotTooltipOf(ownerBlock.Data, slotIndex));
+	}
+
+	public void OnPointerExit(PointerEventData eventData)
+	{
+		if (editor != null) editor.ExitHover(this);
 	}
 
 	// 「변수 고르기」 버튼: 누르면 이 칸에 넣을 수 있는 변수(이 블록 자리에서 보이고, 타입이 칸 규칙에 맞는 것)를 드롭다운으로 보여 준다 (#474 5단계)

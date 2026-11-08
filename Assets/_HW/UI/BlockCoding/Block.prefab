@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 1202138453343239004}
   - component: {fileID: 6704748891605179568}
   - component: {fileID: 284819284132079046}
+  - component: {fileID: 2655793030165164765}
   m_Layer: 5
   m_Name: Block
   m_TagString: Untagged
@@ -142,7 +143,7 @@ MonoBehaviour:
   nameFieldSprite: {fileID: 21300000, guid: 4da2e0e7312746ffb5d9d615ab8eead9, type: 3}
   variableFieldSprite: {fileID: 21300000, guid: c1356bd033674e50aa12bfdd68516b3c, type: 3}
   fieldLineColor: {r: 1, g: 1, b: 1, a: 0.75}
-  containerBottom: 7
+  containerBottom: 9
   errorColor: {r: 0.78431374, g: 0.28235295, b: 0.34509805, a: 1}
   dragAlpha: 0.75
 --- !u!114 &284819284132079046
@@ -167,6 +168,21 @@ MonoBehaviour:
   m_LayoutPriority: 1
   m_MaxWidth: -1
   m_MaxHeight: -1
+--- !u!114 &2655793030165164765
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2649361150070973732}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0, g: 0, b: 0, a: 0.55}
+  m_EffectDistance: {x: 1, y: 1}
+  m_UseGraphicAlpha: 1
 --- !u!1 &3260142452206727227
 GameObject:
   m_ObjectHideFlags: 0
@@ -258,12 +274,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
-    m_Left: 12
-    m_Right: 2
-    m_Top: 3
-    m_Bottom: 3
+    m_Left: 14
+    m_Right: 3
+    m_Top: 4
+    m_Bottom: 4
   m_ChildAlignment: 0
-  m_Spacing: 2
+  m_Spacing: 3
   m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
@@ -285,7 +301,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
   m_IgnoreLayout: 0
   m_MinWidth: -1
-  m_MinHeight: 14
+  m_MinHeight: 18
   m_PreferredWidth: -1
   m_PreferredHeight: -1
   m_FlexibleWidth: -1
@@ -360,7 +376,7 @@ MonoBehaviour:
     m_Top: 0
     m_Bottom: 0
   m_ChildAlignment: 3
-  m_Spacing: 3
+  m_Spacing: 4
   m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1

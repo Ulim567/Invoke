@@ -159,11 +159,11 @@ public static class SlotRules
 	{
 		switch (rule.Expect)
 		{
-			case Expect.Condition: return "참·거짓(true, false, 비교, 논리)";
+			case Expect.Condition: return "참 또는 거짓(true, false, 비교, 논리)"; // 「·」는 글꼴(Galmuri11)에 없어 쓰지 않는다
 			case Expect.Number: return "숫자";
 			case Expect.Integer: return "정수";
 			case Expect.ArrayLength: return "직접 적은 1 이상의 정수";
-			case Expect.Comparable: return "숫자, 문자, 참·거짓, 포인터 (string은 비교할 수 없음)";
+			case Expect.Comparable: return "숫자, 문자, 참 또는 거짓, 포인터 (string은 비교할 수 없음)";
 			case Expect.Pointer: return "포인터(NULL, malloc, summon_sword() 등)";
 			case Expect.Typed:
 				if (rule.Type == null) return "값";
@@ -179,6 +179,29 @@ public static class SlotRules
 				return rule.LiteralOnly ? $"직접 적은 {type}" : type;
 			default:
 				return "값";
+		}
+	}
+
+	/// <summary>
+	/// 빈 값 칸에 흐리게 보일 짧은 안내 (#476). 칸이 받는 타입만 적는다. 예: if의 조건 → bool, for의 끝 → int, thrust의 target → Target.
+	/// 자세한 설명(받는 블록·변수)은 칸에 마우스를 올리면 보이는 설명창(Describe)이 맡는다.
+	/// </summary>
+	public static string ShortLabel(Rule rule)
+	{
+		switch (rule.Expect)
+		{
+			case Expect.Condition: return "bool";
+			case Expect.Number: return "숫자";
+			case Expect.Integer:
+			case Expect.ArrayLength: return "int";
+			case Expect.Pointer: return "포인터";
+			case Expect.Typed:
+				if (rule.Type == null) return "값";
+				if (rule.Type.Kind == VariableTypeKind.Void) return ""; // void 함수의 return은 비워 둔다
+				if (rule.Type.Kind == VariableTypeKind.Target) return "Target";
+				return BlockLabels.TypeName(rule.Type);
+			default:
+				return "값"; // Any, Comparable: 여러 타입을 받는 칸
 		}
 	}
 

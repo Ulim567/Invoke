@@ -96,16 +96,45 @@ public class BlockList : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 화면 좌표 screenPosition에 놓으면 몇 번째 자리에 들어가는지. 블록 가운데보다 위면 그 블록 앞에 들어간다.
+	/// 화면 좌표 screenPosition에 놓으면 몇 번째 자리(데이터 순서)에 들어가는지. 블록 가운데보다 위면 그 블록 앞에 들어간다.
+	/// 끄는 동안의 반투명 미리보기(#476)는 이 자리의 블록이 아니므로 세지 않는다.
 	/// </summary>
 	public int GetInsertIndex(Vector2 screenPosition, Camera eventCamera)
 	{
+		int index = 0;
 		for (int i = 0; i < transform.childCount; i++)
 		{
 			RectTransform child = (RectTransform)transform.GetChild(i);
+			if (!IsPlacedBlock(child)) continue;
 			RectTransformUtility.ScreenPointToLocalPointInRectangle(child, screenPosition, eventCamera, out Vector2 local);
-			if (local.y > child.rect.center.y) return i;
+			if (local.y > child.rect.center.y) return index;
+			index++;
 		}
-		return transform.childCount;
+		return index;
 	}
+
+	/// <summary>
+	/// 끄는 동안의 반투명 미리보기(BlockEditor가 만든다, #476)를 index 자리(데이터 순서)에 보이게 놓는다. 데이터는 바꾸지 않는다.
+	/// </summary>
+	public void PlaceGhost(RectTransform ghost, int index)
+	{
+		ghost.SetParent(transform, false);
+		// index번째 블록의 앞에 둔다. 미리보기가 이미 이 자리에 있으면 그 칸은 세지 않는다
+		int count = 0;
+		for (int i = 0; i < transform.childCount; i++)
+		{
+			Transform child = transform.GetChild(i);
+			if (child == ghost || !IsPlacedBlock(child)) continue;
+			if (count == index)
+			{
+				ghost.SetSiblingIndex(ghost.GetSiblingIndex() < i ? i - 1 : i);
+				return;
+			}
+			count++;
+		}
+		ghost.SetAsLastSibling();
+	}
+
+	// 이 자리에 놓인 블록이면 true (데이터에 들어 있는 블록). 반투명 미리보기는 블록 UI를 복사한 것이라 놓인 자리가 없다
+	bool IsPlacedBlock(Transform child) => child.TryGetComponent(out BlockView view) && view.OwnerList == this;
 }

@@ -103,17 +103,46 @@
 - 위: 제목줄(편집 터미널, 닫기), 함수 이름 칸과 금색 저장 버튼(`Save Button Prefab`)
 - 왼쪽 함수 목록(`Function List`): `Global Variables` → 머리글 「슬롯」 → 슬롯 1~8 → 머리글 「페이지 n / 5 +」 → 페이지 함수. 임시 계정은 `Global Variables` → 「함수 n개 +」 → 저장한 함수
   - 줄은 `ListItemView`(번호, 이름, 오른쪽 글자, 고른 줄 모양), 머리글은 `ListHeaderView`(글자, + 버튼). 지금 연 줄은 고른 모양, 열고 나서 고쳤으면 이름 뒤 `*`
-- 가운데 편집 영역(점 격자 바탕), 아래 상태 줄: 왼쪽 저장 상태(`Message Label`: 「슬롯 1 · 저장하지 않은 변경 있음」, 「저장됨」, 오류는 빨강), 오른쪽 블록 수·코드 크기(`Info Label`)
+- 가운데 편집 영역(점 격자 바탕), 아래 상태 줄
+  - 편집 영역 스크롤 (#476): 블록이 길거나 넓어지면 세로·가로 스크롤 + 오른쪽·아래 스크롤바(내용이 넘칠 때만 보임). 블록 자리(`Content`)는 가장 작을 때 보이는 칸 크기라서, 블록 아래 빈 곳에 놓아도 맨 끝에 들어감: 왼쪽 저장 상태(`Message Label`: 「슬롯 1 · 저장하지 않은 변경 있음」, 「저장됨」, 오류는 빨강), 오른쪽 블록 수·코드 크기(`Info Label`)
 - 오른쪽 블록 목록: 분류 머리글(제어, 변수, 값, 함수, 메모리, 기타) 아래에 견본 블록
+  - 검색 칸 (#476): 분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있는 블록만 (대소문자 구분 없음). 분류 이름이 맞으면 그 분류 전체. 남은 블록이 없는 분류는 머리글도 없음
+  - 세로 스크롤 + 오른쪽 스크롤바 (내용이 길 때만 보임)
+- 참고 탭 (#476): 블록 목록과 같은 분류 순서로 분류 머리글(`ListHeaderView`, 분류 색 네모) 아래에 카드. 검색해서 카드가 없는 분류는 머리글도 없음. 카드 사이 간격 7
+  - 카드 내용 (#476, 레퍼런스 페이지 형식): 접힌 카드는 이름·분류 태그, 형식(주황 #F0A860: `if (조건) { 블록 }`, `void thrust(Target target);`)만. 펼치면 설명 한 문장(스킬은 「검 찌르기: ...」), 채울 곳 또는 파라미터(「- 이름: 설명」), 돌려주는 값, 예시, 실행(동작·쿨타임 틱, 코드 크기)
+  - 보이지 않는 것: C 표기, 놓는 곳, 동작 문단, 주의, 스킬 사용법·긴 설명
+- 글꼴 주의: Galmuri11 TMP는 정적 아틀라스라 `—`, `·`, `•`, `…`, `▾`, `「」`가 없어 빈칸으로 보인다. 편집 화면 글자에는 `-`, `:`, `...`, 따옴표를 쓴다
 - 그림: `Assets/_HW/UI/Frame/`의 9-slice 스프라이트(창, 제목줄, 패널, 머리글, 버튼, 목록 줄, 슬롯 카드, 키 배지, 격자)
 - 블록 모양(`Assets/_HW/UI/BlockCoding/Shapes`): 문장 블록은 위 왼쪽 홈(`blk_stmt`), 값 블록은 알약(`blk_value`), 조건문·반복문은 왼쪽 기둥과 아래 막대로 안쪽을 감쌈(`blk_inner`), 값 칸은 어두운 알약(`blk_slot`), 이름 칸은 밑줄, 변수 칸은 점선 상자, 드롭다운은 밝은 네모 + ▾
 - 블록 목록은 칩(짧은 이름: If, For, Declare, Array Get, thrust…)을 분류별로 줄줄이 놓는다 (`FlowLayoutGroup`). 칩을 끌면 칸이 다 있는 블록이 나온다
+  - 칩 크기: 편집 영역 블록과 같음 (#476, 예전 0.85배)
+- 블록 크기·테두리 (#476): 끌어 놓기 쉽게 여백과 값 칸을 키움(값 칸 최소 24×17, 예전 18×13). 블록 바탕 가장자리에 어두운 1픽셀 테두리(`Outline`). 글자 크기 11은 그대로 (Galmuri11이 깨지지 않게)
+- 빈 값 칸의 안내 글자 (#476): 칸이 받는 타입을 흐리게 (`SlotRules.ShortLabel`). 칸 너비도 이 글자만큼
+
+| 칸 | 안내 글자 |
+| --- | --- |
+| 조건 (if, while, &&, !) | `bool` |
+| 연산의 양쪽, wait | `숫자` |
+| for의 시작·끝, 칸 번호, 배열 길이 | `int` |
+| free | `포인터` |
+| 함수의 파라미터, 선언의 처음 값, return, 대입의 값 | 그 타입 (`Target`, `Sword*`, `int` …). 타입을 모르면 `값`, void 함수의 return은 비움 |
+| 비교의 양쪽 | `값` |
+
+- 설명창 (#476): 블록·값 칸에 마우스를 올리고 0.4초 멈추면 그 아래에 설명창(`BlockTooltip` 프리팹). 블록 목록의 칩과 편집 영역의 블록 모두. 겹치면 가장 안쪽 것. 끄는 동안은 띄우지 않음
+  - 사전 정의 함수: 함수 원형(주황, `void thrust(Target target);`), 스킬의 한국어 이름(`PredefinedFunction.Name`), 설명(스킬 트리 노드 설명, 참고 카드와 같음), 파라미터마다 무엇을 넣는지, 돌려주는 값
+  - 내가 만든 함수: 함수 원형
+  - 문법 블록: 형식, 설명 한 문장 (참고 카드의 표). 채울 곳은 설명창이 길어지므로 참고 탭에서만
+  - 값 칸: 함수의 파라미터면 「타입 이름」과 무엇을 넣는지, 그리고 넣을 수 있는 것 (`SlotRules.Describe`)
 - 타입·연산자 칸은 드롭다운(`DropdownPopup` 프리팹): 타입(위 「칸 고치기」의 타입 칸), 연산 + - * / %, 비교 > < == != >= <=, 논리 && ||
 - 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set), 내가 만든 함수 부르기(`CallUserFunction`, 「함수」 분류 끝)가 있다. 배열 블록 셋은 `syntax.list` 해금 뒤에 보인다 (#470). 함수 부르기 블록은 페이지 함수만 붙이고 슬롯 함수(slot1~slot8)는 붙이지 않는다 (#470, 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않음). malloc은 불러온 함수에서만 보인다
 - 값 칸에 `NULL`을 적으면 `SlotData.FromNull()`과 같은 값으로 넣는다 (function-data.md #120)
 - 위쪽 줄의 「동기 / 비동기」 버튼: `FunctionData.IsAsync`를 고른다 (#132). 슬롯 함수와 전역 변수는 바꿀 수 없음
   - 지금은 항상 숨김 (#470). 버튼과 `ToggleAsync`는 남겨 둠, 저장된 `IsAsync` 값은 그대로
-- 끄는 동안: 블록이 반투명, 들어갈 자리에 보라색 줄(`InsertMarker`, 시작 위치에서 그 편집 영역·블록 영역의 오른쪽 끝까지, 두께 3. #432), 끼울 수 있는 값 칸은 보라색. 놓인 블록을 끌면 블록 목록 위에 빨간 휴지통 「여기에 놓으면 블록을 지워요」
+- 끄는 동안 (#476): 마우스를 따라오는 블록은 반투명하고 작게(0.6배, `BlockView.dragScale`). 들어갈 자리에는 같은 모양의 반투명 블록(미리보기, 불투명도 0.4)을 실제로 끼워 놓은 뒤의 모습을 보임
+  - 블록 자리: 그 자리에 미리보기가 들어가 아래 블록이 밀려남. 값 칸: 칸 안에 미리보기가 들어가고 칸은 보라색. 놓을 수 없는 곳이면 미리보기 없음
+  - 미리보기는 데이터에 들어가지 않음. `BlockList.GetInsertIndex`는 미리보기를 세지 않고, 놓을 때는 미리보기를 지우기 전에 자리 번호를 셈 (미리보기에 보인 자리에 들어가게)
+  - 예전의 보라색 줄(`InsertMarker`, #432)은 쓰지 않음 (프리팹 칸은 남겨 둠)
+  - 놓인 블록을 끌면 블록 목록 위에 빨간 휴지통 「여기에 놓으면 블록을 지워요」
   - 놓을 자리: 끄는 동안의 미리보기와 같은 자리 (#474). 끄는 블록 자신과 그 안쪽(칸, 블록 영역)은 고르지 않음. 예전에는 놓는 순간 블록 자신이 걸려, 자기 블록 영역에 들어가 화면에 떠 있거나 지워졌음
 - 컴파일(`FunctionChecker`): 반복문 밖의 break·continue, return이 없는 길, 비어 있는 값 칸. 오류가 있으면 오른쪽 오류 창으로 바뀌고, 비어 있는 값 칸과 반복문 밖의 break·continue 블록을 빨갛게 표시. 고치면 표시를 지운다
 - 함수 틀 (#432): 편집 영역 위에 머리줄 「반환 타입 이름(파라미터) {」, 아래에 「}」 줄이 늘 있다 (`FunctionFrameView`). 편집 영역(`BlockList`)의 자식이 아니라 따로 둔 줄이다
@@ -121,8 +150,8 @@
   - 파라미터는 편집할 수 없다. 이미 있는 파라미터는 머리줄에 보여 주기만 한다. 반환 타입을 바꿔서 틀린 곳(return이 없는 길 등)은 저장할 때 컴파일이 알려 준다. 이 함수를 이미 부르는 다른 함수의 호출 블록은 다시 확인하지 않는다
   - 전역 변수를 고칠 때는 반환 타입 없이 「Global Variables」 이름과 안내만 보인다
 - 저장하지 않은 변경 확인 (#432): `BlockEditor.HasUnsavedChanges`(열고 나서 고쳤거나, 「+」로 만든 새 페이지를 저장하지 않았을 때. 기본으로 열리는 빈 함수는 고치기 전까지 해당 없음)
-  - 다른 함수를 열기(함수 목록의 줄·같은 줄 다시 누르기·`+`·`Global Variables`) 전에 `ConfirmDialog`로 묻는다: 「파일이 저장되지 않았습니다. 슬롯 2 guard를 여시겠습니까?」 예(Enter) / 아니오(ESC). 예이면 지금 내용을 버리고 연다
-  - 나가기(닫기 버튼, ESC)도 `BlockEditorPanel.Close`(`InputBlockingPanel.Close`를 virtual로 바꿈)가 묻는다: 「파일이 저장되지 않았습니다. 저장하지 않고 나가시겠습니까?」. 예이면 저장하지 않은 내용을 버리고(`DiscardUnsaved`) 닫는다
+  - 다른 함수를 열기(함수 목록의 줄·같은 줄 다시 누르기·`+`·`Global Variables`) 전에 `ConfirmDialog`로 묻는다: 「파일이 저장되지 않았습니다.(줄바꿈)슬롯 2 guard를 여시겠습니까?」 예(Enter) / 아니오(ESC). 예이면 지금 내용을 버리고 연다
+  - 나가기(닫기 버튼, ESC)도 `BlockEditorPanel.Close`(`InputBlockingPanel.Close`를 virtual로 바꿈)가 묻는다: 「파일이 저장되지 않았습니다.(줄바꿈)저장하지 않고 나가시겠습니까?」. 예이면 저장하지 않은 내용을 버리고(`DiscardUnsaved`) 닫는다
   - 서버에 저장을 요청하고 답을 기다리는 동안(`savePending`)은 열기·나가기를 막고 「저장하는 중입니다」만 보인다
   - 「+」로 만든 새 페이지는 저장하기 전에는 서버·파일에 없으므로, 예를 누르면 사라지고 다시 들어갈 수 없다. 다른 곳을 열면 목록의 「저장 안 함」 줄도 함께 지운다 (`RemoveStaleUnsavedEntry`)
   - 예·아니오 글자에 키(Enter, Esc)를 함께 적는다. 키 표시 부품(#430)이 생기면 배지로 바꾼다
@@ -165,8 +194,8 @@
 
 ### 화면 구성 (테스트 씬 `Test_HW`)
 - `BlockEditorCanvas` (Canvas Scaler 640×360, `BlockEditor`)
-  - `Palette`: Image + Rect Mask 2D + Scroll Rect → `Content`(Vertical Layout Group + Content Size Fitter)
-  - `Workspace`: Image + Vertical Layout Group + `BlockList`
+  - `Palette`: Image + Rect Mask 2D → `SearchField`, `Scroll`(Scroll Rect + `Scrollbar`) → `Viewport` → `Content`(Vertical Layout Group + Content Size Fitter). 참고 창과 같은 구조 (#476)
+  - `Workspace`: Image(격자) + Scroll Rect → `Viewport`(Rect Mask 2D) → `Content`(Image 투명 + Vertical Layout Group + Content Size Fitter + Layout Element + `BlockList`), `VerticalScrollbar`, `HorizontalScrollbar` (#476)
   - `TopBar`: Image + Horizontal Layout Group (안의 칸과 버튼은 `BlockEditor`가 만든다)
   - `DragLayer`: 화면 전체, Canvas 맨 아래 자식
 - 프리팹 `Assets/_HW/UI/BlockCoding`

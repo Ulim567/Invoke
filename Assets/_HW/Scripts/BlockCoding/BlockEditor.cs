@@ -50,14 +50,23 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("블록 목록(팔레트). 견본 블록이 이 아래에 만들어진다. 스크롤을 쓰면 Scroll Rect의 Content")]
 	RectTransform palette;
 
+	[SerializeField, Tooltip("블록 목록 위의 검색 칸 (#476). 비워 두면 검색 없이 모두 보여 준다")]
+	TMP_InputField paletteSearch;
+
 	[SerializeField, Tooltip("편집 영역 = 함수 몸통. BlockList가 붙어 있다")]
 	BlockList workspace;
 
 	[SerializeField, Tooltip("끌고 있는 블록을 잠시 올려 두는 곳. Canvas 맨 아래(가장 위에 그려지는) 자식으로 둔다")]
 	RectTransform dragLayer;
 
-	[SerializeField, Tooltip("레이아웃을 다시 계산할 기준. 편집 영역(Workspace)을 넣는다")]
+	[SerializeField, Tooltip("레이아웃을 다시 계산할 기준. 편집 영역의 블록 자리(Workspace/Viewport/Content)를 넣는다")]
 	RectTransform layoutRoot;
+
+	[SerializeField, Tooltip("편집 영역 스크롤의 보이는 칸 (Workspace/Viewport, #476). 블록 자리가 이보다 작아지지 않게 맞춘다. 비워 두면 맞추지 않는다")]
+	RectTransform workspaceViewport;
+
+	[SerializeField, Tooltip("블록·값 칸에 마우스를 올리면 보이는 설명창 (BlockTooltip 프리팹, #476). 비워 두면 설명창을 쓰지 않는다")]
+	BlockTooltipView tooltipPrefab;
 
 	[SerializeField, Tooltip("함수 이름 칸과 저장 버튼이 만들어지는 줄 (Horizontal Layout Group). 아래 칸들을 비워 두면 새 함수 버튼, 블록 수, 저장한 함수도 여기에 만든다")]
 	RectTransform topBar;
@@ -85,7 +94,7 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("타입·연산자 드롭다운 (DropdownPopup 프리팹: 화면 전체를 덮는 투명 Button + 자식 List)")]
 	RectTransform dropdownPrefab;
 
-	[SerializeField, Tooltip("블록을 끄는 동안 들어갈 자리에 보이는 줄 (InsertMarker 프리팹)")]
+	[SerializeField, Tooltip("블록을 끄는 동안 들어갈 자리에 보이는 줄 (InsertMarker 프리팹). #476부터 반투명 미리보기로 바꾸어 쓰지 않는다")]
 	RectTransform insertMarkerPrefab;
 
 	[Header("휴지통·오류 창")]
@@ -240,7 +249,26 @@ public class BlockEditor : MonoBehaviour
 	FunctionExecutorNetwork server;
 	static readonly string[] SlotKeys = { "Q", "W", "E", "R", "A", "S", "D", "F" };
 	RectTransform openDropdown;
-	RectTransform insertMarker;
+
+	// 편집 영역 스크롤 (#476): 블록 자리(Content)의 가장 작은 크기를 맞추는 칸과 마지막으로 맞춘 보이는 칸 크기
+	LayoutElement workspaceMinSize;
+	Vector2 fittedViewportSize;
+
+	// 마우스가 올라가 있는 블록·값 칸들. 블록 안의 값 칸, 값 칸 안의 블록처럼 겹치므로 가장 안쪽의 설명을 보인다
+	readonly List<(Component owner, RectTransform anchor, Func<string> text)> hovered = new List<(Component, RectTransform, Func<string>)>();
+	float hoverSince;
+	Component tooltipOwner;
+	BlockTooltipView tooltip;
+
+	// 마우스를 올리고 이만큼 멈춰 있어야 설명창을 띄운다. 블록 위를 지나가기만 할 때 깜빡이지 않게
+	const float TooltipDelay = 0.4f;
+
+	// 끄는 동안 들어갈 자리에 보이는 반투명 미리보기 블록 (#476). 끌기 하나에 하나를 만들고, 놓으면 지운다
+	RectTransform dropGhost;
+
+	// 반투명 미리보기의 불투명도. 놓인 블록과 구분되면서 모양은 알아볼 수 있게
+	const float GhostAlpha = 0.4f;
+
 	BlockValueSlot highlightedSlot;
 	Button asyncButton;
 	bool paletteBuilt;
@@ -261,6 +289,7 @@ public class BlockEditor : MonoBehaviour
 		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(RightTab.Errors));
 		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => ShowTab(RightTab.Reference));
 		if (referenceSearch != null) referenceSearch.onValueChanged.AddListener(_ => RebuildReference());
+		if (paletteSearch != null) paletteSearch.onValueChanged.AddListener(_ => RebuildPalette());
 		if (functionFrame != null && functionFrame.ReturnButton != null) functionFrame.ReturnButton.onClick.AddListener(OpenReturnTypeDropdown);
 		ShowErrors(new List<FunctionChecker.Error>());
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
@@ -277,6 +306,109 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	void OnDestroy() => UnbindServer();
+
+	void OnDisable() => ClearHover(); // 편집 화면을 닫으면 설명창을 지운다
+
+	void Update()
+	{
+		FitWorkspaceToViewport();
+		UpdateTooltip();
+	}
+
+	// 편집 영역 스크롤 (#476) ----------------------------------------------------
+
+	// 블록 자리(Content)의 가장 작은 크기를 보이는 칸(Viewport) 크기로 맞춘다. 블록이 적어도 편집 영역 전체가 블록 자리여서,
+	// 블록 아래 빈 곳에 놓아도 지워지지 않고 맨 끝에 들어가게 하기 위함 (예전에는 편집 영역 자체가 블록 자리였다)
+	void FitWorkspaceToViewport()
+	{
+		if (workspaceViewport == null) return;
+		if (workspaceMinSize == null && !workspace.TryGetComponent(out workspaceMinSize)) return;
+		Vector2 size = workspaceViewport.rect.size;
+		if (size == fittedViewportSize) return;
+		fittedViewportSize = size;
+		workspaceMinSize.minWidth = size.x;
+		workspaceMinSize.minHeight = size.y;
+	}
+
+	// 설명창 (#476) -------------------------------------------------------------
+
+	/// <summary>
+	/// 블록·값 칸에 마우스가 들어왔을 때 부른다 (BlockView, BlockValueSlot). 잠깐 멈추면 text()의 글자로 설명창을 띄운다.
+	/// </summary>
+	public void EnterHover(Component owner, RectTransform anchor, Func<string> text)
+	{
+		hovered.RemoveAll(h => h.owner == owner);
+		hovered.Add((owner, anchor, text));
+		hoverSince = Time.unscaledTime;
+	}
+
+	/// <summary>블록·값 칸에서 마우스가 나갔을 때 부른다</summary>
+	public void ExitHover(Component owner)
+	{
+		hovered.RemoveAll(h => h.owner == owner);
+		hoverSince = Time.unscaledTime;
+	}
+
+	/// <summary>설명창을 지우고 마우스가 올라간 것을 모두 잊는다. 블록을 끌기 시작할 때, 편집 화면을 닫을 때 부른다</summary>
+	public void ClearHover()
+	{
+		hovered.Clear();
+		HideTooltip();
+	}
+
+	void UpdateTooltip()
+	{
+		// 지워진 블록(검색으로 블록 목록을 다시 만든 경우 등)은 뺀다
+		hovered.RemoveAll(h => h.owner == null);
+		if (hovered.Count == 0)
+		{
+			HideTooltip();
+			return;
+		}
+		// 가장 안쪽(부모가 가장 많은) 것을 고른다. Unity가 마우스가 들어왔다고 알리는 순서는 안쪽·바깥쪽이 섞이기 때문
+		(Component owner, RectTransform anchor, Func<string> text) top = hovered[0];
+		int topDepth = -1;
+		foreach (var entry in hovered)
+		{
+			int depth = 0;
+			for (Transform t = entry.owner.transform; t != null; t = t.parent) depth++;
+			if (depth <= topDepth) continue;
+			topDepth = depth;
+			top = entry;
+		}
+		if (top.owner == tooltipOwner) return;
+		HideTooltip();
+		if (Time.unscaledTime - hoverSince < TooltipDelay) return;
+		ShowTooltip(top.anchor, top.text());
+		tooltipOwner = top.owner;
+	}
+
+	// 설명창은 처음 한 번만 프리팹에서 만들고, 숨겼다 보였다 한다. 끄는 블록과 같은 층(DragLayer)에 두어 다른 것 위에 그린다
+	void ShowTooltip(RectTransform anchor, string text)
+	{
+		if (tooltipPrefab == null || string.IsNullOrEmpty(text)) return;
+		if (tooltip == null) tooltip = Instantiate(tooltipPrefab, dragLayer);
+		tooltip.Show(text, anchor, dragLayer);
+	}
+
+	void HideTooltip()
+	{
+		tooltipOwner = null;
+		if (tooltip != null) tooltip.Hide();
+	}
+
+	/// <summary>
+	/// 블록에 마우스를 올렸을 때 보일 설명. 함수 원형, 스킬의 한국어 이름·설명, 파라미터 설명 (BlockReference.TooltipOf).
+	/// </summary>
+	public string TooltipOf(BlockData block) =>
+		BlockReference.TooltipOf(block, PaletteNameOf(block), block.IsUserFunction ? FindUserFunction(block.FunctionId) : null);
+
+	/// <summary>
+	/// 값 칸에 마우스를 올렸을 때 보일 설명. 함수의 파라미터면 이름·타입·설명, 그리고 이 칸에 넣을 수 있는 것 (SlotRules.Describe).
+	/// </summary>
+	public string SlotTooltipOf(BlockData owner, int index) =>
+		BlockReference.SlotTooltipOf(owner, index, SlotRules.Describe(RuleOf(owner, index)),
+			owner.IsUserFunction ? FindUserFunction(owner.FunctionId) : null);
 
 	/// <summary>
 	/// 편집 화면을 열 때 부른다 (BlockEditorPanel). 내 캐릭터가 실제 계정인지 다시 보고 함수 목록을 새로 그린다.
@@ -382,7 +514,8 @@ public class BlockEditor : MonoBehaviour
 			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
 			return;
 		}
-		confirmDialog.Show($"파일이 저장되지 않았습니다. {label}{Eul(label)} {verb}?", open);
+		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
+		confirmDialog.Show($"파일이 저장되지 않았습니다.\n{label}{Eul(label)} {verb}?", open);
 	}
 
 	/// <summary>
@@ -401,7 +534,7 @@ public class BlockEditor : MonoBehaviour
 			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
 			return;
 		}
-		confirmDialog.Show("파일이 저장되지 않았습니다. 저장하지 않고 나가시겠습니까?", () =>
+		confirmDialog.Show("파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?", () =>
 		{
 			DiscardUnsaved();
 			close();
@@ -780,13 +913,16 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 블록을 끄는 동안 놓을 자리를 보여 준다 (BlockView가 부른다): 블록 자리면 들어갈 곳에 줄, 값 칸이면 그 칸을 보라색으로.
+	/// 블록을 끄는 동안 놓을 자리를 보여 준다 (BlockView가 부른다, #476).
+	/// 들어갈 자리에 끄는 블록과 같은 모양의 반투명 블록을 실제로 끼워, 놓은 뒤의 모습(아래 블록이 밀려나는 것, 값 칸이 넓어지는 것)을 미리 보인다.
+	/// 값 칸이면 그 칸도 보라색으로 표시한다. 놓을 수 없는 곳이면 아무것도 보이지 않는다.
 	/// </summary>
 	public void ShowDropPreview(BlockView dragged, Component target, UnityEngine.EventSystems.PointerEventData eventData)
 	{
 		if (highlightedSlot != null && !ReferenceEquals(target, highlightedSlot))
 		{
 			highlightedSlot.SetHighlight(false);
+			highlightedSlot.HideGhost();
 			highlightedSlot = null;
 		}
 
@@ -794,59 +930,83 @@ public class BlockEditor : MonoBehaviour
 		{
 			slot.SetHighlight(true);
 			highlightedSlot = slot;
-			SetMarker(false);
+			MoveGhost(slot.transform, () => slot.ShowGhost(GhostOf(dragged)));
 			return;
 		}
 
-		if (target is BlockList list && insertMarkerPrefab != null)
+		if (target is BlockList list)
 		{
 			int index = list.GetInsertIndex(eventData.position, eventData.pressEventCamera);
-			if (!list.CanInsert(dragged.Data, index))
+			if (list.CanInsert(dragged.Data, index))
 			{
-				SetMarker(false);
+				MoveGhost(list.transform, () => list.PlaceGhost(GhostOf(dragged), index));
 				return;
 			}
-			SetMarker(true);
-			var corners = new Vector3[4];
-			Transform t = list.transform;
-			if (t.childCount == 0) ((RectTransform)t).GetWorldCorners(corners);
-			else ((RectTransform)t.GetChild(Mathf.Min(index, t.childCount - 1))).GetWorldCorners(corners);
-			// 맨 끝이면 마지막 블록 아래(왼쪽 아래 모서리), 아니면 그 자리 블록 위(왼쪽 위 모서리)
-			insertMarker.position = t.childCount > 0 && index >= t.childCount ? corners[0] : corners[1];
-
-			// 줄을 시작 위치에서 이 블록 자리(편집 영역 또는 블록 영역)의 오른쪽 끝까지 늘려서, 어디에 들어가는지 멀리서도 보이게 한다
-			var listCorners = new Vector3[4];
-			((RectTransform)t).GetWorldCorners(listCorners);
-			float width = (listCorners[2].x - insertMarker.position.x) / insertMarker.lossyScale.x;
-			insertMarker.sizeDelta = new Vector2(Mathf.Max(MarkerMinWidth, width), MarkerThickness);
-			insertMarker.SetAsFirstSibling(); // 끄는 블록보다 아래에 그린다
-			return;
 		}
 
-		SetMarker(false);
+		ParkGhost();
 	}
 
-	/// <summary>놓을 자리 표시를 모두 끈다</summary>
+	/// <summary>놓을 자리 표시(반투명 미리보기, 보라색 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
 	public void HideDropPreview()
 	{
-		if (highlightedSlot != null) highlightedSlot.SetHighlight(false);
+		if (highlightedSlot != null)
+		{
+			highlightedSlot.SetHighlight(false);
+			highlightedSlot.HideGhost();
+		}
 		highlightedSlot = null;
-		SetMarker(false);
+		DestroyGhost();
 	}
 
-	// 들어갈 자리 줄의 가장 짧은 길이와 두께 (캔버스 기준 960×540 픽셀)
-	const float MarkerMinWidth = 40f;
-	const float MarkerThickness = 3f;
-
-	// 들어갈 자리 줄. 처음 쓸 때 한 번만 프리팹에서 만든다
-	void SetMarker(bool show)
+	// 미리보기를 place로 옮기고, 자리나 순서가 바뀌었을 때만 레이아웃을 다시 계산한다 (끄는 동안 매 프레임 다시 계산하지 않게)
+	void MoveGhost(Transform place, Action move)
 	{
-		if (insertMarker == null)
+		Transform oldParent = dropGhost != null ? dropGhost.parent : null;
+		int oldIndex = dropGhost != null ? dropGhost.GetSiblingIndex() : -1;
+		bool wasActive = dropGhost != null && dropGhost.gameObject.activeSelf;
+		move();
+		dropGhost.gameObject.SetActive(true);
+		if (!wasActive || oldParent != place || oldIndex != dropGhost.GetSiblingIndex()) RefreshLayout();
+	}
+
+	// 끄는 블록과 같은 모양의 반투명 블록. 끌기 하나에 한 번만 만든다 (블록 UI를 복사한 것이라 데이터는 없다)
+	// 클릭을 통과시켜, 놓을 자리를 찾을 때 미리보기 자신이 걸리지 않게 한다
+	RectTransform GhostOf(BlockView dragged)
+	{
+		if (dropGhost != null) return dropGhost;
+		GameObject copy = Instantiate(dragged.gameObject, dragLayer);
+		copy.name = "DropGhost";
+		dropGhost = (RectTransform)copy.transform;
+		dropGhost.localScale = Vector3.one; // 끄는 블록은 작게 보이지만, 미리보기는 놓은 뒤의 실제 크기
+		if (copy.TryGetComponent(out CanvasGroup group))
 		{
-			if (!show || insertMarkerPrefab == null) return;
-			insertMarker = Instantiate(insertMarkerPrefab, dragLayer);
+			group.alpha = GhostAlpha;
+			group.blocksRaycasts = false;
+			group.interactable = false;
 		}
-		insertMarker.gameObject.SetActive(show);
+		return dropGhost;
+	}
+
+	// 놓을 수 없는 곳: 미리보기를 숨겨 둔다 (다시 놓을 수 있는 곳에 오면 다시 쓴다)
+	void ParkGhost()
+	{
+		if (dropGhost == null || !dropGhost.gameObject.activeSelf) return;
+		dropGhost.gameObject.SetActive(false);
+		dropGhost.SetParent(dragLayer, false);
+		RefreshLayout();
+	}
+
+	// 미리보기를 지운다. Destroy는 프레임 끝에 지우므로, 그 전에 블록 자리에서 빼고 꺼 둔다
+	// (같은 프레임에 블록을 넣고 자리 번호를 셀 때, 편집 영역의 블록 목록에 미리보기가 섞이지 않게)
+	void DestroyGhost()
+	{
+		if (dropGhost == null) return;
+		dropGhost.gameObject.SetActive(false);
+		dropGhost.SetParent(dragLayer, false);
+		Destroy(dropGhost.gameObject);
+		dropGhost = null;
+		RefreshLayout();
 	}
 
 	void ToggleAsync()
@@ -889,8 +1049,23 @@ public class BlockEditor : MonoBehaviour
 		if (referenceList == null || referenceCardPrefab == null) return;
 		for (int i = referenceList.childCount - 1; i >= 0; i--) Destroy(referenceList.GetChild(i).gameObject);
 		string query = referenceSearch != null ? referenceSearch.text : "";
-		foreach (BlockReferenceEntry entry in BlockReference.Search(query))
-			Instantiate(referenceCardPrefab, referenceList).Show(entry);
+		List<BlockReferenceEntry> found = BlockReference.Search(query);
+
+		// 블록 목록과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
+		// 블록 목록에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
+		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Category)).Distinct();
+		foreach (string category in categories)
+		{
+			List<BlockReferenceEntry> cards = found.Where(entry => entry.Category == category).ToList();
+			if (cards.Count == 0) continue;
+			if (headerPrefab != null)
+			{
+				// 분류 색 네모: 그 분류 블록의 색 (블록 목록의 머리글과 같다)
+				Color icon = cards[0].Sample != null ? BlockLabels.ColorOf(cards[0].Sample) : new Color(0, 0, 0, 0);
+				Instantiate(headerPrefab, referenceList).Show(category, null, icon);
+			}
+			foreach (BlockReferenceEntry entry in cards) Instantiate(referenceCardPrefab, referenceList).Show(entry);
+		}
 	}
 
 	static void SetTabLook(Button tab, bool active)
@@ -1080,6 +1255,9 @@ public class BlockEditor : MonoBehaviour
 		if (layoutRoot != null) LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
 		if (Function == null && !editingGlobals) return;
 
+		// 빈 값 칸의 안내 글자 (#476). 선언의 타입이나 대입의 변수를 바꾸면 다른 칸이 받는 타입도 바뀌므로 고칠 때마다 다시 쓴다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>()) slot.RefreshPlaceholder();
+
 		// 동기·비동기 버튼 (슬롯 함수와 전역 변수는 바꿀 수 없음)
 		if (asyncButton != null)
 		{
@@ -1211,32 +1389,45 @@ public class BlockEditor : MonoBehaviour
 		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
 			unlockedForPalette = new HashSet<string>(progress.Unlocked);
 
+		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
+
 		foreach ((string title, Func<BlockData>[] blocks) in PaletteGroups)
 		{
-			// 해금한 블록만 남긴다. 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			Func<BlockData>[] shown = blocks;
-			if (blocks != null && unlockedForPalette != null)
-			{
-				shown = blocks.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette)).ToArray();
-				if (shown.Length == 0) continue;
-			}
 			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
 			if (blocks == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
+
+			// 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476). 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
+			IEnumerable<Func<BlockData>> candidates = (IEnumerable<Func<BlockData>>)blocks ?? FunctionTemplates();
+			if (blocks != null && unlockedForPalette != null)
+				candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
+			Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, query)).ToArray();
+			if (shown.Length == 0) continue;
 
 			if (headerPrefab != null)
 			{
 				ListHeaderView header = Instantiate(headerPrefab, palette);
 				// 분류 색 네모: 그 분류 블록의 색
-				BlockData sample = shown != null ? shown[0]() : BlockData.CallPredefinedFunction("", new SlotData[0]);
-				header.Show(title, null, BlockLabels.ColorOf(sample));
+				header.Show(title, null, BlockLabels.ColorOf(shown[0]()));
 			}
 			// 분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로)
 			paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
-			if (shown == null) AddPredefinedTemplates();
-			else foreach (Func<BlockData> template in shown) AddTemplate(template);
+			foreach (Func<BlockData> template in shown) AddTemplate(template);
 		}
 		paletteTarget = palette;
 	}
+
+	// 블록 목록 검색 (#476): 비어 있거나, 분류 이름·칩 이름·스킬의 화면 이름(검 찌르기)·고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 분류 이름이 맞으면 그 분류의 블록을 모두 보여 준다. 예: 「제어」 → If, For, While …
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string query)
+	{
+		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(PaletteNameOf(block), query)) return true;
+		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
+		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
+			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));
+	}
+
+	static bool ContainsText(string text, string query) =>
+		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
 
 	RectTransform paletteTarget; // 견본 칩을 만들 곳 (BuildPalette 중의 분류 칸)
 
@@ -1258,43 +1449,44 @@ public class BlockEditor : MonoBehaviour
 		}
 	}
 
-	// C 스킬 등 사전 정의 함수: 파라미터 수만큼 빈 값 칸을 가진 함수 블록
-	void AddPredefinedTemplates()
+	// 「함수」 분류의 견본들: C 스킬 등 사전 정의 함수와 내가 만든 함수 부르기. 둘 다 파라미터 수만큼 빈 값 칸을 가진 함수 블록
+	// 칩을 바로 만들지 않고 목록으로 돌려준다. 검색에 맞는 블록이 없으면 분류 머리글도 만들지 않기 위함 (#476)
+	List<Func<BlockData>> FunctionTemplates()
 	{
+		var templates = new List<Func<BlockData>>();
 		IReadOnlyList<PredefinedFunction> functions = PredefinedFunctionRegistry.All;
-		if (functions == null)
+		if (functions == null) Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
+		else
 		{
-			Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
-			return;
-		}
-
-		foreach (PredefinedFunction function in functions)
-		{
-			// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
-			try
+			foreach (PredefinedFunction function in functions)
 			{
-				if (function == null) continue;
-				string id = function.Id;
-				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
-				// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
-				if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
-				int parameterCount = function.Parameters?.Count ?? 0;
-				AddTemplate(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
-			}
-			catch (Exception e)
-			{
-				Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
+				// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
+				try
+				{
+					if (function == null) continue;
+					string id = function.Id;
+					if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+					// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
+					if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
+					int parameterCount = function.Parameters?.Count ?? 0;
+					templates.Add(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
+				}
+				catch (Exception e)
+				{
+					Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
+				}
 			}
 		}
 
-		// 내가 만든 함수 부르기 (BlockData.CallUserFunction). 파라미터 수만큼 빈 값 칸
+		// 내가 만든 함수 부르기 (BlockData.CallUserFunction)
 		// 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않으므로 페이지 함수만 붙인다
 		foreach (FunctionData saved in PageFunctions())
 		{
 			string guid = saved.Guid;
 			int parameterCount = saved.Parameters?.Count ?? 0;
-			AddTemplate(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
+			templates.Add(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
 		}
+		return templates;
 	}
 
 	// 저장한 함수가 바뀌면 블록 목록의 「함수」 분류도 바뀌므로 다시 만든다

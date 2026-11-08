@@ -396,7 +396,8 @@ public static class RaidLobbyUIBuilder
 		RectTransform box = NewUI(name, parent);
 		Height(box.gameObject, 20);
 		Image boxImage = SetImage(box.gameObject, "Assets/_HW/UI/Account/acc_field.png");
-		TMP_InputField input = box.gameObject.AddComponent<TMP_InputField>();
+		// 한글 조합 중에 칸을 벗어나도 멈추지 않는 칸 (방 이름에 한글을 적으므로)
+		TMP_InputField input = box.gameObject.AddComponent<ImeSafeInputField>();
 		input.targetGraphic = boxImage;
 		RectTransform area = NewUI("Text Area", box);
 		Stretch(area);

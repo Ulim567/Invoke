@@ -15,7 +15,7 @@ using UnityEngine.UI;
 /// </para>
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
-public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
 {
 	[SerializeField, Tooltip("블록 배경. 분류별 색이 들어간다")]
 	Image background;
@@ -52,13 +52,16 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	Color fieldLineColor = new Color(1, 1, 1, 0.75f);
 
 	[SerializeField, Tooltip("조건문·반복문 아래 막대 높이")]
-	int containerBottom = 7;
+	int containerBottom = 9;
 
 	[SerializeField, Tooltip("컴파일 오류가 난 블록 색 (반복문 밖의 break 등)")]
 	Color errorColor = new Color32(0xC8, 0x48, 0x58, 0xFF);
 
 	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
 	float dragAlpha = 0.75f;
+
+	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 크기 (원래 크기의 배수, #476)")]
+	float dragScale = 0.6f;
 
 	// 선언 블록에서 고를 수 있는 타입. 고를 때마다 새 VariableType을 만들도록 함수로 둔다 (블록끼리 같은 타입 객체를 나눠 쓰지 않게)
 	// Sword*: 소환검 포인터를 담아 두었다가 free_sword(s)처럼 해제하기 위함. 스킬 파라미터는 반드시 채워야 하기 때문 (#474)
@@ -164,9 +167,10 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (row.TryGetComponent(out HorizontalLayoutGroup rowLayout))
 		{
 			// 문장 블록은 위의 홈(3픽셀)만큼 위 여백을 더 둔다
-			rowLayout.padding = chip ? new RectOffset(5, 5, 2, 3)
-				: value ? new RectOffset(6, 6, 2, 2)
-				: new RectOffset(5, 6, 5, 3);
+			// 끌어 놓기 쉽게 예전(칩 5·2·3, 값 6·2, 문장 5·5·3)보다 여백을 키운다 (#476)
+			rowLayout.padding = chip ? new RectOffset(7, 7, 4, 4)
+				: value ? new RectOffset(8, 8, 3, 3)
+				: new RectOffset(7, 8, 7, 4);
 			rowLayout.childAlignment = chip ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
 		}
 
@@ -514,9 +518,22 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		return button.GetComponentInChildren<TMP_Text>();
 	}
 
+	// 마우스를 올리면 잠깐 뒤에 설명창 (#476): 함수 원형, 스킬 설명, 파라미터. 끄는 중에는 띄우지 않는다
+	public void OnPointerEnter(PointerEventData eventData)
+	{
+		if (editor == null || eventData.dragging || dragging) return;
+		editor.EnterHover(this, (RectTransform)transform, () => editor.TooltipOf(Data));
+	}
+
+	public void OnPointerExit(PointerEventData eventData)
+	{
+		if (editor != null) editor.ExitHover(this);
+	}
+
 	public void OnBeginDrag(PointerEventData eventData)
 	{
 		BlockView dragged = this;
+		editor.ClearHover(); // 끌기 시작하면 설명창을 지운다
 
 		if (templateFactory != null)
 		{
@@ -547,6 +564,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		dragging = true;
 		canvasGroup.alpha = dragAlpha; // 아직 놓이지 않았다는 표시
+		// 마우스를 따라오는 블록은 작게 (#476). 놓은 뒤의 실제 크기는 들어갈 자리의 반투명 미리보기가 보여 주므로, 큰 블록이 미리보기를 가리지 않게
+		transform.localScale = Vector3.one * dragScale;
 		// 끄는 블록이 마우스를 가리면 아래에 있는 놓을 자리를 찾을 수 없으므로 클릭을 통과시킨다
 		canvasGroup.blocksRaycasts = false;
 		MoveTo(eventData);
@@ -556,7 +575,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		if (!dragging) return;
 		MoveTo(eventData);
-		editor.ShowDropPreview(this, FindDropTarget(eventData), eventData); // 들어갈 자리 줄, 끼울 수 있는 값 칸 표시
+		editor.ShowDropPreview(this, FindDropTarget(eventData), eventData); // 들어갈 자리의 반투명 미리보기, 끼울 수 있는 값 칸 표시
 	}
 
 	public void OnEndDrag(PointerEventData eventData)
@@ -566,8 +585,12 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		// 놓을 자리는 클릭 통과를 되돌리기 전에 찾는다. 되돌린 뒤에 찾으면 마우스 아래의 이 블록 자신이 걸려,
 		// 미리보기와 다른 자리(자기 자신의 블록 영역)에 들어가거나 지워지기 때문 (#474)
 		Component target = FindDropTarget(eventData);
+		// 들어갈 자리 번호도 미리보기를 지우기 전에 센다. 지운 뒤에는 블록들이 아직 미리보기만큼 밀려난 위치에 있어서,
+		// 미리보기에 보인 자리와 다른 자리가 나올 수 있기 때문 (#476)
+		int index = target is BlockList targetList ? targetList.GetInsertIndex(eventData.position, eventData.pressEventCamera) : -1;
 		canvasGroup.blocksRaycasts = true;
 		canvasGroup.alpha = 1f;
+		transform.localScale = Vector3.one; // 끄는 동안 작게 보이던 것을 원래 크기로
 		editor.ShowTrash(false);
 		editor.HideDropPreview();
 
@@ -585,7 +608,6 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		}
 
 		BlockList list = (BlockList)target;
-		int index = list.GetInsertIndex(eventData.position, eventData.pressEventCamera);
 		if (list.CanInsert(Data, index))
 		{
 			list.Insert(this, index);

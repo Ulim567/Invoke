@@ -4,7 +4,7 @@ using UnityEngine.Audio;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 장소마다 BGM을 튼다 (#436). 내 캐릭터가 있는 장소(씬 이름)의 곡을 SoundTable에서 찾아 반복 재생하고, 장소가 바뀌면 바꿔 튼다(페이드).
+/// 장소마다 BGM을 튼다 (#436). 내 캐릭터가 있는 장소(PlayerPlace.Mine, 장소 씬 이름)의 곡을 SoundTable에서 찾아 반복 재생하고, 장소가 바뀌면 바꿔 튼다(페이드).
 /// <para>
 /// - 곡이 같으면(로비 → 사냥터처럼 같은 곡을 쓰는 장소) 끊지 않고 이어서 튼다.<br/>
 /// - 내 캐릭터가 없으면(로그인 화면 등) 곡을 끈다. 네트워크 없는 테스트에서는 열린 장소 씬 중 표에 있는 첫 씬의 곡을 튼다.<br/>
@@ -82,11 +82,13 @@ public class BgmPlayer : MonoBehaviour
 		fadeStart = now;
 	}
 
-	// 내 캐릭터가 있는 씬 이름. 내 캐릭터가 없으면: 서버·클라이언트 중이면 null(곡 끔), 네트워크 없는 테스트면 표에 있는 첫 장소 씬
+	// 내 캐릭터의 장소 씬 이름. 내 캐릭터가 없으면: 서버·클라이언트 중이면 null(곡 끔), 네트워크 없는 테스트면 표에 있는 첫 장소 씬
 	string CurrentPlace()
 	{
+		// 클라이언트에서는 Mirror가 캐릭터를 늘 Base 씬에 만들어서 scene.name으로는 장소를 알 수 없다(#466).
+		// 그래서 서버가 보내 주는 PlayerPublicInfo.Place를 읽는다. 아직 정해지지 않았으면 ""라 곡을 틀지 않는다
 		NetworkIdentity me = NetworkClient.localPlayer;
-		if (me != null) return me.gameObject.scene.name;
+		if (me != null) return PlayerPlace.Mine;
 		if (NetworkClient.active || NetworkServer.active) return null;
 
 		for (int i = 0; i < SceneManager.sceneCount; i++)

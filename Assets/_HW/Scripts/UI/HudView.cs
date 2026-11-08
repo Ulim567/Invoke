@@ -9,15 +9,16 @@ using UnityEngine.UI;
 /// <summary>
 /// 게임 중 HUD (우림이 시안 8, 8-1). 내 캐릭터의 값을 읽어서 보여 주기만 한다.
 /// <para>
-/// - 왼쪽 위: 설정(Esc) · Lv · 버그 조각 · 보스 코어 (PlayerProgress). 그 아래 지금 장소 이름 (내 캐릭터가 있는 씬).<br/>
-/// - 아래 가운데: HP(PlayerHealth), Memory(ProcessMemory: 왼쪽부터 Data·Heap, 오른쪽부터 Stack), 슬롯 8칸(Q W E R A S D F).<br/>
+/// - 왼쪽 위: 설정(Esc) · Lv · 버그 조각 · 보스 코어 (PlayerProgress, 재료 그림은 박진우의 드롭 그림 첫 장). 그 아래 지금 장소 이름 (내 캐릭터가 있는 씬).<br/>
+/// - 아래 가운데: HP(PlayerHealth, 닳은 부분이 흰 잔상으로 잠시 남았다가 줄어듦 #431), Memory(ProcessMemory: 왼쪽부터 Data·Heap, 오른쪽부터 Stack), 슬롯 8칸(Q W E R A S D F).<br/>
 /// - 소환검 (#365): 아래 띠 왼쪽에 「소환검 n/5」와 5칸. SummonedSwords.Swords(박진우)를 읽기만 한다. 사용 가능 청록, 쓰는 중 어둡게, 누수 빨강.<br/>
 /// - 레이드 던전 (시안 8-3): 왼쪽 위는 설정만, 바로가기 숨김. 파티원 목록(RaidPartyView)과 보스 체력 바(김도훈의 BossHealthBar + BossBarPercent)가 같은 프리팹에 있다.<br/>
-/// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 줄고 남은 초) / 시전 거부(잠깐 빨간 테두리).
+/// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 걷히고 「x.x sec」) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
-///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks. 거부: CastRejected.<br/>
-/// - 오른쪽 아래: 스킬 트리 · 레벨업 바로가기. 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비에서만, 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
-/// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. 창(InputBlockingPanel)이 열린 동안에도 숨긴다. HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
+///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks (함수 칸은 안의 C 스킬 중 가장 긴 것). 거부: CastRejected.<br/>
+/// - 오른쪽 아래: 스킬 트리(1) · 레벨업(2) 바로가기. 누르거나 숫자 키를 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비에서만, 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
+/// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. HUD를 숨기는 창(InputBlockingPanel.HudHidden)이 열린 동안에도 숨긴다.
+///   로비 창(입구, 스킬 트리)처럼 HUD를 남기는 창이 열린 동안은 보이기만 하고 누를 수 없다 (#431). HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
 /// </para>
 /// </summary>
 public class HudView : MonoBehaviour
@@ -47,6 +48,9 @@ public class HudView : MonoBehaviour
 
 	[Header("아래")]
 	[SerializeField] Image hpFill;
+	[SerializeField, Tooltip("HP 막대의 흰 잔상 (#431). 맞기 전 너비로 남았다가 빨간 쪽까지 줄어든다. 몬스터·보스 체력 바와 같은 방식")] Image hpTrail;
+	[SerializeField, Min(0f), Tooltip("잔상이 줄어들기 시작할 때까지 기다리는 시간(초). 몬스터 체력 바와 같은 0.3초")] float hpTrailDelay = 0.3f;
+	[SerializeField, Min(0.01f), Tooltip("잔상이 줄어드는 빠르기 (막대 전체 = 1, 초당)")] float hpTrailSpeed = 0.6f;
 	[SerializeField] TMP_Text hpText;
 	[SerializeField, Tooltip("왼쪽부터 차는 Data + Heap (Filled, Horizontal, Left)")] Image heapFill;
 	[SerializeField, Tooltip("왼쪽부터 차는 Data만 (Heap 위에 덮임)")] Image dataFill;
@@ -100,18 +104,44 @@ public class HudView : MonoBehaviour
 	readonly float[] rejectedUntil = new float[SlotCount];
 	readonly int[] cooldownTotal = new int[SlotCount]; // 이번 쿨타임이 처음 보였을 때의 tick 수 (덮개 비율의 기준)
 
+	// HP 잔상
+	float hpTrailValue = -1f;
+	float hpLastValue = -1f;
+	float hpTrailHoldUntil;
+
+	CanvasGroup rootGroup;
+
 	void Awake()
 	{
 		if (settingsButton != null) settingsButton.onClick.AddListener(OpenSettings);
 		if (skillTreeButton != null) skillTreeButton.onClick.AddListener(() => SkillTreeRequested?.Invoke());
 		if (levelUpButton != null) levelUpButton.onClick.AddListener(() => LevelUpRequested?.Invoke());
-		if (root != null) root.SetActive(false);
+		if (root != null)
+		{
+			root.SetActive(false);
+			if (!root.TryGetComponent(out rootGroup)) rootGroup = root.AddComponent<CanvasGroup>();
+		}
 	}
 
 	void OnDisable() => Unbind();
 
 	/// <summary>설정 버튼, Esc(UIShortcut). 설정 화면을 연다</summary>
 	public void OpenSettings() => SettingsRequested?.Invoke();
+
+	/// <summary>숫자 1(UIShortcut, #431). 스킬 트리 버튼을 누를 수 있을 때만 연다</summary>
+	public void OpenSkillTreeByKey()
+	{
+		if (CanPress(skillTreeButton)) SkillTreeRequested?.Invoke();
+	}
+
+	/// <summary>숫자 2(UIShortcut, #431). 레벨업 버튼을 누를 수 있을 때만 연다</summary>
+	public void OpenLevelUpByKey()
+	{
+		if (CanPress(levelUpButton)) LevelUpRequested?.Invoke();
+	}
+
+	// 버튼이 보이고(레이드에서는 숨김) 켜져 있을 때만. 다른 창이 열려 있으면 HUD의 UIShortcut이 맨 위가 아니라 애초에 불리지 않는다
+	bool CanPress(Button button) => player != null && button != null && button.interactable && button.gameObject.activeInHierarchy;
 
 	void Update()
 	{
@@ -121,6 +151,9 @@ public class HudView : MonoBehaviour
 		bool show = player != null && !InputBlockingPanel.HudHidden;
 		if (root != null && root.activeSelf != show) root.SetActive(show);
 		if (!show) return;
+		// HUD를 남기는 창(로비 입구, 스킬 트리, 설정)이 열린 동안은 보이기만 하고 누를 수 없게 한다 (#431)
+		bool interactive = !InputBlockingPanel.AnyOpen;
+		if (rootGroup != null && rootGroup.interactable != interactive) rootGroup.interactable = rootGroup.blocksRaycasts = interactive;
 
 		RefreshTop();
 		RefreshBars();
@@ -162,6 +195,7 @@ public class HudView : MonoBehaviour
 		network = null;
 		player = null;
 		runningTaskSlot.Clear();
+		hpTrailValue = hpLastValue = -1f;
 	}
 
 	void OnCastAccepted(int slot, int taskId)
@@ -236,7 +270,9 @@ public class HudView : MonoBehaviour
 		if (health != null)
 		{
 			int max = Mathf.Max(1, health.MaxHp);
-			if (hpFill != null) hpFill.fillAmount = Mathf.Clamp01((float)health.Hp / max);
+			float hp = Mathf.Clamp01((float)health.Hp / max);
+			if (hpFill != null) hpFill.fillAmount = hp;
+			RefreshHpTrail(hp);
 			SetText(hpText, $"{health.Hp} / {health.MaxHp}");
 		}
 		if (memory != null)
@@ -248,6 +284,17 @@ public class HudView : MonoBehaviour
 			if (stackFill != null) stackFill.fillAmount = Mathf.Clamp01(memory.StackUsed / capacity);
 			SetText(memoryText, $"{used} / {memory.Capacity}");
 		}
+	}
+
+	// 흰 잔상: 줄어들면 Delay 동안 맞기 전 너비로 남았다가 Speed로 빨간 쪽까지 줄어든다. 맞는 중에는 다시 기다린다. 회복하면 바로 맞춘다
+	void RefreshHpTrail(float hp)
+	{
+		if (hpTrailValue < 0f) hpTrailValue = hpLastValue = hp;
+		if (hp < hpLastValue) hpTrailHoldUntil = Time.time + hpTrailDelay;
+		hpLastValue = hp;
+		if (hp >= hpTrailValue) hpTrailValue = hp;
+		else if (Time.time >= hpTrailHoldUntil) hpTrailValue = Mathf.MoveTowards(hpTrailValue, hp, hpTrailSpeed * Time.deltaTime);
+		if (hpTrail != null) hpTrail.fillAmount = hpTrailValue;
 	}
 
 	void RefreshSlots()
@@ -262,8 +309,10 @@ public class HudView : MonoBehaviour
 			FunctionBlock function = null;
 			bool hasFunction = !empty && loadout.TryGetFunction(i, out function);
 
-			// 쿨타임
-			int remaining = hasFunction && executor != null && !noCast ? executor.GetRemainingCooldownTicks(function) : 0;
+			string label = SlotLabel(i); // 1초마다 슬롯 안의 C 스킬 목록도 새로 셈
+
+			// 쿨타임: C 스킬 칸은 그 스킬, 함수 칸은 안의 C 스킬 중 가장 긴 것 (함수 자체는 쿨타임이 없음)
+			int remaining = hasFunction && executor != null && !noCast ? RemainingCooldown(i, function) : 0;
 			if (remaining <= 0) cooldownTotal[i] = 0;
 			else if (remaining > cooldownTotal[i]) cooldownTotal[i] = remaining;
 			bool cooling = remaining > 0 && !running[i];
@@ -279,7 +328,6 @@ public class HudView : MonoBehaviour
 			}
 
 			TMP_Text slotName = At(slotNames, i);
-			string label = SlotLabel(i);
 			if (slotName != null) slotName.text = label; // 마우스를 올리면 칸 위 말풍선으로 보임 (SlotHoverTip)
 
 			// 스킬 아이콘 (#444): C 스킬 칸은 그 스킬, 함수 칸은 함수 안의 첫 C 스킬. 없으면 숨김
@@ -298,12 +346,13 @@ public class HudView : MonoBehaviour
 			if (key != null)
 			{
 				float seconds = executor != null ? remaining * executor.SecondsPerTick : 0f;
-				key.text = cooling ? seconds.ToString("0.0") : SlotKeys[i];
+				key.text = cooling ? $"{seconds:0.0}\n<size=5>sec</size>" : SlotKeys[i];
 				key.color = noCast || empty ? keyDisabledColor : keyColor;
 				// 아이콘이 있으면 키 글자는 오른쪽 아래 구석에 작게, 쿨타임 초는 가운데에 크게
 				bool corner = hasIcon && !cooling;
 				key.alignment = corner ? TextAlignmentOptions.BottomRight : TextAlignmentOptions.Center;
-				key.fontSize = corner ? 6 : 9;
+				key.fontSize = corner ? 6 : cooling ? 8 : 9;
+				key.lineSpacing = cooling ? -15f : 0f;
 			}
 
 			Image cooldown = At(slotCooldowns, i);
@@ -322,6 +371,7 @@ public class HudView : MonoBehaviour
 
 	readonly string[] slotLabels = new string[SlotCount];
 	readonly string[] slotIconIds = new string[SlotCount]; // 슬롯 아이콘으로 쓸 스킬 ID (#444)
+	readonly List<string>[] slotSkillIds = new List<string>[SlotCount]; // 함수 칸 안의 C 스킬 ID들 (쿨타임, #431)
 	float slotLabelsTime = -1f;
 
 	// 슬롯에 보일 스킬 이름. 1초마다 다시 센다 (장착·저장이 바뀌면 따라감)
@@ -330,16 +380,18 @@ public class HudView : MonoBehaviour
 		if (Time.unscaledTime - slotLabelsTime > 1f || slotLabelsTime < 0f)
 		{
 			slotLabelsTime = Time.unscaledTime;
-			for (int i = 0; i < SlotCount; i++) slotLabels[i] = ComputeSlotLabel(i, out slotIconIds[i]);
+			for (int i = 0; i < SlotCount; i++) slotLabels[i] = ComputeSlotLabel(i, out slotIconIds[i], out slotSkillIds[i]);
 		}
 		return slotLabels[slot] ?? "";
 	}
 
 	// 슬롯 내용 → 「검 찌르기」. C 스킬을 바로 넣었으면 그 이름, 함수를 넣었으면 그 안의 C 스킬(스킬 트리에 있는 것) 이름
 	// iconSkillId: 슬롯 아이콘으로 쓸 스킬 ID (#444). C 스킬 칸은 그 스킬, 함수 칸은 함수 안의 첫 C 스킬, 없으면 null
-	string ComputeSlotLabel(int slot, out string iconSkillId)
+	// skillIds: 함수 칸 안의 C 스킬 ID들 (쿨타임을 볼 것). C 스킬 칸·빈 칸은 null
+	string ComputeSlotLabel(int slot, out string iconSkillId, out List<string> skillIds)
 	{
 		iconSkillId = null;
+		skillIds = null;
 		if (loadout == null) return "";
 		SlotLoadout.Entry entry = loadout.GetEntry(slot);
 		if (entry.IsEmpty) return "";
@@ -354,9 +406,22 @@ public class HudView : MonoBehaviour
 		List<string> skills = function.AllBlocks()
 			.Where(b => b.Kind == BlockKind.Function && !b.IsUserFunction && !string.IsNullOrEmpty(b.FunctionId) && SkillTree.TryGet(b.FunctionId, out _))
 			.Select(b => b.FunctionId).Distinct().ToList();
+		skillIds = skills;
 		if (skills.Count == 0) return function.CountBlocks() > 0 && !function.Name.StartsWith("slot") ? function.Name : "";
 		iconSkillId = skills[0];
 		return skills.Count == 1 ? SkillName(skills[0]) : $"{SkillName(skills[0])} +{skills.Count - 1}";
+	}
+
+	// 남은 쿨타임(tick). C 스킬 칸은 그 스킬, 함수 칸은 안의 C 스킬마다 PredefinedFunctionRegistry로 스킬을 꺼내 물어보고 가장 긴 것
+	int RemainingCooldown(int slot, FunctionBlock function)
+	{
+		int remaining = executor.GetRemainingCooldownTicks(function);
+		List<string> skills = slotSkillIds[slot];
+		if (function is PredefinedFunction || skills == null) return remaining;
+		foreach (string id in skills)
+			if (PredefinedFunctionRegistry.TryGet(id, out PredefinedFunction skill))
+				remaining = Mathf.Max(remaining, executor.GetRemainingCooldownTicks(skill));
+		return remaining;
 	}
 
 	// 실제 계정은 서버가 보낸 함수 목록, 임시 계정은 이 컴퓨터의 함수 파일에서 찾는다

@@ -257,4 +257,44 @@ public class SkillTree : ScriptableObject
 #endif
 		Debug.Log($"[SkillTree] 기획서대로 노드 {nodes.Count}개를 채움. Ctrl/Cmd+S로 저장하고 「검사」를 눌러 확인한다");
 	}
+
+	// 이미 만든 에셋에 설명만 넣는다. 「기획서대로 채우기」는 노드 전체(재료 등 Inspector에서 고친 값)를 덮어쓰므로 따로 둔다.
+	// 짧은 설명과 자세한 설명이 둘 다 빈 노드만 채우고, 한 칸이라도 적어 둔 노드는 건드리지 않는다
+	[ContextMenu("비어 있는 설명만 채우기")]
+	void FillEmptyDescriptions()
+	{
+		int filled = 0;
+		foreach (SkillTreeNode node in nodes)
+		{
+			if (node == null || (node.Description != null && !node.Description.IsEmpty)) continue;
+			SkillTreeNodeDescription description = SkillTreeDefaults.DescriptionOf(node.Id);
+			if (description == null) continue;
+			node.SetDescription(description);
+			filled++;
+		}
+#if UNITY_EDITOR
+		if (filled > 0) UnityEditor.EditorUtility.SetDirty(this);
+#endif
+		Debug.Log($"[SkillTree] 비어 있던 설명 {filled}개를 채움. Ctrl/Cmd+S로 저장한다");
+	}
+
+	// 설명의 원본은 SkillTreeDefaults. 문구를 고친 뒤 이 메뉴 한 번으로 모든 노드에 반영한다.
+	// Inspector에서 직접 고친 설명도 덮어쓴다. 재료·선행 등 다른 값은 건드리지 않는다
+	[ContextMenu("설명 모두 다시 채우기")]
+	void RefillAllDescriptions()
+	{
+		int filled = 0;
+		foreach (SkillTreeNode node in nodes)
+		{
+			if (node == null) continue;
+			SkillTreeNodeDescription description = SkillTreeDefaults.DescriptionOf(node.Id);
+			if (description == null) continue;
+			node.SetDescription(description);
+			filled++;
+		}
+#if UNITY_EDITOR
+		if (filled > 0) UnityEditor.EditorUtility.SetDirty(this);
+#endif
+		Debug.Log($"[SkillTree] 설명 {filled}개를 SkillTreeDefaults 문구로 다시 채움. Ctrl/Cmd+S로 저장한다");
+	}
 }

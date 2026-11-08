@@ -13,6 +13,8 @@
 ## 동작 규칙
 - 에셋: `Assets/_HW/Resources/SkillTree.asset`. Inspector에서 고친다.
   - 처음 만들 때: Create → Invoke → Skill Tree → 에셋 ⋮ → 「기획서대로 채우기」 (`SkillTreeDefaults`)
+  - 설명만 넣을 때: 에셋 ⋮ → 「비어 있는 설명만 채우기」. 짧은 설명·자세한 설명이 둘 다 빈 노드만 `SkillTreeDefaults`의 문구로 채운다 (#433)
+  - 설명 문구를 고친 뒤: 에셋 ⋮ → 「설명 모두 다시 채우기」. 모든 노드의 설명을 `SkillTreeDefaults` 문구로 덮어쓴다 (다른 값은 그대로). 설명의 원본은 `SkillTreeDefaults`
   - 고친 뒤: 에셋 ⋮ → 「검사」. ID 중복, 없는 선행 노드, 선행 조건 순환, 재료, SkillTable과 스킬이 같은지 본다.
 - 노드 ID
   - 스킬: `PredefinedFunctionIds`의 값 (예: `c.thrust`). SkillTable의 24개와 같아야 한다.
@@ -84,6 +86,7 @@
 - 스크립트: `SkillTreeView`(화면), `SkillTreeNodeView`(노드 프리팹). 로비 스킬 트리 창(`LobbyUI` 프리팹의 SkillTreePanel → Window) 안에 둔다
 - 노드·선·계열 이름은 프리팹(`Assets/_HW/UI/SkillTree`)으로 만든다. 탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 둔다
 - 탭: 문법 / 스킬. 스킬은 계열별 줄(소환, 찌르기, 던지기, 휘두르기, 이동). 위치는 `SkillTreeView`의 `SkillLayout`·`SyntaxLayout` 표. 표에 없는 노드는 맨 아래 「기타」 줄 (노드를 늘리면 표에도 넣는다)
+  - 문법: 위에서 아래로 세로 한 줄 (순차 실행 → … → Type 정의), 줄 간격은 스킬 탭보다 넓음. 트리 칸보다 길면 세로 스크롤과 오른쪽 스크롤 막대 (#433)
 - 같은 계열의 선행은 선으로 잇고, 다른 계열의 선행(검 소환)은 이름 아래 「+ 검 소환」
 
 | 노드 모습 | 뜻 |
@@ -93,6 +96,9 @@
 | 회색 글자 | 선행 노드를 아직 안 엶 |
 | 흰 테두리 | 지금 고른 노드 |
 
+- 설명(`SkillTreeNode.Description`, #433): 짧은 설명은 문법 탭의 노드 옆, 자세한 설명은 설명 칸의 이름 아래. 비어 있으면 보이지 않음
+- 설명 칸: 제목과 내용을 위에서부터 쌓아 제목이 두 줄이면 내용이 밀림. 해금 버튼 위까지 넘치면 세로 스크롤 (`DetailScroll`, 노드를 고르면 맨 위로)
+- 스킬 노드를 누르면 설명 칸 제목의 이름 옆에 블록 편집기의 함수 이름 (예: 검 찌르기  thrust, `BlockLabels.PredefinedFunctionName`)
 - 노드를 누르면 설명 칸에 종류, 상태, 선행(열었으면 초록, 아니면 빨강), 재료, 같이 열리는 노드, 여는 블록
 - 해금 목록은 `SetUnlocked`로 받는다. 받기 전에는 처음부터 해금된 노드(`StartingNodes` + 같이 열리는 노드)만 해금됨
 - 「해금」 버튼은 `UnlockRequested`를 알리고, 내 캐릭터의 `PlayerProgress.RequestUnlock`을 부른다. 서버가 재료 확인·해금·저장을 한다 (progress-store.md 「노드 해금 검사」) (#294)
@@ -128,7 +134,8 @@
 | `AutoUnlock` | 선행을 채우면 재료 없이 같이 열림 |
 | `Cost` | `MaterialCost`(`MaterialId`, `Count`) 목록 |
 | `UnlocksBlocks` | 해금하면 쓸 수 있는 블록 종류 |
-| `Note` | 가정한 것 |
+| `Description` | 플레이어에게 보이는 설명 `SkillTreeNodeDescription`: `Summary`(짧은 설명 한 문장), `Detail`(자세한 설명 문단). 비어 있을 수 있음 (#433) |
+| `Note` | 가정한 것 (개발 메모, 화면에 안 보임) |
 
 ## 맞춘 결과
 - 박진우와 정한 것 (#91)

@@ -12,6 +12,7 @@ using UnityEngine.UI;
 /// - 노드·선·계열 이름은 프리팹(Node Prefab, Line Prefab, Lane Label Prefab)에서 만들고 지우는 일은 ClearTree 한 곳에서 한다 (CLAUDE.md 코드 작성 규칙 3, 4).<br/>
 ///   탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 두고 칸에 넣는다.<br/>
 /// - 노드 위치는 SkillLayout·SyntaxLayout 표로 정한다. 표에 없는 노드는 맨 아래 「기타」 줄에 놓는다.<br/>
+///   문법은 세로 한 줄이고, 트리 칸보다 길면 세로 스크롤을 켠다 (UpdateScroll).<br/>
 ///   같은 계열 안의 선행은 선으로 잇고, 다른 계열의 선행(예: 검 소환)은 이름 아래 「+ 검 소환」으로 적는다.<br/>
 /// - 창이 열리면 내 캐릭터의 PlayerProgress에서 해금 목록과 재료를 읽고, PlayerProgress.Changed마다 다시 그린다. 내 캐릭터가 없으면(네트워크 없는 시험) SetUnlocked로 받은 목록, 그것도 없으면 처음부터 해금된 노드만.<br/>
 /// - 「해금」 버튼은 UnlockRequested(노드 ID)를 알리고, 내 캐릭터의 PlayerProgress.RequestUnlock(이우림 #315)으로 서버에 해금을 요청한다.
@@ -44,6 +45,11 @@ public class SkillTreeView : MonoBehaviour
 
 	// 크기 (LobbyUI Canvas 1920×1080 기준) -----------------------------------------
 	const float NodeWidth = 170f, NodeHeight = 48f, ColumnGap = 28f, RowGap = 10f; // 스킬 탭 전체 약 1122×668. 시안 9 창의 트리 칸(1158×702)에 스크롤 없이 들어감
+	// 문법 탭은 세로 한 줄이라 줄 사이를 넓힌다 (캔버스 9: 노드 44 : 줄 72). 나중에 노드 옆 설명이 들어갈 높이이고, 트리 칸보다 길어져 세로 스크롤이 생긴다
+	const float SyntaxRowGap = 42f;
+	const float WheelSensitivity = 10f; // 트리 칸 Scroll Rect의 휠 감도 (UpdateScroll)
+	// 문법 탭 노드 옆 짧은 설명. 트리 칸(약 1140) - 노드 오른쪽 끝(310) - 간격 - 스크롤 막대(12)
+	const float SummaryGap = 24f, SummaryWidth = 760f, SummaryFontSize = 20f;
 	const float LaneLabelWidth = 120f, Padding = 20f, LineWidth = 4f;
 
 	// 색 -----------------------------------------------------------------------
@@ -61,6 +67,8 @@ public class SkillTreeView : MonoBehaviour
 	static readonly Color LineOn = new Color32(0x8A, 0x84, 0xA8, 0xFF);
 	static readonly Color LineOff = new Color32(0x3A, 0x35, 0x50, 0xFF);
 	const string Good = "#5EF2D6", Bad = "#E07070", Dim = "#8A84A8", Warn = "#E8A867", UnlockedText = "#1A1E3A";
+	const string DescriptionText = "#B8B3C7"; // 설명 글자 (캔버스 9의 설명 색). 이름표(Dim)보다 밝게
+	static readonly Color SummaryColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
 
 	// 노드 위치: (계열, 칸, 줄). 줄은 위에서부터 --------------------------------------
 	static readonly string[] SkillLanes = { "소환", "찌르기", "던지기", "휘두르기", "이동" };
@@ -96,20 +104,20 @@ public class SkillTreeView : MonoBehaviour
 		[PredefinedFunctionIds.SwordRide] = (4, 2, 10),
 	};
 
-	// 문법은 한 계열. 5칸씩 지그재그
+	// 문법은 한 계열. 앞 단계가 선행이라 위에서 아래로 한 줄 (같은 칸끼리는 Connect가 세로선으로 잇는다)
 	static readonly string[] SyntaxLanes = { "문법" };
 	static readonly Dictionary<string, (int lane, int col, int row)> SyntaxLayout = new Dictionary<string, (int, int, int)>
 	{
 		[SkillTreeDefaults.Sequence] = (0, 0, 0),
-		[SkillTreeDefaults.Variable] = (0, 1, 0),
-		[SkillTreeDefaults.Arithmetic] = (0, 2, 0),
-		[SkillTreeDefaults.If] = (0, 3, 0),
-		[SkillTreeDefaults.Logic] = (0, 4, 0),
-		[SkillTreeDefaults.For] = (0, 4, 1),
-		[SkillTreeDefaults.While] = (0, 3, 1),
-		[SkillTreeDefaults.Function] = (0, 2, 1),
-		[SkillTreeDefaults.List] = (0, 1, 1),
-		[SkillTreeDefaults.TypeDefinition] = (0, 0, 1),
+		[SkillTreeDefaults.Variable] = (0, 0, 1),
+		[SkillTreeDefaults.Arithmetic] = (0, 0, 2),
+		[SkillTreeDefaults.If] = (0, 0, 3),
+		[SkillTreeDefaults.Logic] = (0, 0, 4),
+		[SkillTreeDefaults.For] = (0, 0, 5),
+		[SkillTreeDefaults.While] = (0, 0, 6),
+		[SkillTreeDefaults.Function] = (0, 0, 7),
+		[SkillTreeDefaults.List] = (0, 0, 8),
+		[SkillTreeDefaults.TypeDefinition] = (0, 0, 9),
 	};
 
 	class Placed
@@ -122,6 +130,7 @@ public class SkillTreeView : MonoBehaviour
 	}
 
 	SkillTreeNodeKind tab = SkillTreeNodeKind.Skill;
+	float rowGap = RowGap; // 지금 탭의 줄 간격 (스킬 RowGap, 문법 SyntaxRowGap)
 	string selectedId;
 	HashSet<string> unlocked;
 	readonly Dictionary<string, Placed> placed = new Dictionary<string, Placed>();
@@ -230,6 +239,7 @@ public class SkillTreeView : MonoBehaviour
 		}
 
 		bool skills = kind == SkillTreeNodeKind.Skill;
+		rowGap = skills ? RowGap : SyntaxRowGap;
 		string[] lanes = skills ? SkillLanes : SyntaxLanes;
 		Dictionary<string, (int lane, int col, int row)> layout = skills ? SkillLayout : SyntaxLayout;
 
@@ -242,7 +252,7 @@ public class SkillTreeView : MonoBehaviour
 			placed[node.Id] = new Placed
 			{
 				Node = node, Lane = p.lane, Column = p.col, Row = p.row,
-				TopLeft = new Vector2(Padding + LaneLabelWidth + p.col * (NodeWidth + ColumnGap), -(Padding + p.row * (NodeHeight + RowGap))),
+				TopLeft = new Vector2(Padding + LaneLabelWidth + p.col * (NodeWidth + ColumnGap), -(Padding + p.row * (NodeHeight + rowGap))),
 			};
 			maxColumn = Mathf.Max(maxColumn, p.col);
 			lastRow = Mathf.Max(lastRow, p.row);
@@ -257,7 +267,7 @@ public class SkillTreeView : MonoBehaviour
 				if (inLane.Count == 0) continue;
 				TMP_Text label = Spawn(laneLabelPrefab);
 				label.text = lane < lanes.Length ? lanes[lane] : "기타";
-				Place(label.rectTransform, new Vector2(Padding, -(Padding + inLane.Min(w => w.Row) * (NodeHeight + RowGap))), new Vector2(LaneLabelWidth - 4, NodeHeight));
+				Place(label.rectTransform, new Vector2(Padding, -(Padding + inLane.Min(w => w.Row) * (NodeHeight + rowGap))), new Vector2(LaneLabelWidth - 4, NodeHeight));
 			}
 		}
 
@@ -282,13 +292,36 @@ public class SkillTreeView : MonoBehaviour
 			p.View.Button.onClick.AddListener(() => Select(id));
 		}
 
+		// 문법 탭: 노드 옆에 짧은 설명 (스킬 탭은 노드 사이가 좁아 오른쪽 설명 칸에만 보인다)
+		if (!skills && laneLabelPrefab != null)
+		{
+			foreach (Placed p in placed.Values)
+			{
+				string summary = p.Node.Description?.Summary;
+				if (string.IsNullOrEmpty(summary)) continue;
+				// 글자 프리팹은 계열 이름과 같은 것을 쓰고 모양만 바꾼다 (새 프리팹 없이)
+				TMP_Text label = Spawn(laneLabelPrefab);
+				label.richText = false; // 설명의 < > (예: a < b)를 태그로 읽지 않게
+				label.text = summary;
+				label.fontSize = SummaryFontSize;
+				label.color = SummaryColor;
+				label.alignment = TextAlignmentOptions.MidlineLeft;
+				label.textWrappingMode = TextWrappingModes.Normal;
+				label.overflowMode = TextOverflowModes.Overflow;
+				label.raycastTarget = false;
+				Place(label.rectTransform, new Vector2(p.TopLeft.x + NodeWidth + SummaryGap, p.TopLeft.y), new Vector2(SummaryWidth, NodeHeight));
+			}
+		}
+
 		treeContent.sizeDelta = new Vector2(
 			Padding * 2 + LaneLabelWidth + (maxColumn + 1) * (NodeWidth + ColumnGap) - ColumnGap,
-			Padding * 2 + (lastRow + 1) * (NodeHeight + RowGap) - RowGap);
+			Padding * 2 + (lastRow + 1) * (NodeHeight + rowGap) - rowGap);
+		UpdateScroll();
 
 		if (selectedId == null || !placed.ContainsKey(selectedId))
 			selectedId = placed.Values.FirstOrDefault(w => SkillTree.CanUnlock(w.Node.Id, Unlocked))?.Node.Id ?? placed.Keys.FirstOrDefault();
 		Refresh();
+		ResetDetailScroll();
 	}
 
 	// 부모 → 자식 선. 같은 칸이면 세로 한 줄, 아니면 ㄱ자로 꺾는다
@@ -323,6 +356,22 @@ public class SkillTreeView : MonoBehaviour
 		rect.sizeDelta = new Vector2(Mathf.Abs(b.x - a.x) + LineWidth, Mathf.Abs(b.y - a.y) + LineWidth);
 		line.raycastTarget = false;
 		return line;
+	}
+
+	// 트리가 트리 칸보다 길 때만 세로 스크롤을 켠다 (LobbyUI의 TreeScroll은 가로·세로 스크롤이 꺼진 채 저장되어 있음).
+	// 탭을 바꾸면 맨 위부터 보이게 되돌린다. Content는 Anchor·Pivot이 왼쪽 위라 y 0이 맨 위
+	void UpdateScroll()
+	{
+		ScrollRect scroll = treeContent.GetComponentInParent<ScrollRect>();
+		if (scroll == null) return;
+		RectTransform view = scroll.viewport != null ? scroll.viewport : (RectTransform)scroll.transform;
+		scroll.horizontal = false;
+		scroll.vertical = treeContent.sizeDelta.y > view.rect.height;
+		// 휠 값(보통 마우스 한 칸 = 6, InputSystemUIInputModule의 Scroll Delta Per Tick)에 곱하는 값. 한 칸에 60px(문법 한 줄 90px의 2/3).
+		// 곱하기만 하므로 터치패드·고해상도 휠처럼 작은 값을 여러 번 보내는 기기도 움직인 양에 비례한다
+		scroll.scrollSensitivity = WheelSensitivity;
+		scroll.StopMovement();
+		treeContent.anchoredPosition = new Vector2(treeContent.anchoredPosition.x, 0);
 	}
 
 	static void Place(RectTransform rect, Vector2 topLeft, Vector2 size)
@@ -406,7 +455,10 @@ public class SkillTreeView : MonoBehaviour
 		// 선행은 채웠지만 재료가 모자라면 해금 버튼을 막는다 (서버도 MaterialShort로 거부함)
 		bool enough = HasMaterials(node);
 
-		detailTitle.text = node.DisplayName;
+		// 스킬은 이름 옆에 블록 편집기에서 부르는 함수 이름 (예: 검 찌르기  thrust)
+		detailTitle.text = node.Kind == SkillTreeNodeKind.Skill
+			? $"{node.DisplayName}  <color={Dim}>{BlockLabels.PredefinedFunctionName(node.Id)}</color>"
+			: node.DisplayName;
 		// 시안 9: 왼쪽 회색 이름표, 오른쪽 값 (표처럼 줄 맞춤)
 		string Row(string label, string value) => $"<color={Dim}>{label}</color><pos=46%>{value}";
 		var lines = new List<string>
@@ -429,6 +481,9 @@ public class SkillTreeView : MonoBehaviour
 		lines.Add(Row("같이 열리는 노드", together.Count > 0 ? string.Join(", ", together) : "없음"));
 		if (node.UnlocksBlocks.Count > 0) lines.Add(Row("여는 블록", string.Join(", ", node.UnlocksBlocks.Select(BlockName))));
 		if (failedId == node.Id && !isUnlocked) lines.Add($"<color={Bad}>해금하지 못했어요. {FailText(failedResult)}</color>");
+		// 자세한 설명은 이름 바로 아래 (캔버스 9-1). noparse: 설명의 < > 를 태그로 읽지 않게
+		string detail = node.Description?.Detail;
+		if (!string.IsNullOrEmpty(detail)) lines.InsertRange(0, new[] { $"<color={DescriptionText}><noparse>{detail}</noparse></color>", "" });
 		detailBody.text = string.Join("\n", lines);
 
 		if (unlockButton != null)
@@ -447,6 +502,18 @@ public class SkillTreeView : MonoBehaviour
 	{
 		selectedId = id;
 		Refresh();
+		ResetDetailScroll();
+	}
+
+	// 다른 노드를 고르면 설명 칸을 맨 위부터 보이게 한다. 설명 칸 스크롤(DetailScroll, SkillTreeUIBuilder)이 없으면 아무것도 안 함.
+	// 해금 결과 등으로 다시 그릴 때(RefreshDetail)는 부르지 않는다. 읽던 자리가 튀지 않게
+	void ResetDetailScroll()
+	{
+		if (detailBody == null) return;
+		ScrollRect scroll = detailBody.GetComponentInParent<ScrollRect>();
+		if (scroll == null || scroll.content == null || !detailBody.transform.IsChildOf(scroll.content)) return;
+		scroll.StopMovement();
+		scroll.content.anchoredPosition = new Vector2(scroll.content.anchoredPosition.x, 0); // Content Pivot이 위라 y 0이 맨 위
 	}
 
 	// 재료 한 줄. 시안 9: 「버그 조각 4 (보유 34)」. 모자라면 빨강

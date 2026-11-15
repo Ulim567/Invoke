@@ -182,49 +182,75 @@ public class BlockEditor : MonoBehaviour
 	/// <summary>끌고 있는 블록을 올려 두는 곳</summary>
 	public RectTransform DragLayer => dragLayer;
 
-	// 블록 목록에 보여 줄 문법 블록 견본들 (분류별). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
-	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Blocks가 null)
-	static readonly (string Title, Func<BlockData>[] Blocks)[] PaletteGroups =
+	// 블록 목록에 보여 줄 문법 블록 견본들. 분류 → 소분류 → 블록 (#487, 시안 6). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
+	// 소분류 이름은 칩 줄 맨 앞에 회색 글씨로 보인다. 이름이 빈 소분류는 글씨 없이 칩만 놓는다
+	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Subgroups가 null)
+	static readonly (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] PaletteGroups =
 	{
-		("제어", new Func<BlockData>[]
+		("제어", new[]
 		{
-			() => BlockData.Conditional(ConditionalBranch.If),
-			() => BlockData.Conditional(ConditionalBranch.ElseIf),
-			() => BlockData.Conditional(ConditionalBranch.Else),
-			() => BlockData.For("i", Int("0"), Int("10")),
-			() => BlockData.While(SlotData.EmptyValue()),
-			() => BlockData.Break(),
-			() => BlockData.Continue(),
+			("조건", new Func<BlockData>[]
+			{
+				() => BlockData.Conditional(ConditionalBranch.If),
+				() => BlockData.Conditional(ConditionalBranch.ElseIf),
+				() => BlockData.Conditional(ConditionalBranch.Else),
+			}),
+			("반복", new Func<BlockData>[]
+			{
+				() => BlockData.For("i", Int("0"), Int("10")),
+				() => BlockData.While(SlotData.EmptyValue()),
+				() => BlockData.Break(),
+				() => BlockData.Continue(),
+			}),
 		}),
-		("변수", new Func<BlockData>[]
+		("변수", new[]
 		{
-			() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
-			// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
-			() => BlockData.Assign("", SlotData.EmptyValue()),
-			() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
-			() => BlockData.ArrayGet("", SlotData.EmptyValue()),
-			() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			("변수", new Func<BlockData>[]
+			{
+				() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
+				// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
+				() => BlockData.Assign("", SlotData.EmptyValue()),
+			}),
+			("배열", new Func<BlockData>[]
+			{
+				() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
+				() => BlockData.ArrayGet("", SlotData.EmptyValue()),
+				() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			}),
 		}),
 		// 값 칸에 끼우는 블록
-		("값", new Func<BlockData>[]
+		("값", new[]
 		{
-			() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
-			() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
-			() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
-			() => BlockData.Not(SlotData.EmptyValue()),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
+				() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
+				() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
+				() => BlockData.Not(SlotData.EmptyValue()),
+			}),
 		}),
 		("함수", null),
-		("메모리", new Func<BlockData>[]
+		// 메모리·기타는 함수 탭 이슈에서 정리한다 (malloc·free·wait는 함수 탭으로, return은 함수 분류로)
+		("메모리", new[]
 		{
-			() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
-			() => BlockData.Free(SlotData.EmptyValue()),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
+				() => BlockData.Free(SlotData.EmptyValue()),
+			}),
 		}),
-		("기타", new Func<BlockData>[]
+		("기타", new[]
 		{
-			() => BlockData.Return(),
-			() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Return(),
+				() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
+			}),
 		}),
 	};
+
+	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
+	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
@@ -1426,36 +1452,60 @@ public class BlockEditor : MonoBehaviour
 
 		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
 
-		foreach ((string title, Func<BlockData>[] blocks) in PaletteGroups)
+		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in PaletteGroups)
 		{
 			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
-			if (blocks == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
+			if (subgroups == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
 
-			// 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476). 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			IEnumerable<Func<BlockData>> candidates = (IEnumerable<Func<BlockData>>)blocks ?? FunctionTemplates();
-			if (blocks != null && unlockedForPalette != null)
-				candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
-			Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, query)).ToArray();
-			if (shown.Length == 0) continue;
+			// 소분류마다 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476, #487). 남은 블록이 없는 소분류는 줄째, 분류는 머리글째 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
+			IEnumerable<(string Name, IEnumerable<Func<BlockData>> Blocks)> source = subgroups != null
+				? subgroups.Select(sub => (sub.Name, (IEnumerable<Func<BlockData>>)sub.Blocks))
+				: new[] { ("", (IEnumerable<Func<BlockData>>)FunctionTemplates()) };
+			var shownGroups = new List<(string Name, Func<BlockData>[] Blocks)>();
+			foreach ((string subName, IEnumerable<Func<BlockData>> blocks) in source)
+			{
+				IEnumerable<Func<BlockData>> candidates = blocks;
+				if (subgroups != null && unlockedForPalette != null)
+					candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
+				Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, subName, query)).ToArray();
+				if (shown.Length > 0) shownGroups.Add((subName, shown));
+			}
+			if (shownGroups.Count == 0) continue;
 
 			if (headerPrefab != null)
 			{
 				ListHeaderView header = Instantiate(headerPrefab, palette);
 				// 분류 색 네모: 그 분류 블록의 색
-				header.Show(title, null, BlockLabels.ColorOf(shown[0]()));
+				header.Show(title, null, BlockLabels.ColorOf(shownGroups[0].Blocks[0]()));
 			}
-			// 분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로)
-			paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
-			foreach (Func<BlockData> template in shown) AddTemplate(template);
+			// 소분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로). 맨 앞에 소분류 이름
+			foreach ((string subName, Func<BlockData>[] shown) in shownGroups)
+			{
+				paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
+				// 소분류 글씨가 있는 줄은 내어쓰기: 칩이 넘쳐 다음 줄로 가도 글씨 아래가 아니라 첫 칩과 같은 자리에서 시작한다 (시안 6)
+				if (paletteTarget != palette && paletteTarget.TryGetComponent(out FlowLayoutGroup flow)) flow.HangingIndent = subName.Length > 0;
+				if (subName.Length > 0) AddSubgroupLabel(subName);
+				foreach (Func<BlockData> template in shown) AddTemplate(template);
+			}
 		}
 		paletteTarget = palette;
 	}
 
-	// 블록 목록 검색 (#476): 비어 있거나, 분류 이름·칩 이름·스킬의 화면 이름(검 찌르기)·고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
-	// 분류 이름이 맞으면 그 분류의 블록을 모두 보여 준다. 예: 「제어」 → If, For, While …
-	bool MatchesPaletteSearch(BlockData block, string groupTitle, string query)
+	// 칩 줄 맨 앞의 소분류 글씨 (#487). 블록 글자 프리팹을 쓰고 색만 회색으로. 클릭을 받지 않으므로 칩 끌기를 막지 않는다
+	// 글자 크기는 블록 글자와 같게 둔다. 픽셀 글꼴(Galmuri11)은 작게 줄이면 글자가 깨지기 때문
+	void AddSubgroupLabel(string name)
 	{
-		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(PaletteNameOf(block), query)) return true;
+		TMP_Text label = CreateText(paletteTarget != null ? paletteTarget : palette);
+		label.text = name;
+		label.color = SubgroupLabelColor;
+		label.raycastTarget = false;
+	}
+
+	// 블록 목록 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 분류·소분류 이름이 맞으면 그 블록들을 모두 보여 준다. 예: 「제어」 → If, For, While …, 「반복」 → For, While, Break, Continue (#487)
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query)
+	{
+		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query)) return true;
 		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
 		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
 			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));

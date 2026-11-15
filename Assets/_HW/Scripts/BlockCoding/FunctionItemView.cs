@@ -53,7 +53,8 @@ public class FunctionItemView : MonoBehaviour, IBeginDragHandler, IDragHandler, 
 		factory = blockFactory;
 		tooltipSample = null;
 		if (titleText != null) titleText.text = title ?? "";
-		if (prototypeText != null) prototypeText.text = prototype ?? "";
+		// 원형은 부분마다 색을 나눈다 (반환 타입, 함수 이름, 파라미터, #489). 참고 카드·설명창과 같은 색
+		if (prototypeText != null) prototypeText.text = BlockReference.ColorCode(prototype);
 		SetEmpty(false);
 	}
 

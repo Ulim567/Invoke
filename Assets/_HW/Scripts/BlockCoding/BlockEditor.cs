@@ -1129,12 +1129,13 @@ public class BlockEditor : MonoBehaviour
 		string query = referenceSearch != null ? referenceSearch.text : "";
 		List<BlockReferenceEntry> found = BlockReference.Search(query);
 
-		// 블록 목록과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
-		// 블록 목록에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
-		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Category)).Distinct();
+		// 문법 탭과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
+		// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
+		// 문법 탭에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
+		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
 		foreach (string category in categories)
 		{
-			List<BlockReferenceEntry> cards = found.Where(entry => entry.Category == category).ToList();
+			List<BlockReferenceEntry> cards = found.Where(entry => entry.Group == category).ToList();
 			if (cards.Count == 0) continue;
 			if (headerPrefab != null)
 			{

@@ -43,12 +43,6 @@ public class ReferenceCardView : MonoBehaviour
 	// 펼친 내용의 항목 이름 색 (참고 탭의 강조색)
 	const string SectionColor = "#8B9CFF";
 
-	// 코드(예시) 색: 흰색. 설명 글자(회색 파랑)와 구분되게
-	const string CodeColor = "#FFFFFF";
-
-	// 접힌 카드의 형식(원형) 색: 주황. 카드마다 가장 먼저 눈에 들어오게 (#476)
-	const string FormatColor = "#F0A860";
-
 	bool expanded;
 
 	void Awake()
@@ -61,7 +55,9 @@ public class ReferenceCardView : MonoBehaviour
 	/// </summary>
 	public void Show(BlockReferenceEntry entry)
 	{
-		if (nameText != null) nameText.text = entry.Name;
+		// 한글 이름이 있는 카드(함수 카드)는 제목에 한글 이름만 (#489, 사용자가 정함). 함수 탭 항목 제목과 같다.
+		// 영문 이름은 형식 줄의 원형(void skewer(Target target);)에 들어 있다. 문법 블록은 한글 이름이 없어 영문 이름(If, For)
+		if (nameText != null) nameText.text = string.IsNullOrEmpty(entry.KoreanName) ? entry.Name : entry.KoreanName;
 		if (categoryText != null) categoryText.text = entry.Category;
 		if (categoryTag != null && entry.Sample != null) categoryTag.color = BlockLabels.ColorOf(entry.Sample);
 		// 설명 한 문장은 접힌 카드에 보이지 않고, 펼친 내용의 맨 위에 보인다 (#476). 접힌 카드는 이름과 형식만 보여 목록을 훑기 쉽게 하기 위함
@@ -70,9 +66,9 @@ public class ReferenceCardView : MonoBehaviour
 		// 사용법 줄은 쓰지 않는다 (#476, 파라미터 설명과 겹침). 프리팹의 칸은 남겨 두고 숨긴다
 		if (usageText != null) usageText.gameObject.SetActive(false);
 
-		// 형식 한 줄 (if (조건) { 블록 }, void thrust(Target target);). 레퍼런스 페이지처럼 코드 색으로
-		// 값에 < 같은 글자가 들어 있어도 TextMeshPro 태그로 읽지 않도록 noparse로 감싼다 (SkillTreeView와 같은 방식)
-		if (detailsText != null) detailsText.text = $"<color={FormatColor}><noparse>{entry.CodeText}</noparse></color>";
+		// 형식 한 줄 (if (조건) { 블록 }, void thrust(Target target);). VS Code처럼 낱말마다 색을 나눈다 (#489, BlockReference.ColorCode)
+		// 칠한 낱말마다 noparse로 감싸서 < 같은 글자가 들어 있어도 TextMeshPro 태그로 읽지 않는다
+		if (detailsText != null) detailsText.text = BlockReference.ColorCode(entry.CodeText);
 
 		// 펼칠 내용이 없는 카드는 눌러도 아무 일도 없으므로 안내도 숨긴다
 		bool hasSections = !string.IsNullOrEmpty(entry.Summary) || (entry.Sections != null && entry.Sections.Count > 0);
@@ -82,7 +78,7 @@ public class ReferenceCardView : MonoBehaviour
 	}
 
 	// 맨 위에 설명 한 문장, 그 아래 항목마다 「이름」 줄과 내용을 놓고, 사이는 한 줄 비운다.
-	// 이름 붙은 줄(파라미터 등)은 「- 이름: 설명」으로, 이름은 강조색. 예시는 코드 색
+	// 이름 붙은 줄(채울 곳, 파라미터, 돌려주는 값)은 「- 이름: 설명」으로, 이름은 형식 줄과 같은 코드 색. 예시도 코드 색
 	// 줄 앞 표시는 「-」: Galmuri11 글꼴에 「·」「—」가 없어 빈칸으로 보이기 때문 (#476)
 	static string BuildExpanded(BlockReferenceEntry entry)
 	{
@@ -95,13 +91,17 @@ public class ReferenceCardView : MonoBehaviour
 			text.Append($"<color={SectionColor}>{section.Title}</color>");
 			if (section.Items != null)
 			{
+				// 줄 이름은 형식 줄·원형과 같은 규칙(BlockReference.ColorCode)으로 칠한다 (#489, 사용자가 통일을 요청).
+				// 형식 줄의 같은 글자와 같은 색이 되어, 이 줄이 형식의 어느 자리를 설명하는지 바로 보인다
+				// 예: 채울 곳 「타입」「처음 값」 = 형식의 한글 자리(흐린 보라), 파라미터 「target」 = 원형의 파라미터(하늘색), 돌려주는 값 「Target」 = 원형의 반환 타입(청록)
 				foreach ((string name, string body) in section.Items)
 				{
-					text.Append($"\n- <color={SectionColor}><noparse>{name}</noparse></color>");
+					text.Append($"\n- {BlockReference.ColorCode(name)}");
 					if (!string.IsNullOrEmpty(body)) text.Append($": <noparse>{body}</noparse>");
 				}
 			}
-			else if (section.IsCode) text.Append($"\n<color={CodeColor}><noparse>{section.Body}</noparse></color>");
+			// 예시 코드도 형식 줄과 같은 코드 색 (#489). 흰색 한 색이면 키워드·함수 이름이 구분되지 않기 때문
+			else if (section.IsCode) text.Append($"\n{BlockReference.ColorCode(section.Body)}");
 			else text.Append($"\n<noparse>{section.Body}</noparse>");
 		}
 		return text.ToString();

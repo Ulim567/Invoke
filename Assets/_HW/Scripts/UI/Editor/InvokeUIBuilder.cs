@@ -362,16 +362,21 @@ public static class InvokeUIBuilder
 		nameText.fontStyle = FontStyles.Bold;
 		nameText.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
 
+		// 분류 태그: 너비는 글자에 맞춘다 (#489). 「함수 > 기본 함수」처럼 두 단계 태그가 길어도 잘리지 않게. 짧은 태그는 예전 너비(34)
 		GameObject tag = NewUI("Tag", titleRow.transform);
 		Image tagImage = SetImage(tag, "ui_card", Image.Type.Sliced);
 		tagImage.raycastTarget = false;
+		HorizontalLayoutGroup tagLayout = tag.AddComponent<HorizontalLayoutGroup>();
+		tagLayout.padding = new RectOffset(5, 5, 0, 1);
+		tagLayout.childAlignment = TextAnchor.MiddleCenter;
+		tagLayout.childControlWidth = tagLayout.childControlHeight = true;
+		tagLayout.childForceExpandWidth = tagLayout.childForceExpandHeight = false;
 		LayoutElement tagSize = tag.AddComponent<LayoutElement>();
-		tagSize.preferredWidth = 34;
+		tagSize.minWidth = 34;
 		tagSize.preferredHeight = 13;
 		tagSize.flexibleWidth = 0;
-		TMP_Text tagText = Text(tag.transform, "Text", "제어", 8, Color.white, TextAlignmentOptions.Center);
+		TMP_Text tagText = Text(tag.transform, "Text", "제어 > 조건", 8, Color.white, TextAlignmentOptions.Center);
 		tagText.overflowMode = TextOverflowModes.Overflow;
-		Stretch(tagText.rectTransform, 0, 0, 0, 1);
 
 		TMP_Text summary = WrappedText(root.transform, "Summary", "조건이 참일 때만 안쪽 블록을 실행합니다.", Color.white);
 		TMP_Text usage = WrappedText(root.transform, "Usage", "사용법", Hex("8B9CFF"));
@@ -432,8 +437,9 @@ public static class InvokeUIBuilder
 		TMP_Text titleText = Text(root.transform, "Title", "검 찌르기", 11, Hex("F4F1FA"), TextAlignmentOptions.MidlineLeft);
 		titleText.fontStyle = FontStyles.Bold;
 
-		// 원형: 설명창·참고 카드의 원형과 같은 주황. 길면 잘리지 않고 다음 줄로 감싼다 (void battlefield_sweep(Target / array targets);)
-		TMP_Text prototypeText = WrappedText(root.transform, "Prototype", "void thrust(Target target);", Hex("F0A860"));
+		// 원형: 길면 잘리지 않고 다음 줄로 감싼다 (void battlefield_sweep(Target / array targets);)
+		// 부분마다의 색은 FunctionItemView가 리치 텍스트로 칠한다 (BlockReference.ColorCode). 여기 색은 괄호·쉼표와 같은 밝은 회색
+		TMP_Text prototypeText = WrappedText(root.transform, "Prototype", "void thrust(Target target);", Hex("D4D4D4"));
 
 		FunctionItemView view = root.AddComponent<FunctionItemView>();
 		Set(view, "background", back);
@@ -1106,7 +1112,7 @@ public static class InvokeUIBuilder
 			// 참고 창 (블록 목록과 같은 자리): 위에 검색 칸, 아래에 블록 설명 카드 목록
 			Transform referencePanel = Panel(window, "ReferenceView", "참고", 22, 11);
 			RightStretch(Rect(referencePanel), LayoutStrip, LayoutPalette, LayoutTop, 0);
-			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel, -26, "블록 이름으로 검색");
+			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel, -26, "이름으로 검색");
 			// 카드 사이 간격 7: 카드끼리 붙어 보이지 않게 (#476)
 			RectTransform referenceList = GetOrBuildCardScroll(referencePanel, 48, 7);
 			referencePanel.gameObject.SetActive(false); // 처음엔 꺼 둔다. 「참고」 탭을 누르면 BlockEditor가 켠다

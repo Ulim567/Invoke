@@ -6340,7 +6340,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\uBE14\uB85D \uC774\uB984\uC73C\uB85C \uAC80\uC0C9"
+  m_text: "\uC774\uB984\uC73C\uB85C \uAC80\uC0C9"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
   m_sharedMaterial: {fileID: 6593387878686915224, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}

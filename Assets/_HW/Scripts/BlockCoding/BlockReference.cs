@@ -44,8 +44,11 @@ public class BlockReferenceEntry
 	/// <summary>카드 제목. 블록 목록(팔레트)의 칩 이름과 같다. 예: If, Else If, thrust</summary>
 	public string Name;
 
-	/// <summary>분류 태그. 블록 목록의 분류와 같다 (제어, 변수, 값, 함수, 메모리, 기타)</summary>
+	/// <summary>분류 태그 (#489). 「분류 > 소분류」로 두 단계: 제어 > 조건, 변수 > 배열, 함수 > 스킬. 소분류가 없으면 분류만 (값, 함수)</summary>
 	public string Category;
+
+	/// <summary>분류 태그의 앞 단계 (제어, 변수, 값, 함수). 참고 탭이 이 분류마다 머리글을 하나 둔다. 문법 탭의 분류와 같다</summary>
+	public string Group;
 
 	/// <summary>분류 태그의 색을 정할 때 쓰는 견본 블록 (BlockLabels.ColorOf). 편집 영역에 놓지 않는다</summary>
 	public BlockData Sample;
@@ -62,16 +65,18 @@ public class BlockReferenceEntry
 	/// <summary>사전 정의 함수의 고정 ID (c.thrust). 문법 블록이면 null</summary>
 	public string FunctionId;
 
-	/// <summary>스킬의 화면 이름 (검 찌르기). 검색에만 쓴다. 문법 블록이면 null</summary>
-	public string DisplayName;
+	/// <summary>한글 이름 (꼬챙이, 버그 찾기, 메모리 할당). 있으면 카드 제목은 이것만 보이고, 검색에도 쓴다. 문법 블록이면 null (#489)</summary>
+	public string KoreanName;
 }
 
 /// <summary>
 /// 참고(Reference) 창에 보여 줄 블록 설명 표와 검색.
 /// <para>
-/// - 문법 블록(제어, 변수, 값, 메모리, 기타): 이 파일의 표에 설명을 직접 적는다. 스킬 트리 노드 하나가 블록 여러 개를 함께 열어서
-///   (예: if문 노드가 if, compare를 같이 엶) 노드 설명을 그대로 쓰면 블록과 맞지 않기 때문이다.<br/>
-/// - 함수 블록(C 스킬, 공통 이동, 입력): 블록 목록에 나오는 사전 정의 함수(c., common., input.)마다 한 장.
+/// - 문법 블록(제어, 변수, 값, return)과 malloc·free·wait: 이 파일의 표에 설명을 직접 적는다. 스킬 트리 노드 하나가 블록 여러 개를 함께 열어서
+///   (예: if문 노드가 if, compare를 같이 엶) 노드 설명을 그대로 쓰면 블록과 맞지 않기 때문이다.
+///   malloc·free·wait 카드는 함수 탭과 같이 함수 카드 모양(소문자 이름, 한글 이름, 원형)으로 보인다 (#489).<br/>
+/// - 분류 태그는 「분류 > 소분류」 두 단계 (제어 > 조건, 함수 > 스킬). 참고 탭은 앞 단계(Group)마다 머리글을 둔다 (#489).<br/>
+/// - 함수 블록(C 스킬, 공통 이동, 입력): 함수 탭에 나오는 사전 정의 함수(c., common., input., game.)마다 한 장.
 ///   설명은 스킬 트리 노드 설명(SkillTreeNode.Description)을 그대로 읽고, 호출 모양·파라미터·동작 시간·쿨타임은 사전 정의 함수의 값에서 만든다.
 ///   파라미터에 무엇을 넣는지는 코드에서 알 수 없어 이 파일의 표에 적는다.<br/>
 /// - 블록 목록(BlockEditor.PaletteGroups)과 따로 적은 표이므로, 블록 목록에 블록을 더하면 이 표에도 더한다.
@@ -101,16 +106,21 @@ public static class BlockReference
 	}
 
 	/// <summary>
-	/// 검색한 글자가 이름, 분류, 스킬 화면 이름, 고정 ID에 들어 있는 카드를 돌려준다 (대소문자 구분 없음).
-	/// 비어 있으면 전체. 예: "if" → If, Else If
+	/// 검색한 글자가 이름, 분류 태그(제어 > 조건), 한글 이름, 고정 ID에 들어 있는 카드를 돌려준다 (대소문자 구분 없음).
+	/// 비어 있으면 전체. 예: "if" → If, Else If, "조건" → If, Else If, Else, "꼬챙" → skewer
 	/// </summary>
 	public static List<BlockReferenceEntry> Search(string query)
 	{
 		query = query?.Trim() ?? "";
 		if (query.Length == 0) return All.ToList();
 		return All.Where(e => Contains(e.Name, query) || Contains(e.Category, query)
-			|| Contains(e.DisplayName, query) || Contains(e.FunctionId, query)).ToList();
+			|| Contains(e.KoreanName, query) || Contains(e.FunctionId, query)).ToList();
 	}
+
+	// 분류 태그의 두 단계 사이 글자 (#489). 「제어 > 조건」: 조건이 제어 안에 속한다는 뜻. 「·」는 Galmuri11 글꼴에 없어 빈칸으로 보이므로 쓰지 않는다
+	const string CategorySeparator = " > ";
+
+	static string Category(string group, string subgroup) => group + CategorySeparator + subgroup;
 
 	static bool Contains(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -119,30 +129,30 @@ public static class BlockReference
 	// (이름, 분류, 견본 블록을 만드는 함수, C 표기 예시, 설명 한 문장)
 	static readonly (string Name, string Category, Func<BlockData> Sample, string Code, string Summary)[] SyntaxRows =
 	{
-		("If", "제어", () => BlockData.Conditional(ConditionalBranch.If), "if (hp > 5) { ... }",
+		("If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.If), "if (hp > 5) { ... }",
 			"조건 칸이 참일 때만 안쪽 블록을 실행합니다."),
-		("Else If", "제어", () => BlockData.Conditional(ConditionalBranch.ElseIf), "else if (hp > 0) { ... }",
+		("Else If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.ElseIf), "else if (hp > 0) { ... }",
 			"앞의 if나 else if가 거짓일 때 이 조건을 검사해 참이면 안쪽을 실행합니다."),
-		("Else", "제어", () => BlockData.Conditional(ConditionalBranch.Else), "else { ... }",
+		("Else", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.Else), "else { ... }",
 			"앞의 조건이 모두 거짓일 때 안쪽 블록을 실행합니다."),
-		("For", "제어", () => BlockData.For("i", Int("0"), Int("10")), "for (int i = 0; i < 10; i++) { ... }",
+		("For", Category("제어", "반복"), () => BlockData.For("i", Int("0"), Int("10")), "for (int i = 0; i < 10; i++) { ... }",
 			"시작 값부터 끝 값 직전까지 i를 1씩 늘리며 안쪽 블록을 반복합니다."),
-		("While", "제어", () => BlockData.While(SlotData.EmptyValue()), "while (hp > 0) { ... }",
+		("While", Category("제어", "반복"), () => BlockData.While(SlotData.EmptyValue()), "while (hp > 0) { ... }",
 			"조건 칸이 참인 동안 안쪽 블록을 계속 반복합니다."),
-		("Break", "제어", () => BlockData.Break(), "break;",
+		("Break", Category("제어", "반복"), () => BlockData.Break(), "break;",
 			"가장 안쪽 반복문을 바로 끝냅니다."),
-		("Continue", "제어", () => BlockData.Continue(), "continue;",
+		("Continue", Category("제어", "반복"), () => BlockData.Continue(), "continue;",
 			"이번 반복을 건너뛰고 다음 반복으로 넘어갑니다."),
 
-		("Declare", "변수", () => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"), "int x = 3;",
+		("Declare", Category("변수", "변수"), () => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"), "int x = 3;",
 			"타입과 이름을 골라 변수를 만들고, 원하면 처음 값을 넣습니다."),
-		("Assign", "변수", () => BlockData.Assign("x", SlotData.EmptyValue()), "x = 5;",
+		("Assign", Category("변수", "변수"), () => BlockData.Assign("x", SlotData.EmptyValue()), "x = 5;",
 			"이미 만든 변수에 새 값을 담습니다. 왼쪽 칸을 눌러 위에서 선언한 변수를 고릅니다."),
-		("Array", "변수", () => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")), "int arr[3];",
+		("Array", Category("변수", "배열"), () => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")), "int arr[3];",
 			"타입과 칸 수를 정해 같은 타입의 값 여러 개를 담는 배열을 만듭니다."),
-		("Array Get", "변수", () => BlockData.ArrayGet("arr", SlotData.EmptyValue()), "arr[i]",
+		("Array Get", Category("변수", "배열"), () => BlockData.ArrayGet("arr", SlotData.EmptyValue()), "arr[i]",
 			"배열의 i번째 칸 값을 읽습니다. 값 칸에 끼워 쓰고, 칸 번호는 0부터 셉니다."),
-		("Array Set", "변수", () => BlockData.ArraySet("arr", SlotData.EmptyValue(), SlotData.EmptyValue()), "arr[i] = 7;",
+		("Array Set", Category("변수", "배열"), () => BlockData.ArraySet("arr", SlotData.EmptyValue(), SlotData.EmptyValue()), "arr[i] = 7;",
 			"배열의 i번째 칸에 값을 담습니다. 칸 번호는 0부터 셉니다."),
 
 		("Arithmetic", "값", () => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()), "x + 1",
@@ -154,14 +164,14 @@ public static class BlockReference
 		("Not", "값", () => BlockData.Not(SlotData.EmptyValue()), "!done",
 			"참과 거짓을 뒤집습니다. 값 칸에 끼워 씁니다."),
 
-		("Malloc", "메모리", () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)), "malloc(Sword)",
+		("Malloc", Category("함수", "메모리"), () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)), "malloc(Sword)",
 			"heap에 Sword를 만들고 그 포인터를 돌려줍니다. 소환검은 최대 5개이고, 만들지 못하면 NULL을 돌려줍니다."),
-		("Free", "메모리", () => BlockData.Free(SlotData.EmptyValue()), "free(s);",
+		("Free", Category("함수", "메모리"), () => BlockData.Free(SlotData.EmptyValue()), "free(s);",
 			"포인터가 가리키는 heap 메모리를 해제합니다."),
 
-		("Return", "기타", () => BlockData.Return(), "return n;",
+		("Return", "함수", () => BlockData.Return(), "return n;",
 			"함수를 끝냅니다. 값을 적으면 부른 쪽에 그 값을 돌려줍니다."),
-		("Wait", "기타", () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")), "wait(0.5초);",
+		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")), "wait(0.5초);",
 			"적은 초만큼 기다린 뒤 다음 블록으로 넘어갑니다."),
 	};
 
@@ -352,9 +362,14 @@ public static class BlockReference
 		[PredefinedFunctionIds.IsValidTarget] = "스킬에 넘길 수 있으면 true, \"대상 없음\"이거나 죽었거나 없어진 몬스터면 false입니다.",
 	};
 
+	// 카드 순서: 문법 블록(제어, 변수, 값, return) → 함수 탭과 같은 순서의 함수 카드(스킬, 기본 함수, 메모리) (#489)
 	static List<BlockReferenceEntry> Build()
 	{
 		var list = new List<BlockReferenceEntry>();
+		var skills = new List<BlockReferenceEntry>();
+		var basics = new List<BlockReferenceEntry>();
+		var builtinBasics = new List<BlockReferenceEntry>(); // wait: 기본 함수 중 get_bug, is_valid_target 뒤 (함수 탭과 같은 순서)
+		var memory = new List<BlockReferenceEntry>();
 
 		foreach ((string name, string category, Func<BlockData> sample, string code, string summary) in SyntaxRows)
 		{
@@ -376,19 +391,49 @@ public static class BlockReference
 				if (fills.Count > 0) entry.Sections.Add(new ReferenceSection("채울 곳", fills));
 				entry.Sections.Add(new ReferenceSection("예시", detail.Example, true));
 			}
+
+			// malloc, free, wait는 함수 탭에서 함수처럼 꺼내므로 카드도 함수 카드처럼: 소문자 이름, 한글 이름, 원형 (#489)
+			// 채울 곳·예시는 문법 블록 표(SyntaxDetails)의 것을 그대로 쓴다
+			var builtin = BuiltinOf(block.Kind);
+			if (builtin != null)
+			{
+				entry.Name = builtin.Value.Name;
+				entry.KoreanName = builtin.Value.KoreanName;
+				entry.CodeText = builtin.Value.Prototype;
+				(block.Kind == BlockKind.Wait ? builtinBasics : memory).Add(entry);
+				continue;
+			}
 			list.Add(entry);
 		}
 
 		IReadOnlyList<PredefinedFunction> functions = PredefinedFunctionRegistry.All;
-		if (functions == null) return list;
-		foreach (PredefinedFunction function in functions)
+		if (functions != null)
 		{
-			string id = function?.Id;
-			if (id == null || !FunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
-			list.Add(FunctionEntry(function));
+			foreach (PredefinedFunction function in functions)
+			{
+				string id = function?.Id;
+				if (id == null || !FunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				BlockReferenceEntry entry = FunctionEntry(function);
+				(IsSkill(id) ? skills : basics).Add(entry);
+			}
+		}
+
+		list.AddRange(skills);
+		list.AddRange(basics);
+		list.AddRange(builtinBasics);
+		list.AddRange(memory);
+		// 머리글을 나눌 분류: 분류 태그의 앞 단계 (「함수 > 스킬」 → 함수)
+		foreach (BlockReferenceEntry entry in list)
+		{
+			int split = entry.Category.IndexOf(CategorySeparator, StringComparison.Ordinal);
+			entry.Group = split < 0 ? entry.Category : entry.Category.Substring(0, split);
 		}
 		return list;
 	}
+
+	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬과 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수 (BlockEditor.RebuildFunctionTab과 같다)
+	static bool IsSkill(string id) =>
+		id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
 
 	static BlockReferenceEntry FunctionEntry(PredefinedFunction function)
 	{
@@ -401,10 +446,7 @@ public static class BlockReference
 		string summary = null;
 		if (SkillTree.TryGet(id, out SkillTreeNode node) && node.Description != null) summary = node.Description.Summary;
 		if (string.IsNullOrEmpty(summary)) FunctionSummaries.TryGetValue(id, out summary);
-		// 스킬의 화면 이름(검 찌르기)을 앞에 붙인다. 화면 이름이 따로 없으면(고정 ID와 같으면) 붙이지 않는다
-		string displayName = function.Name;
-		if (!string.IsNullOrEmpty(displayName) && displayName != id && displayName != name)
-			summary = string.IsNullOrEmpty(summary) ? displayName : $"{displayName}: {summary}";
+		// 한글 이름(검 찌르기)은 카드 제목에 보이므로 설명 앞에 붙이지 않는다 (#489)
 
 		// 견본 블록: 편집 화면의 함수 블록 견본과 같이 파라미터 수만큼 빈 값 칸을 둔다
 		SlotData[] slots = new SlotData[parameters.Count];
@@ -415,12 +457,12 @@ public static class BlockReference
 		var entry = new BlockReferenceEntry
 		{
 			Name = name,
-			Category = "함수",
+			Category = Category("함수", IsSkill(id) ? "스킬" : "기본 함수"),
 			Sample = sample,
 			Summary = summary,
 			CodeText = Prototype(function.ReturnType, name, parameters),
 			FunctionId = id,
-			DisplayName = function.Name,
+			KoreanName = KoreanNameOf(id),
 		};
 
 		if (parameters.Count > 0)
@@ -482,9 +524,8 @@ public static class BlockReference
 	// 설명창 (#476) ------------------------------------------------------------
 	// 블록·값 칸에 마우스를 올리면 보이는 짧은 설명. 참고 카드와 같은 표(SyntaxDetails, ParameterMeanings 등)를 읽는다
 
-	// 설명창 글자 색: 원형·형식(주황, 참고 카드의 형식 줄과 같음), 스킬 이름(참고 탭의 강조색), 파라미터 이름(민트), 줄 이름(어두운 회색 파랑)
-	// 스킬 이름과 파라미터 이름의 색을 나누는 이유: 둘 다 강조색이면 「target」이 스킬 이름처럼 보이기 때문 (#476)
-	const string TooltipCode = "#F0A860";
+	// 설명창 글자 색: 문법 블록 형식(주황, 참고 카드의 형식 줄과 같음), 스킬 이름(참고 탭의 강조색), 돌려주는 값(민트), 줄 이름(어두운 회색 파랑)
+	// 함수 원형과 문법 형식은 낱말마다 색을 나눈다 (ColorCode, #489, VS Code Dark+). 파라미터 이름은 원형과 같은 하늘색(ParameterColor)
 	const string TooltipAccent = "#8B9CFF";
 	const string TooltipParameter = "#7ED6C0";
 	const string TooltipLabel = "#7C84A8";
@@ -506,15 +547,17 @@ public static class BlockReference
 		if (block.Kind == BlockKind.Function)
 		{
 			if (block.IsUserFunction)
-				return userFunction == null ? null : string.Join("\n", Code(Prototype(userFunction.ReturnType, userFunction.Name, userFunction.Parameters)), "내가 만든 함수입니다.");
+				return userFunction == null ? null : string.Join("\n", ColorCode(Prototype(userFunction.ReturnType, userFunction.Name, userFunction.Parameters)), "내가 만든 함수입니다.");
 			return PredefinedTooltip(block.FunctionId);
 		}
 
 		// 문법 블록은 형식과 설명 한 문장만 짧게 보인다. 채울 곳까지 보이면 설명창이 길어져 편집 영역을 가리므로, 자세한 것은 참고 탭에 맡긴다
-		BlockReferenceEntry entry = All.FirstOrDefault(e => e.FunctionId == null && e.Name == paletteName);
+		// 대소문자를 가리지 않는다: malloc·free·wait 카드는 함수 카드처럼 소문자 이름인데 칩 이름은 Malloc, Free, Wait이기 때문 (#489)
+		BlockReferenceEntry entry = All.FirstOrDefault(e => e.FunctionId == null && string.Equals(e.Name, paletteName, StringComparison.OrdinalIgnoreCase));
 		if (entry == null) return null;
 		var lines = new List<string>();
-		lines.Add(Code(SyntaxDetails.TryGetValue(entry.Name, out var detail) ? detail.Format : entry.CodeText));
+		// 형식(if (조건) { 블록 })과 malloc·free·wait의 원형은 VS Code처럼 낱말마다 색을 나눈다 (#489)
+		lines.Add(ColorCode(SyntaxDetails.TryGetValue(entry.Name, out var detail) ? detail.Format : entry.CodeText));
 		if (!string.IsNullOrEmpty(entry.Summary)) lines.Add(entry.Summary);
 		return string.Join("\n", lines);
 	}
@@ -539,7 +582,7 @@ public static class BlockReference
 
 			if (parameter != null)
 			{
-				lines.Add(Code($"{TypeText(parameter.Type)} {parameter.Name}"));
+				lines.Add(ColorCode($"{TypeText(parameter.Type)} {parameter.Name}")); // 원형과 같은 색 (#489)
 				if (ParameterMeanings.TryGetValue(parameter.Name, out string meaning)) lines.Add(meaning);
 			}
 		}
@@ -554,12 +597,11 @@ public static class BlockReference
 		if (string.IsNullOrEmpty(id) || !PredefinedFunctionRegistry.TryGet(id, out PredefinedFunction function)) return null;
 		string name = BlockLabels.PredefinedFunctionName(id);
 		IReadOnlyList<ParameterData> parameters = function.Parameters ?? (IReadOnlyList<ParameterData>)new List<ParameterData>();
-		var lines = new List<string> { Code(Prototype(function.ReturnType, name, parameters)) };
+		var lines = new List<string> { ColorCode(Prototype(function.ReturnType, name, parameters)) };
 
-		// 스킬의 한국어 이름 (검 찌르기). 화면 이름이 따로 없으면(고정 ID와 같으면) 적지 않는다
-		string displayName = function.Name;
-		if (!string.IsNullOrEmpty(displayName) && displayName != id && displayName != name)
-			lines.Add($"<color={TooltipAccent}>{displayName}</color>");
+		// 한글 이름 (검 찌르기, 버그 찾기). 함수 탭·참고 카드와 같은 이름 (#489). 없으면 적지 않는다
+		string koreanName = KoreanNameOf(id);
+		if (!string.IsNullOrEmpty(koreanName)) lines.Add($"<color={TooltipAccent}>{koreanName}</color>");
 
 		// 설명: 스킬 트리 노드의 설명, 노드가 없으면 이 파일의 짧은 설명 (참고 카드와 같다)
 		string summary = null;
@@ -571,7 +613,7 @@ public static class BlockReference
 		foreach (ParameterData parameter in parameters)
 		{
 			string meaning = ParameterMeanings.TryGetValue(parameter.Name, out string found) ? found : "";
-			details.Add($"- <color={TooltipParameter}>{parameter.Name}</color>  <noparse>{meaning}</noparse>");
+			details.Add($"- {Paint(parameter.Name, ParameterColor)}  <noparse>{meaning}</noparse>");
 		}
 		if (function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void && ReturnMeanings.TryGetValue(id, out string returned))
 			details.Add($"- <color={TooltipParameter}>돌려주는 값</color>  <noparse>{returned}</noparse>");
@@ -640,8 +682,100 @@ public static class BlockReference
 		return $"{returned} {name}({args});";
 	}
 
-	// 원형·형식 글자: 주황, 태그로 읽지 않음 (< 같은 글자가 들어 있어도 그대로 보이게)
-	static string Code(string code) => $"<color={TooltipCode}><noparse>{code}</noparse></color>";
+	// C 코드 글자의 색 (#489, VS Code 어두운 테마 Dark+ 기준). 낱말마다 색을 나눠 키워드·타입·함수 이름·변수를 구분하기 쉽게 한다
+	const string KeywordColor = "#C586C0";       // if, else, for, while, break, continue, return
+	const string PrimitiveTypeColor = "#569CD6"; // void, int, float, bool, char, string, array, true, false, NULL
+	const string GameTypeColor = "#4EC9B0";      // Target, Sword (대문자로 시작하는 게임 타입)
+	const string FunctionNameColor = "#DCDCAA";  // skewer, get_bug (뒤에 괄호가 오는 이름)
+	const string NumberColor = "#B5CEA8";        // 0, 0.5
+	const string StringColor = "#CE9178";        // "abc", 'a'
+	const string PunctuationColor = "#D4D4D4";   // ( ) { } , ; = + < && 와 포인터의 *
+	// 형식 속의 한글 자리 글자(조건, 블록, 처음 값): 코드가 아니라 채울 곳이라 코드 색과 다른 연보라.
+	// 참고 카드 「채울 곳」의 줄 이름(타입, 처음 값)도 ColorCode로 칠해 같은 색이 된다.
+	// 흐린 보라(#B8B3C7)는 설명 글자(회색 파랑)와 구분되지 않았고, 주황은 진하다고 해서(사용자) 채도가 있는 연보라로
+	const string PlaceholderColor = "#B9A2FF";
+
+	// 변수·파라미터 이름 색 (하늘색, VS Code와 같음). 핑크로 했다가 사용자가 바꿈
+	const string ParameterColor = "#9CDCFE";
+
+	static readonly HashSet<string> Keywords = new HashSet<string> { "if", "else", "for", "while", "break", "continue", "return" };
+	static readonly HashSet<string> PrimitiveWords = new HashSet<string> { "void", "int", "float", "bool", "char", "string", "array", "true", "false", "NULL" };
+
+	/// <summary>
+	/// C 코드 글자(함수 원형 void skewer(Target target);, 문법 형식 if (조건) { 블록 })를 낱말마다 색을 나눈 리치 텍스트로 바꾼다 (#489, VS Code Dark+ 기준).
+	/// 키워드는 보라, 기본 타입은 파랑, 게임 타입(Target, Sword)은 청록, 함수 이름은 노랑, 변수·파라미터 이름은 하늘색, 숫자는 연두,
+	/// 괄호·연산자·포인터의 *는 밝은 회색, 한글 자리 글자(조건, 처음 값)는 흐린 보라. 함수 탭, 참고 카드, 설명창이 같이 쓴다.
+	/// </summary>
+	public static string ColorCode(string code)
+	{
+		if (string.IsNullOrEmpty(code)) return "";
+		var text = new System.Text.StringBuilder();
+		int i = 0;
+		while (i < code.Length)
+		{
+			char c = code[i];
+			int start = i;
+			if (char.IsWhiteSpace(c))
+			{
+				// 빈칸·줄바꿈은 칠하지 않고 그대로 (Declare 형식은 두 줄)
+				while (i < code.Length && char.IsWhiteSpace(code[i])) i++;
+				text.Append(code, start, i - start);
+			}
+			else if (IsHangul(c))
+			{
+				// 한글 자리 글자. 「처음 값」, 「칸 수」처럼 빈칸을 사이에 둔 한글 낱말은 한 덩어리로
+				while (i < code.Length && (IsHangul(code[i]) || (code[i] == ' ' && i + 1 < code.Length && IsHangul(code[i + 1])))) i++;
+				text.Append(Paint(code.Substring(start, i - start), PlaceholderColor));
+			}
+			else if (char.IsLetter(c) || c == '_')
+			{
+				while (i < code.Length && (char.IsLetterOrDigit(code[i]) && !IsHangul(code[i]) || code[i] == '_')) i++;
+				string word = code.Substring(start, i - start);
+				text.Append(Paint(word, ColorOfWord(word, NextNonSpace(code, i) == '(')));
+			}
+			else if (char.IsDigit(c))
+			{
+				while (i < code.Length && (char.IsDigit(code[i]) || code[i] == '.')) i++;
+				text.Append(Paint(code.Substring(start, i - start), NumberColor));
+			}
+			else if (c == '"' || c == '\'')
+			{
+				// 문자열·문자: 닫는 따옴표까지
+				i++;
+				while (i < code.Length && code[i] != c) i++;
+				if (i < code.Length) i++;
+				text.Append(Paint(code.Substring(start, i - start), StringColor));
+			}
+			else
+			{
+				// 괄호·연산자: 이어진 기호를 한 번에 (&&, ++, ==)
+				while (i < code.Length && !char.IsWhiteSpace(code[i]) && !char.IsLetterOrDigit(code[i]) && code[i] != '_' && code[i] != '"' && code[i] != '\'') i++;
+				text.Append(Paint(code.Substring(start, i - start), PunctuationColor));
+			}
+		}
+		return text.ToString();
+	}
+
+	// 영문 낱말의 색: 키워드 → 기본 타입·상수 → 뒤에 괄호가 오면 함수 이름 → 대문자로 시작하면 게임 타입 → 나머지는 변수·파라미터
+	static string ColorOfWord(string word, bool beforeParenthesis)
+	{
+		if (Keywords.Contains(word)) return KeywordColor;
+		if (PrimitiveWords.Contains(word)) return PrimitiveTypeColor;
+		if (beforeParenthesis) return FunctionNameColor;
+		if (char.IsUpper(word[0])) return GameTypeColor;
+		return ParameterColor;
+	}
+
+	static char NextNonSpace(string code, int index)
+	{
+		while (index < code.Length && code[index] == ' ') index++;
+		return index < code.Length ? code[index] : '\0';
+	}
+
+	static bool IsHangul(char c) => c >= '가' && c <= '힣';
+
+	// 글자 하나를 색으로 칠한다. 태그로 읽지 않음 (< 같은 글자가 그대로 보이게)
+	static string Paint(string text, string color) => $"<color={color}><noparse>{text}</noparse></color>";
 
 	// 타입을 C 글자로. 배열은 「int array」처럼 원소 타입 뒤에 array
 	static string TypeText(VariableType type)

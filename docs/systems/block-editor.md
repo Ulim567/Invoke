@@ -36,11 +36,13 @@
 | `SlotRules` | 값 칸마다 받을 수 있는 것 (#474) |
 | `VariableScopes` | 블록 자리에서 보이는 변수(이름, 타입). C의 { } 범위 규칙 (#474) |
 | `BlockLabels` | 블록 글자(C 모양)와 분류별 색 |
+| `FunctionItemView` | 함수 탭의 함수 항목 한 줄. 끌면 그 함수의 호출 블록을 만들어 끔 (#489) |
 | `FunctionStorage` | 함수 저장·불러오기 (임시, 이 컴퓨터 파일) |
 
 ### 블록 놓기
 - 블록 목록의 블록은 견본이다. 끌면 견본은 그대로 두고 새 블록을 만든다.
-- 블록 목록: 문법 블록, 값 블록(`+`, `>`, `&&`, `!`), `free`, 사전 정의 함수 중 고정 ID가 `c.`, `common.`, `input.`으로 시작하는 것 (`PredefinedFunctionRegistry.All`). 함수 블록은 파라미터 수만큼 빈 값 칸을 가진다.
+- 함수 탭의 항목도 같다 (#489): 끌면 그 함수의 호출 블록을 새로 만든다 (`BlockEditor.BeginNewBlockDrag`, 아래 「화면 배치」의 「함수 탭」)
+- 블록 목록(문법 탭): 문법 블록, 값 블록(`+`, `>`, `&&`, `!`), return (#489). 함수를 부르는 블록과 malloc·free·wait는 함수 탭에 있다. 함수 블록은 파라미터 수만큼 빈 값 칸을 가진다.
 - 편집 영역의 블록을 블록 목록이나 빈 곳에 놓으면 지워진다.
 - 놓을 자리는 마우스 아래에서 가장 안쪽의, 이 블록을 받을 수 있는 자리다.
   - 값 칸: 비어 있고 `BlockEditor.CanBeValue`가 true일 때. 함수 블록은 부를 함수의 `ReturnType`이 `Void`가 아닐 때만
@@ -109,21 +111,78 @@
     - 임시 계정도 슬롯에 끼운 함수를 슬롯 함수로 다룸: 목록·함수 틀·이름 칸·상태 글자에 키로 보이고, 이름과 반환 타입을 바꿀 수 없음 (이름을 바꾸려면 장착대에서 슬롯을 비운 뒤). C 스킬·빈 슬롯 줄은 키만 보이고 누를 수 없음
 - 가운데 편집 영역(점 격자 바탕), 아래 상태 줄
   - 편집 영역 스크롤 (#476): 블록이 길거나 넓어지면 세로·가로 스크롤 + 오른쪽·아래 스크롤바(내용이 넘칠 때만 보임). 블록 자리(`Content`)는 가장 작을 때 보이는 칸 크기라서, 블록 아래 빈 곳에 놓아도 맨 끝에 들어감: 왼쪽 저장 상태(`Message Label`: 「슬롯 Q, 저장하지 않은 변경 있음」, 「저장됨」, 오류는 빨강), 오른쪽 블록 수·코드 크기(`Info Label`)
-- 오른쪽 블록 목록: 분류 머리글(제어, 변수, 값, 함수, 메모리, 기타) 아래에 견본 블록
+- 오른쪽 블록 목록(문법 탭): 분류 머리글(제어, 변수, 값, 함수) 아래에 견본 블록. 「함수」 분류에는 Return만 (#489)
   - 두 단계 분류 (#487): 분류 아래 소분류마다 칩 줄 하나, 줄 맨 앞에 소분류 이름(회색 `#8A84A0`)
 
     | 분류 | 소분류 |
     | --- | --- |
     | 제어 | 조건(If, Else If, Else), 반복(For, While, Break, Continue) |
     | 변수 | 변수(Declare, Assign), 배열(Array, Array Get, Array Set) |
-    | 값, 함수, 메모리, 기타 | 소분류 없음 (글씨 없이 칩만) |
+    | 값, 함수 | 소분류 없음 (글씨 없이 칩만) |
 
     - 소분류 이름이 있는 줄은 내어쓰기: 칩이 넘쳐 다음 줄로 가면 이름 아래가 아니라 첫 칩 자리에서 시작 (`FlowLayoutGroup.HangingIndent`)
     - 남은 블록이 없는 소분류는 줄째 숨김
-  - 검색 칸 (#476): 분류·소분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있는 블록만 (대소문자 구분 없음). 분류·소분류 이름이 맞으면 그 블록 전체 (예: 「반복」 → For, While, Break, Continue). 남은 블록이 없는 분류는 머리글도 없음
+  - 검색 칸 (#476, 안내 「이름으로 검색」): 분류·소분류 이름, 칩 이름에 검색 글자가 들어 있는 블록만 (대소문자 구분 없음). 분류·소분류 이름이 맞으면 그 블록 전체 (예: 「반복」 → For, While, Break, Continue). 남은 블록이 없는 분류는 머리글도 없음
   - 세로 스크롤 + 오른쪽 스크롤바 (내용이 길 때만 보임)
-- 참고 탭 (#476): 블록 목록과 같은 분류 순서로 분류 머리글(`ListHeaderView`, 분류 색 네모) 아래에 카드. 검색해서 카드가 없는 분류는 머리글도 없음. 카드 사이 간격 7
-  - 카드 내용 (#476, 레퍼런스 페이지 형식): 접힌 카드는 이름·분류 태그, 형식(주황 #F0A860: `if (조건) { 블록 }`, `void thrust(Target target);`)만. 펼치면 설명 한 문장(스킬은 「검 찌르기: ...」), 채울 곳 또는 파라미터(「- 이름: 설명」), 돌려주는 값, 예시, 실행(동작·쿨타임 틱, 코드 크기)
+- 오른쪽 끝 세로 탭: 문법 / 함수 / 오류 / 참고 (#489). 누른 탭의 창 하나만 보임. 블록 목록 탭은 문법 블록만 남으므로 「문법」
+  - 네 창 모두 머리글(「오류」, 「참고」 등) 없음. 어느 창인지는 세로 탭이 알려 줌 (#489)
+  - 오류 창의 「오류 없음」 글자는 창 둘레에서 여백 10
+- 함수 탭 (#489, 게임 UI 캔버스 시안 6-12): 함수를 코드로 끌어다 놓는 목록. 블록 목록과 같이 머리글 없이 맨 위 검색 칸(안내 「이름으로 검색」), 아래에 구역 머리글(`ListHeaderView`, 색 네모 없음)과 항목(사이 간격 6)
+  - 검색 칸: 구역 이름(메모리)이 맞으면 그 구역 전체, 아니면 한글 이름(휩쓸)이나 영문 이름(sweep)에 검색 글자가 든 항목 (대소문자 구분 없음). 남은 항목이 없는 구역은 머리글도 없음
+  - 구역과 항목
+
+    | 구역 | 항목 | 끌면 만드는 블록 |
+    | --- | --- | --- |
+    | 스킬 | 사전 정의 함수 중 고정 ID가 `c.`, `common.`인 것 | `BlockData.CallPredefinedFunction` |
+    | 기본 함수 | get_bug, is_valid_target, wait | get_bug·is_valid_target: `CallPredefinedFunction`, wait: `BlockData.Wait` (초 칸 비움) |
+    | 메모리 | malloc, free | `BlockData.Malloc(Sword)`, `BlockData.Free` |
+    | 내가 만든 함수 | 페이지 함수 (슬롯 함수 제외) | `BlockData.CallUserFunction` |
+
+  - 항목 한 줄(`FunctionItem` 프리팹, `FunctionItemView`): 굵은 제목(한글 이름), 아래에 함수 원형(`void thrust(Target target);`). 영문 이름은 원형에 들어 있으므로 따로 적지 않음
+    - 제목: 한글 이름. 한글 이름이 없는 내가 만든 함수는 함수 이름
+    - 원형 글자: 낱말마다 다른 색 (아래 「코드 색」). 길면 잘리지 않고 다음 줄로 감쌈 (`void battlefield_sweep(Target` / `array targets);`)
+- 코드 색 (#489, VS Code 어두운 테마 Dark+ 기준, `BlockReference.ColorCode`): 함수 원형과 문법 블록 형식(`if (조건) { 블록 }`)을 낱말마다 칠함. 함수 탭 항목, 참고 카드의 형식 줄, 설명창이 같이 씀
+
+  | 부분 | 예 | 색 |
+  | --- | --- | --- |
+  | 키워드 | `if`, `else`, `for`, `while`, `break`, `continue`, `return` | 보라 `#C586C0` |
+  | 기본 타입, 상수 | `void`, `int`, `bool`, `float`, `array`, `true`, `NULL` | 파랑 `#569CD6` |
+  | 게임 타입 (대문자로 시작) | `Target`, `Sword` | 청록 `#4EC9B0` |
+  | 함수 이름 (뒤에 괄호) | `skewer`, `get_bug`, `malloc` | 노랑 `#DCDCAA` |
+  | 변수·파라미터 이름 | `target`, `sec`, `i` | 하늘색 `#9CDCFE` |
+  | 숫자 | `0`, `0.5` | 연두 `#B5CEA8` |
+  | 문자열 | `"abc"` | 주황 갈색 `#CE9178` |
+  | 괄호, 연산자, 포인터의 `*` | `( ) { } ; = < && *` | 밝은 회색 `#D4D4D4` |
+  | 한글 자리 글자 | `조건`, `블록`, `처음 값` | 연보라 `#B9A2FF` (코드가 아니라 채울 곳. 흐린 보라 `#B8B3C7`는 설명 글자와 구분되지 않고, 주황은 진해서 바꿈) |
+
+  - 참고 카드를 펼친 내용의 줄 이름도 같은 규칙으로 칠함: 「채울 곳」의 `타입`·`처음 값`(연보라, 형식 줄의 자리 글자와 같음), 「파라미터」의 `target`(하늘색, 원형의 파라미터와 같음), 「돌려주는 값」의 `Target`(청록, 원형의 반환 타입과 같음). 설명창의 파라미터 줄도 같음
+  - 파라미터 이름은 핑크로 했다가 VS Code와 같은 하늘색으로 바꿈 (사용자가 정함)
+  - 참고 카드를 펼쳤을 때의 「예시」 코드도 같은 규칙
+    - 한글 이름: 스킬은 스킬 표의 이름(`PredefinedFunction.Name`), get_bug 「버그 찾기」, is_valid_target 「대상 확인」, wait 「기다리기」, malloc 「메모리 할당」, free 「메모리 해제」. 내가 만든 함수는 없음 (`BlockReference.KoreanNameOf`, `BuiltinOf`)
+    - 원형: 사전 정의 함수·내가 만든 함수는 파라미터에서 만듦(`BlockReference.PrototypeOf`). malloc `Sword* malloc(Sword);`, free `void free(Sword* p);`, wait `void wait(float sec);`
+    - 바탕: 함수 색(`#9E7BFF`)을 편집 영역 바탕(`#141823`)에 26% 섞은 불투명 색
+  - 설명창: 항목에 마우스를 올리고 0.4초 멈추면 편집 영역의 같은 블록과 같은 설명창 (원형, 스킬 설명, 파라미터, 돌려주는 값). 항목에는 설명을 넣지 않음 (목록이 길어지지 않게)
+  - 끄는 동안 (시안 6-8): 목록의 그 항목은 바탕 8%와 점선 테두리(`blk_round_dashed`, 함수 색 70%)로 비워 둠. 블록을 놓으면 원래대로
+  - 해금: 블록 목록과 같은 규칙. 사전 정의 함수와 내가 만든 함수는 함수 블록(`BlockKind.Function`)을 해금해야 보이고, 스킬 트리에 노드가 있는 스킬은 그 노드도 해금해야 보임. malloc·free·wait는 각자의 블록 종류를 해금해야 보임. 임시 계정은 모두 보임. 항목이 없는 구역은 머리글도 없음
+  - 함수 탭을 열 때와 저장한 함수 목록이 바뀔 때 목록을 다시 만듦
+  - 아직 없음: 「남은/가진」 개수 표시 (블록·함수 개수 이슈)
+- 참고 탭 (#476): 문법 탭과 같은 분류 순서(제어, 변수, 값, 함수)로 분류 머리글(`ListHeaderView`, 분류 색 네모) 아래에 카드. 검색해서 카드가 없는 분류는 머리글도 없음. 카드 사이 간격 7. 검색 칸 안내 「이름으로 검색」
+  - 분류 태그 (#489, 시안 6-13): 「분류 > 소분류」 두 단계. 머리글은 앞 단계(`BlockReferenceEntry.Group`)마다 하나. 태그 너비는 글자에 맞춤 (가장 작을 때 34)
+
+    | 카드 | 태그 |
+    | --- | --- |
+    | If, Else If, Else / For, While, Break, Continue | 제어 > 조건 / 제어 > 반복 |
+    | Declare, Assign / Array, Array Get, Array Set | 변수 > 변수 / 변수 > 배열 |
+    | Arithmetic, Compare, Logic, Not | 값 |
+    | Return | 함수 |
+    | 스킬(c., common.) / get_bug, is_valid_target, wait / malloc, free | 함수 > 스킬 / 함수 > 기본 함수 / 함수 > 메모리 |
+
+    - 「·」 대신 「>」: Galmuri11 글꼴에 「·」가 없고, 소분류가 분류 안에 속한다는 뜻 (사용자가 정함)
+  - 함수 카드 (#489): 제목은 한글 이름만(예: 「꼬챙이」, 함수 탭 항목 제목과 같음), 영문 이름은 형식 줄의 C 원형(`void skewer(Target target);`)에. 함수 탭과 같은 순서(스킬, 기본 함수, 메모리)
+    - malloc, free, wait도 함수 카드 모양: 소문자 이름, 한글 이름, 원형(`Sword* malloc(Sword);`, `void free(Sword* p);`, `void wait(float sec);`). 채울 곳·예시는 문법 블록 표의 것
+    - 검색: 이름, 분류 태그(조건, 스킬), 한글 이름(꼬챙), 고정 ID(c.skewer)
+  - 카드 내용 (#476, 레퍼런스 페이지 형식): 접힌 카드는 이름·분류 태그, 형식(「코드 색」: `if (조건) { 블록 }`, `void thrust(Target target);`)만. 펼치면 설명 한 문장, 채울 곳 또는 파라미터(「- 이름: 설명」), 돌려주는 값, 예시, 실행(동작·쿨타임 틱, 코드 크기). 설명 앞에 붙이던 스킬 이름(「검 찌르기: 」)은 제목으로 옮김 (#489)
+  - 펼치는 카드는 하나만 (#489): 카드를 펼치면 펼쳐져 있던 다른 카드가 접힘. 펼친 카드를 다시 누르면 접힘
   - 보이지 않는 것: C 표기, 놓는 곳, 동작 문단, 주의, 스킬 사용법·긴 설명
 - 글꼴 주의: Galmuri11 TMP는 정적 아틀라스라 `—`, `·`, `•`, `…`, `▾`, `「」`가 없어 빈칸으로 보인다. 편집 화면 글자에는 `-`, `:`, `...`, 따옴표를 쓴다
 - 그림: `Assets/_HW/UI/Frame/`의 9-slice 스프라이트(창, 제목줄, 패널, 머리글, 버튼, 목록 줄, 슬롯 카드, 키 배지, 격자)
@@ -163,12 +222,13 @@
 | 비교의 양쪽 | `값` |
 
 - 설명창 (#476): 블록·값 칸에 마우스를 올리고 0.4초 멈추면 그 아래에 설명창(`BlockTooltip` 프리팹). 블록 목록의 칩과 편집 영역의 블록 모두. 겹치면 가장 안쪽 것. 끄는 동안은 띄우지 않음
-  - 사전 정의 함수: 함수 원형(주황, `void thrust(Target target);`), 스킬의 한국어 이름(`PredefinedFunction.Name`), 설명(스킬 트리 노드 설명, 참고 카드와 같음), 파라미터마다 무엇을 넣는지, 돌려주는 값
+  - 사전 정의 함수: 함수 원형(「코드 색」, `void thrust(Target target);`), 한글 이름(`BlockReference.KoreanNameOf`, 함수 탭·참고 카드와 같음), 설명(스킬 트리 노드 설명, 참고 카드와 같음), 파라미터마다 무엇을 넣는지, 돌려주는 값
   - 내가 만든 함수: 함수 원형
   - 문법 블록: 형식, 설명 한 문장 (참고 카드의 표). 채울 곳은 설명창이 길어지므로 참고 탭에서만
   - 값 칸: 함수의 파라미터면 「타입 이름」과 무엇을 넣는지, 그리고 넣을 수 있는 것 (`SlotRules.Describe`)
 - 타입·연산자 칸은 드롭다운(`DropdownPopup` 프리팹): 타입(위 「칸 고치기」의 타입 칸), 연산 + - * / %, 비교 > < == != >= <=, 논리 && ||
-- 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set), 내가 만든 함수 부르기(`CallUserFunction`, 「함수」 분류 끝)가 있다. 배열 블록 셋은 `syntax.list` 해금 뒤에 보인다 (#470). 함수 부르기 블록은 페이지 함수만 붙이고 슬롯 함수(slot1~slot8)는 붙이지 않는다 (#470, 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않음). malloc은 불러온 함수에서만 보인다
+- 블록 목록에 배열 만들기(Array), 원소 읽기(Array Get, 값 칸에 끼움), 원소 쓰기(Array Set)가 있다. 배열 블록 셋은 `syntax.list` 해금 뒤에 보인다 (#470)
+- 내가 만든 함수 부르기(`CallUserFunction`)는 함수 탭의 「내가 만든 함수」에 있다 (#489). 페이지 함수만 붙이고 슬롯 함수(slot1~slot8)는 붙이지 않는다 (#470, 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않음)
 - 값 칸에 `NULL`을 적으면 `SlotData.FromNull()`과 같은 값으로 넣는다 (function-data.md #120)
 - 위쪽 줄의 「동기 / 비동기」 버튼: `FunctionData.IsAsync`를 고른다 (#132). 슬롯 함수와 전역 변수는 바꿀 수 없음
   - 지금은 항상 숨김 (#470). 버튼과 `ToggleAsync`는 남겨 둠, 저장된 `IsAsync` 값은 그대로
@@ -230,16 +290,17 @@
 | 제어 | if, else if, else, for, while, break, continue | `#DBF25A` |
 | 변수 | 선언, 대입, 배열 | `#5EB7F2` |
 | 값 | 연산, 비교, 논리, Not | `#79D36F` |
-| 함수 | C 스킬, 사용자 함수 | `#9E7BFF` |
-| 메모리 | malloc, free | `#F27FB4` |
-| 기타 | return, 기다리기 | `#8A84A0` |
+| 함수 | 함수 호출(C 스킬, 기본 함수, 사용자 함수), malloc, free, wait, return | `#9E7BFF` |
 
 - 변수는 시안의 청록(`#5EF2D6`) 대신 하늘색: 청록은 값의 초록과 구분되지 않고, 끄는 동안 「끼울 수 있는 칸」 표시 색과도 같기 때문
-- 메모리·기타는 함수 탭이 생기면 없어지는 분류 (malloc·free·wait는 함수 탭, return은 함수 분류)
+- 예전의 메모리(malloc, free, `#F27FB4`)·기타(return, wait, `#8A84A0`) 분류는 없앰 (#489). malloc·free·wait는 함수 탭, return은 문법 탭 「함수」 분류
 
 ### 화면 구성 (테스트 씬 `Test_HW`)
 - `BlockEditorCanvas` (Canvas Scaler 640×360, `BlockEditor`)
   - `Palette`: Image + Rect Mask 2D → `SearchField`, `Scroll`(Scroll Rect + `Scrollbar`) → `Viewport` → `Content`(Vertical Layout Group + Content Size Fitter). 참고 창과 같은 구조 (#476)
+  - `ErrorView`, `ReferenceView`: 머리글 없음 (#489, `InvokeUIBuilder.HeaderlessRightPanel`)
+  - `FunctionView` (#489): `Palette`와 같은 구조. `SearchField`, `Scroll` → `Viewport` → `Content`(구역 머리글과 `FunctionItem`이 쌓임). 처음엔 꺼 둠
+  - `TabStrip`: `BlockTab`, `FunctionTab`, `ErrorTab`(오류 수 `Badge`), `ReferenceTab`
   - `Workspace`: Image(격자) + Scroll Rect → `Viewport`(Rect Mask 2D) → `Content`(Image 투명 + Vertical Layout Group + Content Size Fitter + Layout Element + `BlockList`), `VerticalScrollbar`, `HorizontalScrollbar` (#476)
   - `TopBar`: Image + Horizontal Layout Group (안의 칸과 버튼은 `BlockEditor`가 만든다)
   - `DragLayer`: 화면 전체, Canvas 맨 아래 자식

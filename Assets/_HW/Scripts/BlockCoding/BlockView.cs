@@ -117,6 +117,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	CanvasGroup canvasGroup;
 	bool errorShown; // 컴파일 오류로 빨갛게 칠했는지. 화면을 다시 그려도(RefreshLook) 빨간 표시가 지워지지 않게
 	Func<BlockData> templateFactory; // 견본이면 새 블록 데이터를 만드는 함수, 아니면 null
+	Action dragFinished; // 함수 탭 항목에서 꺼낸 블록이면 놓았을 때 그 항목에 알리는 함수 (#489), 아니면 null
 	bool dragging;
 
 	// 끌기 전에 있던 자리. 놓을 수 없는 곳에 놓으면 여기로 되돌린다
@@ -646,32 +647,38 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 	public void OnBeginDrag(PointerEventData eventData)
 	{
-		BlockView dragged = this;
-		editor.ClearHover(); // 끌기 시작하면 설명창을 지운다
-
 		if (templateFactory != null)
 		{
 			// 견본: 새 블록을 만들어서 그걸 끈다. 이후 끌기 이벤트는 새 블록이 받는다
-			dragged = editor.CreateView(templateFactory(), editor.DragLayer);
-			// 끄는 블록은 칩이 아니라 칸이 다 있는 블록이므로, 그 블록이 원하는 크기로 맞춘다
-			var draggedRect = (RectTransform)dragged.transform;
-			LayoutRebuilder.ForceRebuildLayoutImmediate(draggedRect);
-			draggedRect.sizeDelta = new Vector2(LayoutUtility.GetPreferredWidth(draggedRect), LayoutUtility.GetPreferredHeight(draggedRect));
-			eventData.pointerDrag = dragged.gameObject;
-		}
-		else
-		{
-			// 편집 영역의 블록: 지금 자리를 기억해 두고 꺼낸다
-			originList = OwnerList;
-			originSlot = OwnerSlot;
-			originIndex = transform.GetSiblingIndex();
-			if (OwnerList != null) OwnerList.Detach(this);
-			if (OwnerSlot != null) OwnerSlot.Detach(this);
-			transform.SetParent(editor.DragLayer, true);
-			editor.ShowTrash(true); // 놓인 블록을 끌 때만: 블록 목록 위에 「여기에 놓으면 지워요」
+			editor.BeginNewBlockDrag(templateFactory(), eventData);
+			return;
 		}
 
-		dragged.StartDrag(eventData);
+		editor.ClearHover(); // 끌기 시작하면 설명창을 지운다
+		// 편집 영역의 블록: 지금 자리를 기억해 두고 꺼낸다
+		originList = OwnerList;
+		originSlot = OwnerSlot;
+		originIndex = transform.GetSiblingIndex();
+		if (OwnerList != null) OwnerList.Detach(this);
+		if (OwnerSlot != null) OwnerSlot.Detach(this);
+		transform.SetParent(editor.DragLayer, true);
+		editor.ShowTrash(true); // 놓인 블록을 끌 때만: 블록 목록 위에 「여기에 놓으면 지워요」
+		StartDrag(eventData);
+	}
+
+	/// <summary>
+	/// 블록 목록의 칩이나 함수 탭의 항목에서 방금 만든 이 블록을 끌기 시작한다 (BlockEditor.BeginNewBlockDrag가 부른다).
+	/// 이후 끌기 이벤트는 이 블록이 받는다. finished는 놓았을 때 한 번 불린다 (함수 탭 항목의 점선 표시를 되돌릴 때, #489).
+	/// </summary>
+	public void BeginDragAsNew(PointerEventData eventData, Action finished)
+	{
+		// 끄는 블록은 칩이 아니라 칸이 다 있는 블록이므로, 그 블록이 원하는 크기로 맞춘다
+		var rect = (RectTransform)transform;
+		LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
+		rect.sizeDelta = new Vector2(LayoutUtility.GetPreferredWidth(rect), LayoutUtility.GetPreferredHeight(rect));
+		eventData.pointerDrag = gameObject;
+		dragFinished = finished;
+		StartDrag(eventData);
 	}
 
 	void StartDrag(PointerEventData eventData)
@@ -697,6 +704,10 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		if (!dragging) return;
 		dragging = false;
+		// 꺼내 온 함수 탭 항목에 놓았다고 알린다. 아래에서 어디로 가든(들어가든, 지워지든) 끌기는 끝났기 때문
+		Action finished = dragFinished;
+		dragFinished = null;
+		finished?.Invoke();
 		// 놓을 자리는 클릭 통과를 되돌리기 전에 찾는다. 되돌린 뒤에 찾으면 마우스 아래의 이 블록 자신이 걸려,
 		// 미리보기와 다른 자리(자기 자신의 블록 영역)에 들어가거나 지워지기 때문 (#474)
 		Component target = FindDropTarget(eventData);

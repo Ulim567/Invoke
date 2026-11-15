@@ -161,6 +161,22 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("참고 창의 카드 하나 (ReferenceCard 프리팹)")]
 	ReferenceCardView referenceCardPrefab;
 
+	[Header("함수 탭 (#489, 비워 두면 함수 탭을 쓰지 않는다)")]
+	[SerializeField, Tooltip("함수 탭 창 (오른쪽 세로 막대의 「함수」를 누르면 보임. 처음엔 꺼 둔다)")]
+	GameObject functionView;
+
+	[SerializeField, Tooltip("세로 막대의 「함수」 버튼")]
+	Button functionTabButton;
+
+	[SerializeField, Tooltip("함수 탭의 검색 칸. 한글 이름, 영문 이름, 구역 이름으로 찾는다. 비워 두면 검색 없이 모두 보여 준다")]
+	TMP_InputField functionSearch;
+
+	[SerializeField, Tooltip("함수 탭에서 구역 머리글과 함수 항목이 쌓이는 곳 (Vertical Layout Group. 스크롤의 Content)")]
+	RectTransform functionTabList;
+
+	[SerializeField, Tooltip("함수 탭의 함수 항목 한 줄 (FunctionItem 프리팹)")]
+	FunctionItemView functionTabItemPrefab;
+
 	[SerializeField, Tooltip("블록 수·코드 크기 글자 (위쪽 줄 오른쪽). 비워 두면 위쪽 줄에 만든다")]
 	TMP_Text infoLabel;
 
@@ -184,7 +200,7 @@ public class BlockEditor : MonoBehaviour
 
 	// 블록 목록에 보여 줄 문법 블록 견본들. 분류 → 소분류 → 블록 (#487, 시안 6). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
 	// 소분류 이름은 칩 줄 맨 앞에 회색 글씨로 보인다. 이름이 빈 소분류는 글씨 없이 칩만 놓는다
-	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Subgroups가 null)
+	// 문법 탭에는 문법 블록만 둔다 (#489). 스킬·기본 함수·malloc·free·wait·내가 만든 함수는 함수 탭에서 끈다 (RebuildFunctionTab)
 	static readonly (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] PaletteGroups =
 	{
 		("제어", new[]
@@ -229,22 +245,12 @@ public class BlockEditor : MonoBehaviour
 				() => BlockData.Not(SlotData.EmptyValue()),
 			}),
 		}),
-		("함수", null),
-		// 메모리·기타는 함수 탭 이슈에서 정리한다 (malloc·free·wait는 함수 탭으로, return은 함수 분류로)
-		("메모리", new[]
-		{
-			("", new Func<BlockData>[]
-			{
-				() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
-				() => BlockData.Free(SlotData.EmptyValue()),
-			}),
-		}),
-		("기타", new[]
+		// 함수를 끝내는 Return만. 함수를 부르는 블록은 함수 탭에 있다 (#489)
+		("함수", new[]
 		{
 			("", new Func<BlockData>[]
 			{
 				() => BlockData.Return(),
-				() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
 			}),
 		}),
 	};
@@ -314,10 +320,12 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (trashZone != null) trashZone.SetActive(false);
 		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => ShowTab(RightTab.Blocks));
+		if (functionTabButton != null) functionTabButton.onClick.AddListener(() => ShowTab(RightTab.Functions));
 		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(RightTab.Errors));
 		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => ShowTab(RightTab.Reference));
 		if (referenceSearch != null) referenceSearch.onValueChanged.AddListener(_ => RebuildReference());
 		if (paletteSearch != null) paletteSearch.onValueChanged.AddListener(_ => RebuildPalette());
+		if (functionSearch != null) functionSearch.onValueChanged.AddListener(_ => RebuildFunctionTab());
 		if (functionFrame != null && functionFrame.ReturnButton != null) functionFrame.ReturnButton.onClick.AddListener(OpenReturnTypeDropdown);
 		ShowErrors(new List<FunctionChecker.Error>());
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
@@ -1081,22 +1089,36 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	// 오른쪽 세로 막대가 고르는 창 세 가지
-	enum RightTab { Blocks, Errors, Reference }
+	enum RightTab { Blocks, Functions, Errors, Reference }
 
 	RightTab rightTab = RightTab.Blocks;
 
-	// 오른쪽: 블록 목록, 오류 창, 참고 창 중 하나만 보인다
+	// 오른쪽: 블록 목록, 함수 탭, 오류 창, 참고 창 중 하나만 보인다
 	void ShowTab(RightTab tab)
 	{
 		rightTab = tab;
 		if (paletteView != null) paletteView.SetActive(tab == RightTab.Blocks);
+		if (functionView != null) functionView.SetActive(tab == RightTab.Functions);
 		if (errorView != null) errorView.SetActive(tab == RightTab.Errors);
 		if (referenceView != null) referenceView.SetActive(tab == RightTab.Reference);
 		SetTabLook(blockTabButton, tab == RightTab.Blocks);
+		SetTabLook(functionTabButton, tab == RightTab.Functions);
 		SetTabLook(errorTabButton, tab == RightTab.Errors);
 		SetTabLook(referenceTabButton, tab == RightTab.Reference);
 		// 참고 탭을 열 때마다 카드를 다시 만든다. 스킬 트리 설명이나 해금 상태가 바뀌어도 다음에 열 때 맞춰진다
 		if (tab == RightTab.Reference) RebuildReference();
+		// 함수 탭도 열 때마다 다시 만든다. 그 사이 해금하거나 함수를 저장했어도 맞춰진다
+		if (tab == RightTab.Functions) RebuildFunctionTab();
+	}
+
+	/// <summary>
+	/// 블록 목록의 칩이나 함수 탭의 항목에서 새 블록을 꺼내 끌기 시작한다 (#489). 이후 끌기 이벤트는 새 블록이 받는다.
+	/// finished는 블록을 놓았을 때 한 번 불린다 (함수 탭 항목의 점선 표시를 되돌릴 때). 없으면 null.
+	/// </summary>
+	public void BeginNewBlockDrag(BlockData data, UnityEngine.EventSystems.PointerEventData eventData, Action finished = null)
+	{
+		ClearHover(); // 끌기 시작하면 설명창을 지운다
+		CreateView(data, dragLayer).BeginDragAsNew(eventData, finished);
 	}
 
 	// 참고 창: 검색 칸의 글자에 맞는 카드를 처음부터 다시 만든다 (BlockReference.Search)
@@ -1107,12 +1129,13 @@ public class BlockEditor : MonoBehaviour
 		string query = referenceSearch != null ? referenceSearch.text : "";
 		List<BlockReferenceEntry> found = BlockReference.Search(query);
 
-		// 블록 목록과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
-		// 블록 목록에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
-		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Category)).Distinct();
+		// 문법 탭과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
+		// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
+		// 문법 탭에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
+		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
 		foreach (string category in categories)
 		{
-			List<BlockReferenceEntry> cards = found.Where(entry => entry.Category == category).ToList();
+			List<BlockReferenceEntry> cards = found.Where(entry => entry.Group == category).ToList();
 			if (cards.Count == 0) continue;
 			if (headerPrefab != null)
 			{
@@ -1472,28 +1495,28 @@ public class BlockEditor : MonoBehaviour
 	// 블록 목록에서 쓸 해금 목록. null이면 걸러 내지 않고 모두 보여 준다 (임시 계정)
 	HashSet<string> unlockedForPalette;
 
+	// 해금한 스킬 트리 노드. 실제 계정만 있고, 임시 계정이면 null이어서 블록 목록·함수 탭에 모두 보여 준다
+	HashSet<string> CurrentUnlocked()
+	{
+		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
+			return new HashSet<string>(progress.Unlocked);
+		return null;
+	}
+
 	void BuildPalette()
 	{
-		unlockedForPalette = null;
-		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
-			unlockedForPalette = new HashSet<string>(progress.Unlocked);
+		unlockedForPalette = CurrentUnlocked();
 
 		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
 
 		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in PaletteGroups)
 		{
-			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
-			if (subgroups == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
-
 			// 소분류마다 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476, #487). 남은 블록이 없는 소분류는 줄째, 분류는 머리글째 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			IEnumerable<(string Name, IEnumerable<Func<BlockData>> Blocks)> source = subgroups != null
-				? subgroups.Select(sub => (sub.Name, (IEnumerable<Func<BlockData>>)sub.Blocks))
-				: new[] { ("", (IEnumerable<Func<BlockData>>)FunctionTemplates()) };
 			var shownGroups = new List<(string Name, Func<BlockData>[] Blocks)>();
-			foreach ((string subName, IEnumerable<Func<BlockData>> blocks) in source)
+			foreach ((string subName, Func<BlockData>[] blocks) in subgroups)
 			{
 				IEnumerable<Func<BlockData>> candidates = blocks;
-				if (subgroups != null && unlockedForPalette != null)
+				if (unlockedForPalette != null)
 					candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
 				Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, subName, query)).ToArray();
 				if (shown.Length > 0) shownGroups.Add((subName, shown));
@@ -1529,15 +1552,11 @@ public class BlockEditor : MonoBehaviour
 		label.raycastTarget = false;
 	}
 
-	// 블록 목록 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 문법 탭 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
 	// 분류·소분류 이름이 맞으면 그 블록들을 모두 보여 준다. 예: 「제어」 → If, For, While …, 「반복」 → For, While, Break, Continue (#487)
-	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query)
-	{
-		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query)) return true;
-		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
-		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
-			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));
-	}
+	// 스킬 이름 검색은 함수 탭이 한다 (#489, 문법 탭에는 스킬이 없음)
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query) =>
+		query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query);
 
 	static bool ContainsText(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -1562,52 +1581,108 @@ public class BlockEditor : MonoBehaviour
 		}
 	}
 
-	// 「함수」 분류의 견본들: C 스킬 등 사전 정의 함수와 내가 만든 함수 부르기. 둘 다 파라미터 수만큼 빈 값 칸을 가진 함수 블록
-	// 칩을 바로 만들지 않고 목록으로 돌려준다. 검색에 맞는 블록이 없으면 분류 머리글도 만들지 않기 위함 (#476)
-	List<Func<BlockData>> FunctionTemplates()
-	{
-		var templates = new List<Func<BlockData>>();
-		IReadOnlyList<PredefinedFunction> functions = PredefinedFunctionRegistry.All;
-		if (functions == null) Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
-		else
-		{
-			foreach (PredefinedFunction function in functions)
-			{
-				// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
-				try
-				{
-					if (function == null) continue;
-					string id = function.Id;
-					if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
-					// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
-					if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
-					int parameterCount = function.Parameters?.Count ?? 0;
-					templates.Add(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
-				}
-				catch (Exception e)
-				{
-					Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
-				}
-			}
-		}
-
-		// 내가 만든 함수 부르기 (BlockData.CallUserFunction)
-		// 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않으므로 페이지 함수만 붙인다
-		foreach (FunctionData saved in PageFunctions())
-		{
-			string guid = saved.Guid;
-			int parameterCount = saved.Parameters?.Count ?? 0;
-			templates.Add(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
-		}
-		return templates;
-	}
-
-	// 저장한 함수가 바뀌면 블록 목록의 「함수」 분류도 바뀌므로 다시 만든다
+	// 편집 화면을 열 때(해금이 바뀌었을 수 있음)와 검색 글자가 바뀔 때 문법 탭을 다시 만든다
 	void RebuildPalette()
 	{
 		if (!paletteBuilt || palette == null) return;
 		for (int i = palette.childCount - 1; i >= 0; i--) Destroy(palette.GetChild(i).gameObject);
 		BuildPalette();
+		// 함수 탭의 「내가 만든 함수」도 저장한 함수로 만들므로 함께 다시 만든다
+		if (rightTab == RightTab.Functions) RebuildFunctionTab();
+	}
+
+	// 함수 탭 (#489, 시안 6-12) ------------------------------------------------------
+
+	// 함수 탭 항목 하나: 영문 이름, 한글 이름, 원형, 끌면 만들 블록
+	readonly struct FunctionTabItem
+	{
+		public readonly string Name, KoreanName, Prototype;
+		public readonly Func<BlockData> Factory;
+
+		public FunctionTabItem(string name, string koreanName, string prototype, Func<BlockData> factory)
+		{
+			Name = name;
+			KoreanName = koreanName;
+			Prototype = prototype;
+			Factory = factory;
+		}
+	}
+
+	// 함수 탭: 구역 스킬 / 기본 함수 / 메모리 / 내가 만든 함수. 해금한 것만 보인다 (블록 목록과 같은 규칙, 서버 저장 검사와 같음)
+	// - 사전 정의 함수와 내가 만든 함수: 함수 블록(BlockKind.Function)을 해금해야 보인다. 스킬 트리에 노드가 있는 스킬은 그 노드도
+	// - malloc, free, wait: 사전 정의 함수가 아니라 각자의 블록이므로 그 블록 종류를 해금해야 보인다
+	void RebuildFunctionTab()
+	{
+		if (functionTabList == null || functionTabItemPrefab == null) return;
+		for (int i = functionTabList.childCount - 1; i >= 0; i--) Destroy(functionTabList.GetChild(i).gameObject);
+
+		HashSet<string> unlocked = CurrentUnlocked();
+		bool Unlocked(BlockKind kind) => unlocked == null || SkillTree.IsBlockUnlocked(kind, unlocked);
+		bool functionUnlocked = Unlocked(BlockKind.Function);
+
+		var skills = new List<FunctionTabItem>();
+		var basics = new List<FunctionTabItem>();
+		if (functionUnlocked && PredefinedFunctionRegistry.All != null)
+		{
+			foreach (PredefinedFunction function in PredefinedFunctionRegistry.All)
+			{
+				string id = function?.Id;
+				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
+				int parameterCount = function.Parameters?.Count ?? 0;
+				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
+					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
+				// C 스킬과 공통 이동(dash 등)은 스킬, 나머지(get_bug, is_valid_target)는 기본 함수
+				bool skill = id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
+				(skill ? skills : basics).Add(item);
+			}
+		}
+		// wait 블록은 시간을 비워 둔다 (wait( 초);). 무엇을 적을지는 놓은 뒤 플레이어가 정한다
+		AddBuiltin(basics, () => BlockData.Wait(SlotData.EmptyValue()));
+
+		var memory = new List<FunctionTabItem>();
+		AddBuiltin(memory, () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)));
+		AddBuiltin(memory, () => BlockData.Free(SlotData.EmptyValue()));
+
+		// 내가 만든 함수: 페이지 함수만. 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않는다 (#470). 한글 이름은 없다
+		var mine = new List<FunctionTabItem>();
+		if (functionUnlocked)
+		{
+			foreach (FunctionData saved in PageFunctions())
+			{
+				string guid = saved.Guid;
+				int parameterCount = saved.Parameters?.Count ?? 0;
+				mine.Add(new FunctionTabItem(saved.Name, "", BlockReference.PrototypeOf(saved), () => BlockData.CallUserFunction(guid, EmptySlots(parameterCount))));
+			}
+		}
+
+		AddFunctionSection("스킬", skills);
+		AddFunctionSection("기본 함수", basics);
+		AddFunctionSection("메모리", memory);
+		AddFunctionSection("내가 만든 함수", mine);
+
+		// 함수처럼 보이는 블록(malloc, free, wait): 그 블록 종류를 해금했을 때만 넣는다
+		void AddBuiltin(List<FunctionTabItem> items, Func<BlockData> factory)
+		{
+			BlockKind kind = factory().Kind;
+			var builtin = BlockReference.BuiltinOf(kind);
+			if (!Unlocked(kind) || builtin == null) return;
+			items.Add(new FunctionTabItem(builtin.Value.Name, builtin.Value.KoreanName, builtin.Value.Prototype, factory));
+		}
+	}
+
+	// 함수 탭의 구역 하나: 머리글 아래에 항목들. 검색 칸이 비어 있지 않으면 맞는 항목만 남기고, 남은 항목이 없는 구역은 머리글도 만들지 않는다
+	// 검색: 구역 이름(메모리)이 맞으면 그 구역 전체, 아니면 한글 이름(휩쓸)이나 영문 이름(sweep)에 검색 글자가 든 항목 (대소문자 구분 없음, 블록 목록 검색과 같은 규칙)
+	void AddFunctionSection(string title, List<FunctionTabItem> items)
+	{
+		string query = functionSearch != null ? functionSearch.text.Trim() : "";
+		if (query.Length > 0 && !ContainsText(title, query))
+			items = items.Where(item => ContainsText(item.Name, query) || ContainsText(item.KoreanName, query)).ToList();
+		if (items.Count == 0) return;
+		if (headerPrefab != null) Instantiate(headerPrefab, functionTabList).Show(title, null); // 색 네모 없이 글자만 (시안 6-12)
+		// 제목은 한글 이름. 영문 이름은 원형에 들어 있으므로 따로 적지 않는다. 한글 이름이 없는 내가 만든 함수는 함수 이름
+		foreach (FunctionTabItem item in items)
+			Instantiate(functionTabItemPrefab, functionTabList).Show(this, string.IsNullOrEmpty(item.KoreanName) ? item.Name : item.KoreanName, item.Prototype, item.Factory);
 	}
 
 	void AddTemplate(Func<BlockData> template)

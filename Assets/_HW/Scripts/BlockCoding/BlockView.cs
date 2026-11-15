@@ -17,30 +17,36 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasGroup))]
 public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
 {
-	[SerializeField, Tooltip("블록 배경. 분류별 색이 들어간다")]
+	[SerializeField, Tooltip("블록 전체의 바탕. 투명하게 두고 끌기·놓기를 받는 자리로만 쓴다 (#487). 줄 바탕이 없는 예전 프리팹이면 여기에 분류 색을 칠한다")]
 	Image background;
 
 	[SerializeField, Tooltip("블록 한 줄. 글자와 칸이 이 아래에 만들어진다 (Horizontal Layout Group)")]
 	RectTransform row;
 
+	[SerializeField, Tooltip("블록 한 줄의 바탕 (Row의 Image, #487). 분류 색을 연하게 칠한다")]
+	Image rowBackground;
+
 	[SerializeField, Tooltip("조건문·for·while 안쪽에 블록을 쌓는 자리 (자식 오브젝트)")]
 	BlockList innerBlocks;
 
-	[Header("모양 (이우림 「블록 견본」)")]
-	[SerializeField, Tooltip("문장 블록: 위 왼쪽에 홈이 있는 네모 (blk_stmt)")]
+	[SerializeField, Tooltip("조건문·for·while의 아래 막대 (자식 오브젝트, #487). 블록 너비와 상관없이 고정 길이다")]
+	Image foot;
+
+	[Header("모양 (게임 UI 캔버스 시안 6, #487)")]
+	[SerializeField, Tooltip("문장 블록 줄: 네 모서리가 둥근 네모 (blk_round)")]
 	Sprite statementSprite;
+
+	[SerializeField, Tooltip("조건문·반복문 줄: 위 모서리만 둥근 네모 (blk_round_top). 아래로 안쪽 영역의 팔이 이어진다")]
+	Sprite containerSprite;
 
 	[SerializeField, Tooltip("값 블록: 양 끝이 둥근 알약 (blk_value)")]
 	Sprite valueSprite;
 
-	[SerializeField, Tooltip("블록 목록의 칩: 홈 없는 네모 (blk_chip)")]
+	[SerializeField, Tooltip("블록 목록의 칩: 네 모서리가 둥근 네모 (blk_round)")]
 	Sprite chipSprite;
 
-	[SerializeField, Tooltip("조건문·반복문의 안쪽: 왼쪽 기둥만 블록 색이 보이는 그림 (blk_inner)")]
+	[SerializeField, Tooltip("조건문·반복문의 안쪽: 왼쪽 팔만 칠하고 안은 비운 그림 (blk_arm)")]
 	Sprite innerSprite;
-
-	[SerializeField, Tooltip("안쪽 바탕 색 (편집 영역 바탕과 같게)")]
-	Color innerColor = new Color32(0x14, 0x18, 0x23, 0xFF);
 
 	[SerializeField, Tooltip("이름 칸 밑줄 (blk_underline)")]
 	Sprite nameFieldSprite;
@@ -51,10 +57,27 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	[SerializeField, Tooltip("이름 칸·변수 칸 선 색")]
 	Color fieldLineColor = new Color(1, 1, 1, 0.75f);
 
-	[SerializeField, Tooltip("조건문·반복문 아래 막대 높이")]
-	int containerBottom = 9;
+	[Header("칠 (분류 색의 불투명도, #487)")]
+	// 시안(줄 26%, 값 16%, 팔 10%)보다 진하게 한다. 시안 비율로는 화면에서 칙칙해 보였고, 값 블록은 어느 색이든 바탕에 묻혀 색이 구분되지 않았기 때문 (#487, 사용자가 슬라이더로 고름)
+	[SerializeField, Range(0f, 1f), Tooltip("문장 블록 줄과 블록 목록 칩")]
+	float rowAlpha = 0.40f;
 
-	[SerializeField, Tooltip("컴파일 오류가 난 블록 색 (반복문 밖의 break 등)")]
+	[SerializeField, Range(0f, 1f), Tooltip("값 블록 (알약)")]
+	float valueAlpha = 0.39f;
+
+	[SerializeField, Range(0f, 1f), Tooltip("조건문·반복문의 왼쪽 팔과 아래 막대. 안쪽은 칠하지 않아 바탕이 겹겹이 쌓이지 않는다")]
+	float armAlpha = 0.22f;
+
+	[SerializeField, Range(1f, 3f), Tooltip("바탕과 섞은 색의 채도 배수. 어두운 바탕과 섞으면 회색빛이 돌아 칙칙해지므로 채도를 올려 선명하게 한다")]
+	float saturation = 1.8f;
+
+	[SerializeField, Range(0f, 0.5f), Tooltip("값 칸 안으로 한 겹 들어간 블록을 더 진하게 칠하는 양. 두 겹이면 다시 원래대로 (밝기 교대)")]
+	float nestedBoost = 0.14f;
+
+	[SerializeField, Tooltip("칠을 섞을 바탕 색 (편집 영역 바탕). 분류 색을 이 색 위에 불투명도만큼 얹은 결과를 불투명한 색으로 칠한다")]
+	Color backdrop = new Color32(0x14, 0x18, 0x23, 0xFF);
+
+	[SerializeField, Tooltip("컴파일 오류가 난 블록 줄의 색 (반복문 밖의 break 등)")]
 	Color errorColor = new Color32(0xC8, 0x48, 0x58, 0xFF);
 
 	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
@@ -92,6 +115,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 	BlockEditor editor;
 	CanvasGroup canvasGroup;
+	bool errorShown; // 컴파일 오류로 빨갛게 칠했는지. 화면을 다시 그려도(RefreshLook) 빨간 표시가 지워지지 않게
 	Func<BlockData> templateFactory; // 견본이면 새 블록 데이터를 만드는 함수, 아니면 null
 	bool dragging;
 
@@ -121,11 +145,11 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		editor = owner;
 		Data = data;
-		background.color = BlockLabels.ColorOf(Data);
 
 		bool hasInner = data.InnerBlocks != null;
+		bool value = IsValueBlock(data);
 		innerBlocks.gameObject.SetActive(hasInner);
-		ApplyShape(IsValueBlock(data) ? valueSprite : statementSprite, IsValueBlock(data), hasInner);
+		ApplyShape(value ? valueSprite : hasInner ? containerSprite : statementSprite, value, hasInner);
 		BuildRow();
 		if (hasInner) innerBlocks.Bind(data.InnerBlocks, editor);
 	}
@@ -138,7 +162,6 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		editor = owner;
 		templateFactory = factory;
 		Data = factory();
-		background.color = BlockLabels.ColorOf(Data);
 		innerBlocks.gameObject.SetActive(false);
 		bool value = IsValueBlock(Data);
 		ApplyShape(value ? valueSprite : chipSprite, value, false, true);
@@ -151,37 +174,128 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		data.Kind is BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not or BlockKind.ArrayGet or BlockKind.Malloc;
 
 	/// <summary>
-	/// 컴파일 오류 표시 (블록을 빨갛게). BlockEditor가 컴파일할 때 부르고, 고치면 끈다.
+	/// 컴파일 오류 표시 (블록 줄을 빨갛게). BlockEditor가 컴파일할 때 부르고, 고치면 끈다.
 	/// </summary>
-	public void SetError(bool on) => background.color = on ? errorColor : BlockLabels.ColorOf(Data);
+	public void SetError(bool on)
+	{
+		errorShown = on;
+		Fill.color = on ? errorColor : FillColor();
+	}
 
-	// 블록 모양: 바탕 그림, 한 줄의 여백, 조건문·반복문의 안쪽과 아래 막대
+	/// <summary>
+	/// 놓인 자리에 맞춰 줄 바탕 색과 여백을 다시 맞춘다 (#487). 값 칸에 끼웠는지, 몇 겹 안에 들어갔는지에 따라 달라진다.
+	/// 블록을 넣거나 뺀 뒤 BlockEditor가 화면을 다시 그릴 때 부르고, 값 칸이 블록을 끼울 때도 부른다.
+	/// </summary>
+	public void RefreshLook()
+	{
+		if (Data == null) return; // 끄는 동안의 반투명 미리보기(블록 UI를 복사한 것)는 데이터가 없다
+		Fill.color = errorShown ? errorColor : FillColor();
+		ApplyRowPadding();
+	}
+
+	// 분류 색을 칠하는 그림. 줄 바탕이 없는 예전 프리팹이면 블록 전체 바탕에 칠한다
+	Image Fill => rowBackground != null ? rowBackground : background;
+
+	// 줄 바탕 색: 분류 색을 연하게. 값 블록(알약)은 문장 블록보다 더 연하게 (#487)
+	// 값 칸 안으로 한 겹 들어갈 때마다 한 단계 밝게, 그다음 겹은 다시 원래대로 번갈아 칠한다.
+	// 선 없이도 같은 색 블록이 겹친 경계(is_valid_target(get_bug()))가 보이게 하기 위함 (Scratch와 같은 방식)
+	Color FillColor()
+	{
+		float alpha = IsValueBlock(Data) ? valueAlpha : rowAlpha;
+		if (SlotDepth() % 2 == 1) alpha += nestedBoost;
+		return Tint(BlockLabels.ColorOf(Data), alpha);
+	}
+
+	// 이 블록이 값 칸 몇 겹 안에 들어 있는지. 블록 자리(함수 몸통, if 안쪽)를 만나면 거기서 센다
+	// if 안쪽에 쌓인 블록은 값 칸에 든 것이 아니므로 0부터 다시 센다 (안쪽 블록까지 밝아지지 않게)
+	int SlotDepth()
+	{
+		int depth = 0;
+		for (Transform t = transform.parent; t != null; t = t.parent)
+		{
+			if (t.GetComponent<BlockList>() != null) break;
+			if (t.GetComponent<BlockValueSlot>() != null) depth++;
+		}
+		return depth;
+	}
+
+	// 한 줄의 여백. 값 칸에 끼운 블록은 함수 블록이어도 값 블록처럼 얇게 해서, 겹칠수록 두꺼워지지 않게 한다 (#487)
+	void ApplyRowPadding()
+	{
+		if (!row.TryGetComponent(out HorizontalLayoutGroup rowLayout)) return;
+		bool chip = templateFactory != null;
+		bool thin = IsValueBlock(Data) || OwnerSlot != null;
+		// 시안의 줄 여백(위아래 5, 좌우 12, 1280 기준)을 편집 화면(960 기준)에 맞춘 값. 칩은 #476에서 키운 여백을 쓴다
+		RectOffset padding = chip ? new RectOffset(7, 7, 4, 4)
+			: thin ? new RectOffset(6, 6, 1, 1)
+			: new RectOffset(9, 9, 4, 4);
+		if (rowLayout.padding.top == padding.top && rowLayout.padding.left == padding.left) return; // 같으면 레이아웃을 다시 계산하지 않는다
+		rowLayout.padding = padding;
+	}
+
+	// 분류 색을 편집 영역 바탕 위에 alpha만큼 얹은 결과를 불투명한 색으로 돌려준다 (#487)
+	// 반투명으로 칠하면 칸 안에 끼운 블록(if 안의 비교, 비교 안의 get_bug)의 색이 바깥 블록 색과 섞여 탁해지기 때문이다.
+	// 미리 섞어 두면 블록 하나만 있을 때는 반투명과 똑같이 보이고, 겹쳐도 블록마다 자기 색이 그대로 보인다
+	Color Tint(Color color, float alpha)
+	{
+		Color mixed = Color.Lerp(backdrop, color, alpha);
+		mixed = Saturate(mixed, saturation);
+		mixed.a = 1f;
+		return mixed;
+	}
+
+	// HSL의 채도(S)만 factor배로 올리고 밝기(L)와 색상(H)은 그대로 둔다. 밝기를 유지해야 블록 글자와의 대비가 바뀌지 않는다
+	// HSV가 아니라 HSL을 쓰는 이유: HSV의 채도를 올리면 어두운 색의 밝기까지 함께 내려가 블록이 더 어두워지기 때문
+	static Color Saturate(Color color, float factor)
+	{
+		float max = Mathf.Max(color.r, color.g, color.b);
+		float min = Mathf.Min(color.r, color.g, color.b);
+		float lightness = (max + min) / 2f;
+		if (max - min < 0.0001f || factor == 1f) return color;
+		// 회색(lightness)에서 떨어진 정도를 factor배로 늘리면 HSL의 채도가 factor배가 된다 (색상·밝기는 그대로)
+		// 채도는 1을 넘을 수 없으므로, 색 성분이 0~1 밖으로 나가지 않는 만큼까지만 늘린다
+		float limit = factor;
+		foreach (float c in new[] { color.r, color.g, color.b })
+		{
+			float d = c - lightness;
+			if (d > 0f) limit = Mathf.Min(limit, (1f - lightness) / d);
+			else if (d < 0f) limit = Mathf.Min(limit, -lightness / d);
+		}
+		return new Color(
+			lightness + (color.r - lightness) * limit,
+			lightness + (color.g - lightness) * limit,
+			lightness + (color.b - lightness) * limit,
+			color.a);
+	}
+
+	// 블록 모양: 줄 바탕 그림과 색, 한 줄의 여백, 조건문·반복문의 안쪽 팔과 아래 막대
 	void ApplyShape(Sprite sprite, bool value, bool hasInner, bool chip = false)
 	{
+		// 블록 전체 바탕은 투명하게 둔다. 칠하지 않아도 끌기와 놓을 자리 찾기(Raycast)는 이 그림이 받는다
+		if (rowBackground != null) background.color = Color.clear;
 		if (sprite != null)
 		{
-			background.sprite = sprite;
-			background.type = Image.Type.Sliced;
+			Fill.sprite = sprite;
+			Fill.type = Image.Type.Sliced;
 		}
+		Fill.color = FillColor();
 
 		if (row.TryGetComponent(out HorizontalLayoutGroup rowLayout))
-		{
-			// 문장 블록은 위의 홈(3픽셀)만큼 위 여백을 더 둔다
-			// 끌어 놓기 쉽게 예전(칩 5·2·3, 값 6·2, 문장 5·5·3)보다 여백을 키운다 (#476)
-			rowLayout.padding = chip ? new RectOffset(7, 7, 4, 4)
-				: value ? new RectOffset(8, 8, 3, 3)
-				: new RectOffset(7, 8, 7, 4);
 			rowLayout.childAlignment = chip ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
-		}
+		ApplyRowPadding();
 
-		if (TryGetComponent(out VerticalLayoutGroup layout))
-			layout.padding = new RectOffset(0, 0, 0, hasInner ? containerBottom : 0);
+		// 아래 막대는 조건문·반복문만. 예전 프리팹(막대 없음)은 바탕 그림 아래 여백으로 막대를 보였으므로 그대로 둔다
+		if (foot != null)
+		{
+			foot.gameObject.SetActive(hasInner);
+			foot.color = Tint(BlockLabels.ColorOf(Data), armAlpha);
+		}
 
 		if (hasInner && innerBlocks.TryGetComponent(out Image innerImage) && innerSprite != null)
 		{
 			innerImage.sprite = innerSprite;
 			innerImage.type = Image.Type.Sliced;
-			innerImage.color = innerColor;
+			innerImage.color = Tint(BlockLabels.ColorOf(Data), armAlpha);
 		}
 	}
 
@@ -569,6 +683,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		// 끄는 블록이 마우스를 가리면 아래에 있는 놓을 자리를 찾을 수 없으므로 클릭을 통과시킨다
 		canvasGroup.blocksRaycasts = false;
 		MoveTo(eventData);
+		editor.ShowDragHints(this); // 끼울 수 있는 빈 칸은 청록, 없는 칸은 어둡게 (#487)
 	}
 
 	public void OnDrag(PointerEventData eventData)
@@ -593,6 +708,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		transform.localScale = Vector3.one; // 끄는 동안 작게 보이던 것을 원래 크기로
 		editor.ShowTrash(false);
 		editor.HideDropPreview();
+		editor.HideDragHints();
 
 		if (target == null)
 		{

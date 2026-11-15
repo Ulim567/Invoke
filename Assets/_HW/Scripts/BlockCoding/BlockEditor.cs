@@ -182,49 +182,75 @@ public class BlockEditor : MonoBehaviour
 	/// <summary>끌고 있는 블록을 올려 두는 곳</summary>
 	public RectTransform DragLayer => dragLayer;
 
-	// 블록 목록에 보여 줄 문법 블록 견본들 (분류별). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
-	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Blocks가 null)
-	static readonly (string Title, Func<BlockData>[] Blocks)[] PaletteGroups =
+	// 블록 목록에 보여 줄 문법 블록 견본들. 분류 → 소분류 → 블록 (#487, 시안 6). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
+	// 소분류 이름은 칩 줄 맨 앞에 회색 글씨로 보인다. 이름이 빈 소분류는 글씨 없이 칩만 놓는다
+	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Subgroups가 null)
+	static readonly (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] PaletteGroups =
 	{
-		("제어", new Func<BlockData>[]
+		("제어", new[]
 		{
-			() => BlockData.Conditional(ConditionalBranch.If),
-			() => BlockData.Conditional(ConditionalBranch.ElseIf),
-			() => BlockData.Conditional(ConditionalBranch.Else),
-			() => BlockData.For("i", Int("0"), Int("10")),
-			() => BlockData.While(SlotData.EmptyValue()),
-			() => BlockData.Break(),
-			() => BlockData.Continue(),
+			("조건", new Func<BlockData>[]
+			{
+				() => BlockData.Conditional(ConditionalBranch.If),
+				() => BlockData.Conditional(ConditionalBranch.ElseIf),
+				() => BlockData.Conditional(ConditionalBranch.Else),
+			}),
+			("반복", new Func<BlockData>[]
+			{
+				() => BlockData.For("i", Int("0"), Int("10")),
+				() => BlockData.While(SlotData.EmptyValue()),
+				() => BlockData.Break(),
+				() => BlockData.Continue(),
+			}),
 		}),
-		("변수", new Func<BlockData>[]
+		("변수", new[]
 		{
-			() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
-			// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
-			() => BlockData.Assign("", SlotData.EmptyValue()),
-			() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
-			() => BlockData.ArrayGet("", SlotData.EmptyValue()),
-			() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			("변수", new Func<BlockData>[]
+			{
+				() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
+				// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
+				() => BlockData.Assign("", SlotData.EmptyValue()),
+			}),
+			("배열", new Func<BlockData>[]
+			{
+				() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
+				() => BlockData.ArrayGet("", SlotData.EmptyValue()),
+				() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			}),
 		}),
 		// 값 칸에 끼우는 블록
-		("값", new Func<BlockData>[]
+		("값", new[]
 		{
-			() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
-			() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
-			() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
-			() => BlockData.Not(SlotData.EmptyValue()),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
+				() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
+				() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
+				() => BlockData.Not(SlotData.EmptyValue()),
+			}),
 		}),
 		("함수", null),
-		("메모리", new Func<BlockData>[]
+		// 메모리·기타는 함수 탭 이슈에서 정리한다 (malloc·free·wait는 함수 탭으로, return은 함수 분류로)
+		("메모리", new[]
 		{
-			() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
-			() => BlockData.Free(SlotData.EmptyValue()),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
+				() => BlockData.Free(SlotData.EmptyValue()),
+			}),
 		}),
-		("기타", new Func<BlockData>[]
+		("기타", new[]
 		{
-			() => BlockData.Return(),
-			() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Return(),
+				() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
+			}),
 		}),
 	};
+
+	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
+	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
@@ -270,6 +296,8 @@ public class BlockEditor : MonoBehaviour
 	const float GhostAlpha = 0.4f;
 
 	BlockValueSlot highlightedSlot;
+	// 블록을 끄는 동안 청록·어둡게 표시한 빈 칸들 (#487). 놓으면 표시를 지운다
+	readonly List<BlockValueSlot> hintedSlots = new List<BlockValueSlot>();
 	Button asyncButton;
 	bool paletteBuilt;
 	readonly List<BlockValueSlot> errorSlots = new List<BlockValueSlot>();
@@ -567,6 +595,9 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (string.IsNullOrEmpty(word)) return "을(를)";
 		char last = word[word.Length - 1];
+		// 영문 대문자 한 글자로 끝나면 그 글자를 읽는 소리로 고른다 (#487, 「슬롯 W를」, 「슬롯 R을」). 엘·엠·엔·알만 받침이 있다
+		if (last >= 'A' && last <= 'Z' && (word.Length == 1 || !char.IsLetter(word[word.Length - 2])))
+			return "LMNR".IndexOf(last) >= 0 ? "을" : "를";
 		if (last < 0xAC00 || last > 0xD7A3) return "을(를)";
 		return (last - 0xAC00) % 28 == 0 ? "를" : "을";
 	}
@@ -591,7 +622,7 @@ public class BlockEditor : MonoBehaviour
 		workspace.Bind(function.Blocks, this);
 		if (functionNameField != null)
 		{
-			functionNameField.Text = function.Name;
+			functionNameField.Text = DisplayNameOf(function);
 			functionNameField.Interactable = !IsSlotFunction(function); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
 		}
 		dirty = false;
@@ -947,7 +978,32 @@ public class BlockEditor : MonoBehaviour
 		ParkGhost();
 	}
 
-	/// <summary>놓을 자리 표시(반투명 미리보기, 보라색 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
+	/// <summary>
+	/// 블록을 끌기 시작할 때 부른다 (BlockView, #487). 끄는 블록이 값 칸에 들어가는 블록이면, 편집 영역의 빈 칸마다
+	/// 끼울 수 있는 칸은 청록, 끼울 수 없는 칸은 어둡게 표시한다 (시안 6-11). 값 칸에 들어가지 않는 블록(if, void 함수 등)은 표시하지 않는다.
+	/// </summary>
+	public void ShowDragHints(BlockView dragged)
+	{
+		HideDragHints();
+		if (!CanBeValue(dragged.Data)) return;
+		// 끄는 블록은 이미 편집 영역에서 꺼내 DragLayer에 있으므로, 자기 안의 칸은 여기에 들어오지 않는다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			if (!slot.IsEmpty) continue; // 값이 들어 있는 칸은 그대로 둔다
+			slot.SetDragHint(slot.CanAccept(dragged.Data) ? BlockValueSlot.DragHint.Accept : BlockValueSlot.DragHint.Reject);
+			hintedSlots.Add(slot);
+		}
+	}
+
+	/// <summary>끄는 동안의 칸 표시를 모두 지운다. 블록을 놓을 때 BlockView가 부른다 (#487)</summary>
+	public void HideDragHints()
+	{
+		foreach (BlockValueSlot slot in hintedSlots)
+			if (slot != null) slot.SetDragHint(BlockValueSlot.DragHint.None);
+		hintedSlots.Clear();
+	}
+
+	/// <summary>놓을 자리 표시(반투명 미리보기, 놓을 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
 	public void HideDropPreview()
 	{
 		if (highlightedSlot != null)
@@ -1256,7 +1312,14 @@ public class BlockEditor : MonoBehaviour
 		if (Function == null && !editingGlobals) return;
 
 		// 빈 값 칸의 안내 글자 (#476). 선언의 타입이나 대입의 변수를 바꾸면 다른 칸이 받는 타입도 바뀌므로 고칠 때마다 다시 쓴다
-		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>()) slot.RefreshPlaceholder();
+		// 칸 테두리(실선·점선·없음, #487)도 내용이 바뀌면 달라지므로 함께 다시 그린다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			slot.RefreshPlaceholder();
+			slot.RefreshLook();
+		}
+		// 블록을 옮기면 겹친 깊이가 바뀌어 칠(밝기 교대)과 줄 여백도 달라지므로 다시 맞춘다 (#487). 옮긴 블록 안쪽 블록까지 모두
+		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.RefreshLook();
 
 		// 동기·비동기 버튼 (슬롯 함수와 전역 변수는 바꿀 수 없음)
 		if (asyncButton != null)
@@ -1318,8 +1381,8 @@ public class BlockEditor : MonoBehaviour
 
 		bool slot = IsSlotFunction(Function);
 		string parameters = string.Join(", ", (Function.Parameters ?? new List<ParameterData>()).Select(p => $"{BlockLabels.TypeName(p.Type)} {p.Name}"));
-		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), Function.Name, parameters,
-			slot ? "슬롯 함수 · 이름과 반환 타입은 고정" : "페이지 함수 · 반환 타입을 고를 수 있음", !slot);
+		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), DisplayNameOf(Function), parameters,
+			slot ? "슬롯 함수 · 이름(슬롯 키)과 반환 타입은 고정" : "페이지 함수 · 반환 타입을 고를 수 있음", !slot);
 	}
 
 	// 반환 타입을 누르면 드롭다운으로 고른다. 고르면 고친 것으로 치고, 틀린 곳(return이 없는 길 등)은 저장할 때 컴파일이 알려 준다
@@ -1344,17 +1407,42 @@ public class BlockEditor : MonoBehaviour
 		{
 			int slot = SlotIndexOf(Function);
 			bool saved = savedFunctions.Any(f => f.Guid == Function.Guid);
-			where = slot >= 0 ? $"슬롯 {slot + 1}" : saved ? "페이지 함수" : "새 함수";
+			where = slot >= 0 ? $"슬롯 {KeyOf(slot)}" : saved ? "페이지 함수" : "새 함수";
 		}
 		return HasUnsavedChanges ? $"{where}, 저장하지 않은 변경 있음" : where;
 	}
 
+	// 슬롯 번호(0~7)의 키 글자 Q W E R A S D F
+	static string KeyOf(int slot) => slot >= 0 && slot < SlotKeys.Length ? SlotKeys[slot] : (slot + 1).ToString();
+
+	// 화면에 보일 함수 이름 (#487). 실제 계정의 슬롯 함수는 슬롯 키(Q~F)가 이름이다. 데이터의 이름(slot1~slot8)은 서버가 검사하므로 그대로 두고 화면에서만 바꾼다
+	string DisplayNameOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? KeyOf(slot) : function.Name;
+	}
+
+	// 함수가 들어 있는 슬롯 번호(0~7). 슬롯에 없으면 -1
+	// 실제 계정은 서버가 보낸 슬롯, 임시 계정은 내 캐릭터의 장착(SlotLoadout). 임시 계정도 슬롯에 끼운 함수를 슬롯 함수로 다룬다 (#487)
 	int SlotIndexOf(FunctionData function)
 	{
-		IReadOnlyList<SlotLoadout.Entry> slots = server?.ReceivedSlots;
-		if (slots == null || function == null) return -1;
-		for (int i = 0; i < slots.Count; i++)
-			if (slots[i].Id == function.Guid) return i;
+		if (function == null) return -1;
+		if (server != null)
+		{
+			IReadOnlyList<SlotLoadout.Entry> slots = server.ReceivedSlots;
+			if (slots == null) return -1;
+			for (int i = 0; i < slots.Count; i++)
+				if (slots[i].Id == function.Guid) return i;
+			return -1;
+		}
+
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (localPlayer == null || !localPlayer.TryGetComponent(out SlotLoadout loadout)) return -1;
+		for (int i = 0; i < SlotLoadout.SlotCount; i++)
+		{
+			SlotLoadout.Entry entry = loadout.GetEntry(i);
+			if (!entry.IsEmpty && entry.Kind == SlotLoadout.EntryKind.UserFunction && entry.Id == function.Guid) return i;
+		}
 		return -1;
 	}
 
@@ -1392,36 +1480,60 @@ public class BlockEditor : MonoBehaviour
 
 		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
 
-		foreach ((string title, Func<BlockData>[] blocks) in PaletteGroups)
+		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in PaletteGroups)
 		{
 			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
-			if (blocks == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
+			if (subgroups == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
 
-			// 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476). 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			IEnumerable<Func<BlockData>> candidates = (IEnumerable<Func<BlockData>>)blocks ?? FunctionTemplates();
-			if (blocks != null && unlockedForPalette != null)
-				candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
-			Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, query)).ToArray();
-			if (shown.Length == 0) continue;
+			// 소분류마다 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476, #487). 남은 블록이 없는 소분류는 줄째, 분류는 머리글째 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
+			IEnumerable<(string Name, IEnumerable<Func<BlockData>> Blocks)> source = subgroups != null
+				? subgroups.Select(sub => (sub.Name, (IEnumerable<Func<BlockData>>)sub.Blocks))
+				: new[] { ("", (IEnumerable<Func<BlockData>>)FunctionTemplates()) };
+			var shownGroups = new List<(string Name, Func<BlockData>[] Blocks)>();
+			foreach ((string subName, IEnumerable<Func<BlockData>> blocks) in source)
+			{
+				IEnumerable<Func<BlockData>> candidates = blocks;
+				if (subgroups != null && unlockedForPalette != null)
+					candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
+				Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, subName, query)).ToArray();
+				if (shown.Length > 0) shownGroups.Add((subName, shown));
+			}
+			if (shownGroups.Count == 0) continue;
 
 			if (headerPrefab != null)
 			{
 				ListHeaderView header = Instantiate(headerPrefab, palette);
 				// 분류 색 네모: 그 분류 블록의 색
-				header.Show(title, null, BlockLabels.ColorOf(shown[0]()));
+				header.Show(title, null, BlockLabels.ColorOf(shownGroups[0].Blocks[0]()));
 			}
-			// 분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로)
-			paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
-			foreach (Func<BlockData> template in shown) AddTemplate(template);
+			// 소분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로). 맨 앞에 소분류 이름
+			foreach ((string subName, Func<BlockData>[] shown) in shownGroups)
+			{
+				paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
+				// 소분류 글씨가 있는 줄은 내어쓰기: 칩이 넘쳐 다음 줄로 가도 글씨 아래가 아니라 첫 칩과 같은 자리에서 시작한다 (시안 6)
+				if (paletteTarget != palette && paletteTarget.TryGetComponent(out FlowLayoutGroup flow)) flow.HangingIndent = subName.Length > 0;
+				if (subName.Length > 0) AddSubgroupLabel(subName);
+				foreach (Func<BlockData> template in shown) AddTemplate(template);
+			}
 		}
 		paletteTarget = palette;
 	}
 
-	// 블록 목록 검색 (#476): 비어 있거나, 분류 이름·칩 이름·스킬의 화면 이름(검 찌르기)·고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
-	// 분류 이름이 맞으면 그 분류의 블록을 모두 보여 준다. 예: 「제어」 → If, For, While …
-	bool MatchesPaletteSearch(BlockData block, string groupTitle, string query)
+	// 칩 줄 맨 앞의 소분류 글씨 (#487). 블록 글자 프리팹을 쓰고 색만 회색으로. 클릭을 받지 않으므로 칩 끌기를 막지 않는다
+	// 글자 크기는 블록 글자와 같게 둔다. 픽셀 글꼴(Galmuri11)은 작게 줄이면 글자가 깨지기 때문
+	void AddSubgroupLabel(string name)
 	{
-		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(PaletteNameOf(block), query)) return true;
+		TMP_Text label = CreateText(paletteTarget != null ? paletteTarget : palette);
+		label.text = name;
+		label.color = SubgroupLabelColor;
+		label.raycastTarget = false;
+	}
+
+	// 블록 목록 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 분류·소분류 이름이 맞으면 그 블록들을 모두 보여 준다. 예: 「제어」 → If, For, While …, 「반복」 → For, While, Break, Continue (#487)
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query)
+	{
+		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query)) return true;
 		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
 		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
 			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));
@@ -1540,7 +1652,7 @@ public class BlockEditor : MonoBehaviour
 					dirty = true;
 				}
 			}
-			functionNameField.Text = Function.Name;
+			functionNameField.Text = DisplayNameOf(Function);
 			Redraw();
 		};
 
@@ -1600,7 +1712,8 @@ public class BlockEditor : MonoBehaviour
 		ClearSavedButtons();
 		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => RequestOpen("Global Variables", OpenGlobals));
 
-		// 슬롯 1~8: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬은 이름만
+		// 슬롯 Q~F: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬·빈 슬롯은 누를 수 없음
+		// 실제 계정과 같게 줄에는 슬롯 키만 보인다 (#487, 사용자 결정). 끼운 함수의 이름은 그 줄을 열면 함수 틀에 보인다
 		var equipped = new HashSet<string>();
 		AddFunctionHeader("슬롯", null);
 		SlotLoadout loadout = null;
@@ -1608,30 +1721,21 @@ public class BlockEditor : MonoBehaviour
 		if (localPlayer != null) localPlayer.TryGetComponent(out loadout);
 		for (int slot = 0; slot < SlotLoadout.SlotCount; slot++)
 		{
-			string number = (slot + 1).ToString();
-			string key = slot < SlotKeys.Length ? SlotKeys[slot] : "";
+			string key = KeyOf(slot);
 			SlotLoadout.Entry entry = loadout != null ? loadout.GetEntry(slot) : default;
-			if (loadout == null || entry.IsEmpty)
-			{
-				AddFunctionEntry(number, null, "비어 있음", key, null, true);
-				continue;
-			}
-			if (entry.Kind == SlotLoadout.EntryKind.Skill)
-			{
-				string skillName = SkillTable.TryGet(entry.Id, out SkillData skill) ? skill.DisplayName : entry.Id;
-				AddFunctionEntry(number, null, skillName, $"{key} 스킬", null, true);
-				continue;
-			}
-			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
+			// 빈 슬롯, C 스킬, 지워진 함수는 열 수 있는 함수가 없으므로 키만 보이고 누를 수 없다 (「비어 있음」 글자와 흐리게 하는 표시는 없음)
+			FunctionData slotFunction = loadout == null || entry.IsEmpty || entry.Kind == SlotLoadout.EntryKind.Skill
+				? null
+				: savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
 			if (slotFunction == null)
 			{
-				AddFunctionEntry(number, null, "(지워진 함수)", key, null, true);
+				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
 			equipped.Add(slotFunction.Guid);
 			string slotGuid = slotFunction.Guid;
-			string slotLabel = $"슬롯 {number} {slotFunction.Name}";
-			AddFunctionEntry(number, slotGuid, slotFunction.Name, key, () => RequestOpen(slotLabel, () =>
+			string slotLabel = $"슬롯 {key}";
+			AddFunctionEntry("", slotGuid, key, key, () => RequestOpen(slotLabel, () =>
 			{
 				FunctionData loaded = FunctionStorage.Load(slotGuid);
 				if (loaded != null) Open(loaded);
@@ -1669,13 +1773,15 @@ public class BlockEditor : MonoBehaviour
 		{
 			FunctionData function = SlotFunction(slot);
 			string key = slot < SlotKeys.Length ? SlotKeys[slot] : "";
+			// 슬롯 함수는 슬롯 키(Q~F)가 이름이다 (#487, 시안 6). 번호와 데이터의 이름(slot1~slot8)은 보이지 않는다
+			// 함수를 받지 못한 슬롯도 「비어 있음」 없이 키만 보인다 (누를 수는 없음)
 			if (function == null)
 			{
-				AddFunctionEntry((slot + 1).ToString(), null, "비어 있음", key, null, true);
+				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
-			string slotLabel = $"슬롯 {slot + 1} {function.Name}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
-			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
+			string slotLabel = $"슬롯 {key}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
+			AddFunctionEntry("", function.Guid, key, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
 		}
 		AddFunctionHeader($"페이지 {PageFunctions().Count()} / {ProgressRules.MaxPageFunctions}", NewFunction);
 		AddUnsavedEntry();
@@ -1754,11 +1860,8 @@ public class BlockEditor : MonoBehaviour
 		return savedFunctions.Where(f => !slotGuids.Contains(f.Guid));
 	}
 
-	bool IsSlotFunction(FunctionData function)
-	{
-		if (server == null || function == null || server.ReceivedSlots == null) return false;
-		return server.ReceivedSlots.Any(e => e.Id == function.Guid);
-	}
+	// 슬롯 함수면 true: 이름(슬롯 키)과 반환 타입을 바꿀 수 없다. 임시 계정은 슬롯에 끼운 함수 (#487. 이름을 바꾸려면 장착대에서 슬롯을 비운 뒤)
+	bool IsSlotFunction(FunctionData function) => SlotIndexOf(function) >= 0;
 
 	// 서버가 보낸 함수를 그대로 고치면 저장하지 않은 내용이 목록에 섞이므로, 열 때마다 복사본을 연다
 	static FunctionData Copy(FunctionData function) =>

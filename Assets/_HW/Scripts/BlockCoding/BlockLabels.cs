@@ -8,16 +8,20 @@ using UnityEngine;
 /// </summary>
 public static class BlockLabels
 {
-	// 블록 분류별 색. 글자는 밝은색이므로 배경은 어두운 쪽으로 둔다
-	static readonly Color ControlColor = new Color32(0xB8, 0x74, 0x2F, 0xFF);  // 조건문, 반복문
-	static readonly Color VariableColor = new Color32(0x2F, 0x8F, 0x86, 0xFF); // 선언, 대입
-	static readonly Color ValueColor = new Color32(0x3E, 0x8E, 0x4F, 0xFF);    // 연산, 비교, 논리
-	static readonly Color FunctionColor = new Color32(0x6A, 0x5A, 0xC9, 0xFF); // 함수, C 스킬
-	static readonly Color MemoryColor = new Color32(0xC2, 0x4D, 0x86, 0xFF);   // malloc, free
-	static readonly Color OtherColor = new Color32(0x4A, 0x55, 0x78, 0xFF);    // return, 기다리기
+	// 블록 분류별 색 (#487). 블록 바탕은 이 색을 연하게 섞어 칠하고(BlockView) 글자는 밝은색으로 쓰므로 밝은 색으로 둔다
+	// 분류 머리글의 색 네모, 참고 카드의 분류 태그는 이 색을 그대로 쓴다
+	// 시안 6의 색(제어 #F2D35A, 변수 #5EF2D6, 값 #6FD39A, 함수 #9A7BFF)에서 채도·밝기는 두고 색상만 옮긴 값이다 (사용자가 슬라이더로 고름).
+	// 변수는 청록 대신 하늘색: 청록은 값의 초록과 연하게 칠하면 구분되지 않고, 끄는 동안 「끼울 수 있는 칸」 표시 색과도 같기 때문
+	static readonly Color ControlColor = new Color32(0xDB, 0xF2, 0x5A, 0xFF);  // 조건문, 반복문
+	static readonly Color VariableColor = new Color32(0x5E, 0xB7, 0xF2, 0xFF); // 선언, 대입, 배열
+	static readonly Color ValueColor = new Color32(0x79, 0xD3, 0x6F, 0xFF);    // 연산, 비교, 논리
+	static readonly Color FunctionColor = new Color32(0x9E, 0x7B, 0xFF, 0xFF); // 함수, C 스킬
+	// 메모리·기타 분류는 함수 탭이 생기면 없어진다 (malloc·free·wait는 함수 탭, return은 함수 분류). 그때까지만 쓴다
+	static readonly Color MemoryColor = new Color32(0xF2, 0x7F, 0xB4, 0xFF);   // malloc, free
+	static readonly Color OtherColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);    // return, 기다리기
 
 	/// <summary>
-	/// 블록 분류에 맞는 배경색
+	/// 블록 분류의 색. 블록 바탕은 BlockView가 이 색을 연하게 칠한다
 	/// </summary>
 	public static Color ColorOf(BlockData block) => block.Kind switch
 	{

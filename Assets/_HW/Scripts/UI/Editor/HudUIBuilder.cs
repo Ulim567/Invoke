@@ -84,6 +84,17 @@ public static class HudUIBuilder
 		TMP_Text level = Text(bar, "Level", "Lv. 1", 8, Label);
 		Fit(level, 30);
 		hideInRaid.Add(level.gameObject);
+		// 경험치 바 (김도훈): Lv 글자 바로 옆. 연한 막대(Ghost)가 먼저 차고 연두 막대(Fill)가 따라 찬다. 움직임은 ExpBarView
+		RectTransform expBar = NewUI("ExpBar", bar);
+		SetImage(expBar.gameObject, "hud_gauge").raycastTarget = false;
+		Layout(expBar.gameObject, 40, 5);
+		Image expGhost = Fill(expBar, "Ghost", Hex("EFFFD9"), Image.OriginHorizontal.Left);
+		Image expFill = Fill(expBar, "Fill", Hex("9BE15D"), Image.OriginHorizontal.Left);
+		var expSo = new SerializedObject(expBar.gameObject.AddComponent<ExpBarView>());
+		Set(expSo, "fill", expFill);
+		Set(expSo, "ghost", expGhost);
+		expSo.ApplyModifiedPropertiesWithoutUndo();
+		hideInRaid.Add(expBar.gameObject);
 		hideInRaid.Add(Divider(bar));
 		hideInRaid.Add(MaterialIcon(bar, "bug_fragment"));
 		TMP_Text bug = Text(bar, "BugFragment", "버그 조각 0", 8, Color.white);

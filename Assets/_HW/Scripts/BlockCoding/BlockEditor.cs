@@ -270,6 +270,8 @@ public class BlockEditor : MonoBehaviour
 	const float GhostAlpha = 0.4f;
 
 	BlockValueSlot highlightedSlot;
+	// 블록을 끄는 동안 청록·어둡게 표시한 빈 칸들 (#487). 놓으면 표시를 지운다
+	readonly List<BlockValueSlot> hintedSlots = new List<BlockValueSlot>();
 	Button asyncButton;
 	bool paletteBuilt;
 	readonly List<BlockValueSlot> errorSlots = new List<BlockValueSlot>();
@@ -947,7 +949,32 @@ public class BlockEditor : MonoBehaviour
 		ParkGhost();
 	}
 
-	/// <summary>놓을 자리 표시(반투명 미리보기, 보라색 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
+	/// <summary>
+	/// 블록을 끌기 시작할 때 부른다 (BlockView, #487). 끄는 블록이 값 칸에 들어가는 블록이면, 편집 영역의 빈 칸마다
+	/// 끼울 수 있는 칸은 청록, 끼울 수 없는 칸은 어둡게 표시한다 (시안 6-11). 값 칸에 들어가지 않는 블록(if, void 함수 등)은 표시하지 않는다.
+	/// </summary>
+	public void ShowDragHints(BlockView dragged)
+	{
+		HideDragHints();
+		if (!CanBeValue(dragged.Data)) return;
+		// 끄는 블록은 이미 편집 영역에서 꺼내 DragLayer에 있으므로, 자기 안의 칸은 여기에 들어오지 않는다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			if (!slot.IsEmpty) continue; // 값이 들어 있는 칸은 그대로 둔다
+			slot.SetDragHint(slot.CanAccept(dragged.Data) ? BlockValueSlot.DragHint.Accept : BlockValueSlot.DragHint.Reject);
+			hintedSlots.Add(slot);
+		}
+	}
+
+	/// <summary>끄는 동안의 칸 표시를 모두 지운다. 블록을 놓을 때 BlockView가 부른다 (#487)</summary>
+	public void HideDragHints()
+	{
+		foreach (BlockValueSlot slot in hintedSlots)
+			if (slot != null) slot.SetDragHint(BlockValueSlot.DragHint.None);
+		hintedSlots.Clear();
+	}
+
+	/// <summary>놓을 자리 표시(반투명 미리보기, 놓을 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
 	public void HideDropPreview()
 	{
 		if (highlightedSlot != null)

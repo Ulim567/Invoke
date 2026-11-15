@@ -58,13 +58,35 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 	[SerializeField, Tooltip("빈 칸의 점선 색")]
 	Color emptyColor = new Color32(0xF4, 0xF1, 0xFA, 0x73); // 45%
 
-	// 칸 테두리 색: 보통 / 끌고 있는 값 블록을 놓을 수 있음(보라) / 컴파일 오류(빨강)
+	[Header("블록을 끄는 동안 (시안 6-11, #487)")]
+	[SerializeField, Tooltip("끄는 블록을 받을 수 있는 칸: 2픽셀 테두리 알약 (blk_slot_bold, Sliced). 비워 두면 값이 있는 칸 그림을 쓴다")]
+	Sprite acceptSprite;
+
+	[SerializeField, Tooltip("끄는 블록을 받을 수 있는 칸의 테두리와 안내 글자 색")]
+	Color acceptColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+
+	[SerializeField, Tooltip("끄는 블록을 받을 수 없는 칸의 점선 색")]
+	Color rejectColor = new Color32(0xF4, 0xF1, 0xFA, 0x2E); // 18%
+
+	[SerializeField, Tooltip("끄는 블록을 받을 수 없는 칸의 안내 글자 색")]
+	Color rejectTextColor = new Color32(0x5A, 0x54, 0x70, 0xFF);
+
+	/// <summary>블록을 끄는 동안 빈 칸에 보이는 표시</summary>
+	public enum DragHint
+	{
+		None,   // 끄는 중이 아니거나, 값 칸에 넣을 수 없는 블록(if, void 함수 등)을 끄는 중
+		Accept, // 끄는 블록을 이 칸에 끼울 수 있음: 청록 테두리
+		Reject, // 끄는 블록을 이 칸에 끼울 수 없음: 어두운 점선
+	}
+
+	// 칸 테두리 색: 컴파일 오류(빨강). 끄는 블록을 놓을 수 있다는 보라색은 그림이 없는 예전 프리팹에서만 쓴다
 	static readonly Color HighlightColor = new Color32(0x8B, 0x9C, 0xFF, 0xC0);
 	static readonly Color ErrorColor = new Color32(0xE0, 0x50, 0x60, 0xC0);
 	Image image;
 	Color baseColor;
 	bool highlighted;
 	bool error;
+	DragHint dragHint;
 	bool ghostShown; // 끄는 동안의 반투명 미리보기를 이 칸에 보이는 중인지 (#476)
 
 	/// <summary>끌고 있는 값 블록을 여기에 놓을 수 있다는 표시 (BlockEditor가 부른다)</summary>
@@ -97,6 +119,16 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		if (pickButton != null) pickButton.gameObject.SetActive(true);
 	}
 
+	/// <summary>
+	/// 블록을 끄는 동안의 표시를 바꾼다 (BlockEditor가 끌기를 시작할 때와 놓을 때 부른다, #487).
+	/// 값이 들어 있는 칸은 끼울 수 없으므로 BlockEditor가 빈 칸에만 Accept·Reject를 준다.
+	/// </summary>
+	public void SetDragHint(DragHint hint)
+	{
+		dragHint = hint;
+		ApplyColor();
+	}
+
 	/// <summary>컴파일 오류(비어 있는 칸) 표시 (BlockEditor가 부른다)</summary>
 	public void SetError(bool on)
 	{
@@ -118,17 +150,36 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 			baseColor = image.color;
 		}
 
-		Color normal = baseColor;
-		if (filledSprite != null && emptySprite != null)
+		// 그림이 없는 예전 프리팹: 바탕 색만 바꾼다
+		if (filledSprite == null || emptySprite == null)
 		{
-			bool empty = Held == null && IsEmptyContent;
+			image.color = highlighted ? HighlightColor : error ? ErrorColor : baseColor;
+			return;
+		}
+
+		bool empty = Held == null && IsEmptyContent;
+		// 마우스 아래의 놓을 칸(highlighted)도 받을 수 있는 칸과 같은 청록으로 보인다. 그 칸에는 반투명 미리보기가 들어가 있다
+		bool accept = highlighted || dragHint == DragHint.Accept;
+		bool reject = !accept && dragHint == DragHint.Reject;
+		if (accept)
+		{
+			image.sprite = acceptSprite != null ? acceptSprite : filledSprite;
+			image.type = Image.Type.Sliced;
+			image.color = acceptColor;
+		}
+		else
+		{
 			image.sprite = empty ? emptySprite : filledSprite;
 			image.type = empty ? Image.Type.Tiled : Image.Type.Sliced;
 			// 끼운 블록은 자기 바탕(알약)이 있으므로 칸 테두리를 숨긴다. 투명해도 놓을 자리 찾기(Raycast)는 그대로 받는다
-			normal = Held != null ? Color.clear : empty ? emptyColor : filledColor;
+			Color normal = Held != null ? Color.clear : empty ? emptyColor : filledColor;
+			image.color = error ? ErrorColor : reject ? rejectColor : normal;
 		}
-		image.color = highlighted ? HighlightColor : error ? ErrorColor : normal;
+		if (field != null) field.SetPlaceholderColor(accept ? acceptColor : reject ? rejectTextColor : (Color?)null);
 	}
+
+	/// <summary>끼운 블록, 적은 값, 변수가 모두 없는 칸이면 true. 블록을 끄는 동안 표시할 칸을 고를 때 BlockEditor가 본다 (#487)</summary>
+	public bool IsEmpty => Held == null && IsEmptyContent;
 
 	// 적은 값, 변수, 끼운 블록이 모두 없으면 true. 칸 글자를 잘못 적어 데이터가 비었을 때도 빈 칸으로 본다 (글자는 빨갛게 남음)
 	bool IsEmptyContent =>

@@ -595,6 +595,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		// 끄는 블록이 마우스를 가리면 아래에 있는 놓을 자리를 찾을 수 없으므로 클릭을 통과시킨다
 		canvasGroup.blocksRaycasts = false;
 		MoveTo(eventData);
+		editor.ShowDragHints(this); // 끼울 수 있는 빈 칸은 청록, 없는 칸은 어둡게 (#487)
 	}
 
 	public void OnDrag(PointerEventData eventData)
@@ -619,6 +620,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		transform.localScale = Vector3.one; // 끄는 동안 작게 보이던 것을 원래 크기로
 		editor.ShowTrash(false);
 		editor.HideDropPreview();
+		editor.HideDragHints();
 
 		if (target == null)
 		{

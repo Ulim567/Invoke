@@ -747,6 +747,7 @@ public static class InvokeUIBuilder
 			BlockValueSlot slot = root.GetComponent<BlockValueSlot>();
 			Set(slot, "filledSprite", LoadShape("blk_slot_line"));
 			Set(slot, "emptySprite", LoadShape("blk_slot_dashed"));
+			Set(slot, "acceptSprite", LoadShape("blk_slot_bold"));
 		});
 
 		EditPrefab(BlockDir + "BlockText.prefab", root =>
@@ -856,6 +857,8 @@ public static class InvokeUIBuilder
 		WriteShape("blk_slot_line", s, s, (x, y) => IsEdge(x, y, pill), Vector4.one * SlotCorner);
 		// 빈 칸: 2픽셀 칠하고 2픽셀 비우는 점선. Tiled로 그려서 칸이 길어져도 점선 간격이 그대로다 (Sliced면 가운데가 늘어나 실선이 됨)
 		WriteShape("blk_slot_dashed", s, s, (x, y) => IsEdge(x, y, pill) && (x + y) / 2 % 2 == 0, Vector4.one * SlotCorner);
+		// 블록을 끄는 동안 끼울 수 있는 칸: 2픽셀 테두리 알약 (시안 6-11의 청록 2px 테두리)
+		WriteShape("blk_slot_bold", s, s, (x, y) => IsEdge(x, y, pill, 2), Vector4.one * SlotCorner);
 	}
 
 	// 모서리마다 둥글기가 다른 네모 안의 픽셀인지. 둥글기 r인 모서리는 반지름 r인 원 바깥을 뺀다. y는 아래에서 위로 센다 (Texture2D와 같음)
@@ -883,11 +886,13 @@ public static class InvokeUIBuilder
 		}
 	}
 
-	// 모양 안의 픽셀 중 바로 옆(상하좌우)이 모양 밖인 픽셀: 1픽셀 테두리
-	static bool IsEdge(int x, int y, System.Func<int, int, bool> inside)
+	// 모양 안의 픽셀 중 상하좌우로 thickness칸 안에 모양 밖이 있는 픽셀: thickness픽셀 테두리
+	static bool IsEdge(int x, int y, System.Func<int, int, bool> inside, int thickness = 1)
 	{
 		if (!inside(x, y)) return false;
-		return !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+		for (int d = 1; d <= thickness; d++)
+			if (!inside(x - d, y) || !inside(x + d, y) || !inside(x, y - d) || !inside(x, y + d)) return true;
+		return false;
 	}
 
 	// filled가 true인 픽셀만 흰색인 PNG를 쓰고 스프라이트로 가져온다. border는 9-slice 테두리 (x 왼쪽, y 아래, z 오른쪽, w 위)

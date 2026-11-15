@@ -125,6 +125,8 @@
   - 검색 칸 (#476, 안내 「이름으로 검색」): 분류·소분류 이름, 칩 이름에 검색 글자가 들어 있는 블록만 (대소문자 구분 없음). 분류·소분류 이름이 맞으면 그 블록 전체 (예: 「반복」 → For, While, Break, Continue). 남은 블록이 없는 분류는 머리글도 없음
   - 세로 스크롤 + 오른쪽 스크롤바 (내용이 길 때만 보임)
 - 오른쪽 끝 세로 탭: 문법 / 함수 / 오류 / 참고 (#489). 누른 탭의 창 하나만 보임. 블록 목록 탭은 문법 블록만 남으므로 「문법」
+  - 네 창 모두 머리글(「오류」, 「참고」 등) 없음. 어느 창인지는 세로 탭이 알려 줌 (#489)
+  - 오류 창의 「오류 없음」 글자는 창 둘레에서 여백 10
 - 함수 탭 (#489, 게임 UI 캔버스 시안 6-12): 함수를 코드로 끌어다 놓는 목록. 블록 목록과 같이 머리글 없이 맨 위 검색 칸(안내 「이름으로 검색」), 아래에 구역 머리글(`ListHeaderView`, 색 네모 없음)과 항목(사이 간격 6)
   - 검색 칸: 구역 이름(메모리)이 맞으면 그 구역 전체, 아니면 한글 이름(휩쓸)이나 영문 이름(sweep)에 검색 글자가 든 항목 (대소문자 구분 없음). 남은 항목이 없는 구역은 머리글도 없음
   - 구역과 항목
@@ -180,6 +182,7 @@
     - malloc, free, wait도 함수 카드 모양: 소문자 이름, 한글 이름, 원형(`Sword* malloc(Sword);`, `void free(Sword* p);`, `void wait(float sec);`). 채울 곳·예시는 문법 블록 표의 것
     - 검색: 이름, 분류 태그(조건, 스킬), 한글 이름(꼬챙), 고정 ID(c.skewer)
   - 카드 내용 (#476, 레퍼런스 페이지 형식): 접힌 카드는 이름·분류 태그, 형식(「코드 색」: `if (조건) { 블록 }`, `void thrust(Target target);`)만. 펼치면 설명 한 문장, 채울 곳 또는 파라미터(「- 이름: 설명」), 돌려주는 값, 예시, 실행(동작·쿨타임 틱, 코드 크기). 설명 앞에 붙이던 스킬 이름(「검 찌르기: 」)은 제목으로 옮김 (#489)
+  - 펼치는 카드는 하나만 (#489): 카드를 펼치면 펼쳐져 있던 다른 카드가 접힘. 펼친 카드를 다시 누르면 접힘
   - 보이지 않는 것: C 표기, 놓는 곳, 동작 문단, 주의, 스킬 사용법·긴 설명
 - 글꼴 주의: Galmuri11 TMP는 정적 아틀라스라 `—`, `·`, `•`, `…`, `▾`, `「」`가 없어 빈칸으로 보인다. 편집 화면 글자에는 `-`, `:`, `...`, 따옴표를 쓴다
 - 그림: `Assets/_HW/UI/Frame/`의 9-slice 스프라이트(창, 제목줄, 패널, 머리글, 버튼, 목록 줄, 슬롯 카드, 키 배지, 격자)
@@ -295,6 +298,7 @@
 ### 화면 구성 (테스트 씬 `Test_HW`)
 - `BlockEditorCanvas` (Canvas Scaler 640×360, `BlockEditor`)
   - `Palette`: Image + Rect Mask 2D → `SearchField`, `Scroll`(Scroll Rect + `Scrollbar`) → `Viewport` → `Content`(Vertical Layout Group + Content Size Fitter). 참고 창과 같은 구조 (#476)
+  - `ErrorView`, `ReferenceView`: 머리글 없음 (#489, `InvokeUIBuilder.HeaderlessRightPanel`)
   - `FunctionView` (#489): `Palette`와 같은 구조. `SearchField`, `Scroll` → `Viewport` → `Content`(구역 머리글과 `FunctionItem`이 쌓임). 처음엔 꺼 둠
   - `TabStrip`: `BlockTab`, `FunctionTab`, `ErrorTab`(오류 수 `Badge`), `ReferenceTab`
   - `Workspace`: Image(격자) + Scroll Rect → `Viewport`(Rect Mask 2D) → `Content`(Image 투명 + Vertical Layout Group + Content Size Fitter + Layout Element + `BlockList`), `VerticalScrollbar`, `HorizontalScrollbar` (#476)

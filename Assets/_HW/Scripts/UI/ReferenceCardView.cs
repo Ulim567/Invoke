@@ -110,7 +110,20 @@ public class ReferenceCardView : MonoBehaviour
 	void Toggle()
 	{
 		if (expandedText == null || string.IsNullOrEmpty(expandedText.text)) return;
+		// 카드는 하나만 펼친다 (#489, 사용자가 정함): 이 카드를 펼치기 전에 같은 목록에서 펼쳐져 있던 카드를 접는다
+		if (!expanded) CollapseSiblings();
 		SetExpanded(!expanded, true);
+	}
+
+	// 같은 목록(참고 창의 카드 자리)에 있는 다른 카드를 모두 접는다
+	void CollapseSiblings()
+	{
+		if (transform.parent == null) return;
+		foreach (Transform sibling in transform.parent)
+		{
+			if (sibling == transform || !sibling.TryGetComponent(out ReferenceCardView card) || !card.expanded) continue;
+			card.SetExpanded(false, true);
+		}
 	}
 
 	void SetExpanded(bool value, bool hasSections)

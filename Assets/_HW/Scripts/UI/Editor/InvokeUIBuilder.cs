@@ -1098,35 +1098,28 @@ public static class InvokeUIBuilder
 			// 스크롤 영역의 여백(4)과 합쳐 예전처럼 패널 가장자리에서 8 떨어지게
 			paletteContent.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(4, 4, 4, 4);
 
-			// 오류 창 (블록 목록과 같은 자리. 오른쪽 세로 막대로 바꾼다)
-			Transform errorPanel = Panel(window, "ErrorView", "오류", 22, 11);
-			RightStretch(Rect(errorPanel), LayoutStrip, LayoutPalette, LayoutTop, 0);
+			// 오른쪽 창들(오류, 참고, 함수)은 문법 탭(Palette)과 같이 머리글이 없다 (#489, 사용자가 뺌). 어느 창인지는 세로 탭이 알려 준다
+
+			// 오류 창 (문법 탭과 같은 자리. 오른쪽 세로 막대로 바꾼다)
+			RectTransform errorPanel = HeaderlessRightPanel(window, "ErrorView");
 			TMP_Text errorText = GetOrText(errorPanel, "ErrorText", "", 9, Muted, TextAlignmentOptions.TopLeft);
 			errorText.textWrappingMode = TextWrappingModes.Normal;
 			errorText.overflowMode = TextOverflowModes.Overflow;
-			Stretch(errorText.rectTransform, 6, 6, 22, 6);
+			// 「오류 없음」 글자가 창 테두리에 붙어 보이지 않게 둘레에 여백 10 (#489, 예전에는 6)
+			Stretch(errorText.rectTransform, 10, 10, 10, 10);
 			RectTransform errorList = Child(errorPanel, "ErrorList");
-			Stretch(errorList, 4, 4, 20, 4);
+			Stretch(errorList, 6, 6, 6, 6);
 			VerticalList(errorList.gameObject, 4);
 
-			// 참고 창 (블록 목록과 같은 자리): 위에 검색 칸, 아래에 블록 설명 카드 목록
-			Transform referencePanel = Panel(window, "ReferenceView", "참고", 22, 11);
-			RightStretch(Rect(referencePanel), LayoutStrip, LayoutPalette, LayoutTop, 0);
-			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel, -26, "이름으로 검색");
+			// 참고 창 (문법 탭과 같은 자리): 위에 검색 칸, 아래에 블록 설명 카드 목록
+			RectTransform referencePanel = HeaderlessRightPanel(window, "ReferenceView");
+			TMP_InputField referenceSearch = GetOrBuildSearchField(referencePanel, -6, "이름으로 검색");
 			// 카드 사이 간격 7: 카드끼리 붙어 보이지 않게 (#476)
-			RectTransform referenceList = GetOrBuildCardScroll(referencePanel, 48, 7);
+			RectTransform referenceList = GetOrBuildCardScroll(referencePanel, 28, 7);
 			referencePanel.gameObject.SetActive(false); // 처음엔 꺼 둔다. 「참고」 탭을 누르면 BlockEditor가 켠다
 
-			// 함수 탭 창 (#489, 시안 6-12. 블록 목록과 같은 자리): 블록 목록과 같이 머리글 없이 위에 검색 칸, 아래에 구역(스킬, 기본 함수, 메모리, 내가 만든 함수)별 함수 항목
-			RectTransform functionTabPanel = Child(window, "FunctionView");
-			RightStretch(functionTabPanel, LayoutStrip, LayoutPalette, LayoutTop, 0);
-			SetImage(functionTabPanel.gameObject, "ui_panel", Image.Type.Sliced);
-			// 지난번에 만든 「함수」 머리글과 「코드로 끌어다 놓으세요」 안내는 지운다 (사용자가 뺌)
-			foreach (string removed in new[] { "Header", "Hint" })
-			{
-				Transform old = functionTabPanel.Find(removed);
-				if (old != null) Object.DestroyImmediate(old.gameObject);
-			}
+			// 함수 탭 창 (#489, 시안 6-12. 문법 탭과 같은 자리): 위에 검색 칸, 아래에 구역(스킬, 기본 함수, 메모리, 내가 만든 함수)별 함수 항목
+			RectTransform functionTabPanel = HeaderlessRightPanel(window, "FunctionView");
 			TMP_InputField functionSearch = GetOrBuildSearchField(functionTabPanel, -6, "이름으로 검색");
 			// 항목 사이 간격 6: 항목끼리 붙어 보이지 않게 (사용자가 정함)
 			RectTransform functionTabList = GetOrBuildCardScroll(functionTabPanel, 28, 6);
@@ -1367,6 +1360,21 @@ public static class InvokeUIBuilder
 		text.textWrappingMode = TextWrappingModes.Normal;
 		text.lineSpacing = -10;
 		return tab;
+	}
+
+	// 편집 화면 오른쪽 창 하나 (#489): 문법 탭과 같은 자리·바탕, 머리글 없음.
+	// 지난번에 만든 머리글(「오류」, 「참고」, 「함수」)과 함수 탭의 안내 글자(「코드로 끌어다 놓으세요」)는 지운다 (사용자가 뺌)
+	static RectTransform HeaderlessRightPanel(Transform window, string name)
+	{
+		RectTransform panel = Child(window, name);
+		RightStretch(panel, LayoutStrip, LayoutPalette, LayoutTop, 0);
+		SetImage(panel.gameObject, "ui_panel", Image.Type.Sliced);
+		foreach (string removed in new[] { "Header", "Hint" })
+		{
+			Transform old = panel.Find(removed);
+			if (old != null) Object.DestroyImmediate(old.gameObject);
+		}
+		return panel;
 	}
 
 	// 패널(바탕 + 머리글)을 만든다

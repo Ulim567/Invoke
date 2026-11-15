@@ -17,30 +17,36 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasGroup))]
 public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
 {
-	[SerializeField, Tooltip("블록 배경. 분류별 색이 들어간다")]
+	[SerializeField, Tooltip("블록 전체의 바탕. 투명하게 두고 끌기·놓기를 받는 자리로만 쓴다 (#487). 줄 바탕이 없는 예전 프리팹이면 여기에 분류 색을 칠한다")]
 	Image background;
 
 	[SerializeField, Tooltip("블록 한 줄. 글자와 칸이 이 아래에 만들어진다 (Horizontal Layout Group)")]
 	RectTransform row;
 
+	[SerializeField, Tooltip("블록 한 줄의 바탕 (Row의 Image, #487). 분류 색을 연하게 칠한다")]
+	Image rowBackground;
+
 	[SerializeField, Tooltip("조건문·for·while 안쪽에 블록을 쌓는 자리 (자식 오브젝트)")]
 	BlockList innerBlocks;
 
-	[Header("모양 (이우림 「블록 견본」)")]
-	[SerializeField, Tooltip("문장 블록: 위 왼쪽에 홈이 있는 네모 (blk_stmt)")]
+	[SerializeField, Tooltip("조건문·for·while의 아래 막대 (자식 오브젝트, #487). 블록 너비와 상관없이 고정 길이다")]
+	Image foot;
+
+	[Header("모양 (게임 UI 캔버스 시안 6, #487)")]
+	[SerializeField, Tooltip("문장 블록 줄: 네 모서리가 둥근 네모 (blk_round)")]
 	Sprite statementSprite;
+
+	[SerializeField, Tooltip("조건문·반복문 줄: 위 모서리만 둥근 네모 (blk_round_top). 아래로 안쪽 영역의 팔이 이어진다")]
+	Sprite containerSprite;
 
 	[SerializeField, Tooltip("값 블록: 양 끝이 둥근 알약 (blk_value)")]
 	Sprite valueSprite;
 
-	[SerializeField, Tooltip("블록 목록의 칩: 홈 없는 네모 (blk_chip)")]
+	[SerializeField, Tooltip("블록 목록의 칩: 네 모서리가 둥근 네모 (blk_round)")]
 	Sprite chipSprite;
 
-	[SerializeField, Tooltip("조건문·반복문의 안쪽: 왼쪽 기둥만 블록 색이 보이는 그림 (blk_inner)")]
+	[SerializeField, Tooltip("조건문·반복문의 안쪽: 왼쪽 팔만 칠하고 안은 비운 그림 (blk_arm)")]
 	Sprite innerSprite;
-
-	[SerializeField, Tooltip("안쪽 바탕 색 (편집 영역 바탕과 같게)")]
-	Color innerColor = new Color32(0x14, 0x18, 0x23, 0xFF);
 
 	[SerializeField, Tooltip("이름 칸 밑줄 (blk_underline)")]
 	Sprite nameFieldSprite;
@@ -51,10 +57,17 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	[SerializeField, Tooltip("이름 칸·변수 칸 선 색")]
 	Color fieldLineColor = new Color(1, 1, 1, 0.75f);
 
-	[SerializeField, Tooltip("조건문·반복문 아래 막대 높이")]
-	int containerBottom = 9;
+	[Header("칠 (분류 색의 불투명도, #487)")]
+	[SerializeField, Range(0f, 1f), Tooltip("문장 블록 줄과 블록 목록 칩")]
+	float rowAlpha = 0.26f;
 
-	[SerializeField, Tooltip("컴파일 오류가 난 블록 색 (반복문 밖의 break 등)")]
+	[SerializeField, Range(0f, 1f), Tooltip("값 블록 (알약)")]
+	float valueAlpha = 0.16f;
+
+	[SerializeField, Range(0f, 1f), Tooltip("조건문·반복문의 왼쪽 팔과 아래 막대. 안쪽은 칠하지 않아 바탕이 겹겹이 쌓이지 않는다")]
+	float armAlpha = 0.10f;
+
+	[SerializeField, Tooltip("컴파일 오류가 난 블록 줄의 색 (반복문 밖의 break 등)")]
 	Color errorColor = new Color32(0xC8, 0x48, 0x58, 0xFF);
 
 	[SerializeField, Range(0.3f, 1f), Tooltip("끌고 있는 블록의 불투명도")]
@@ -121,11 +134,11 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		editor = owner;
 		Data = data;
-		background.color = BlockLabels.ColorOf(Data);
 
 		bool hasInner = data.InnerBlocks != null;
+		bool value = IsValueBlock(data);
 		innerBlocks.gameObject.SetActive(hasInner);
-		ApplyShape(IsValueBlock(data) ? valueSprite : statementSprite, IsValueBlock(data), hasInner);
+		ApplyShape(value ? valueSprite : hasInner ? containerSprite : statementSprite, value, hasInner);
 		BuildRow();
 		if (hasInner) innerBlocks.Bind(data.InnerBlocks, editor);
 	}
@@ -138,7 +151,6 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		editor = owner;
 		templateFactory = factory;
 		Data = factory();
-		background.color = BlockLabels.ColorOf(Data);
 		innerBlocks.gameObject.SetActive(false);
 		bool value = IsValueBlock(Data);
 		ApplyShape(value ? valueSprite : chipSprite, value, false, true);
@@ -151,37 +163,51 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		data.Kind is BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not or BlockKind.ArrayGet or BlockKind.Malloc;
 
 	/// <summary>
-	/// 컴파일 오류 표시 (블록을 빨갛게). BlockEditor가 컴파일할 때 부르고, 고치면 끈다.
+	/// 컴파일 오류 표시 (블록 줄을 빨갛게). BlockEditor가 컴파일할 때 부르고, 고치면 끈다.
 	/// </summary>
-	public void SetError(bool on) => background.color = on ? errorColor : BlockLabels.ColorOf(Data);
+	public void SetError(bool on) => Fill.color = on ? errorColor : FillColor();
 
-	// 블록 모양: 바탕 그림, 한 줄의 여백, 조건문·반복문의 안쪽과 아래 막대
+	// 분류 색을 칠하는 그림. 줄 바탕이 없는 예전 프리팹이면 블록 전체 바탕에 칠한다
+	Image Fill => rowBackground != null ? rowBackground : background;
+
+	// 줄 바탕 색: 분류 색을 연하게. 값 블록(알약)은 문장 블록보다 더 연하게 (#487)
+	Color FillColor() => WithAlpha(BlockLabels.ColorOf(Data), IsValueBlock(Data) ? valueAlpha : rowAlpha);
+
+	static Color WithAlpha(Color color, float alpha) => new Color(color.r, color.g, color.b, alpha);
+
+	// 블록 모양: 줄 바탕 그림과 색, 한 줄의 여백, 조건문·반복문의 안쪽 팔과 아래 막대
 	void ApplyShape(Sprite sprite, bool value, bool hasInner, bool chip = false)
 	{
+		// 블록 전체 바탕은 투명하게 둔다. 칠하지 않아도 끌기와 놓을 자리 찾기(Raycast)는 이 그림이 받는다
+		if (rowBackground != null) background.color = Color.clear;
 		if (sprite != null)
 		{
-			background.sprite = sprite;
-			background.type = Image.Type.Sliced;
+			Fill.sprite = sprite;
+			Fill.type = Image.Type.Sliced;
 		}
+		Fill.color = FillColor();
 
 		if (row.TryGetComponent(out HorizontalLayoutGroup rowLayout))
 		{
-			// 문장 블록은 위의 홈(3픽셀)만큼 위 여백을 더 둔다
-			// 끌어 놓기 쉽게 예전(칩 5·2·3, 값 6·2, 문장 5·5·3)보다 여백을 키운다 (#476)
+			// 시안의 줄 여백(위아래 5, 좌우 12, 1280 기준)을 편집 화면(960 기준)에 맞춘 값. 칩과 값 블록은 #476에서 키운 여백을 쓴다
 			rowLayout.padding = chip ? new RectOffset(7, 7, 4, 4)
-				: value ? new RectOffset(8, 8, 3, 3)
-				: new RectOffset(7, 8, 7, 4);
+				: value ? new RectOffset(6, 6, 1, 1)
+				: new RectOffset(9, 9, 4, 4);
 			rowLayout.childAlignment = chip ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
 		}
 
-		if (TryGetComponent(out VerticalLayoutGroup layout))
-			layout.padding = new RectOffset(0, 0, 0, hasInner ? containerBottom : 0);
+		// 아래 막대는 조건문·반복문만. 예전 프리팹(막대 없음)은 바탕 그림 아래 여백으로 막대를 보였으므로 그대로 둔다
+		if (foot != null)
+		{
+			foot.gameObject.SetActive(hasInner);
+			foot.color = WithAlpha(BlockLabels.ColorOf(Data), armAlpha);
+		}
 
 		if (hasInner && innerBlocks.TryGetComponent(out Image innerImage) && innerSprite != null)
 		{
 			innerImage.sprite = innerSprite;
 			innerImage.type = Image.Type.Sliced;
-			innerImage.color = innerColor;
+			innerImage.color = WithAlpha(BlockLabels.ColorOf(Data), armAlpha);
 		}
 	}
 

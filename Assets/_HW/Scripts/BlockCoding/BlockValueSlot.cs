@@ -45,7 +45,20 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		}
 	}
 
-	// 칸 바탕 색: 보통 / 끌고 있는 값 블록을 놓을 수 있음(보라) / 컴파일 오류(빨강)
+	[Header("모양 (게임 UI 캔버스 시안 6, #487). 비워 두면 프리팹의 그림과 색을 그대로 쓴다")]
+	[SerializeField, Tooltip("값이 있는 칸: 1픽셀 테두리 알약 (blk_slot_line, Sliced)")]
+	Sprite filledSprite;
+
+	[SerializeField, Tooltip("빈 칸: 1픽셀 점선 테두리 알약 (blk_slot_dashed, Tiled). 점선이 늘어나지 않게 Tiled로 그린다")]
+	Sprite emptySprite;
+
+	[SerializeField, Tooltip("값이 있는 칸의 테두리 색")]
+	Color filledColor = new Color32(0xF4, 0xF1, 0xFA, 0x4D); // 30%
+
+	[SerializeField, Tooltip("빈 칸의 점선 색")]
+	Color emptyColor = new Color32(0xF4, 0xF1, 0xFA, 0x73); // 45%
+
+	// 칸 테두리 색: 보통 / 끌고 있는 값 블록을 놓을 수 있음(보라) / 컴파일 오류(빨강)
 	static readonly Color HighlightColor = new Color32(0x8B, 0x9C, 0xFF, 0xC0);
 	static readonly Color ErrorColor = new Color32(0xE0, 0x50, 0x60, 0xC0);
 	Image image;
@@ -91,6 +104,12 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		ApplyColor();
 	}
 
+	/// <summary>
+	/// 칸 모양을 지금 내용에 맞춘다 (#487): 값이 있으면 실선 테두리, 비었으면 점선 테두리, 블록을 끼웠으면 테두리 없음.
+	/// 칸을 고친 뒤 BlockEditor가 화면을 다시 그릴 때 부른다.
+	/// </summary>
+	public void RefreshLook() => ApplyColor();
+
 	void ApplyColor()
 	{
 		if (image == null)
@@ -98,8 +117,22 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 			if (!TryGetComponent(out image)) return;
 			baseColor = image.color;
 		}
-		image.color = highlighted ? HighlightColor : error ? ErrorColor : baseColor;
+
+		Color normal = baseColor;
+		if (filledSprite != null && emptySprite != null)
+		{
+			bool empty = Held == null && IsEmptyContent;
+			image.sprite = empty ? emptySprite : filledSprite;
+			image.type = empty ? Image.Type.Tiled : Image.Type.Sliced;
+			// 끼운 블록은 자기 바탕(알약)이 있으므로 칸 테두리를 숨긴다. 투명해도 놓을 자리 찾기(Raycast)는 그대로 받는다
+			normal = Held != null ? Color.clear : empty ? emptyColor : filledColor;
+		}
+		image.color = highlighted ? HighlightColor : error ? ErrorColor : normal;
 	}
+
+	// 적은 값, 변수, 끼운 블록이 모두 없으면 true. 칸 글자를 잘못 적어 데이터가 비었을 때도 빈 칸으로 본다 (글자는 빨갛게 남음)
+	bool IsEmptyContent =>
+		Slot == null || (Slot.Block == null && string.IsNullOrEmpty(Slot.Literal) && string.IsNullOrEmpty(Slot.VariableName));
 
 	/// <summary>
 	/// 블록의 slotIndex번 칸과 연결한다. 칸에 블록이 이미 있으면 (불러온 함수) 그 블록도 화면에 만든다.
@@ -117,6 +150,7 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		if (Slot.Block != null) Hold(editor.CreateView(Slot.Block, transform));
 		else field.Text = BlockSlotText.ToText(Slot);
 		RefreshPlaceholder();
+		RefreshLook();
 	}
 
 	/// <summary>
@@ -253,6 +287,7 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		view.RefreshTexts();
 		field.gameObject.SetActive(false);
 		if (pickButton != null) pickButton.gameObject.SetActive(false);
+		ApplyColor(); // 끼운 블록이 보이도록 칸 테두리를 숨긴다
 	}
 
 	// 적은 글자를 값으로 읽고, 칸 규칙에 맞지 않으면 넣지 않는다 (#474). 예: if의 조건 칸에 "abc"

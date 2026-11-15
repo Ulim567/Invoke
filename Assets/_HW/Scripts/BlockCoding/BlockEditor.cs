@@ -1256,7 +1256,12 @@ public class BlockEditor : MonoBehaviour
 		if (Function == null && !editingGlobals) return;
 
 		// 빈 값 칸의 안내 글자 (#476). 선언의 타입이나 대입의 변수를 바꾸면 다른 칸이 받는 타입도 바뀌므로 고칠 때마다 다시 쓴다
-		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>()) slot.RefreshPlaceholder();
+		// 칸 테두리(실선·점선·없음, #487)도 내용이 바뀌면 달라지므로 함께 다시 그린다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			slot.RefreshPlaceholder();
+			slot.RefreshLook();
+		}
 
 		// 동기·비동기 버튼 (슬롯 함수와 전역 변수는 바꿀 수 없음)
 		if (asyncButton != null)

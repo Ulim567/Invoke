@@ -647,60 +647,93 @@ public static class InvokeUIBuilder
 
 	// 블록 프리팹 ----------------------------------------------------------------
 
+	// 블록 글자 색 (게임 UI 캔버스 시안 6, #487). 블록 바탕을 연하게 칠하므로 흰색보다 살짝 누그러진 밝은 색
+	static readonly Color BlockInk = Hex("F4F1FA");
+
 	static void StyleBlockPrefabs()
 	{
+		BuildShapeSprites();
+
+		// 블록 모양 (게임 UI 캔버스 시안 6, #487): 줄만 분류 색으로 연하게 칠하고, 조건문·반복문은 왼쪽 팔과 고정 길이 아래 막대로 ㄷ자를 만든다
+		// 색은 BlockView가 분류마다 칠한다. 여기서는 그림과 자리만 정한다
 		EditPrefab(BlockDir + "Block.prefab", root =>
 		{
-			SetShape(root, "blk_stmt", Color.white);
+			// 블록 전체 바탕: 칠하지 않고 끌기·놓을 자리 찾기(Raycast)만 받는다
+			Image rootImage = GetOrAdd<Image>(root);
+			rootImage.sprite = null;
+			rootImage.color = Color.clear;
+			rootImage.raycastTarget = true;
+
 			VerticalLayoutGroup layout = GetOrAdd<VerticalLayoutGroup>(root);
+			layout.padding = new RectOffset(0, 0, 0, 0);
 			layout.spacing = 0;
+			layout.childAlignment = TextAnchor.UpperLeft;
 			layout.childControlWidth = layout.childControlHeight = true;
-			layout.childForceExpandWidth = true;
+			// 줄과 안쪽은 블록 너비만큼 늘리고(LayoutElement의 flexibleWidth), 아래 막대는 고정 길이로 두기 위해 강제로 늘리지 않는다
+			layout.childForceExpandWidth = false;
 			layout.childForceExpandHeight = false;
 			// 블록은 자기 내용만큼만 넓다 (편집 영역 폭을 꽉 채우지 않음)
 			LayoutElement blockSize = GetOrAdd<LayoutElement>(root);
 			blockSize.flexibleWidth = 0;
 			blockSize.flexibleHeight = 0;
 
+			// #476의 어두운 1픽셀 테두리는 없앤다. 시안에는 테두리가 없고, 연한 바탕에 검은 테두리가 겹치면 시안과 달라 보이기 때문
+			if (root.TryGetComponent(out Outline outline)) Object.DestroyImmediate(outline, true);
+
 			Transform row = root.transform.Find("Row");
 			HorizontalLayoutGroup rowLayout = GetOrAdd<HorizontalLayoutGroup>(row.gameObject);
 			rowLayout.spacing = 4;
 			rowLayout.childAlignment = TextAnchor.MiddleLeft;
+			Image rowImage = GetOrAdd<Image>(row.gameObject);
+			rowImage.sprite = LoadShape("blk_round");
+			rowImage.type = Image.Type.Sliced;
+			rowImage.raycastTarget = true;
+			GetOrAdd<LayoutElement>(row.gameObject).flexibleWidth = 1;
 
-			// 블록 가장자리의 어두운 1픽셀 테두리 (#476). 바탕 그림의 모양(문장 블록의 홈, 값 블록의 알약)을 따라 그려진다
-			Outline outline = GetOrAdd<Outline>(root);
-			outline.effectColor = new Color(0, 0, 0, 0.55f);
-			outline.effectDistance = new Vector2(1, 1);
-			outline.useGraphicAlpha = true;
-
+			// 안쪽 영역: 왼쪽 팔(9 = 시안 12px의 0.75배)만 칠하고 안은 비운다. 블록을 놓을 자리이므로 Raycast는 안쪽 전체가 받는다
 			Transform inner = root.transform.Find("Inner");
-			SetShape(inner.gameObject, "blk_inner", Workspace);
+			SetShape(inner.gameObject, "blk_arm", Color.clear);
 			VerticalLayoutGroup innerLayout = GetOrAdd<VerticalLayoutGroup>(inner.gameObject);
-			// 블록을 끌어 놓기 쉽게 안쪽 여백과 간격을 키운다 (#476)
-			innerLayout.padding = new RectOffset(14, 3, 4, 4);
-			innerLayout.spacing = 3;
+			innerLayout.padding = new RectOffset(12, 3, 3, 3); // 팔 9 + 띄움 3
+			innerLayout.spacing = 2;
 			innerLayout.childAlignment = TextAnchor.UpperLeft;
 			innerLayout.childControlWidth = innerLayout.childControlHeight = true;
 			innerLayout.childForceExpandWidth = false;
 			innerLayout.childForceExpandHeight = false;
 			LayoutElement innerSize = GetOrAdd<LayoutElement>(inner.gameObject);
 			innerSize.minHeight = 18;
+			innerSize.flexibleWidth = 1;
+
+			// 아래 막대: 너비 60 × 높이 8 (시안 80 × 10px의 0.75배, 높이는 픽셀에 맞게 반올림). 블록 너비와 상관없이 고정 길이
+			Transform footTransform = root.transform.Find("Foot");
+			GameObject foot = footTransform != null ? footTransform.gameObject : NewUI("Foot", root.transform);
+			Image footImage = GetOrAdd<Image>(foot);
+			footImage.sprite = LoadShape("blk_round_bottom");
+			footImage.type = Image.Type.Sliced;
+			footImage.raycastTarget = true;
+			LayoutElement footSize = GetOrAdd<LayoutElement>(foot);
+			footSize.preferredWidth = 60;
+			footSize.minHeight = footSize.preferredHeight = 8;
+			footSize.flexibleWidth = 0;
+			footSize.flexibleHeight = 0;
+			foot.transform.SetAsLastSibling();
 
 			BlockView view = root.GetComponent<BlockView>();
-			Set(view, "statementSprite", LoadShape("blk_stmt"));
+			Set(view, "rowBackground", rowImage);
+			Set(view, "foot", footImage);
+			Set(view, "statementSprite", LoadShape("blk_round"));
+			Set(view, "containerSprite", LoadShape("blk_round_top"));
 			Set(view, "valueSprite", LoadShape("blk_value"));
-			Set(view, "chipSprite", LoadShape("blk_chip"));
-			Set(view, "innerSprite", LoadShape("blk_inner"));
+			Set(view, "chipSprite", LoadShape("blk_round"));
+			Set(view, "innerSprite", LoadShape("blk_arm"));
 			Set(view, "nameFieldSprite", LoadShape("blk_underline"));
 			Set(view, "variableFieldSprite", LoadShape("blk_dashed"));
-			var viewSettings = new SerializedObject(view);
-			viewSettings.FindProperty("containerBottom").intValue = 9; // 조건문·반복문 아래 막대 (예전 7)
-			viewSettings.ApplyModifiedPropertiesWithoutUndo();
 		});
 
+		// 값 칸: 투명 바탕에 1픽셀 테두리 알약. 비었으면 점선 (#487). 그림은 BlockValueSlot이 내용에 맞춰 바꾼다
 		EditPrefab(BlockDir + "BlockValueSlot.prefab", root =>
 		{
-			SetShape(root, "blk_slot", new Color(0, 0, 0, 0.35f));
+			SetShape(root, "blk_slot_line", new Color32(0xF4, 0xF1, 0xFA, 0x4D));
 			HorizontalLayoutGroup layout = GetOrAdd<HorizontalLayoutGroup>(root);
 			// 값 칸을 키워 블록을 끼우기 쉽게 한다 (#476, 예전 여백 4·1, 최소 18×13)
 			layout.padding = new RectOffset(5, 5, 2, 2);
@@ -710,6 +743,15 @@ public static class InvokeUIBuilder
 			size.minHeight = 17;
 			size.flexibleWidth = 0;
 			size.flexibleHeight = 0;
+
+			BlockValueSlot slot = root.GetComponent<BlockValueSlot>();
+			Set(slot, "filledSprite", LoadShape("blk_slot_line"));
+			Set(slot, "emptySprite", LoadShape("blk_slot_dashed"));
+		});
+
+		EditPrefab(BlockDir + "BlockText.prefab", root =>
+		{
+			if (root.TryGetComponent(out TMP_Text text)) text.color = BlockInk;
 		});
 
 		// 글자 칸 바탕은 투명 (값 칸의 알약, 이름 칸의 밑줄이 대신 보인다)
@@ -718,6 +760,7 @@ public static class InvokeUIBuilder
 			Image image = GetOrAdd<Image>(root);
 			image.sprite = null;
 			image.color = new Color(0, 0, 0, 0);
+			if (root.TryGetComponent(out TMP_InputField field) && field.textComponent != null) field.textComponent.color = BlockInk;
 
 			// 빈 값 칸의 안내 글자(int, bool, Target 등, #476): 흐린 흰 글자. 기울임은 픽셀 글꼴이 깨지므로 끈다
 			if (root.TryGetComponent(out TMP_InputField input) && input.placeholder is TMP_Text placeholder)
@@ -785,6 +828,98 @@ public static class InvokeUIBuilder
 		Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(ShapeDir + name + ".png");
 		if (sprite == null) Debug.LogWarning($"[InvokeUIBuilder] {ShapeDir}{name}.png 스프라이트를 찾지 못함");
 		return sprite;
+	}
+
+	// 블록 모양 그림 (#487) -----------------------------------------------------------
+	// 게임 UI 캔버스 시안의 블록 모양(둥근 네모, ㄷ자의 팔과 아래 막대, 테두리만 있는 값 칸)을 코드로 그려 Shapes 폴더에 PNG로 저장한다.
+	// 흰색으로 그리고 색은 Image.color로 칠한다(분류 색, 칸 테두리 색). 크기는 편집 화면 기준(960×540)의 픽셀이며 1픽셀 = 1 (Pixels Per Unit 100)
+	// 메뉴를 누를 때마다 다시 그린다. 아트로 바꿀 그림이 생기면 그 줄을 여기서 지우고 그림 파일을 바꾼다
+
+	const int BlockCorner = 4; // 블록 모서리 둥글기 (시안 6px의 0.75배를 내림)
+	const int SlotCorner = 8;  // 값 칸 알약의 둥근 끝 (칸 최소 높이 17의 절반쯤)
+
+	static void BuildShapeSprites()
+	{
+		int b = BlockCorner * 2 + 1;
+		// 문장 블록 줄, 블록 목록 칩: 네 모서리가 둥근 네모
+		WriteShape("blk_round", b, b, (x, y) => InRoundRect(x, y, b, b, BlockCorner, BlockCorner, BlockCorner, BlockCorner), Vector4.one * BlockCorner);
+		// 조건문·반복문 줄: 위 모서리만 둥글다. 아래로 안쪽 영역의 팔이 바로 이어지기 때문
+		WriteShape("blk_round_top", b, b, (x, y) => InRoundRect(x, y, b, b, BlockCorner, BlockCorner, 0, 0), Vector4.one * BlockCorner);
+		// 조건문·반복문 아래 막대: 아래 모서리만 둥글다
+		WriteShape("blk_round_bottom", b, b, (x, y) => InRoundRect(x, y, b, b, 0, 0, BlockCorner, BlockCorner), Vector4.one * BlockCorner);
+		// 안쪽 영역: 왼쪽 9픽셀(팔)만 칠하고 나머지는 투명. 왼쪽 테두리만 9로 두어 팔 너비가 늘어나지 않게 한다
+		WriteShape("blk_arm", 10, 1, (x, y) => x < 9, new Vector4(9, 0, 0, 0));
+
+		// 값 칸: 1픽셀 테두리 알약. 가운데 4픽셀은 늘이거나(Sliced) 반복하는(Tiled) 자리
+		int s = SlotCorner * 2 + 4;
+		System.Func<int, int, bool> pill = (x, y) => InRoundRect(x, y, s, s, SlotCorner, SlotCorner, SlotCorner, SlotCorner);
+		WriteShape("blk_slot_line", s, s, (x, y) => IsEdge(x, y, pill), Vector4.one * SlotCorner);
+		// 빈 칸: 2픽셀 칠하고 2픽셀 비우는 점선. Tiled로 그려서 칸이 길어져도 점선 간격이 그대로다 (Sliced면 가운데가 늘어나 실선이 됨)
+		WriteShape("blk_slot_dashed", s, s, (x, y) => IsEdge(x, y, pill) && (x + y) / 2 % 2 == 0, Vector4.one * SlotCorner);
+	}
+
+	// 모서리마다 둥글기가 다른 네모 안의 픽셀인지. 둥글기 r인 모서리는 반지름 r인 원 바깥을 뺀다. y는 아래에서 위로 센다 (Texture2D와 같음)
+	static bool InRoundRect(int x, int y, int width, int height, int topLeft, int topRight, int bottomLeft, int bottomRight)
+	{
+		// 그림 밖은 모양 밖이다. IsEdge가 가장자리 픽셀의 바깥 이웃을 물을 때 테두리로 잡히게 하기 위함
+		if (x < 0 || y < 0 || x >= width || y >= height) return false;
+		float cx = x + 0.5f;
+		float cy = y + 0.5f;
+		return InsideCorner(cx, cy, bottomLeft, bottomLeft, bottomLeft)
+			&& InsideCorner(cx, cy, bottomRight, width - bottomRight, bottomRight)
+			&& InsideCorner(cx, cy, topLeft, topLeft, height - topLeft)
+			&& InsideCorner(cx, cy, topRight, width - topRight, height - topRight);
+
+		// 모서리 원의 중심(centerX, centerY) 쪽 바깥 칸에 있으면 원 안인지 본다. 그 밖의 픽셀은 이 모서리와 상관없다
+		bool InsideCorner(float px, float py, int r, float centerX, float centerY)
+		{
+			if (r <= 0) return true;
+			bool outsideX = centerX <= r ? px < centerX : px > centerX;
+			bool outsideY = centerY <= r ? py < centerY : py > centerY;
+			if (!outsideX || !outsideY) return true;
+			float dx = px - centerX;
+			float dy = py - centerY;
+			return dx * dx + dy * dy <= r * r;
+		}
+	}
+
+	// 모양 안의 픽셀 중 바로 옆(상하좌우)이 모양 밖인 픽셀: 1픽셀 테두리
+	static bool IsEdge(int x, int y, System.Func<int, int, bool> inside)
+	{
+		if (!inside(x, y)) return false;
+		return !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+	}
+
+	// filled가 true인 픽셀만 흰색인 PNG를 쓰고 스프라이트로 가져온다. border는 9-slice 테두리 (x 왼쪽, y 아래, z 오른쪽, w 위)
+	static void WriteShape(string name, int width, int height, System.Func<int, int, bool> filled, Vector4 border)
+	{
+		string path = ShapeDir + name + ".png";
+		var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+		var pixels = new Color32[width * height];
+		for (int y = 0; y < height; y++)
+			for (int x = 0; x < width; x++)
+				pixels[y * width + x] = filled(x, y) ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+		texture.SetPixels32(pixels);
+		texture.Apply();
+		System.IO.File.WriteAllBytes(path, texture.EncodeToPNG());
+		Object.DestroyImmediate(texture);
+
+		AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+		var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+		importer.textureType = TextureImporterType.Sprite;
+		importer.spriteImportMode = SpriteImportMode.Single;
+		importer.spritePixelsPerUnit = 100;
+		importer.filterMode = FilterMode.Point; // 픽셀 그림이 번지지 않게 (다른 블록 그림과 같음)
+		importer.mipmapEnabled = false;
+		importer.alphaIsTransparency = true;
+		importer.textureCompression = TextureImporterCompression.Uncompressed;
+		importer.spriteBorder = border;
+		// Tiled로 반복해 그리려면 Full Rect여야 한다 (Tight면 Unity가 반복이 어긋날 수 있다고 경고함)
+		var settings = new TextureImporterSettings();
+		importer.ReadTextureSettings(settings);
+		settings.spriteMeshType = SpriteMeshType.FullRect;
+		importer.SetTextureSettings(settings);
+		importer.SaveAndReimport();
 	}
 
 	static SlotCardView BuildSlotCard()

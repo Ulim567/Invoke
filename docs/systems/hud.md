@@ -17,6 +17,7 @@
 | 자리 | 보여 주는 것 | 읽는 곳 |
 | --- | --- | --- |
 | 왼쪽 위 띠 | 설정(Esc) · Lv · 버그 조각 · 보스 코어. 재료 앞에 재료 그림 16×16 (#431, 박진우의 `material_{ID}.png` 첫 장) | `PlayerProgress.Level`, `GetMaterialCount("bug_fragment" / "boss_core")` |
+| Lv 바로 옆 | 경험치 바 40×5 (김도훈 `ExpBarView`). 경험치가 늘면 연한 막대(EFFFD9)가 바로 차고 0.3초 뒤 연두 막대(9BE15D, 메이플스토리 경험치 바 색)가 서서히 따라 찬다. 레벨업하면 끝까지 찬 뒤 0부터 다시. 최대 레벨은 가득. 접속 직후 1초와 경험치가 줄었을 때는 바로 맞춤. 레이드에서는 Lv와 같이 숨김 | `PlayerProgress.Exp`, `Level`, `LevelRules.ExpToNext` |
 | 그 아래 | 「> 사냥터」 지금 장소 이름 | 내 캐릭터가 있는 씬 이름 (`PlaceScenes` 상수 → 한글) |
 | 아래 가운데 | HP 막대·숫자. 닳으면 흰 잔상이 0.3초 남았다가 줄어든다 (#431, 몬스터·보스 체력 바와 같은 방식. 회복은 바로) | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
@@ -67,6 +68,7 @@
 
 ## 맞춘 결과
 - 이우림이 고친 것 (#480): `HudView`에 실패 알림, `HudUIBuilder`에 알림 칸(`Notice`). HUD 프리팹은 메뉴로 다시 만듦
+- 김도훈이 고친 것 (경험치 바): `HudUIBuilder`에 Lv 옆 `ExpBar`(+`ExpBarView`, `Assets/_DH/Scripts/UI`)와 레이드에서 숨기기. `HudView`는 그대로. HUD 프리팹은 메뉴로 다시 만듦
 - 소환검 개수(`SummonedSwordHud`, 박진우)와 체력 바(`TempHealthBar`, 김도훈)의 임시 표시는 이 HUD가 대신할 예정. 그때 각자 끈다
 
 ## 레이드 던전 (시안 8-3, #337)

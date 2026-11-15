@@ -87,6 +87,8 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 	bool highlighted;
 	bool error;
 	DragHint dragHint;
+	RectOffset emptyPadding; // 빈 칸일 때의 여백 (프리팹 값). 블록을 끼우면 0으로 했다가 빼면 되돌린다
+	Vector2 emptyMinSize;    // 빈 칸일 때의 최소 크기 (프리팹 값)
 	bool ghostShown; // 끄는 동안의 반투명 미리보기를 이 칸에 보이는 중인지 (#476)
 
 	/// <summary>끌고 있는 값 블록을 여기에 놓을 수 있다는 표시 (BlockEditor가 부른다)</summary>
@@ -301,6 +303,7 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		Slot.Block = null;
 		Held = null;
 		view.OwnerSlot = null;
+		FitToHeld(false);
 		field.gameObject.SetActive(true);
 		if (pickButton != null) pickButton.gameObject.SetActive(true);
 		field.Text = "";
@@ -339,6 +342,23 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		field.gameObject.SetActive(false);
 		if (pickButton != null) pickButton.gameObject.SetActive(false);
 		ApplyColor(); // 끼운 블록이 보이도록 칸 테두리를 숨긴다
+		FitToHeld(true);
+		view.RefreshLook(); // 칸에 들어가면 줄 여백이 얇아지고, 겹친 깊이에 따라 칠이 바뀐다
+	}
+
+	// 블록을 끼운 칸은 여백과 최소 크기를 없애 블록 크기에 딱 맞춘다 (#487). 테두리를 숨긴 칸이 여백만 남아 겹칠수록 두꺼워지지 않게
+	// 빈 칸으로 돌아오면 프리팹의 여백·최소 크기로 되돌린다 (끌어 놓기 쉽게 #476에서 키운 크기)
+	void FitToHeld(bool held)
+	{
+		if (!TryGetComponent(out HorizontalLayoutGroup layout) || !TryGetComponent(out LayoutElement size)) return;
+		if (emptyPadding == null)
+		{
+			emptyPadding = layout.padding;
+			emptyMinSize = new Vector2(size.minWidth, size.minHeight);
+		}
+		layout.padding = held ? new RectOffset(0, 0, 0, 0) : emptyPadding;
+		size.minWidth = held ? -1 : emptyMinSize.x;
+		size.minHeight = held ? -1 : emptyMinSize.y;
 	}
 
 	// 적은 글자를 값으로 읽고, 칸 규칙에 맞지 않으면 넣지 않는다 (#474). 예: if의 조건 칸에 "abc"

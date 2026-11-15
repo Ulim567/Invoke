@@ -728,6 +728,16 @@ public static class InvokeUIBuilder
 			Set(view, "innerSprite", LoadShape("blk_arm"));
 			Set(view, "nameFieldSprite", LoadShape("blk_underline"));
 			Set(view, "variableFieldSprite", LoadShape("blk_dashed"));
+
+			// 칠 비율과 채도 (#487): 시안 비율(줄 26%, 값 16%, 팔 10%)은 화면에서 칙칙해 보여 진하기와 채도를 올린 값 (사용자가 슬라이더로 고름)
+			// 프리팹에 저장된 값이 쓰이므로, 코드의 기본값을 바꾸는 것만으로는 반영되지 않아 여기서 넣는다
+			var viewSettings = new SerializedObject(view);
+			viewSettings.FindProperty("rowAlpha").floatValue = 0.40f;
+			viewSettings.FindProperty("valueAlpha").floatValue = 0.39f;
+			viewSettings.FindProperty("armAlpha").floatValue = 0.22f;
+			viewSettings.FindProperty("saturation").floatValue = 1.8f;
+			viewSettings.FindProperty("nestedBoost").floatValue = 0.14f; // 값 칸 한 겹 안의 블록을 더 진하게 (밝기 교대)
+			viewSettings.ApplyModifiedPropertiesWithoutUndo();
 		});
 
 		// 값 칸: 투명 바탕에 1픽셀 테두리 알약. 비었으면 점선 (#487). 그림은 BlockValueSlot이 내용에 맞춰 바꾼다
@@ -848,6 +858,10 @@ public static class InvokeUIBuilder
 		WriteShape("blk_round_top", b, b, (x, y) => InRoundRect(x, y, b, b, BlockCorner, BlockCorner, 0, 0), Vector4.one * BlockCorner);
 		// 조건문·반복문 아래 막대: 아래 모서리만 둥글다
 		WriteShape("blk_round_bottom", b, b, (x, y) => InRoundRect(x, y, b, b, 0, 0, BlockCorner, BlockCorner), Vector4.one * BlockCorner);
+		// 값 블록(알약): 가장자리 선 없이 칠만. 예전 그림은 가장자리 1픽셀이 어두워서, 값 블록에만 선이 보이고 함수 블록에는 선이 없어 서로 달라 보였다
+		// 겹친 블록의 경계는 선 대신 밝기 교대(BlockView)로 보인다
+		int v = SlotCorner * 2 + 1;
+		WriteShape("blk_value", v, v, (x, y) => InRoundRect(x, y, v, v, SlotCorner, SlotCorner, SlotCorner, SlotCorner), Vector4.one * SlotCorner);
 		// 안쪽 영역: 왼쪽 9픽셀(팔)만 칠하고 나머지는 투명. 왼쪽 테두리만 9로 두어 팔 너비가 늘어나지 않게 한다
 		WriteShape("blk_arm", 10, 1, (x, y) => x < 9, new Vector4(9, 0, 0, 0));
 

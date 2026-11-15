@@ -145,9 +145,12 @@ MonoBehaviour:
   nameFieldSprite: {fileID: 21300000, guid: 4da2e0e7312746ffb5d9d615ab8eead9, type: 3}
   variableFieldSprite: {fileID: 21300000, guid: c1356bd033674e50aa12bfdd68516b3c, type: 3}
   fieldLineColor: {r: 1, g: 1, b: 1, a: 0.75}
-  rowAlpha: 0.26
-  valueAlpha: 0.16
-  armAlpha: 0.1
+  rowAlpha: 0.4
+  valueAlpha: 0.39
+  armAlpha: 0.22
+  saturation: 1.8
+  nestedBoost: 0.14
+  backdrop: {r: 0.078431375, g: 0.09411765, b: 0.13725491, a: 1}
   errorColor: {r: 0.78431374, g: 0.28235295, b: 0.34509805, a: 1}
   dragAlpha: 0.75
   dragScale: 0.6

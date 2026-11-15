@@ -1289,6 +1289,8 @@ public class BlockEditor : MonoBehaviour
 			slot.RefreshPlaceholder();
 			slot.RefreshLook();
 		}
+		// 블록을 옮기면 겹친 깊이가 바뀌어 칠(밝기 교대)과 줄 여백도 달라지므로 다시 맞춘다 (#487). 옮긴 블록 안쪽 블록까지 모두
+		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.RefreshLook();
 
 		// 동기·비동기 버튼 (슬롯 함수와 전역 변수는 바꿀 수 없음)
 		if (asyncButton != null)

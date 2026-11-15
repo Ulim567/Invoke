@@ -237,6 +237,14 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		// 글자 없이 버튼 프리팹의 ▾만 보인다. 칸이 길어지지 않게 하기 위함
 		TMP_Text label = pickButton.GetComponentInChildren<TMP_Text>();
 		if (label != null) label.text = "";
+		// 버튼 바탕(밝은 네모)은 숨기고 ▾ 삼각형만 보인다 (#487). 칸 안에 네모가 하나 더 있으면 칸이 복잡해 보이기 때문
+		// 바탕은 투명하게만 두어 누르는 자리는 그대로 받고, 마우스를 올렸을 때의 색 변화는 삼각형이 받는다
+		Transform arrow = pickButton.transform.Find("Arrow");
+		if (arrow != null && arrow.TryGetComponent(out Image arrowImage) && pickButton.targetGraphic != null)
+		{
+			pickButton.targetGraphic.color = Color.clear;
+			pickButton.targetGraphic = arrowImage;
+		}
 		var anchor = (RectTransform)pickButton.transform;
 		pickButton.onClick.AddListener(() =>
 		{

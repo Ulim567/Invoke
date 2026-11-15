@@ -595,6 +595,9 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (string.IsNullOrEmpty(word)) return "을(를)";
 		char last = word[word.Length - 1];
+		// 영문 대문자 한 글자로 끝나면 그 글자를 읽는 소리로 고른다 (#487, 「슬롯 W를」, 「슬롯 R을」). 엘·엠·엔·알만 받침이 있다
+		if (last >= 'A' && last <= 'Z' && (word.Length == 1 || !char.IsLetter(word[word.Length - 2])))
+			return "LMNR".IndexOf(last) >= 0 ? "을" : "를";
 		if (last < 0xAC00 || last > 0xD7A3) return "을(를)";
 		return (last - 0xAC00) % 28 == 0 ? "를" : "을";
 	}
@@ -619,7 +622,7 @@ public class BlockEditor : MonoBehaviour
 		workspace.Bind(function.Blocks, this);
 		if (functionNameField != null)
 		{
-			functionNameField.Text = function.Name;
+			functionNameField.Text = DisplayNameOf(function);
 			functionNameField.Interactable = !IsSlotFunction(function); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
 		}
 		dirty = false;
@@ -1378,8 +1381,8 @@ public class BlockEditor : MonoBehaviour
 
 		bool slot = IsSlotFunction(Function);
 		string parameters = string.Join(", ", (Function.Parameters ?? new List<ParameterData>()).Select(p => $"{BlockLabels.TypeName(p.Type)} {p.Name}"));
-		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), Function.Name, parameters,
-			slot ? "슬롯 함수 · 이름과 반환 타입은 고정" : "페이지 함수 · 반환 타입을 고를 수 있음", !slot);
+		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), DisplayNameOf(Function), parameters,
+			slot ? "슬롯 함수 · 이름(슬롯 키)과 반환 타입은 고정" : "페이지 함수 · 반환 타입을 고를 수 있음", !slot);
 	}
 
 	// 반환 타입을 누르면 드롭다운으로 고른다. 고르면 고친 것으로 치고, 틀린 곳(return이 없는 길 등)은 저장할 때 컴파일이 알려 준다
@@ -1404,17 +1407,42 @@ public class BlockEditor : MonoBehaviour
 		{
 			int slot = SlotIndexOf(Function);
 			bool saved = savedFunctions.Any(f => f.Guid == Function.Guid);
-			where = slot >= 0 ? $"슬롯 {slot + 1}" : saved ? "페이지 함수" : "새 함수";
+			where = slot >= 0 ? $"슬롯 {KeyOf(slot)}" : saved ? "페이지 함수" : "새 함수";
 		}
 		return HasUnsavedChanges ? $"{where}, 저장하지 않은 변경 있음" : where;
 	}
 
+	// 슬롯 번호(0~7)의 키 글자 Q W E R A S D F
+	static string KeyOf(int slot) => slot >= 0 && slot < SlotKeys.Length ? SlotKeys[slot] : (slot + 1).ToString();
+
+	// 화면에 보일 함수 이름 (#487). 실제 계정의 슬롯 함수는 슬롯 키(Q~F)가 이름이다. 데이터의 이름(slot1~slot8)은 서버가 검사하므로 그대로 두고 화면에서만 바꾼다
+	string DisplayNameOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? KeyOf(slot) : function.Name;
+	}
+
+	// 함수가 들어 있는 슬롯 번호(0~7). 슬롯에 없으면 -1
+	// 실제 계정은 서버가 보낸 슬롯, 임시 계정은 내 캐릭터의 장착(SlotLoadout). 임시 계정도 슬롯에 끼운 함수를 슬롯 함수로 다룬다 (#487)
 	int SlotIndexOf(FunctionData function)
 	{
-		IReadOnlyList<SlotLoadout.Entry> slots = server?.ReceivedSlots;
-		if (slots == null || function == null) return -1;
-		for (int i = 0; i < slots.Count; i++)
-			if (slots[i].Id == function.Guid) return i;
+		if (function == null) return -1;
+		if (server != null)
+		{
+			IReadOnlyList<SlotLoadout.Entry> slots = server.ReceivedSlots;
+			if (slots == null) return -1;
+			for (int i = 0; i < slots.Count; i++)
+				if (slots[i].Id == function.Guid) return i;
+			return -1;
+		}
+
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (localPlayer == null || !localPlayer.TryGetComponent(out SlotLoadout loadout)) return -1;
+		for (int i = 0; i < SlotLoadout.SlotCount; i++)
+		{
+			SlotLoadout.Entry entry = loadout.GetEntry(i);
+			if (!entry.IsEmpty && entry.Kind == SlotLoadout.EntryKind.UserFunction && entry.Id == function.Guid) return i;
+		}
 		return -1;
 	}
 
@@ -1624,7 +1652,7 @@ public class BlockEditor : MonoBehaviour
 					dirty = true;
 				}
 			}
-			functionNameField.Text = Function.Name;
+			functionNameField.Text = DisplayNameOf(Function);
 			Redraw();
 		};
 
@@ -1684,7 +1712,8 @@ public class BlockEditor : MonoBehaviour
 		ClearSavedButtons();
 		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => RequestOpen("Global Variables", OpenGlobals));
 
-		// 슬롯 1~8: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬은 이름만
+		// 슬롯 Q~F: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬·빈 슬롯은 누를 수 없음
+		// 실제 계정과 같게 줄에는 슬롯 키만 보인다 (#487, 사용자 결정). 끼운 함수의 이름은 그 줄을 열면 함수 틀에 보인다
 		var equipped = new HashSet<string>();
 		AddFunctionHeader("슬롯", null);
 		SlotLoadout loadout = null;
@@ -1692,30 +1721,21 @@ public class BlockEditor : MonoBehaviour
 		if (localPlayer != null) localPlayer.TryGetComponent(out loadout);
 		for (int slot = 0; slot < SlotLoadout.SlotCount; slot++)
 		{
-			string number = (slot + 1).ToString();
-			string key = slot < SlotKeys.Length ? SlotKeys[slot] : "";
+			string key = KeyOf(slot);
 			SlotLoadout.Entry entry = loadout != null ? loadout.GetEntry(slot) : default;
-			if (loadout == null || entry.IsEmpty)
-			{
-				AddFunctionEntry(number, null, "비어 있음", key, null, true);
-				continue;
-			}
-			if (entry.Kind == SlotLoadout.EntryKind.Skill)
-			{
-				string skillName = SkillTable.TryGet(entry.Id, out SkillData skill) ? skill.DisplayName : entry.Id;
-				AddFunctionEntry(number, null, skillName, $"{key} 스킬", null, true);
-				continue;
-			}
-			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
+			// 빈 슬롯, C 스킬, 지워진 함수는 열 수 있는 함수가 없으므로 키만 보이고 누를 수 없다 (「비어 있음」 글자와 흐리게 하는 표시는 없음)
+			FunctionData slotFunction = loadout == null || entry.IsEmpty || entry.Kind == SlotLoadout.EntryKind.Skill
+				? null
+				: savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
 			if (slotFunction == null)
 			{
-				AddFunctionEntry(number, null, "(지워진 함수)", key, null, true);
+				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
 			equipped.Add(slotFunction.Guid);
 			string slotGuid = slotFunction.Guid;
-			string slotLabel = $"슬롯 {number} {slotFunction.Name}";
-			AddFunctionEntry(number, slotGuid, slotFunction.Name, key, () => RequestOpen(slotLabel, () =>
+			string slotLabel = $"슬롯 {key}";
+			AddFunctionEntry("", slotGuid, key, key, () => RequestOpen(slotLabel, () =>
 			{
 				FunctionData loaded = FunctionStorage.Load(slotGuid);
 				if (loaded != null) Open(loaded);
@@ -1753,13 +1773,15 @@ public class BlockEditor : MonoBehaviour
 		{
 			FunctionData function = SlotFunction(slot);
 			string key = slot < SlotKeys.Length ? SlotKeys[slot] : "";
+			// 슬롯 함수는 슬롯 키(Q~F)가 이름이다 (#487, 시안 6). 번호와 데이터의 이름(slot1~slot8)은 보이지 않는다
+			// 함수를 받지 못한 슬롯도 「비어 있음」 없이 키만 보인다 (누를 수는 없음)
 			if (function == null)
 			{
-				AddFunctionEntry((slot + 1).ToString(), null, "비어 있음", key, null, true);
+				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
-			string slotLabel = $"슬롯 {slot + 1} {function.Name}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
-			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
+			string slotLabel = $"슬롯 {key}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
+			AddFunctionEntry("", function.Guid, key, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
 		}
 		AddFunctionHeader($"페이지 {PageFunctions().Count()} / {ProgressRules.MaxPageFunctions}", NewFunction);
 		AddUnsavedEntry();
@@ -1838,11 +1860,8 @@ public class BlockEditor : MonoBehaviour
 		return savedFunctions.Where(f => !slotGuids.Contains(f.Guid));
 	}
 
-	bool IsSlotFunction(FunctionData function)
-	{
-		if (server == null || function == null || server.ReceivedSlots == null) return false;
-		return server.ReceivedSlots.Any(e => e.Id == function.Guid);
-	}
+	// 슬롯 함수면 true: 이름(슬롯 키)과 반환 타입을 바꿀 수 없다. 임시 계정은 슬롯에 끼운 함수 (#487. 이름을 바꾸려면 장착대에서 슬롯을 비운 뒤)
+	bool IsSlotFunction(FunctionData function) => SlotIndexOf(function) >= 0;
 
 	// 서버가 보낸 함수를 그대로 고치면 저장하지 않은 내용이 목록에 섞이므로, 열 때마다 복사본을 연다
 	static FunctionData Copy(FunctionData function) =>

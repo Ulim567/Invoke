@@ -200,7 +200,7 @@ public class BlockEditor : MonoBehaviour
 
 	// 블록 목록에 보여 줄 문법 블록 견본들. 분류 → 소분류 → 블록 (#487, 시안 6). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
 	// 소분류 이름은 칩 줄 맨 앞에 회색 글씨로 보인다. 이름이 빈 소분류는 글씨 없이 칩만 놓는다
-	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Subgroups가 null)
+	// 문법 탭에는 문법 블록만 둔다 (#489). 스킬·기본 함수·malloc·free·wait·내가 만든 함수는 함수 탭에서 끈다 (RebuildFunctionTab)
 	static readonly (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] PaletteGroups =
 	{
 		("제어", new[]
@@ -245,22 +245,12 @@ public class BlockEditor : MonoBehaviour
 				() => BlockData.Not(SlotData.EmptyValue()),
 			}),
 		}),
-		("함수", null),
-		// 메모리·기타는 함수 탭 이슈에서 정리한다 (malloc·free·wait는 함수 탭으로, return은 함수 분류로)
-		("메모리", new[]
-		{
-			("", new Func<BlockData>[]
-			{
-				() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
-				() => BlockData.Free(SlotData.EmptyValue()),
-			}),
-		}),
-		("기타", new[]
+		// 함수를 끝내는 Return만. 함수를 부르는 블록은 함수 탭에 있다 (#489)
+		("함수", new[]
 		{
 			("", new Func<BlockData>[]
 			{
 				() => BlockData.Return(),
-				() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
 			}),
 		}),
 	};
@@ -1520,18 +1510,12 @@ public class BlockEditor : MonoBehaviour
 
 		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in PaletteGroups)
 		{
-			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
-			if (subgroups == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
-
 			// 소분류마다 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476, #487). 남은 블록이 없는 소분류는 줄째, 분류는 머리글째 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			IEnumerable<(string Name, IEnumerable<Func<BlockData>> Blocks)> source = subgroups != null
-				? subgroups.Select(sub => (sub.Name, (IEnumerable<Func<BlockData>>)sub.Blocks))
-				: new[] { ("", (IEnumerable<Func<BlockData>>)FunctionTemplates()) };
 			var shownGroups = new List<(string Name, Func<BlockData>[] Blocks)>();
-			foreach ((string subName, IEnumerable<Func<BlockData>> blocks) in source)
+			foreach ((string subName, Func<BlockData>[] blocks) in subgroups)
 			{
 				IEnumerable<Func<BlockData>> candidates = blocks;
-				if (subgroups != null && unlockedForPalette != null)
+				if (unlockedForPalette != null)
 					candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
 				Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, subName, query)).ToArray();
 				if (shown.Length > 0) shownGroups.Add((subName, shown));
@@ -1567,15 +1551,11 @@ public class BlockEditor : MonoBehaviour
 		label.raycastTarget = false;
 	}
 
-	// 블록 목록 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 문법 탭 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
 	// 분류·소분류 이름이 맞으면 그 블록들을 모두 보여 준다. 예: 「제어」 → If, For, While …, 「반복」 → For, While, Break, Continue (#487)
-	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query)
-	{
-		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query)) return true;
-		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
-		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
-			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));
-	}
+	// 스킬 이름 검색은 함수 탭이 한다 (#489, 문법 탭에는 스킬이 없음)
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query) =>
+		query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query);
 
 	static bool ContainsText(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -1600,47 +1580,7 @@ public class BlockEditor : MonoBehaviour
 		}
 	}
 
-	// 「함수」 분류의 견본들: C 스킬 등 사전 정의 함수와 내가 만든 함수 부르기. 둘 다 파라미터 수만큼 빈 값 칸을 가진 함수 블록
-	// 칩을 바로 만들지 않고 목록으로 돌려준다. 검색에 맞는 블록이 없으면 분류 머리글도 만들지 않기 위함 (#476)
-	List<Func<BlockData>> FunctionTemplates()
-	{
-		var templates = new List<Func<BlockData>>();
-		IReadOnlyList<PredefinedFunction> functions = PredefinedFunctionRegistry.All;
-		if (functions == null) Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
-		else
-		{
-			foreach (PredefinedFunction function in functions)
-			{
-				// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
-				try
-				{
-					if (function == null) continue;
-					string id = function.Id;
-					if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
-					// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
-					if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
-					int parameterCount = function.Parameters?.Count ?? 0;
-					templates.Add(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
-				}
-				catch (Exception e)
-				{
-					Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
-				}
-			}
-		}
-
-		// 내가 만든 함수 부르기 (BlockData.CallUserFunction)
-		// 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않으므로 페이지 함수만 붙인다
-		foreach (FunctionData saved in PageFunctions())
-		{
-			string guid = saved.Guid;
-			int parameterCount = saved.Parameters?.Count ?? 0;
-			templates.Add(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
-		}
-		return templates;
-	}
-
-	// 저장한 함수가 바뀌면 블록 목록의 「함수」 분류도 바뀌므로 다시 만든다
+	// 편집 화면을 열 때(해금이 바뀌었을 수 있음)와 검색 글자가 바뀔 때 문법 탭을 다시 만든다
 	void RebuildPalette()
 	{
 		if (!paletteBuilt || palette == null) return;

@@ -15,10 +15,7 @@ public static class BlockLabels
 	static readonly Color ControlColor = new Color32(0xDB, 0xF2, 0x5A, 0xFF);  // 조건문, 반복문
 	static readonly Color VariableColor = new Color32(0x5E, 0xB7, 0xF2, 0xFF); // 선언, 대입, 배열
 	static readonly Color ValueColor = new Color32(0x79, 0xD3, 0x6F, 0xFF);    // 연산, 비교, 논리
-	static readonly Color FunctionColor = new Color32(0x9E, 0x7B, 0xFF, 0xFF); // 함수, C 스킬
-	// 메모리·기타 분류는 함수 탭이 생기면 없어진다 (malloc·free·wait는 함수 탭, return은 함수 분류). 그때까지만 쓴다
-	static readonly Color MemoryColor = new Color32(0xF2, 0x7F, 0xB4, 0xFF);   // malloc, free
-	static readonly Color OtherColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);    // return, 기다리기
+	static readonly Color FunctionColor = new Color32(0x9E, 0x7B, 0xFF, 0xFF); // 함수 호출, malloc, free, wait, return
 
 	/// <summary>
 	/// 블록 분류의 색. 블록 바탕은 BlockView가 이 색을 연하게 칠한다
@@ -30,9 +27,9 @@ public static class BlockLabels
 		BlockKind.Declare or BlockKind.Assign or BlockKind.ArrayDeclare
 			or BlockKind.ArrayGet or BlockKind.ArraySet => VariableColor,
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not => ValueColor,
-		BlockKind.Function => FunctionColor,
-		BlockKind.Malloc or BlockKind.Free => MemoryColor,
-		_ => OtherColor,
+		// 함수 색 (#489): 함수 탭에서 꺼내는 블록(함수 호출, malloc, free, wait)과 문법 탭 「함수」 분류의 return.
+		// 예전의 메모리(분홍)·기타(회색) 분류는 함수 탭이 생기며 없앴다
+		_ => FunctionColor,
 	};
 
 	/// <summary>

@@ -7,7 +7,7 @@ using UnityEngine.UI;
 /// 편집 화면(BlockEditorCanvas)과 장착 화면(SlotEquipCanvas), 블록 프리팹을 이우림의 「블록 견본」 디자인으로 한 번에 바꾸는 에디터 도구. 게임에는 들어가지 않는다.
 /// <para>
 /// 메뉴 Invoke → UI → 편집·장착 화면 새 디자인으로 만들기.<br/>
-/// - Assets/_HW/UI/Common에 ListItem, EquipItem, ListHeader, SaveButton, CompileButton, PaletteGroup, SlotCard, ReferenceCard 프리팹을 만든다 (있으면 다시 만든다).<br/>
+/// - Assets/_HW/UI/Common에 ListItem, EquipItem, ListHeader, SaveButton, CompileButton, PaletteGroup, SlotCard, ReferenceCard, FunctionItem 프리팹을 만든다 (있으면 다시 만든다).<br/>
 /// - 블록 프리팹(Block, BlockValueSlot, BlockField, BlockButton)에 블록 모양 그림(Assets/_HW/UI/BlockCoding/Shapes)을 넣는다.<br/>
 /// - 두 캔버스 프리팹의 배치·그림(Assets/_HW/UI/Frame)을 바꾸고, BlockEditor·SlotEquipPanel의 칸을 채운다.<br/>
 /// - 여러 번 눌러도 된다. 결과가 마음에 안 들면 git으로 되돌린다 (git restore Assets/_HW/UI).
@@ -59,7 +59,9 @@ public static class InvokeUIBuilder
 		BlockTooltipView tooltip = BuildBlockTooltip();
 
 		StyleBlockPrefabs();
-		BuildEditorCanvas(item, header, save, compile, paletteGroup, dropdown, marker, errorItem, errorFrame, referenceCard, tooltip);
+		// 함수 항목은 블록 모양 그림(점선 테두리)을 쓰므로 그림을 만든 뒤(StyleBlockPrefabs)에 만든다
+		FunctionItemView functionItem = BuildFunctionItem();
+		BuildEditorCanvas(item, header, save, compile, paletteGroup, dropdown, marker, errorItem, errorFrame, referenceCard, tooltip, functionItem);
 		BuildEquipCanvas(equipItem, card);
 
 		AssetDatabase.SaveAssets();
@@ -399,6 +401,48 @@ public static class InvokeUIBuilder
 		return SavePrefab(root, "ReferenceCard").GetComponent<ReferenceCardView>();
 	}
 
+	// 함수 탭의 함수 항목 한 줄 (#489, 시안 6-12): 굵은 제목(한글 이름), 그 아래 함수 원형. 바탕 색은 FunctionItemView가 칠한다
+	// 영문 이름은 원형에 들어 있으므로 따로 두지 않는다 (사용자가 정함)
+	static FunctionItemView BuildFunctionItem()
+	{
+		GameObject root = NewUI("FunctionItem", null);
+		Image back = root.AddComponent<Image>();
+		back.sprite = LoadShape("blk_round");
+		back.type = Image.Type.Sliced;
+		back.raycastTarget = true; // 끌기를 받는다
+		VerticalLayoutGroup layout = root.AddComponent<VerticalLayoutGroup>();
+		layout.padding = new RectOffset(7, 7, 4, 4);
+		layout.spacing = 1;
+		layout.childAlignment = TextAnchor.UpperLeft;
+		layout.childControlWidth = layout.childControlHeight = true;
+		layout.childForceExpandWidth = true;
+		layout.childForceExpandHeight = false;
+		root.AddComponent<LayoutElement>().flexibleHeight = 0;
+
+		// 끄는 동안만 보이는 점선 테두리. 레이아웃에서 빼고 항목 전체를 덮는다
+		GameObject outline = NewUI("Outline", root.transform);
+		outline.AddComponent<LayoutElement>().ignoreLayout = true;
+		Stretch(Rect(outline), 0, 0, 0, 0);
+		Image outlineImage = outline.AddComponent<Image>();
+		outlineImage.sprite = LoadShape("blk_round_dashed");
+		outlineImage.type = Image.Type.Tiled;
+		outlineImage.raycastTarget = false;
+		outlineImage.enabled = false;
+
+		TMP_Text titleText = Text(root.transform, "Title", "검 찌르기", 11, Hex("F4F1FA"), TextAlignmentOptions.MidlineLeft);
+		titleText.fontStyle = FontStyles.Bold;
+
+		// 원형: 설명창·참고 카드의 원형과 같은 주황. 길면 잘리지 않고 다음 줄로 감싼다 (void battlefield_sweep(Target / array targets);)
+		TMP_Text prototypeText = WrappedText(root.transform, "Prototype", "void thrust(Target target);", Hex("F0A860"));
+
+		FunctionItemView view = root.AddComponent<FunctionItemView>();
+		Set(view, "background", back);
+		Set(view, "dashedOutline", outlineImage);
+		Set(view, "titleText", titleText);
+		Set(view, "prototypeText", prototypeText);
+		return SavePrefab(root, "FunctionItem").GetComponent<FunctionItemView>();
+	}
+
 	// 여러 줄로 이어 쓰는 글자 (카드 안의 설명)
 	static TMP_Text WrappedText(Transform parent, string name, string value, Color color)
 	{
@@ -415,7 +459,12 @@ public static class InvokeUIBuilder
 	{
 		RectTransform fieldRect = Child(panel, "SearchField");
 		TopStretch(fieldRect, 6, 6, y, 18);
-		if (fieldRect.TryGetComponent(out TMP_InputField existing)) return existing;
+		if (fieldRect.TryGetComponent(out TMP_InputField existing))
+		{
+			// 이미 있는 칸도 안내 글자는 새로 맞춘다 (안내 글자를 바꾸었을 때 메뉴를 다시 누르면 반영되게)
+			if (existing.placeholder is TMP_Text oldPlaceholder) oldPlaceholder.text = placeholderText;
+			return existing;
+		}
 
 		SetImage(fieldRect.gameObject, "ui_field", Image.Type.Sliced);
 		// 한글 조합 중에 칸을 벗어나도 멈추지 않는 칸 (스킬의 한국어 이름으로 검색하므로)
@@ -854,6 +903,10 @@ public static class InvokeUIBuilder
 		int b = BlockCorner * 2 + 1;
 		// 문장 블록 줄, 블록 목록 칩: 네 모서리가 둥근 네모
 		WriteShape("blk_round", b, b, (x, y) => InRoundRect(x, y, b, b, BlockCorner, BlockCorner, BlockCorner, BlockCorner), Vector4.one * BlockCorner);
+		// 함수 탭에서 끄는 동안 비워 둔 항목의 테두리 (#489, 시안 6-8): 둥근 네모의 1픽셀 점선. 빈 값 칸 점선과 같이 Tiled로 그려 간격을 지킨다
+		int d = BlockCorner * 2 + 4;
+		System.Func<int, int, bool> round = (x, y) => InRoundRect(x, y, d, d, BlockCorner, BlockCorner, BlockCorner, BlockCorner);
+		WriteShape("blk_round_dashed", d, d, (x, y) => IsEdge(x, y, round) && (x + y) / 2 % 2 == 0, Vector4.one * BlockCorner);
 		// 조건문·반복문 줄: 위 모서리만 둥글다. 아래로 안쪽 영역의 팔이 바로 이어지기 때문
 		WriteShape("blk_round_top", b, b, (x, y) => InRoundRect(x, y, b, b, BlockCorner, BlockCorner, 0, 0), Vector4.one * BlockCorner);
 		// 조건문·반복문 아래 막대: 아래 모서리만 둥글다
@@ -974,7 +1027,7 @@ public static class InvokeUIBuilder
 
 	// 편집 화면 ------------------------------------------------------------------
 
-	static void BuildEditorCanvas(ListItemView item, ListHeaderView header, Button save, Button compile, RectTransform paletteGroup, RectTransform dropdown, RectTransform marker, ErrorItemView errorItem, RectTransform errorFrame, ReferenceCardView referenceCard, BlockTooltipView tooltip)
+	static void BuildEditorCanvas(ListItemView item, ListHeaderView header, Button save, Button compile, RectTransform paletteGroup, RectTransform dropdown, RectTransform marker, ErrorItemView errorItem, RectTransform errorFrame, ReferenceCardView referenceCard, BlockTooltipView tooltip, FunctionItemView functionItem)
 	{
 		GameObject root = PrefabUtility.LoadPrefabContents(EditorCanvasPath);
 		try
@@ -1034,7 +1087,7 @@ public static class InvokeUIBuilder
 			if (palette.TryGetComponent(out ScrollRect oldPaletteScroll)) Object.DestroyImmediate(oldPaletteScroll);
 			Transform oldPaletteContent = palette.Find("Content");
 			if (oldPaletteContent != null) Object.DestroyImmediate(oldPaletteContent.gameObject);
-			TMP_InputField paletteSearch = GetOrBuildSearchField(palette, -6, "블록·스킬 이름으로 검색");
+			TMP_InputField paletteSearch = GetOrBuildSearchField(palette, -6, "이름으로 검색");
 			RectTransform paletteContent = GetOrBuildCardScroll(palette, 28, 2);
 			// 스크롤 영역의 여백(4)과 합쳐 예전처럼 패널 가장자리에서 8 떨어지게
 			paletteContent.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(4, 4, 4, 4);
@@ -1058,13 +1111,30 @@ public static class InvokeUIBuilder
 			RectTransform referenceList = GetOrBuildCardScroll(referencePanel, 48, 7);
 			referencePanel.gameObject.SetActive(false); // 처음엔 꺼 둔다. 「참고」 탭을 누르면 BlockEditor가 켠다
 
-			// 오른쪽 끝 세로 막대: 블록 / 오류 / 참고
+			// 함수 탭 창 (#489, 시안 6-12. 블록 목록과 같은 자리): 블록 목록과 같이 머리글 없이 위에 검색 칸, 아래에 구역(스킬, 기본 함수, 메모리, 내가 만든 함수)별 함수 항목
+			RectTransform functionTabPanel = Child(window, "FunctionView");
+			RightStretch(functionTabPanel, LayoutStrip, LayoutPalette, LayoutTop, 0);
+			SetImage(functionTabPanel.gameObject, "ui_panel", Image.Type.Sliced);
+			// 지난번에 만든 「함수」 머리글과 「코드로 끌어다 놓으세요」 안내는 지운다 (사용자가 뺌)
+			foreach (string removed in new[] { "Header", "Hint" })
+			{
+				Transform old = functionTabPanel.Find(removed);
+				if (old != null) Object.DestroyImmediate(old.gameObject);
+			}
+			TMP_InputField functionSearch = GetOrBuildSearchField(functionTabPanel, -6, "이름으로 검색");
+			// 항목 사이 간격 6: 항목끼리 붙어 보이지 않게 (사용자가 정함)
+			RectTransform functionTabList = GetOrBuildCardScroll(functionTabPanel, 28, 6);
+			functionTabList.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(4, 4, 2, 4);
+			functionTabPanel.gameObject.SetActive(false); // 처음엔 꺼 둔다. 「함수」 탭을 누르면 BlockEditor가 켠다
+
+			// 오른쪽 끝 세로 막대: 문법 / 함수 / 오류 / 참고 (#489). 블록 목록 탭은 문법 블록만 남으므로 「문법」이라 부른다
 			RectTransform strip = Child(window, "TabStrip");
 			RightStretch(strip, 0, LayoutStrip, LayoutTop, 0);
 			SetImage(strip.gameObject, "ui_titlebar", Image.Type.Sliced).raycastTarget = false;
-			Button blockTab = Tab(strip, "BlockTab", "블\n록", 6, 54);
-			Button errorTab = Tab(strip, "ErrorTab", "오\n류", 66, 66);
-			Button referenceTab = Tab(strip, "ReferenceTab", "참\n고", 138, 54);
+			Button blockTab = Tab(strip, "BlockTab", "문\n법", 6, 54);
+			Button functionTab = Tab(strip, "FunctionTab", "함\n수", 66, 54);
+			Button errorTab = Tab(strip, "ErrorTab", "오\n류", 126, 66);
+			Button referenceTab = Tab(strip, "ReferenceTab", "참\n고", 198, 54);
 			// 오류 수 빨간 동그라미 (오류 탭 아래쪽)
 			RectTransform tabBadge = Child(errorTab.transform, "Badge");
 			Place(tabBadge, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 3), new Vector2(10, 10));
@@ -1167,6 +1237,11 @@ public static class InvokeUIBuilder
 			Set(editor, "referenceCardPrefab", referenceCard);
 			Set(editor, "confirmDialog", confirmDialog);
 			Set(editor, "functionFrame", functionFrame);
+			Set(editor, "functionView", functionTabPanel.gameObject);
+			Set(editor, "functionTabButton", functionTab);
+			Set(editor, "functionTabList", functionTabList);
+			Set(editor, "functionSearch", functionSearch);
+			Set(editor, "functionTabItemPrefab", functionItem);
 
 			PrefabUtility.SaveAsPrefabAsset(root, EditorCanvasPath);
 		}

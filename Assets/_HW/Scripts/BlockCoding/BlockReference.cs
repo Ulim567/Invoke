@@ -583,6 +583,55 @@ public static class BlockReference
 		return string.Join("\n", lines);
 	}
 
+	// 함수 탭 (#489) ---------------------------------------------------------
+	// 기본 함수의 한글 이름 (11/15 정함). 스킬은 스킬 표의 이름(PredefinedFunction.Name)을 쓰므로 적지 않는다.
+	// get_bug, is_valid_target의 Name은 클래스 이름(GetBug)이라 화면에 그대로 보일 수 없기 때문
+	static readonly Dictionary<string, string> KoreanNames = new Dictionary<string, string>
+	{
+		[PredefinedFunctionIds.GetBug] = "버그 찾기",
+		[PredefinedFunctionIds.IsValidTarget] = "대상 확인",
+	};
+
+	/// <summary>
+	/// 사전 정의 함수의 한글 이름. 함수 탭 항목과 참고 카드에 쓴다. 예: c.skewer → 꼬챙이, input.get_bug → 버그 찾기. 없으면 빈 글자.
+	/// </summary>
+	public static string KoreanNameOf(string functionId)
+	{
+		if (string.IsNullOrEmpty(functionId)) return "";
+		if (KoreanNames.TryGetValue(functionId, out string fixedName)) return fixedName;
+		if (!PredefinedFunctionRegistry.TryGet(functionId, out PredefinedFunction function)) return "";
+		// 화면 이름이 따로 없으면(고정 ID나 블록에 보이는 이름과 같으면) 한글 이름이 없는 것으로 본다
+		string name = function.Name;
+		return string.IsNullOrEmpty(name) || name == functionId || name == BlockLabels.PredefinedFunctionName(functionId) ? "" : name;
+	}
+
+	/// <summary>
+	/// 사전 정의 함수의 C 원형. 예: void thrust(Target target); 없는 함수면 빈 글자.
+	/// </summary>
+	public static string PrototypeOf(string functionId)
+	{
+		if (string.IsNullOrEmpty(functionId) || !PredefinedFunctionRegistry.TryGet(functionId, out PredefinedFunction function)) return "";
+		return Prototype(function.ReturnType, BlockLabels.PredefinedFunctionName(functionId), function.Parameters);
+	}
+
+	/// <summary>
+	/// 내가 만든 함수의 C 원형. 예: int count_bugs();
+	/// </summary>
+	public static string PrototypeOf(FunctionData function) =>
+		function == null ? "" : Prototype(function.ReturnType, function.Name, function.Parameters);
+
+	/// <summary>
+	/// 함수 탭에서 함수처럼 보이는 블록(malloc, free, wait)의 이름, 한글 이름, 원형 (#489, 시안 6-12). 그 밖의 블록이면 null.
+	/// 사전 정의 함수가 아니라 각자의 블록(BlockKind.Malloc 등)이어서 이름과 원형을 여기에 적는다.
+	/// </summary>
+	public static (string Name, string KoreanName, string Prototype)? BuiltinOf(BlockKind kind) => kind switch
+	{
+		BlockKind.Malloc => ("malloc", "메모리 할당", "Sword* malloc(Sword);"),
+		BlockKind.Free => ("free", "메모리 해제", "void free(Sword* p);"),
+		BlockKind.Wait => ("wait", "기다리기", "void wait(float sec);"),
+		_ => null,
+	};
+
 	// C 선언 모양의 함수 원형. 예: void thrust(Target target);
 	static string Prototype(VariableType returnType, string name, IReadOnlyList<ParameterData> parameters)
 	{

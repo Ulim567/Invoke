@@ -56,3 +56,4 @@ MonoBehaviour:
   m_ChildAlignment: 0
   spacing: {x: 3, y: 3}
   childScale: 1
+  hangingIndent: 0

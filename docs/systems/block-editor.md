@@ -36,10 +36,12 @@
 | `SlotRules` | 값 칸마다 받을 수 있는 것 (#474) |
 | `VariableScopes` | 블록 자리에서 보이는 변수(이름, 타입). C의 { } 범위 규칙 (#474) |
 | `BlockLabels` | 블록 글자(C 모양)와 분류별 색 |
+| `FunctionItemView` | 함수 탭의 함수 항목 한 줄. 끌면 그 함수의 호출 블록을 만들어 끔 (#489) |
 | `FunctionStorage` | 함수 저장·불러오기 (임시, 이 컴퓨터 파일) |
 
 ### 블록 놓기
 - 블록 목록의 블록은 견본이다. 끌면 견본은 그대로 두고 새 블록을 만든다.
+- 함수 탭의 항목도 같다 (#489): 끌면 그 함수의 호출 블록을 새로 만든다 (`BlockEditor.BeginNewBlockDrag`, 아래 「화면 배치」의 「함수 탭」)
 - 블록 목록: 문법 블록, 값 블록(`+`, `>`, `&&`, `!`), `free`, 사전 정의 함수 중 고정 ID가 `c.`, `common.`, `input.`으로 시작하는 것 (`PredefinedFunctionRegistry.All`). 함수 블록은 파라미터 수만큼 빈 값 칸을 가진다.
 - 편집 영역의 블록을 블록 목록이나 빈 곳에 놓으면 지워진다.
 - 놓을 자리는 마우스 아래에서 가장 안쪽의, 이 블록을 받을 수 있는 자리다.
@@ -122,6 +124,29 @@
     - 남은 블록이 없는 소분류는 줄째 숨김
   - 검색 칸 (#476): 분류·소분류 이름, 칩 이름, 스킬의 화면 이름(검 찌르기), 고정 ID(c.thrust)에 검색 글자가 들어 있는 블록만 (대소문자 구분 없음). 분류·소분류 이름이 맞으면 그 블록 전체 (예: 「반복」 → For, While, Break, Continue). 남은 블록이 없는 분류는 머리글도 없음
   - 세로 스크롤 + 오른쪽 스크롤바 (내용이 길 때만 보임)
+- 오른쪽 끝 세로 탭: 문법 / 함수 / 오류 / 참고 (#489). 누른 탭의 창 하나만 보임. 블록 목록 탭은 문법 블록만 남으므로 「문법」
+- 함수 탭 (#489, 게임 UI 캔버스 시안 6-12): 함수를 코드로 끌어다 놓는 목록. 블록 목록과 같이 머리글 없이 맨 위 검색 칸(안내 「이름으로 검색」), 아래에 구역 머리글(`ListHeaderView`, 색 네모 없음)과 항목(사이 간격 6)
+  - 검색 칸: 구역 이름(메모리)이 맞으면 그 구역 전체, 아니면 한글 이름(휩쓸)이나 영문 이름(sweep)에 검색 글자가 든 항목 (대소문자 구분 없음). 남은 항목이 없는 구역은 머리글도 없음
+  - 구역과 항목
+
+    | 구역 | 항목 | 끌면 만드는 블록 |
+    | --- | --- | --- |
+    | 스킬 | 사전 정의 함수 중 고정 ID가 `c.`, `common.`인 것 | `BlockData.CallPredefinedFunction` |
+    | 기본 함수 | get_bug, is_valid_target, wait | get_bug·is_valid_target: `CallPredefinedFunction`, wait: `BlockData.Wait` (초 칸 비움) |
+    | 메모리 | malloc, free | `BlockData.Malloc(Sword)`, `BlockData.Free` |
+    | 내가 만든 함수 | 페이지 함수 (슬롯 함수 제외) | `BlockData.CallUserFunction` |
+
+  - 항목 한 줄(`FunctionItem` 프리팹, `FunctionItemView`): 굵은 제목(한글 이름), 아래에 함수 원형(`void thrust(Target target);`). 영문 이름은 원형에 들어 있으므로 따로 적지 않음
+    - 제목: 한글 이름. 한글 이름이 없는 내가 만든 함수는 함수 이름
+    - 원형 글자: 주황 `#F0A860` (설명창·참고 카드의 원형과 같음). 길면 잘리지 않고 다음 줄로 감쌈 (`void battlefield_sweep(Target` / `array targets);`)
+    - 한글 이름: 스킬은 스킬 표의 이름(`PredefinedFunction.Name`), get_bug 「버그 찾기」, is_valid_target 「대상 확인」, wait 「기다리기」, malloc 「메모리 할당」, free 「메모리 해제」. 내가 만든 함수는 없음 (`BlockReference.KoreanNameOf`, `BuiltinOf`)
+    - 원형: 사전 정의 함수·내가 만든 함수는 파라미터에서 만듦(`BlockReference.PrototypeOf`). malloc `Sword* malloc(Sword);`, free `void free(Sword* p);`, wait `void wait(float sec);`
+    - 바탕: 함수 색(`#9E7BFF`)을 편집 영역 바탕(`#141823`)에 26% 섞은 불투명 색
+  - 설명창: 항목에 마우스를 올리고 0.4초 멈추면 편집 영역의 같은 블록과 같은 설명창 (원형, 스킬 설명, 파라미터, 돌려주는 값). 항목에는 설명을 넣지 않음 (목록이 길어지지 않게)
+  - 끄는 동안 (시안 6-8): 목록의 그 항목은 바탕 8%와 점선 테두리(`blk_round_dashed`, 함수 색 70%)로 비워 둠. 블록을 놓으면 원래대로
+  - 해금: 블록 목록과 같은 규칙. 사전 정의 함수와 내가 만든 함수는 함수 블록(`BlockKind.Function`)을 해금해야 보이고, 스킬 트리에 노드가 있는 스킬은 그 노드도 해금해야 보임. malloc·free·wait는 각자의 블록 종류를 해금해야 보임. 임시 계정은 모두 보임. 항목이 없는 구역은 머리글도 없음
+  - 함수 탭을 열 때와 저장한 함수 목록이 바뀔 때 목록을 다시 만듦
+  - 아직 없음: 「남은/가진」 개수 표시 (블록·함수 개수 이슈)
 - 참고 탭 (#476): 블록 목록과 같은 분류 순서로 분류 머리글(`ListHeaderView`, 분류 색 네모) 아래에 카드. 검색해서 카드가 없는 분류는 머리글도 없음. 카드 사이 간격 7
   - 카드 내용 (#476, 레퍼런스 페이지 형식): 접힌 카드는 이름·분류 태그, 형식(주황 #F0A860: `if (조건) { 블록 }`, `void thrust(Target target);`)만. 펼치면 설명 한 문장(스킬은 「검 찌르기: ...」), 채울 곳 또는 파라미터(「- 이름: 설명」), 돌려주는 값, 예시, 실행(동작·쿨타임 틱, 코드 크기)
   - 보이지 않는 것: C 표기, 놓는 곳, 동작 문단, 주의, 스킬 사용법·긴 설명
@@ -240,6 +265,8 @@
 ### 화면 구성 (테스트 씬 `Test_HW`)
 - `BlockEditorCanvas` (Canvas Scaler 640×360, `BlockEditor`)
   - `Palette`: Image + Rect Mask 2D → `SearchField`, `Scroll`(Scroll Rect + `Scrollbar`) → `Viewport` → `Content`(Vertical Layout Group + Content Size Fitter). 참고 창과 같은 구조 (#476)
+  - `FunctionView` (#489): `Palette`와 같은 구조. `SearchField`, `Scroll` → `Viewport` → `Content`(구역 머리글과 `FunctionItem`이 쌓임). 처음엔 꺼 둠
+  - `TabStrip`: `BlockTab`, `FunctionTab`, `ErrorTab`(오류 수 `Badge`), `ReferenceTab`
   - `Workspace`: Image(격자) + Scroll Rect → `Viewport`(Rect Mask 2D) → `Content`(Image 투명 + Vertical Layout Group + Content Size Fitter + Layout Element + `BlockList`), `VerticalScrollbar`, `HorizontalScrollbar` (#476)
   - `TopBar`: Image + Horizontal Layout Group (안의 칸과 버튼은 `BlockEditor`가 만든다)
   - `DragLayer`: 화면 전체, Canvas 맨 아래 자식

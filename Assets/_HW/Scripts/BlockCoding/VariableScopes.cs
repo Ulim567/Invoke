@@ -38,6 +38,10 @@ public static class VariableScopes
 			if (!string.IsNullOrEmpty(name)) scopes[scopes.Count - 1][name] = type;
 		}
 
+		/// <summary>가장 안쪽 범위에 이미 있는 이름이면 true. 같은 { } 안에서 두 번 선언했는지 볼 때 쓴다 (#504)</summary>
+		public bool IsDeclaredInInnermost(string name) =>
+			!string.IsNullOrEmpty(name) && scopes[scopes.Count - 1].ContainsKey(name);
+
 		/// <summary>안쪽 범위부터 찾는다. 없으면 false</summary>
 		public bool TryGet(string name, out VariableType type)
 		{

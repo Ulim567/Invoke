@@ -6,7 +6,9 @@ using System.Linq;
 /// <para>
 /// - 편집 화면(BlockEditor)의 컴파일 버튼·오류 창·빨간 테두리, 함수 목록의 빨간 밑줄, 장착 화면(SlotEquipPanel)에서 오류 있는 함수를 막을 때 쓴다.<br/>
 /// - 검사: for·while 밖의 break·continue, 값을 돌려줘야 하는데 return이 없는 길(BlockData.AlwaysReturnsValue), 비어 있는 값 칸,
-///   선언하지 않은 변수(함수 안의 선언·배열·for의 변수, 파라미터, 전역 변수에 없는 이름), 지운 함수를 부르는 블록 (function-data.md, function-executor.md).<br/>
+///   선언하지 않은 변수(함수 안의 선언·배열·for의 변수, 파라미터, 전역 변수에 없는 이름), 지운 함수를 부르는 블록 (function-data.md, function-executor.md),
+///   같은 { } 안에서 두 번 선언한 변수, 칸 규칙(SlotRules)에 맞지 않는 값 (#504).<br/>
+/// - 오류 문장은 실제 C 컴파일러 형식이다. 예: error: use of undeclared identifier 'x' (#504).<br/>
 /// - 저장하기 전에 FindNewlyBroken으로, 이 저장 때문에 다른 함수에 오류가 새로 생기는지도 본다 (#494).
 /// </para>
 /// </summary>
@@ -41,7 +43,7 @@ public static class FunctionChecker
 
 		bool returnsValue = function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void;
 		if (returnsValue && !BlockData.AlwaysReturnsValue(function.Blocks))
-			errors.Add(new Error { Code = function.Name, Message = "값을 돌려주지 않고 끝나는 길이 있어요 (return 필요)" });
+			errors.Add(new Error { Code = function.Name, Message = "error: control reaches end of non-void function" });
 		return errors;
 	}
 
@@ -98,30 +100,43 @@ public static class FunctionChecker
 		foreach (BlockData block in blocks)
 		{
 			if (block == null) continue;
-			if ((block.Kind == BlockKind.Break || block.Kind == BlockKind.Continue) && loopDepth == 0)
-				Add(errors, block, "break, continue는 for, while 안에서만 쓸 수 있어요");
+			// 오류 문장은 실제 C 컴파일러(gcc, clang)의 형식을 따른다 (#504). 플레이어가 나중에 실제 컴파일러의 오류도 읽을 수 있게 하기 위함
+			if (block.Kind == BlockKind.Break && loopDepth == 0) Add(errors, block, "error: break statement not within loop");
+			if (block.Kind == BlockKind.Continue && loopDepth == 0) Add(errors, block, "error: continue statement not within loop");
 			if (CallsMissingFunction(block, context)) Add(errors, block, MissingFunctionMessage);
 
 			int empty = 0;
 			var unknown = new List<string>();
 			var wrong = new List<string>();
 			CheckSlots(block, scopes, context, ref empty, unknown, wrong);
-			if (empty > 0) Add(errors, block, $"비어 있는 값 칸 {empty}개");
-			foreach (string name in unknown.Distinct()) Add(errors, block, $"선언하지 않은 변수 {name} (이 블록보다 위에서, 보이는 범위에 선언해야 해요)");
+			// 빈 칸 하나마다 한 줄. 실제 컴파일러도 오류 위치마다 한 줄씩 내기 때문
+			for (int i = 0; i < empty; i++) Add(errors, block, "error: expected expression");
+			foreach (string name in unknown.Distinct()) Add(errors, block, $"error: use of undeclared identifier '{name}'");
 			foreach (string message in wrong.Distinct()) Add(errors, block, message);
 
-			// 블록 영역은 { } 하나. for의 i는 그 안에서만 보인다
+			// { } 하나가 범위 하나. for는 i의 범위 안에 몸통의 범위가 따로 있다 (실행기의 ForBlock, LoopBlock과 같음)
+			// 그래서 for 몸통에서 int i;를 다시 선언해도 C처럼 바깥 i를 가릴 뿐 오류가 아니다
 			if (block.InnerBlocks != null)
 			{
 				bool loop = block.Kind == BlockKind.For || block.Kind == BlockKind.While;
+				bool forIndex = block.Kind == BlockKind.For && block.Slots.Count > 0;
+				if (forIndex)
+				{
+					scopes.Push();
+					scopes.Declare(block.Slots[0]?.Name, new VariableType(VariableTypeKind.Int));
+				}
 				scopes.Push();
-				if (block.Kind == BlockKind.For && block.Slots.Count > 0) scopes.Declare(block.Slots[0]?.Name, new VariableType(VariableTypeKind.Int));
 				Walk(block.InnerBlocks, loopDepth + (loop ? 1 : 0), scopes, context, errors);
 				scopes.Pop();
+				if (forIndex) scopes.Pop();
 			}
 
 			// 칸을 본 뒤에 선언을 더한다. int x = x; 의 오른쪽 x는 아직 선언되지 않은 것으로 보기 위함
-			scopes.Declare(VariableScopes.DeclaredName(block), VariableScopes.DeclaredType(block));
+			// 같은 { } 안에 같은 이름이 이미 있으면 실행기가 DuplicateVariable로 멈추므로 저장 전에 찾는다 (#504)
+			// 바깥 { }나 전역 변수와 같은 이름은 C처럼 가리기만 하므로 오류가 아니다 (LanguageRule_C의 AllowShadowing)
+			string declared = VariableScopes.DeclaredName(block);
+			if (scopes.IsDeclaredInInnermost(declared)) Add(errors, block, $"error: redefinition of '{declared}'");
+			scopes.Declare(declared, VariableScopes.DeclaredType(block));
 		}
 	}
 
@@ -138,7 +153,7 @@ public static class FunctionChecker
 			{
 				SlotRules.Rule rule = SlotRules.RuleOf(block, i, context.ReturnType, false, context.FindUserFunction, variableType);
 				if (!SlotRules.Fits(rule, slot, context.FindUserFunction, variableType))
-					wrong.Add($"{SlotText(slot)}은(는) 이 칸에 넣을 수 없어요 ({SlotRules.Describe(rule)}만)");
+					wrong.Add(WrongValueMessage(block, slot, rule, context, variableType));
 			}
 			if (slot.Block != null)
 			{
@@ -162,17 +177,51 @@ public static class FunctionChecker
 		}
 	}
 
-	const string MissingFunctionMessage = "지운 함수를 부르고 있어요 (이 호출 블록을 지워 주세요)";
+	// 지운 함수는 이름이 남아 있지 않아(호출 블록은 GUID만 가짐) 이름 없이 적는다
+	const string MissingFunctionMessage = "error: call to undeclared function";
+
+	// 칸 규칙에 맞지 않는 값의 오류 문장. 넣은 값의 타입과 칸이 받는 타입을 보인다
+	static string WrongValueMessage(BlockData block, SlotData slot, SlotRules.Rule rule, SlotContext context, System.Func<string, VariableType> variableType)
+	{
+		if (rule.Expect == SlotRules.Expect.ArrayLength)
+			return $"error: size of array '{(block.Slots.Count > 1 ? block.Slots[1]?.Name : "")}' must be a positive integer constant";
+		if (SlotRules.IsVoid(rule)) return "error: void function should not return a value";
+
+		VariableType found = SlotRules.TypeOf(slot, context.FindUserFunction, variableType);
+		string expected = ExpectedName(rule);
+		return found != null
+			? $"error: incompatible type '{TypeText(found)}', expected '{expected}'"
+			: $"error: incompatible type, expected '{expected}'";
+	}
+
+	// 칸이 받는 것을 오류 문장에 쓸 영어 이름으로
+	static string ExpectedName(SlotRules.Rule rule)
+	{
+		switch (rule.Expect)
+		{
+			case SlotRules.Expect.Condition: return "bool";
+			case SlotRules.Expect.Number: return "number";
+			case SlotRules.Expect.Integer: return "int";
+			case SlotRules.Expect.Comparable: return "number, char, bool or pointer";
+			case SlotRules.Expect.Pointer: return "pointer";
+			case SlotRules.Expect.Typed: return rule.Type != null ? TypeText(rule.Type) : "value";
+			default: return "value";
+		}
+	}
+
+	// 타입을 C 글자로. NULL(가리키는 타입이 없는 포인터)은 C처럼 void*
+	static string TypeText(VariableType type)
+	{
+		if (type.Kind == VariableTypeKind.Pointer && type.ElementType == null) return "void*";
+		if (type.Kind == VariableTypeKind.Array) return (type.ElementType != null ? BlockLabels.TypeName(type.ElementType) : "?") + "[]";
+		return BlockLabels.TypeName(type);
+	}
 
 	// 사용자 정의 함수를 부르는 블록인데 캐릭터가 가진 함수 중에 그 GUID가 없으면 true (#494).
 	// 실행기도 이 함수를 바꾸지 못해 그 슬롯 전체가 시전되지 않으므로 저장 전에 찾는다. 함수 목록을 받지 않았으면(FindUserFunction null) 보지 않는다
 	static bool CallsMissingFunction(BlockData block, SlotContext context) =>
 		block.Kind == BlockKind.Function && block.IsUserFunction && context.FindUserFunction != null
 		&& context.FindUserFunction(block.FunctionId) == null;
-
-	// 오류 문장에 보일 칸 글자. 끼운 블록은 그 블록의 C 글자
-	static string SlotText(SlotData slot) =>
-		slot.Block != null ? BlockLabels.TextOf(slot.Block).TrimEnd(';') : BlockSlotText.ToText(slot);
 
 	static void Add(List<Error> errors, BlockData block, string message) =>
 		errors.Add(new Error { Block = block, Code = BlockLabels.TextOf(block), Message = message });

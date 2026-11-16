@@ -343,10 +343,16 @@ public class FunctionExecutor : MonoBehaviour
 	/// 전역 변수 파일이 검사(칸 부족, 대상 타입, 직접 입력한 값이 아닌 초기값 등)를 통과하면 true. 저장하거나 반영하지는 않는다.<br/>
 	/// 거부 이유는 콘솔 오류로 남는다. 서버가 전역 변수를 DB에 저장하기 전에 쓴다(FunctionExecutorNetwork).
 	/// </summary>
-	public bool CanUseGlobalVariables(GlobalVariablesData file)
+	public bool CanUseGlobalVariables(GlobalVariablesData file) => CanUseGlobalVariables(file, out _);
+
+	/// <summary>
+	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 error에 첫 번째 이유를 실제 C 컴파일러 형식으로 돌려준다 (#504). 예: error: redefinition of 'x'<br/>
+	/// 편집 화면이 Global Variables의 오류 카드에 이유를 보일 때 쓴다. 쓸 수 있으면 error는 null이다.
+	/// </summary>
+	public bool CanUseGlobalVariables(GlobalVariablesData file, out string error)
 	{
 		if (file == null) throw new ArgumentNullException(nameof(file));
-		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _);
+		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _, out error);
 	}
 
 	void Awake()

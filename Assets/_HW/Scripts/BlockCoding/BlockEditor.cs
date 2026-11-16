@@ -586,7 +586,7 @@ public class BlockEditor : MonoBehaviour
 			if (saved) ReloadSavedFunctions();
 			SetMessage(saved ? "저장됨"
 				: result == PlayerDataRequestResult.CountExceeded ? CountShortageMessage(FindCountShortage(savedFunctions, globals))
-				: "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
+				: "전역 변수 저장 실패", !saved);
 			Redraw();
 			return;
 		}
@@ -631,7 +631,7 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
 		StashCurrent();
@@ -663,7 +663,7 @@ public class BlockEditor : MonoBehaviour
 		}
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
 		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
@@ -847,7 +847,7 @@ public class BlockEditor : MonoBehaviour
 			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
 			ReloadSavedFunctions();
 		}
-		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인. 콘솔 참고)", !ok);
+		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수 저장 실패", !ok);
 		Redraw();
 	}
 
@@ -965,12 +965,12 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
 		if (IsSlotFunction(page)) return; // 슬롯 함수는 지울 수 없다 (×도 보이지 않음)
 
-		// 저장할 때와 같은 규칙: 이 함수를 뺀 저장된 함수들로 다시 컴파일해 새 오류(지운 함수를 부르고 있어요)가 생기는 함수를 찾는다
+		// 저장할 때와 같은 규칙: 이 함수를 뺀 저장된 함수들로 다시 컴파일해 새 오류(error: call to undeclared function)가 생기는 함수를 찾는다
 		// 예: 슬롯 Q가 foo를 부르면 foo를 지우는 순간 슬롯 Q 전체가 시전되지 않으므로 막는다
 		List<(FunctionData function, List<FunctionChecker.Error> errors)> broken = FunctionChecker.FindNewlyBroken(
 			savedFunctions, CurrentGlobals(), savedFunctions.Where(f => f.Guid != page.Guid), CurrentGlobals());
@@ -1051,8 +1051,11 @@ public class BlockEditor : MonoBehaviour
 		{
 			errors = new List<FunctionChecker.Error>();
 			NetworkIdentity localPlayer = NetworkClient.localPlayer;
-			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
-			if (!ok) errors.Add(new FunctionChecker.Error { Code = "", Message = "int x = 3; 같은 선언 블록과 int arr[5]; 같은 배열 만들기 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
+			string error = null;
+			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals, out error);
+			// 실행기가 찾은 첫 번째 이유를 그대로 보인다 (#504). 예: error: redefinition of 'x'
+			// 이유가 없으면 내 캐릭터의 실행기를 찾지 못한 것이다 (접속 전 등)
+			if (!ok) errors.Add(new FunctionChecker.Error { Code = "", Message = error ?? "error: function executor not found" });
 			globalsErrors = errors.Count > 0 ? errors : null;
 		}
 		else
@@ -1180,7 +1183,8 @@ public class BlockEditor : MonoBehaviour
 			{
 				string code = CodeOf(error);
 				// 저장·지우기 거부로 이미 맨 위에 보인 오류는 다시 적지 않는다
-				if (shown.Any(s => s.Location == location && s.Code == code && s.Message == error.Message)) continue;
+				// 같은 함수 안의 같은 문장은 거르지 않는다. 빈 칸이 둘인 블록은 error: expected expression이 두 줄이어야 하기 때문 (#504)
+				if (brokenErrors != null && brokenErrors.Any(s => s.Location == location && s.Code == code && s.Message == error.Message)) continue;
 				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
 					BlockIndex = function != null ? IndexOfBlock(function, error.Block) : -1 });
 			}
@@ -1607,7 +1611,7 @@ public class BlockEditor : MonoBehaviour
 	// 오류 창의 오류 하나: 설명, 코드, 「> 이름」 세 줄. Guid·BlockIndex는 「> 이름」을 누를 때 열 함수와 깜빡일 블록 (BlockIndex가 -1이면 함수만 연다)
 	struct ShownError
 	{
-		public string Message;  // 설명 (예: 비어 있는 값 칸 1개)
+		public string Message;  // 설명 (예: error: expected expression)
 		public string Code;     // 오류가 난 블록의 글자 (예: if ( )). 블록이 없으면 빈 글자
 		public string Location; // 함수 이름 (예: temp, 슬롯 Q, Global Variables)
 		public string Guid;

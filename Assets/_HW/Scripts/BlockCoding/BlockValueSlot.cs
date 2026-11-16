@@ -258,7 +258,7 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 			}
 			if (names.Count == 0)
 			{
-				editor.ShowNotice($"이 칸에 넣을 수 있는 변수가 없어요 ({AcceptsText})");
+				editor.ShowNotice("이 칸에 넣을 수 있는 변수 없음");
 				return;
 			}
 			editor.ShowDropdown(anchor, labels.ToArray(), names.IndexOf(Slot.VariableName), picked =>
@@ -377,9 +377,9 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		bool valid = BlockSlotText.TryApply(Slot, text);
 		string reason = null;
 		if (valid && !string.IsNullOrEmpty(Slot.VariableName) && !editor.VisibleVariables(ownerBlock.Data).ContainsKey(Slot.VariableName))
-			reason = $"{Slot.VariableName}은(는) 여기서 쓸 수 있는 변수가 아니에요. 이 블록보다 위에서 선언해야 해요";
+			reason = $"이 위치에서 사용할 수 없는 변수: {Slot.VariableName}";
 		else if (valid && !editor.Fits(ownerBlock.Data, slotIndex, Slot))
-			reason = $"이 칸에는 {AcceptsText}만 넣을 수 있어요";
+			reason = !string.IsNullOrEmpty(Slot.VariableName) ? $"이 칸의 타입과 맞지 않는 변수: {Slot.VariableName}" : $"이 칸의 타입과 맞지 않는 값: {text.Trim()}";
 		if (reason != null)
 		{
 			Slot.Type = null;

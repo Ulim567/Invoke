@@ -537,7 +537,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			text = text.Trim();
 			if (!BlockSlotText.IsIdentifier(text))
 			{
-				RejectText(field, slot.Name, "이름에는 영문자, 숫자, 밑줄만 쓸 수 있고 숫자로 시작할 수 없어요");
+				RejectText(field, slot.Name, "이름은 영문자, 숫자, 밑줄만 사용 가능하며 숫자로 시작 불가");
 				return;
 			}
 			if (text == slot.Name) return; // 바꾸지 않았으면 고친 것으로 치지 않는다 (저장하지 않은 변경 표시)
@@ -586,8 +586,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			}
 			if (names.Count == 0)
 			{
-				editor.ShowNotice(arrays ? "고를 수 있는 array가 없어요. 이 블록보다 위에서 Array로 먼저 만드세요"
-					: "고를 수 있는 변수가 없어요. 이 블록보다 위에서 Declare로 먼저 선언하세요");
+				editor.ShowNotice(arrays ? "이 위치에서 선택 가능한 array 없음"
+					: "이 위치에서 선택 가능한 변수 없음");
 				return;
 			}
 			editor.ShowDropdown(anchor, labels.ToArray(), names.IndexOf(slot.VariableName), picked =>
@@ -631,7 +631,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		if (initialValueSlot == null) return;
 		if (!initialValueSlot.HasWrongValue) return;
 		editor.MarkSlotError(initialValueSlot);
-		editor.ShowNotice($"처음 값이 {BlockLabels.TypeName(Data.Slots[0].Type)}에 맞지 않아요. 이 칸에는 {initialValueSlot.AcceptsText}만 넣을 수 있어요");
+		editor.ShowNotice($"{BlockLabels.TypeName(Data.Slots[0].Type)} 타입과 맞지 않는 처음 값");
 	}
 
 	// malloc의 struct 고르기 (드롭다운): 게임이 정한 struct 목록 (PredefinedStructs.All)

@@ -13,7 +13,7 @@ using UnityEngine.UI;
 /// </summary>
 public class ErrorItemView : MonoBehaviour
 {
-	[SerializeField, Tooltip("설명 (예: 선언하지 않은 변수 hpp)")]
+	[SerializeField, Tooltip("설명 (예: error: use of undeclared identifier 'hpp')")]
 	TMP_Text messageText;
 
 	[SerializeField, Tooltip("오류가 난 블록의 글자 (예: hp = hpp - 1;). 블록이 없는 오류면 숨긴다")]

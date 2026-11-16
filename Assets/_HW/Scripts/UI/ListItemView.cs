@@ -6,7 +6,8 @@ using UnityEngine.UI;
 /// 목록 한 줄 (ListItem 프리팹). 편집 화면의 함수 목록과 장착 화면의 함수·스킬 목록에서 쓴다. 보여 주기만 한다.
 /// <para>
 /// 프리팹 구성: 최상위에 Image(ui_item, Sliced) + Button + Horizontal Layout Group + Layout Element + 이 컴포넌트,
-/// 자식에 Tag(Image, 색 띠. 없어도 됨), Prefix(Text - TextMeshPro, 번호), Name(Text - TextMeshPro), Detail(Text - TextMeshPro, 오른쪽 정렬).
+/// 자식에 Tag(Image, 색 띠. 없어도 됨), Prefix(Text - TextMeshPro, 번호), Name(Text - TextMeshPro), Detail(Text - TextMeshPro, 오른쪽 정렬),
+/// Delete(Image ui_close + Button, 지우기. 없어도 됨, #494).
 /// </para>
 /// </summary>
 public class ListItemView : MonoBehaviour
@@ -37,6 +38,9 @@ public class ListItemView : MonoBehaviour
 
 	[SerializeField, Tooltip("상자로 보일 때의 바탕 (ui_card). Global Variables 줄")]
 	Sprite boxSprite;
+
+	[SerializeField, Tooltip("줄 오른쪽 지우기 버튼 (자식 Delete, ui_close 그림). 비워도 된다. 편집 화면 함수 목록의 페이지 함수 줄에만 보인다 (#494)")]
+	Button deleteButton;
 
 	bool boxed;
 
@@ -79,6 +83,18 @@ public class ListItemView : MonoBehaviour
 	/// 테두리 상자로 보이게 한다 (함수 목록 맨 위의 Global Variables). Show 전에 부른다.
 	/// </summary>
 	public void SetBoxed(bool value) => boxed = value;
+
+	/// <summary>
+	/// 줄 오른쪽 지우기 버튼(×)을 누르면 할 일을 정한다 (#494). null이면 버튼을 숨긴다.
+	/// 버튼은 줄의 Button 안에 있지만, 누르면 지우기 버튼만 반응하고 줄은 골라지지 않는다 (눌린 곳에서 가장 가까운 Button이 받음).
+	/// </summary>
+	public void SetDeleteAction(System.Action onDelete)
+	{
+		if (deleteButton == null) return;
+		deleteButton.onClick.RemoveAllListeners();
+		if (onDelete != null) deleteButton.onClick.AddListener(() => onDelete());
+		deleteButton.gameObject.SetActive(onDelete != null);
+	}
 
 	/// <summary>
 	/// 앞쪽 색 띠의 색을 정한다 (장착 화면: 함수, C 스킬, 공통 이동을 색으로 나눈다).

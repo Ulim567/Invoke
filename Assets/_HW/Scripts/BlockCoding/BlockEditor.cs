@@ -278,6 +278,10 @@ public class BlockEditor : MonoBehaviour
 	readonly Dictionary<string, FunctionData> drafts = new Dictionary<string, FunctionData>();
 	GlobalVariablesData globalsDraft; // 저장하지 않은 전역 변수 작업본. 없으면 null
 
+	// 서버에 페이지 함수 지우기를 요청하고 답을 기다리는 함수의 GUID와 상태 줄에 보일 이름 (#494). 답이 오면 비운다
+	string pendingDeleteGuid;
+	string pendingDeleteLabel;
+
 	// 전역 변수 편집 중이면 true. 이때 편집 영역은 globals.Declarations를 보여 준다
 	bool editingGlobals;
 	GlobalVariablesData globals;
@@ -505,7 +509,25 @@ public class BlockEditor : MonoBehaviour
 
 	void OnServerAnswered(PlayerDataRequest request, PlayerDataRequestResult result)
 	{
-		if (request == PlayerDataRequest.SaveFunction || request == PlayerDataRequest.SaveGlobals) savePending = false;
+		if (request == PlayerDataRequest.SaveFunction || request == PlayerDataRequest.SaveGlobals || request == PlayerDataRequest.DeleteFunction) savePending = false;
+		if (request == PlayerDataRequest.DeleteFunction)
+		{
+			// 성공이면 이 답보다 먼저 ReceivedFunctions에서 빠지고 목록을 다시 그렸다 (OnServerDataReceived)
+			string guid = pendingDeleteGuid, label = pendingDeleteLabel ?? "함수";
+			pendingDeleteGuid = pendingDeleteLabel = null;
+			if (result == PlayerDataRequestResult.Saved && guid != null) AfterPageDeleted(guid, label);
+			else
+			{
+				SetMessage(result switch
+				{
+					PlayerDataRequestResult.SlotFunctionLocked => "슬롯 함수는 지울 수 없음",
+					PlayerDataRequestResult.UnknownFunction => $"{label}{Eul(label)} 찾지 못해 지우지 못함",
+					_ => $"지우지 못함 ({result})",
+				}, true);
+				Redraw();
+			}
+			return;
+		}
 		if (request == PlayerDataRequest.SaveGlobals)
 		{
 			bool saved = result == PlayerDataRequestResult.Saved;
@@ -845,7 +867,13 @@ public class BlockEditor : MonoBehaviour
 		// 지금 저장하려는 함수 자신은 저장 버튼의 컴파일이 이미 본다
 		if (!editingGlobals) broken.RemoveAll(b => b.function.Guid == Function.Guid);
 		if (broken.Count == 0) return false;
+		ShowBroken(broken, "에 컴파일 오류가 생겨 저장하지 않았습니다");
+		return true;
+	}
 
+	// 다른 함수에 새로 생길 오류를 오류 창과 상태 줄에 보인다. 상태 줄은 「슬롯 Q, 페이지 a」 뒤에 what을 붙인 글자 (#494)
+	void ShowBroken(List<(FunctionData function, List<FunctionChecker.Error> errors)> broken, string what)
+	{
 		// 오류 창에 「슬롯 Q  x = 1;」처럼 어느 함수의 어느 블록인지 보인다. 다른 함수의 블록은 편집 영역에 없으므로 「블록 보기」는 없다
 		var errors = new List<FunctionChecker.Error>();
 		foreach ((FunctionData function, List<FunctionChecker.Error> list) in broken)
@@ -856,9 +884,78 @@ public class BlockEditor : MonoBehaviour
 		ShowTab(RightTab.Errors);
 		// 오류가 생기는 함수를 작업본에서 이미 고쳤으면, 목록에는 밑줄이 없어도 저장된 내용 기준으로는 오류다. 그 함수를 먼저 저장하라고 알린다 (#494)
 		string hint = broken.Any(b => drafts.ContainsKey(b.function.Guid)) ? ". 고친 함수를 먼저 저장해 주세요" : "";
-		SetMessage($"{string.Join(", ", broken.Select(b => LabelOf(b.function)))}에 컴파일 오류가 생겨 저장하지 않았습니다{hint}", true);
+		SetMessage($"{string.Join(", ", broken.Select(b => LabelOf(b.function)))}{what}{hint}", true);
 		Redraw();
-		return true;
+	}
+
+	// 페이지 함수 지우기 (#494) ---------------------------------------------------
+
+	// 함수 목록의 페이지 줄 ×를 눌렀을 때. 저장된 다른 함수가 이 함수를 부르면 지우지 않고 그 함수들을 알린다.
+	// 부르지 않으면 확인창에서 「지우기」를 눌렀을 때 지운다. 지우는 것은 바로 저장소(서버 DB, 이 컴퓨터 파일)에 반영되므로 「지우기를 저장하는 버튼」이다
+	void RequestDeletePage(FunctionData page)
+	{
+		if (savePending)
+		{
+			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			return;
+		}
+		if (IsSlotFunction(page)) return; // 슬롯 함수는 지울 수 없다 (×도 보이지 않음)
+
+		// 저장할 때와 같은 규칙: 이 함수를 뺀 저장된 함수들로 다시 컴파일해 새 오류(지운 함수를 부르고 있어요)가 생기는 함수를 찾는다
+		// 예: 슬롯 Q가 foo를 부르면 foo를 지우는 순간 슬롯 Q 전체가 시전되지 않으므로 막는다
+		List<(FunctionData function, List<FunctionChecker.Error> errors)> broken = FunctionChecker.FindNewlyBroken(
+			savedFunctions, CurrentGlobals(), savedFunctions.Where(f => f.Guid != page.Guid), CurrentGlobals());
+		if (broken.Count > 0)
+		{
+			ShowBroken(broken, $"에서 {page.Name}{Eul(page.Name)} 불러서 지우지 않았습니다");
+			return;
+		}
+
+		string label = LabelOf(page);
+		if (confirmDialog == null)
+		{
+			DeletePage(page);
+			return;
+		}
+		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
+		confirmDialog.Show($"{label}{Eul(label)} 지우시겠습니까?\n지운 함수는 되돌릴 수 없습니다.", () => DeletePage(page), "지우기 (Enter)", "취소 (Esc)");
+	}
+
+	// 실제 계정은 서버에 지우기를 요청하고(답은 OnServerAnswered), 임시 계정은 이 컴퓨터의 파일을 바로 지운다
+	void DeletePage(FunctionData page)
+	{
+		if (server != null)
+		{
+			savePending = true; // 답이 오기 전에는 다른 페이지를 열거나 나가지 못하게 한다 (저장과 같음)
+			pendingDeleteGuid = page.Guid;
+			pendingDeleteLabel = LabelOf(page);
+			server.RequestDeleteFunction(page.Guid);
+			if (savePending) SetMessage("지우는 중...");
+			Redraw();
+			return;
+		}
+
+		bool deleted = FunctionStorage.Delete(page.Guid);
+		if (deleted) AfterPageDeleted(page.Guid, LabelOf(page));
+		else
+		{
+			SetMessage($"{LabelOf(page)}{Eul(LabelOf(page))} 지우지 못했습니다 (파일 없음)", true);
+			Redraw();
+		}
+	}
+
+	// 지운 뒤: 그 페이지의 작업본을 버리고, 지운 페이지를 열어 두었으면 다른 곳을 연다
+	void AfterPageDeleted(string guid, string label)
+	{
+		drafts.Remove(guid);
+		if (!editingGlobals && Function != null && Function.Guid == guid)
+		{
+			if (server != null) OpenFirstSlot();
+			else Open(FunctionData.Create(UniqueName("새_함수")));
+		}
+		ReloadSavedFunctions();
+		SetMessage($"{label}{Eul(label)} 지웠습니다");
+		Redraw();
 	}
 
 	// 상태 글자·오류 창에 보일 함수 이름: 슬롯 함수는 「슬롯 Q」, 나머지는 「페이지 이름」 (확인창의 글자와 같음)
@@ -1837,12 +1934,14 @@ public class BlockEditor : MonoBehaviour
 	bool HasFunctionList => functionList != null && functionItemPrefab != null;
 
 	// 함수 목록에 한 줄을 더한다. 함수 목록 칸이 있으면 그곳에, 없으면 위쪽 줄에 버튼으로 (onClick이 null이면 누를 수 없는 줄)
-	void AddFunctionEntry(string prefix, string guid, string name, string detail, Action onClick, bool dim = false)
+	// onDelete가 있으면 줄 오른쪽에 지우기 버튼(×)을 보인다 (#494, 저장한 페이지 함수만)
+	void AddFunctionEntry(string prefix, string guid, string name, string detail, Action onClick, bool dim = false, Action onDelete = null)
 	{
 		if (HasFunctionList)
 		{
 			ListItemView item = Instantiate(functionItemPrefab, functionList);
 			item.SetBoxed(guid == GlobalsKey); // Global Variables는 상자로
+			item.SetDeleteAction(onDelete);
 			if (onClick != null) item.Button.onClick.AddListener(() => onClick());
 			item.Button.interactable = onClick != null;
 			savedButtons.Add(item.gameObject);
@@ -1908,7 +2007,9 @@ public class BlockEditor : MonoBehaviour
 		foreach (FunctionData saved in pages)
 		{
 			string guid = saved.Guid;
-			AddFunctionEntry("-", guid, WorkingNameOf(saved), $"코드 {CodeSizeOf(saved)}", () => SwitchTo(() => OpenPage(guid, () => FunctionStorage.Load(guid))));
+			FunctionData page = saved;
+			AddFunctionEntry("-", guid, WorkingNameOf(saved), $"코드 {CodeSizeOf(saved)}", () => SwitchTo(() => OpenPage(guid, () => FunctionStorage.Load(guid))),
+				false, () => RequestDeletePage(page));
 		}
 		RebuildPalette();
 		Redraw();
@@ -1941,7 +2042,8 @@ public class BlockEditor : MonoBehaviour
 		foreach (FunctionData function in PageFunctions())
 		{
 			FunctionData page = function;
-			AddFunctionEntry("-", page.Guid, WorkingNameOf(page), $"코드 {CodeSizeOf(page)}", () => SwitchTo(() => OpenPage(page.Guid, () => Copy(page))));
+			AddFunctionEntry("-", page.Guid, WorkingNameOf(page), $"코드 {CodeSizeOf(page)}", () => SwitchTo(() => OpenPage(page.Guid, () => Copy(page))),
+				false, () => RequestDeletePage(page));
 		}
 		RebuildPalette();
 		Redraw();

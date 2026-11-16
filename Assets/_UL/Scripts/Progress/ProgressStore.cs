@@ -7,7 +7,7 @@ using UnityEngine;
 /// <summary>
 /// 캐릭터의 진행도를 DB(SQLite)에 저장하고 읽는 곳. 서버에서만 쓴다.
 /// <para>
-/// - 진행도 테이블 6개(CharacterProgress, CharacterMaterials, CharacterUnlocks, CharacterSlots, CharacterFunctions, CharacterGlobals)만 다룬다. 계정·캐릭터는 AccountStore가 다룬다.<br/>
+/// - 진행도 테이블 7개(CharacterProgress, CharacterMaterials, CharacterItemCounts, CharacterUnlocks, CharacterSlots, CharacterFunctions, CharacterGlobals)만 다룬다. 계정·캐릭터는 AccountStore가 다룬다.<br/>
 /// - AccountStore가 연 SQLite 연결을 함께 쓴다. 그래야 캐릭터를 만들 때 Characters row와 진행도 처음 row를 한 트랜잭션으로 넣을 수 있다.<br/>
 /// - 부르는 곳은 AccountStore, AccountServer, PlayerProgress, FunctionExecutorNetwork뿐이다. 다른 시스템은 PlayerProgress를 부른다.
 /// </para>
@@ -44,6 +44,21 @@ public class ProgressStore
 		[Indexed(Name = "CharacterMaterial", Order = 2, Unique = true)]
 		public string MaterialId { get; set; }
 		// 1 이상. 0개가 되면 row를 지운다
+		public int Count { get; set; }
+	}
+
+	// 블록·함수의 가진 개수 (#500). 모양은 재료와 같다. 블록을 놓거나 지워도 바뀌지 않는다 (남은 개수는 함수를 세어 계산)
+	[Table("CharacterItemCounts")]
+	class ItemCountRow
+	{
+		[PrimaryKey, AutoIncrement]
+		public int Id { get; set; }
+		[Indexed(Name = "CharacterItem", Order = 1, Unique = true)]
+		public string CharacterKey { get; set; }
+		// 항목 ID (ItemCountRules, BlockUsageCounter.KeyOf)
+		[Indexed(Name = "CharacterItem", Order = 2, Unique = true)]
+		public string ItemId { get; set; }
+		// 1 이상 ItemCountRules.MaxCount 이하. 0개가 되면 row를 지운다
 		public int Count { get; set; }
 	}
 
@@ -100,6 +115,7 @@ public class ProgressStore
 		this.db = db;
 		db.CreateTable<ProgressRow>();
 		db.CreateTable<MaterialRow>();
+		db.CreateTable<ItemCountRow>();
 		db.CreateTable<UnlockRow>();
 		db.CreateTable<SlotRow>();
 		db.CreateTable<FunctionRow>();
@@ -108,7 +124,7 @@ public class ProgressStore
 
 	/// <summary>
 	/// 새 캐릭터의 처음 row를 넣는다. AccountStore.CreateCharacter가 Characters row와 같은 트랜잭션 안에서 부른다.<br/>
-	/// 레벨 1, 경험치·돈 0, 재료·페이지 함수 없음, 해금은 SkillTree의 처음 노드, 전역 변수 없음.<br/>
+	/// 레벨 1, 경험치·돈 0, 재료·페이지 함수 없음, 해금은 SkillTree의 처음 노드, 전역 변수 없음, 블록·함수 개수는 ItemCountRules.Initial.<br/>
 	/// 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)를 CharacterFunctions에 넣고, CharacterSlots 0~7에 그 GUID를 넣는다.<br/>
 	/// 이미 있는 row는 건드리지 않고 없는 row만 넣는다. Load가 진행도 row가 빠진 캐릭터를 채울 때도 쓰기 때문이다.
 	/// </summary>
@@ -141,12 +157,23 @@ public class ProgressStore
 
 			if (db.Find<GlobalsRow>(characterKey) == null)
 				db.Insert(new GlobalsRow { CharacterKey = characterKey, Json = FunctionDataJson.ToJson(new GlobalVariablesData()) });
+
+			InsertInitialItemCountsIfNone(characterKey);
 		});
 	}
 
+	// 개수 row가 하나도 없는 캐릭터에만 처음 개수를 넣는다. 트랜잭션 안에서 부른다
+	// 가진 개수는 줄지 않고 처음 개수는 0보다 크므로, row가 하나도 없으면 개수 기능(#500) 전에 만든 캐릭터다
+	void InsertInitialItemCountsIfNone(string characterKey)
+	{
+		if (db.Table<ItemCountRow>().Where(r => r.CharacterKey == characterKey).Count() > 0) return;
+		foreach (KeyValuePair<string, int> pair in ItemCountRules.Initial()) WriteItemCount(characterKey, pair.Key, pair.Value);
+	}
+
 	/// <summary>
-	/// 캐릭터의 진행도를 테이블 6개에서 읽어 돌려준다. 「들어가기」 때 서버가 부른다.<br/>
+	/// 캐릭터의 진행도를 테이블 7개에서 읽어 돌려준다. 「들어가기」 때 서버가 부른다.<br/>
 	/// 진행도 row가 없는 캐릭터(이 기능 전에 만든 캐릭터)는 새 캐릭터와 같은 처음 row를 넣은 뒤 돌려준다.<br/>
+	/// 개수 row가 없는 캐릭터(#500 전에 만든 캐릭터, 개수를 비운 테스트 진행도)는 처음 개수를 넣은 뒤 돌려준다.<br/>
 	/// 읽을 수 없는 함수 JSON과 SkillTree에 없는 노드 ID는 건너뛰고 로그를 남긴다.
 	/// </summary>
 	public CharacterProgressData Load(string characterKey)
@@ -167,6 +194,10 @@ public class ProgressStore
 
 		foreach (MaterialRow row in db.Table<MaterialRow>().Where(r => r.CharacterKey == characterKey))
 			data.Materials[row.MaterialId] = row.Count;
+
+		db.RunInTransaction(() => InsertInitialItemCountsIfNone(characterKey));
+		foreach (ItemCountRow row in db.Table<ItemCountRow>().Where(r => r.CharacterKey == characterKey))
+			data.ItemCounts[row.ItemId] = row.Count;
 
 		foreach (UnlockRow row in db.Table<UnlockRow>().Where(r => r.CharacterKey == characterKey))
 		{
@@ -198,7 +229,8 @@ public class ProgressStore
 	}
 
 	/// <summary>
-	/// [테스트용] 캐릭터의 진행도 테이블 6개를 data로 모두 바꾼다. 한 트랜잭션이므로 예전 값이 섞여 남지 않는다.<br/>
+	/// [테스트용] 캐릭터의 진행도 테이블 7개를 data로 모두 바꾼다. 한 트랜잭션이므로 예전 값이 섞여 남지 않는다.<br/>
+	/// 개수(ItemCounts)를 비우면 처음 개수를 넣는다. 개수는 ItemCountRules.MaxCount에서 멈춘다.<br/>
 	/// 슬롯은 8개에 맞춘다. 슬롯의 함수가 data.Functions에 없으면 새 캐릭터와 같은 슬롯 함수를 만든다.<br/>
 	/// 페이지 함수(슬롯에 걸리지 않은 함수)는 ProgressRules.MaxPageFunctions개까지만 넣고, GUID가 없는 함수는 건너뛴다.
 	/// </summary>
@@ -206,7 +238,7 @@ public class ProgressStore
 	{
 		db.RunInTransaction(() =>
 		{
-			foreach (string table in new[] { "CharacterProgress", "CharacterMaterials", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals" })
+			foreach (string table in new[] { "CharacterProgress", "CharacterMaterials", "CharacterItemCounts", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals" })
 				db.Execute($"DELETE FROM {table} WHERE CharacterKey = ?", characterKey);
 
 			db.Insert(new ProgressRow { CharacterKey = characterKey, Level = Math.Max(1, data.Level), Exp = Math.Max(0, data.Exp), Money = Math.Max(0, data.Money) });
@@ -219,6 +251,15 @@ public class ProgressStore
 						db.Insert(new MaterialRow { CharacterKey = characterKey, MaterialId = pair.Key, Count = pair.Value });
 				}
 			}
+
+			if (data.ItemCounts != null)
+			{
+				foreach (KeyValuePair<string, int> pair in data.ItemCounts)
+				{
+					if (!string.IsNullOrEmpty(pair.Key)) WriteItemCount(characterKey, pair.Key, pair.Value);
+				}
+			}
+			InsertInitialItemCountsIfNone(characterKey);
 
 			var unlocked = new HashSet<string>();
 			if (data.Unlocked != null)
@@ -278,11 +319,19 @@ public class ProgressStore
 		db.RunInTransaction(() => WriteMaterialCount(characterKey, materialId, count));
 	}
 
+	/// <summary>블록·함수 항목 하나의 가진 개수를 정한다 (#500). 0 이하면 row를 지우고, ItemCountRules.MaxCount에서 멈춘다.</summary>
+	public void SetItemCount(string characterKey, string itemId, int count)
+	{
+		db.RunInTransaction(() => WriteItemCount(characterKey, itemId, count));
+	}
+
 	/// <summary>
-	/// 노드 해금과 재료 개수 변경을 한 트랜잭션으로 쓴다. 재료만 빠지고 노드가 안 열리는 일이 없게 하기 위함이다.<br/>
+	/// 노드 해금, 재료 개수 변경, 블록·함수 지급을 한 트랜잭션으로 쓴다. 재료만 빠지고 노드가 안 열리는 일이 없게 하기 위함이다.<br/>
 	/// nodeIds: 새로 연 노드(같이 열린 노드 포함). 이미 있는 노드는 건너뛴다. materialCounts: 바뀐 재료의 새 개수(뺀 뒤의 개수).
+	/// itemCounts: 바뀐 블록·함수 항목의 새 가진 개수(지급한 뒤의 개수). 없으면 null.
 	/// </summary>
-	public void SaveUnlock(string characterKey, IReadOnlyList<string> nodeIds, IReadOnlyDictionary<string, int> materialCounts)
+	public void SaveUnlock(string characterKey, IReadOnlyList<string> nodeIds, IReadOnlyDictionary<string, int> materialCounts,
+		IReadOnlyDictionary<string, int> itemCounts = null)
 	{
 		db.RunInTransaction(() =>
 		{
@@ -291,8 +340,14 @@ public class ProgressStore
 				bool exists = db.Table<UnlockRow>().Where(r => r.CharacterKey == characterKey && r.NodeId == id).Count() > 0;
 				if (!exists) db.Insert(new UnlockRow { CharacterKey = characterKey, NodeId = id });
 			}
-			if (materialCounts == null) return;
-			foreach (KeyValuePair<string, int> pair in materialCounts) WriteMaterialCount(characterKey, pair.Key, pair.Value);
+			if (materialCounts != null)
+			{
+				foreach (KeyValuePair<string, int> pair in materialCounts) WriteMaterialCount(characterKey, pair.Key, pair.Value);
+			}
+			if (itemCounts != null)
+			{
+				foreach (KeyValuePair<string, int> pair in itemCounts) WriteItemCount(characterKey, pair.Key, pair.Value);
+			}
 		});
 	}
 
@@ -367,6 +422,26 @@ public class ProgressStore
 		else if (row == null)
 		{
 			db.Insert(new MaterialRow { CharacterKey = characterKey, MaterialId = materialId, Count = count });
+		}
+		else
+		{
+			row.Count = count;
+			db.Update(row);
+		}
+	}
+
+	// 트랜잭션 안에서 부른다. 0 이하면 row를 지우고, 최대 개수를 넘으면 최대 개수로 쓴다
+	void WriteItemCount(string characterKey, string itemId, int count)
+	{
+		count = Math.Min(count, ItemCountRules.MaxCount);
+		ItemCountRow row = db.Table<ItemCountRow>().Where(r => r.CharacterKey == characterKey && r.ItemId == itemId).FirstOrDefault();
+		if (count <= 0)
+		{
+			if (row != null) db.Delete(row);
+		}
+		else if (row == null)
+		{
+			db.Insert(new ItemCountRow { CharacterKey = characterKey, ItemId = itemId, Count = count });
 		}
 		else
 		{

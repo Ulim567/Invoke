@@ -119,7 +119,7 @@ public class FunctionExecutor : MonoBehaviour
 	/// 사전 정의 함수에 argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 플레이어가 고른 대상을 넘기는 데 쓴다.<br/>
 	/// 예: Cast(thrust, RuntimeValue.FromBug(몬스터)). 스킬은 함수 안에서 불렸을 때와 같이 TryGetArgument로 읽는다.<br/>
 	/// arguments는 Parameters 순서이고, 뒤쪽 파라미터는 비워도 된다(「값 없음」). argument가 없으면 Cast(function)과 같다.<br/>
-	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 InvalidTarget으로 끝난다.
+	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 NoTarget(대상 없음) 또는 InvalidTarget(죽음, 없어짐)으로 끝난다.
 	/// </summary>
 	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments) => Cast(function, arguments, out _);
 

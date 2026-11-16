@@ -209,7 +209,9 @@ public class InputWaitTest : MonoBehaviour
 			case Step.SlotCastNoTarget:
 			case Step.Dead:
 				if (task != current) return;
-				Check($"{step}: InvalidTarget으로 실패", task.IsFailed && task.Failure == FunctionFailure.InvalidTarget, $"실제 {task.EndReason}, {task.Failure}");
+				// 「대상 없음」은 NoTarget, 죽은 대상은 InvalidTarget (#504)
+				FunctionFailure expected = step == Step.Dead ? FunctionFailure.InvalidTarget : FunctionFailure.NoTarget;
+				Check($"{step}: 실패 종류 {expected}",task.IsFailed && task.Failure == expected, $"실제 {task.EndReason}, {task.Failure}");
 				Check($"{step}: TestTargetFunction은 시작하지 않음", readTarget == null);
 				break;
 

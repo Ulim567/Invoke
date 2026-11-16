@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// struct 객체 등록 자리(StructObjectRegistry), HeapStorage.ObjectFreed·ObjectLeaked, 대상 array(FromBugs, AsBugs, 시작할 때의 InvalidTarget) 테스트용 컴포넌트.<br/>
+/// struct 객체 등록 자리(StructObjectRegistry), HeapStorage.ObjectFreed·ObjectLeaked, 대상 array(FromBugs, AsBugs, 시작할 때의 NoTarget) 테스트용 컴포넌트.<br/>
 /// 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다. 「[StructObjectTest] 전체 통과」면 통과.<br/>
 /// - 실제 소환검 대신 가짜 객체(FakeSword)를 만드는 함수를 이 캐릭터의 Sword에 등록한다. 같은 오브젝트에 SummonedSwords를 붙이지 않는다.<br/>
 /// - 씬에 살아 있는 몬스터가 있으면 그 몬스터로 대상 array를 확인한다. 없으면 그 단계만 건너뛴다(경고).<br/>
@@ -182,7 +182,7 @@ public class StructObjectTest : MonoBehaviour
 		Cast(converted);
 	}
 
-	// 5~7단계. 대상 array: 모두 쓸 수 있음 → 정상 종료, 「대상 없음」이 섞임 → InvalidTarget, 빈 array → 정상 종료
+	// 5~7단계. 대상 array: 모두 쓸 수 있음 → 정상 종료, 「대상 없음」이 섞임 → NoTarget, 빈 array → 정상 종료
 	void CastArray(Step arrayStep)
 	{
 		step = arrayStep;
@@ -261,7 +261,7 @@ public class StructObjectTest : MonoBehaviour
 				break;
 
 			case Step.ArrayWithNoTarget:
-				Check("ArrayWithNoTarget: InvalidTarget으로 실패", task.IsFailed && task.Failure == FunctionFailure.InvalidTarget, $"실제 {task.EndReason}, {task.Failure}");
+				Check("ArrayWithNoTarget: NoTarget으로 실패", task.IsFailed && task.Failure == FunctionFailure.NoTarget, $"실제 {task.EndReason}, {task.Failure}");
 				Check("ArrayWithNoTarget: 스킬이 시작하지 않음", readTargets == null);
 				CastArray(Step.ArrayEmpty);
 				break;

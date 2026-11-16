@@ -62,7 +62,7 @@ public static class GlobalVariablesConverter
 			// 함수 몸통과 같은 규칙. array는 배열 만들기 블록으로만 만든다(길이가 있어야 칸 수를 알 수 있기 때문)
 			if (type.Kind == VariableTypeKind.Array) return Reject($"전역 array {name}은(는) 배열 만들기 블록으로 선언해야 합니다.");
 			// 대상(Target) 전역 변수는 받는다 (#474). 담아 둔 몬스터가 죽거나 없어지면 플레이어가 is_valid_target(b)로 확인하고,
-			// 그대로 스킬에 넘기면 InvalidTarget이 난다. 처음 값은 비워 두는 것만 된다(「대상 없음」). 대상은 직접 적을 수 있는 값이 없기 때문
+			// 그대로 스킬에 넘기면 NoTarget이 난다. 처음 값은 비워 두는 것만 된다(「대상 없음」). 대상은 직접 적을 수 있는 값이 없기 때문
 			if (!TryGetInitialValue(block.Slots[2], type, rule, out RuntimeValue value, out string reason)) return Reject(reason);
 			converted.Add((name, type, value));
 		}

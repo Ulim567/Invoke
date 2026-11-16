@@ -61,8 +61,10 @@ public static class FailureNotice
 		{
 			case FunctionFailure.Overflow: return "stack이 가득 차 프로세스 재시작";
 			case FunctionFailure.DivideByZero: return "0으로 나눔";
-			case FunctionFailure.InvalidPointer: return "free할 수 없는 포인터를 free함";
-			case FunctionFailure.InvalidTarget: return "대상이 없거나 죽음";
+			case FunctionFailure.InvalidPointer: return "free할 수 없는 포인터를 free";
+			case FunctionFailure.DoubleFree: return "이미 free한 포인터를 다시 free";
+			case FunctionFailure.NoTarget: return "스킬에 전달한 대상이 비어 있음";
+			case FunctionFailure.InvalidTarget: return "스킬에 전달한 대상이 죽었거나 사라짐";
 			case FunctionFailure.IndexOutOfRange: return "array 범위 밖 index";
 		}
 		return null;

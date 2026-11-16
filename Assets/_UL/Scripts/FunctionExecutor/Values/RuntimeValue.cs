@@ -175,7 +175,7 @@ public readonly struct RuntimeValue
 
 	/// <summary>
 	/// Bug 대상 array의 몬스터들. 원소 순서대로 담은 새 목록이고, 「대상 없음」 원소는 null이다. 원소가 Bug 대상이 아닌 array이면 예외가 난다.<br/>
-	/// 스킬이 시작할 때 실행기가 쓸 수 없는 대상이 든 array를 InvalidTarget으로 막지만, 실행 중에 죽은 몬스터는 받은 스킬이 거른다.
+	/// 스킬이 시작할 때 실행기가 쓸 수 없는 대상이 든 array를 NoTarget 또는 InvalidTarget으로 막지만, 실행 중에 죽은 몬스터는 받은 스킬이 거른다.
 	/// </summary>
 	// 원소 저장소(ArrayStorage)를 스킬 코드에 보이지 않고 몬스터만 꺼내 주기 위함. 목록을 새로 만들므로 스킬이 바꿔도 array 원소는 그대로다
 	public List<Monster> AsBugs()

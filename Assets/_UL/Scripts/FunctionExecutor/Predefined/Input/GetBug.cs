@@ -3,7 +3,7 @@
 /// <para>
 /// - 실행되면 작업이 멈추고, 실행기가 InputRequested로 입력을 받는 쪽(SlotCaster)에 알린다.<br/>
 /// - 입력을 받는 쪽이 ProvideInput으로 몬스터를 넣으면 다음 틱에 그 몬스터를 돌려주고 끝난다.<br/>
-/// - 고를 몬스터가 없어 「대상 없음」이 들어오면 그대로 돌려준다. 그 값을 스킬에 넘기면 InvalidTarget이 난다.
+/// - 고를 몬스터가 없어 「대상 없음」이 들어오면 그대로 돌려준다. 그 값을 스킬에 넘기면 NoTarget이 난다.
 /// </para>
 /// </summary>
 public class GetBug : InputFunction

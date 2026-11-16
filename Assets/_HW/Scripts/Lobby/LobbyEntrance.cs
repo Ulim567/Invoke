@@ -34,6 +34,9 @@ public class LobbyEntrance : PlaceInteractable
 	[SerializeField, Tooltip("Lobby 씬에 하나 놓은 입구 창")]
 	LobbyEntrancePanel panel;
 
+	/// <summary>이 입구가 어디로 가는지 (튜토리얼이 가야 할 문을 찾을 때 읽는다)</summary>
+	public Destination Target => destination;
+
 	/// <summary>창 제목에 쓰는 이름</summary>
 	public string DisplayName => !string.IsNullOrEmpty(displayName) ? displayName : DefaultName(destination);
 

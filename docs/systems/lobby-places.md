@@ -47,6 +47,7 @@
 | `LobbyEntrance.RaidEntryRequested` | `PlayerInputReader` ↑를 누른 내 캐릭터 | - | static 이벤트. 레이드 던전 입구에서 ↑를 눌렀을 때 (입구 창 없음). 내 화면에서만 불린다. 이우림의 `RaidLobbyOpener`가 받아 레이드 방 화면(`RaidLobbyUI.OpenFor`, `raid.md`)을 연다 |
 
 - 받는 쪽(이우림)은 `LobbyEntrance.TravelRequested += 함수;`로 등록하고, 사라질 때 `-=`로 해제한다.
+- `LobbyEntrance.Target` (읽기 전용, `Destination`): 이 입구가 어디로 가는지. 튜토리얼(김도훈, [tutorial.md](tutorial.md))이 가리킬 문을 찾을 때 읽는다
 
 ## 맞춘 결과
 - 이우림과 정함

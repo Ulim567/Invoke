@@ -1342,6 +1342,8 @@ public class BlockEditor : MonoBehaviour
 		float bestDistance = float.MaxValue;
 		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
 		{
+			// 미리보기(DropGhost)는 끄는 블록을 Instantiate한 복사본이라 칸이 Init되지 않았다(editor가 null). 편집 영역에 들어와 있어도 진짜 칸이 아니므로 건너뛴다 (#498)
+			if (dropGhost != null && slot.transform.IsChildOf(dropGhost)) continue;
 			if (!slot.CanAccept(dragged)) continue;
 			Rect rect = ScreenRectOf((RectTransform)slot.transform, eventCamera);
 			if (!rect.Overlaps(areaRect)) continue; // 스크롤로 가려진 칸

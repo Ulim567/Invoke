@@ -128,6 +128,9 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	// 데이터가 바뀌면 다시 써야 하는 글자들 (예: for의 "i <"는 이름 칸을 고치면 바뀜)
 	readonly List<(TMP_Text text, Func<string> content)> dynamicTexts = new List<(TMP_Text, Func<string>)>();
 
+	// 변수 칸(대입의 왼쪽, array 이름)의 버튼 그림과 원래 색. 키는 칸 번호. 컴파일 오류가 난 변수 칸을 칠하고 되돌릴 때 쓴다 (#504)
+	readonly Dictionary<int, (Graphic graphic, Color normal)> variableSlots = new Dictionary<int, (Graphic, Color)>();
+
 	// 선언 블록의 처음 값: 「=」 글자, 값 칸, 펼치기·접기 버튼 글자, 지금 펼쳤는지 (#474). 선언 블록이 아니면 null
 	GameObject initialEquals;
 	BlockValueSlot initialValueSlot;
@@ -203,7 +206,19 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		data.Kind is BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not or BlockKind.ArrayGet or BlockKind.Malloc;
 
 	/// <summary>
+	/// 변수 칸(대입의 왼쪽, array 이름) index번을 컴파일 오류 색으로 칠하거나 되돌린다 (#504).
+	/// BlockEditor가 오류가 난 칸을 표시하고 깜빡일 때 부른다. 이 블록에 그 번호의 변수 칸이 없으면 false.
+	/// </summary>
+	public bool SetVariableSlotError(int index, bool on)
+	{
+		if (!variableSlots.TryGetValue(index, out var slot) || slot.graphic == null) return false;
+		slot.graphic.color = on ? errorColor : slot.normal;
+		return true;
+	}
+
+	/// <summary>
 	/// 컴파일 오류 표시 (블록 줄을 빨갛게). BlockEditor가 컴파일할 때 부르고, 고치면 끈다.
+	/// 값 칸에 끼운 블록이 그 칸의 오류일 때도 쓴다 (예: int 칸에 끼운 비교 블록, 지운 함수를 부르는 블록, #504).
 	/// </summary>
 	public void SetError(bool on)
 	{
@@ -572,6 +587,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		Button button = editor.CreateButton(row);
 		var anchor = (RectTransform)button.transform;
 		TMP_Text label = button.GetComponentInChildren<TMP_Text>();
+		if (button.targetGraphic != null) variableSlots[index] = (button.targetGraphic, button.targetGraphic.color);
 		button.onClick.AddListener(() =>
 		{
 			var names = new List<string>();

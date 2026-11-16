@@ -248,7 +248,7 @@ public static class InvokeUIBuilder
 		barRect.offsetMax = new Vector2(3, -1);
 
 		// 설명이 맨 위 (무엇이 잘못됐는지), 그 아래 코드, 마지막에 「> 함수 이름」 (사용자 결정. 예전에는 「함수 이름  코드」가 제목이라 이름과 코드가 한 덩어리로 읽혔다)
-		TMP_Text message = Text(root.transform, "Message", "error: use of undeclared identifier 'hpp'", 10, Color.white, TextAlignmentOptions.TopLeft);
+		TMP_Text message = Text(root.transform, "Message", "선언하지 않은 식별자: hpp", 10, Color.white, TextAlignmentOptions.TopLeft);
 		message.textWrappingMode = TextWrappingModes.Normal;
 		message.overflowMode = TextOverflowModes.Overflow;
 		message.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;

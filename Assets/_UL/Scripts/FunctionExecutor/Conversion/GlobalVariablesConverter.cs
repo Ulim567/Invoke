@@ -11,7 +11,7 @@ using UnityEngine;
 /// - capacity는 캐릭터의 메모리 전체 칸 수(ProcessMemory.Capacity)다. 전역 변수 하나가 데이터 영역 1칸, 전역 array는 길이만큼 칸을 쓴다(CellsOf).
 /// </para>
 /// <para>
-/// 거부(false)하는 파일. 콘솔 오류를 남기고, error에 첫 번째 이유를 실제 C 컴파일러 형식으로 돌려준다 (#504). 예: error: redefinition of 'x'<br/>
+/// 거부(false)하는 파일. 콘솔 오류를 남기고, error에 첫 번째 이유를 C 용어로 쓴 한국어 문장으로 돌려준다 (#504). 예: 같은 scope에서 재정의할 수 없음: x<br/>
 /// - 데이터 영역 칸 수 합계가 capacity보다 많음<br/>
 /// - 선언·배열 만들기 블록이 아닌 블록, 지금 실행기가 다룰 수 없는 타입, 선언 블록의 array 타입<br/>
 /// - 배열 길이가 직접 입력한 1 이상의 정수가 아님<br/>
@@ -27,7 +27,7 @@ public static class GlobalVariablesConverter
 	/// <summary>
 	/// TryConvert와 같다. 거부하면 error에 첫 번째 이유를 돌려준다. 편집 화면이 Global Variables의 오류 카드에 보인다 (#504).
 	/// </summary>
-	// 이유 문장을 실제 C 컴파일러(gcc, clang) 형식으로 쓰는 이유: 함수의 컴파일 오류(FunctionChecker)와 같은 형식으로 보이기 위함
+	// 이유 문장을 C 컴파일러(gcc, clang)의 오류를 C 용어 그대로 옮긴 한국어로 쓰는 이유: 함수의 컴파일 오류(FunctionChecker)와 같은 형식으로 보이기 위함
 	public static bool TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables, out string error)
 	{
 		error = null;
@@ -44,11 +44,11 @@ public static class GlobalVariablesConverter
 		{
 			// 칸: 타입(배열 만들기는 원소 타입), 이름, 초기값(배열 만들기는 길이). 함수 몸통의 블록과 같음
 			if (block == null || (block.Kind != BlockKind.Declare && block.Kind != BlockKind.ArrayDeclare) || block.Slots == null || block.Slots.Count < 3)
-				return Reject(out error, "error: expected declaration at file scope");
+				return Reject(out error, "전역 scope에는 선언만 둘 수 있음");
 
 			string name = block.Slots[1].Name;
-			if (string.IsNullOrEmpty(name)) return Reject(out error, "error: expected identifier");
-			if (!names.Add(name)) return Reject(out error, $"error: redefinition of '{name}'");
+			if (string.IsNullOrEmpty(name)) return Reject(out error, "선언에 식별자가 없음");
+			if (!names.Add(name)) return Reject(out error, $"같은 scope에서 재정의할 수 없음: {name}");
 
 			int length = 1;
 			if (block.Kind == BlockKind.ArrayDeclare && !TryGetArrayLength(block, out length, out string lengthReason)) return Reject(out error, lengthReason);
@@ -57,7 +57,7 @@ public static class GlobalVariablesConverter
 			// array를 만들기 전에 검사한다. 칸보다 큰 array의 원소를 먼저 만들지 않기 위함
 			cells += length;
 			// 넘친 칸 수는 파일 전체로 센다. 여기의 cells는 넘친 순간까지만 더한 값이라 뒤의 블록이 빠지기 때문
-			if (cells > capacity) return Reject(out error, $"error: data section overflowed by {CountCells(data) - capacity} cells");
+			if (cells > capacity) return Reject(out error, $"데이터 영역 크기를 {CountCells(data) - capacity}칸 초과함");
 
 			if (block.Kind == BlockKind.ArrayDeclare)
 			{
@@ -67,9 +67,9 @@ public static class GlobalVariablesConverter
 			}
 
 			VariableType type = block.Slots[0].Type;
-			if (!RuntimeValue.IsSupportedType(type)) return Reject(out error, $"error: unsupported type '{TypeText(type)}' for global variable '{name}'");
+			if (!RuntimeValue.IsSupportedType(type)) return Reject(out error, $"전역 변수로 지원하지 않는 타입: {TypeText(type)}");
 			// 함수 몸통과 같은 규칙. array는 배열 만들기 블록으로만 만든다(길이가 있어야 칸 수를 알 수 있기 때문)
-			if (type.Kind == VariableTypeKind.Array) return Reject(out error, $"error: array '{name}' must be declared with a size");
+			if (type.Kind == VariableTypeKind.Array) return Reject(out error, $"array는 크기를 지정해 선언해야 함: {name}");
 			// 대상(Target) 전역 변수는 받는다 (#474). 담아 둔 몬스터가 죽거나 없어지면 플레이어가 is_valid_target(b)로 확인하고,
 			// 그대로 스킬에 넘기면 NoTarget이 난다. 처음 값은 비워 두는 것만 된다(「대상 없음」). 대상은 직접 적을 수 있는 값이 없기 때문
 			if (!TryGetInitialValue(block.Slots[2], type, rule, out RuntimeValue value, out string reason)) return Reject(out error, reason);
@@ -113,7 +113,7 @@ public static class GlobalVariablesConverter
 	{
 		reason = null;
 		if (FunctionDataConverter.TryGetArrayLength(block.Slots[2], out length)) return true;
-		reason = $"error: size of array '{block.Slots[1].Name}' must be a positive integer constant";
+		reason = $"array 크기에는 양의 정수 상수만 쓸 수 있음: {block.Slots[1].Name}";
 		return false;
 	}
 
@@ -126,12 +126,12 @@ public static class GlobalVariablesConverter
 		VariableType arrayType = VariableType.ArrayOf(elementType);
 		if (!RuntimeValue.IsSupportedType(arrayType))
 		{
-			reason = $"error: unsupported element type '{TypeText(elementType)}' for array '{name}'";
+			reason = $"전역 array의 원소로 지원하지 않는 타입: {TypeText(elementType)}";
 			return false;
 		}
 		if (!rule.TryGetDefaultValue(elementType, out RuntimeValue initialValue))
 		{
-			reason = $"error: no default value for type '{TypeText(elementType)}'";
+			reason = $"기본값이 없는 타입이라 초기값을 생략할 수 없음: {TypeText(elementType)}";
 			return false;
 		}
 
@@ -147,26 +147,26 @@ public static class GlobalVariablesConverter
 		if (slot == null || IsEmpty(slot))
 		{
 			if (rule.TryGetDefaultValue(type, out value)) return true;
-			reason = $"error: no default value for type '{TypeText(type)}'";
+			reason = $"기본값이 없는 타입이라 초기값을 생략할 수 없음: {TypeText(type)}";
 			return false;
 		}
 
 		value = default;
 		if (slot.Block != null || slot.VariableName != null)
 		{
-			reason = "error: initializer element is not constant";
+			reason = "전역 변수의 초기값에는 상수만 쓸 수 있음";
 			return false;
 		}
 		if (!LiteralValue.TryParse(slot.Type, slot.Literal, out RuntimeValue parsed))
 		{
-			reason = $"error: invalid initializer '{slot.Literal}' for type '{TypeText(type)}'";
+			reason = $"{TypeText(type)} 타입에 쓸 수 없는 초기값: {slot.Literal}";
 			return false;
 		}
 		// LiteralValue를 함께 넘기는 이유: 포인터 변수에 직접 입력한 0을 NULL로 볼지(ZeroIsNull)를 선언 블록과 같은 규칙으로 판단하기 위함
 		// 포인터에 직접 입력할 수 있는 값은 NULL과 0뿐이므로, 포인터 초기값은 여기서 저절로 NULL만 남는다
 		if (!NumericRules.TryConvertForStore(new LiteralValue(slot.Type, slot.Literal), parsed, type, rule, out value))
 		{
-			reason = $"error: invalid initializer '{slot.Literal}' for type '{TypeText(type)}'";
+			reason = $"{TypeText(type)} 타입에 쓸 수 없는 초기값: {slot.Literal}";
 			return false;
 		}
 		return true;

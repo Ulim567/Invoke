@@ -346,7 +346,7 @@ public class FunctionExecutor : MonoBehaviour
 	public bool CanUseGlobalVariables(GlobalVariablesData file) => CanUseGlobalVariables(file, out _);
 
 	/// <summary>
-	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 error에 첫 번째 이유를 실제 C 컴파일러 형식으로 돌려준다 (#504). 예: error: redefinition of 'x'<br/>
+	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 error에 첫 번째 이유를 C 용어로 쓴 한국어 문장으로 돌려준다 (#504). 예: 같은 scope에서 재정의할 수 없음: x<br/>
 	/// 편집 화면이 Global Variables의 오류 카드에 이유를 보일 때 쓴다. 쓸 수 있으면 error는 null이다.
 	/// </summary>
 	public bool CanUseGlobalVariables(GlobalVariablesData file, out string error)

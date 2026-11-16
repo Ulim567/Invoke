@@ -123,7 +123,7 @@
   - 파라미터: 하나라도 있으면 거부
   - 반환 타입(`ReturnType`): `Void`가 아니면 거부 (비어 있으면 `Void`로 봄)
   - 비동기 여부(`IsAsync`): true면 거부
-- 함수 지우기: 지금 없음. 생기면 페이지 함수만 지울 수 있음 (슬롯 함수는 지우지 않음)
+- 함수 지우기 (#494): 페이지 함수만 지울 수 있음 (슬롯 함수는 지우지 않음). 그 함수 row만 지움 (`DeleteFunction`, 아래 「저장 요청」의 `RequestDeleteFunction`)
 
 #### `CharacterGlobals`
 | column | 타입 | 규칙 |
@@ -233,6 +233,9 @@
 - 크기는 슬롯 8개 전체를 셈 (`function-data.md` 「코드 영역 크기 규칙」). 슬롯 함수가 부르는 함수를 고쳐도 그 함수를 저장하는 순간 걸림. 슬롯에서 닿지 않는 함수는 세지 않으므로 거부하지 않음
 - 이미 저장된 함수는 다시 검사하지 않음. 나중에 해금 규칙이 바뀌어도 저장된 함수는 그대로 남고, 그 함수를 다시 저장할 때 걸림
 | `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected` |
+| `RequestDeleteFunction(함수 GUID)` (#494) | 슬롯 함수인지 봄 → `CharacterFunctions`에서 지움 → 슬롯 원본을 다시 만듦 (지운 함수를 부르던 슬롯은 시전 거부) | `InvalidData`, `SlotFunctionLocked`(슬롯 함수), `UnknownFunction`(없는 함수) |
+
+- 함수 지우기: 다른 함수가 지울 함수를 부르는지는 서버가 보지 않음. 편집 화면이 지우기 전에 막음 (block-editor.md 「저장 버튼」의 「다른 함수 검사」)
 
 - 장착을 바꾸는 요청: 없음 (슬롯 함수 GUID 고정)
 - 결과: `PlayerDataRequestAnswered(요청 종류, 결과)`. 성공(`Saved`)이면 그보다 먼저 `ReceivedFunctions`·`ReceivedGlobals`가 새 값으로 바뀌고 `PlayerDataReceived`가 불림
@@ -256,6 +259,7 @@
 | `CountPageFunctions(캐릭터 key)` | 슬롯에 걸리지 않은 함수 row 수 (개수 제한 검사). 읽을 수 없는 함수 row도 셈 | Slots, Functions |
 | `HasFunction(캐릭터 key, 함수 GUID)` | 그 함수 row가 있는지 (새 함수인지 볼 때) | Functions |
 | `SaveFunction(캐릭터 key, 함수 GUID, JSON)` | 넣거나 덮어씀 | Functions |
+| `DeleteFunction(캐릭터 key, 함수 GUID)` | 그 함수 row를 지움. 지웠으면 true, 없으면 false. 슬롯 함수인지는 부르는 쪽이 봄 (#494) | Functions |
 | `SaveGlobals(캐릭터 key, JSON)` | row 하나를 덮어씀 | Globals |
 
 - 표의 테이블 이름은 앞의 `Character`를 뺀 것 (예: Progress = `CharacterProgress`)

@@ -104,7 +104,23 @@ public static class InvokeUIBuilder
 		// 시안 6: 편집 화면 함수 목록에는 오른쪽 글자(키, 코드 크기)가 없다. 장착 화면(EquipItem)은 그대로
 		if (prefabName == "ListItem") detail.gameObject.SetActive(false);
 
+		// 편집 화면 함수 목록의 페이지 함수 줄 오른쪽 지우기 버튼 (#494). 글꼴(Galmuri11)에 ×가 없어서 제목줄 닫기 버튼과 같은 그림을 쓴다
+		// 처음엔 꺼 둔다. 페이지 함수 줄에서만 BlockEditor가 켠다 (ListItemView.SetDeleteAction)
+		Button delete = null;
+		if (prefabName == "ListItem")
+		{
+			GameObject deleteObject = NewUI("Delete", root.transform);
+			Image deleteImage = SetImage(deleteObject, "ui_close", Image.Type.Simple);
+			deleteImage.preserveAspect = true;
+			delete = deleteObject.AddComponent<Button>();
+			delete.targetGraphic = deleteImage;
+			LayoutElement deleteSize = deleteObject.AddComponent<LayoutElement>();
+			deleteSize.preferredWidth = 11;
+			deleteObject.SetActive(false);
+		}
+
 		ListItemView view = root.AddComponent<ListItemView>();
+		if (delete != null) Set(view, "deleteButton", delete);
 		Set(view, "button", button);
 		Set(view, "background", bg);
 		Set(view, "tagImage", tagImage);

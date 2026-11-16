@@ -337,6 +337,18 @@ public class ProgressStore
 		});
 	}
 
+	/// <summary>
+	/// 함수 하나를 지운다 (#494). 그 row가 있어서 지웠으면 true, 없으면 false.<br/>
+	/// 슬롯 함수인지(지울 수 없음)와 다른 함수가 부르는지는 부르는 쪽이 먼저 본다. 이 함수는 row만 지운다.
+	/// </summary>
+	public bool DeleteFunction(string characterKey, string functionGuid)
+	{
+		FunctionRow row = FindFunction(characterKey, functionGuid);
+		if (row == null) return false;
+		db.Delete(row);
+		return true;
+	}
+
 	/// <summary>전역 변수 선언 JSON을 덮어쓴다. 편집 화면이 전역 변수를 한꺼번에 저장하므로 JSON 전체를 바꾼다.</summary>
 	public void SaveGlobals(string characterKey, string json)
 	{

@@ -336,6 +336,7 @@
 | `BlockEditor.Refresh()` | - | - | 실제 계정인지 다시 보고 함수 목록을 새로 그린다. 편집 화면을 열 때 `BlockEditorPanel`이 부른다 |
 | `FunctionStorage.LoadAll()` | - | `List<FunctionData>` | 저장한 함수 모두 (이름 순서). 슬롯 장착 화면 등에서 쓸 수 있다. 서버 저장이 생기면 바뀐다 |
 | `FunctionStorage.Load(guid)` | GUID | `FunctionData` | 저장한 함수 하나. 없으면 null |
+| `FunctionStorage.Delete(guid)` | GUID | `bool` | 저장한 함수 파일을 지움 (임시 계정, #494). 지웠으면 true, 없으면 false. 슬롯에 끼운 함수인지, 다른 함수가 부르는지는 부르는 쪽이 먼저 봄 |
 
 ## 맞춘 결과
 - 이우림과 정한 것 (#72)

@@ -407,6 +407,23 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		CmdSaveGlobals(FunctionDataJson.ToJson(globals));
 	}
 
+	/// <summary>
+	/// [소유 클라이언트] 페이지 함수 하나를 서버 DB에서 지우라고 요청한다 (#494). 결과는 PlayerDataRequestAnswered(DeleteFunction, 결과).<br/>
+	/// 성공이면 Saved이고, 그보다 먼저 ReceivedFunctions에서 그 함수가 빠지고 PlayerDataReceived가 불린다.<br/>
+	/// 슬롯 함수(ReceivedSlots의 GUID)는 지울 수 없어 SlotFunctionLocked, 없는 함수는 UnknownFunction.<br/>
+	/// 다른 함수가 이 함수를 부르는지는 서버가 보지 않는다. 편집 화면이 지우기 전에 막는다 (FunctionChecker.FindNewlyBroken).
+	/// </summary>
+	public void RequestDeleteFunction(string functionGuid)
+	{
+		if (!CanRequest(PlayerDataRequest.DeleteFunction)) return;
+		if (string.IsNullOrEmpty(functionGuid))
+		{
+			PlayerDataRequestAnswered?.Invoke(PlayerDataRequest.DeleteFunction, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+		CmdDeleteFunction(functionGuid);
+	}
+
 	// 서버 DB를 쓰는 플레이어의 소유 클라이언트만 요청할 수 있다. 임시 계정과 네트워크를 켜지 않은 테스트는 지금처럼 이 컴퓨터의 파일에 저장한다
 	bool CanRequest(PlayerDataRequest request)
 	{
@@ -538,6 +555,35 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.Saved);
 	}
 
+	[Command]
+	void CmdDeleteFunction(string functionGuid)
+	{
+		if (!usesServerData) { TargetAnswer(PlayerDataRequest.DeleteFunction, PlayerDataRequestResult.NotAllowed); return; }
+
+		// 슬롯 함수 8개는 캐릭터를 만들 때 서버가 만들고 늘 있어야 하므로 지울 수 없다 (progress-store.md 「CharacterFunctions」)
+		if (Array.Exists(serverSlots, e => e.Kind == SlotLoadout.EntryKind.UserFunction && e.Id == functionGuid))
+		{
+			TargetAnswer(PlayerDataRequest.DeleteFunction, PlayerDataRequestResult.SlotFunctionLocked);
+			return;
+		}
+		int index = serverFunctions.FindIndex(f => f.Guid == functionGuid);
+		if (index < 0)
+		{
+			TargetAnswer(PlayerDataRequest.DeleteFunction, PlayerDataRequestResult.UnknownFunction);
+			return;
+		}
+
+#if UNITY_SERVER || UNITY_EDITOR
+		store.DeleteFunction(characterKey, functionGuid);
+#endif
+		serverFunctions.RemoveAt(index);
+		// 지운 함수를 부르던 슬롯이 있으면 그 슬롯의 원본을 만들 수 없게 되므로(시전 거부), 원본을 다시 만든다. 전역 변수는 그대로 둔다(null)
+		ApplyPlayerData(serverSlots, serverFunctions, null);
+
+		TargetFunctionDeleted(functionGuid);
+		TargetAnswer(PlayerDataRequest.DeleteFunction, PlayerDataRequestResult.Saved);
+	}
+
 	[TargetRpc]
 	void TargetAnswer(PlayerDataRequest request, PlayerDataRequestResult result)
 	{
@@ -564,6 +610,17 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	{
 		if (!FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) || globals == null) return;
 		ReceivedGlobals = globals;
+		PlayerDataReceived?.Invoke();
+	}
+
+	// [소유 클라이언트] 지우기가 성공한 함수를 ReceivedFunctions에서 뺀다. 결과(TargetAnswer)보다 먼저 온다 (#494)
+	[TargetRpc]
+	void TargetFunctionDeleted(string functionGuid)
+	{
+		if (ReceivedFunctions == null) return;
+		var functions = new List<FunctionData>(ReceivedFunctions);
+		functions.RemoveAll(f => f.Guid == functionGuid);
+		ReceivedFunctions = functions;
 		PlayerDataReceived?.Invoke();
 	}
 

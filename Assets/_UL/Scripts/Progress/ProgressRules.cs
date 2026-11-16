@@ -43,6 +43,8 @@ public enum PlayerDataRequest
 {
 	SaveFunction,
 	SaveGlobals,
+	DeleteFunction, // 페이지 함수 지우기 (#494). 성공이면 결과는 Saved (저장소에 반영됨)
+	// 새 값은 맨 끝에만 더한다. 이 값은 네트워크로 보내므로 중간에 끼우면 뒤 값들의 번호가 바뀐다
 }
 
 /// <summary>플레이어 데이터 요청의 결과.</summary>
@@ -52,9 +54,11 @@ public enum PlayerDataRequestResult
 	NotAllowed,       // 서버 DB를 쓰지 않는 플레이어(임시 계정, 네트워크를 켜지 않은 테스트)
 	InvalidData,      // JSON을 읽을 수 없음, GUID가 없음
 	TooManyFunctions, // 새 함수(페이지 함수)인데 이미 ProgressRules.MaxPageFunctions개
-	SlotFunctionLocked, // 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님)를 바꾸려 함. 슬롯 함수는 function body만 바꿀 수 있음
+	SlotFunctionLocked, // 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님)를 바꾸거나 슬롯 함수를 지우려 함. 슬롯 함수는 function body만 바꿀 수 있음
 	BlockLocked,      // 해금하지 않은 문법의 블록을 씀 (SkillTree.IsBlockUnlocked)
 	SkillLocked,      // 해금하지 않은 C 스킬을 부름 (스킬 트리에 노드가 있는 사전 정의 함수만 해당)
 	CodeSizeExceeded, // 저장하면 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘음
 	GlobalsRejected,  // 전역 변수 검사에 걸림 (칸 부족 등. 이유는 서버 콘솔 오류)
+	UnknownFunction,  // 지우려는 함수가 없음 (#494)
+	// 새 값은 맨 끝에만 더한다. 이 값은 네트워크로 보내므로 중간에 끼우면 뒤 값들의 번호가 바뀐다
 }

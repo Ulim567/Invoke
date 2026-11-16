@@ -96,6 +96,17 @@ public class ProgressStoreTest : MonoBehaviour
 
 			Check("다른 캐릭터의 진행도는 그대로", progress.Load(oldCharacterKey).Level == 1 && progress.CountPageFunctions(oldCharacterKey) == 0);
 
+			// 함수 지우기 (#494): 지운 페이지 함수는 개수에서 빠지고, 없는 함수와 다른 캐릭터의 함수는 지우지 않는다
+			FunctionData doomed = FunctionData.Create("Doomed");
+			progress.SaveFunction(characterKey, doomed.Guid, FunctionDataJson.ToJson(doomed));
+			progress.SaveFunction(oldCharacterKey, doomed.Guid, FunctionDataJson.ToJson(doomed));
+			bool deleted = progress.DeleteFunction(characterKey, doomed.Guid);
+			Check("페이지 함수를 지우면 true, row가 없어지고 페이지 함수 1개로 돌아감",
+				deleted && !progress.HasFunction(characterKey, doomed.Guid) && progress.CountPageFunctions(characterKey) == 1);
+			Check("없는 함수를 지우면 false", !progress.DeleteFunction(characterKey, doomed.Guid));
+			Check("다른 캐릭터의 같은 GUID 함수는 그대로", progress.HasFunction(oldCharacterKey, doomed.Guid));
+			progress.DeleteFunction(oldCharacterKey, doomed.Guid);
+
 			// 테스트 데이터 넣기: 슬롯 0만 data의 함수, 슬롯 1은 옛 스킬 장착, 나머지 슬롯은 빠짐. 페이지 함수는 제한보다 2개 많이 넣는다
 			var replaced = new CharacterProgressData { Level = 12 };
 			FunctionData customSlot = FunctionData.Create(ProgressRules.SlotFunctionName(0));

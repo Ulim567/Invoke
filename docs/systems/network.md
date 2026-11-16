@@ -175,6 +175,7 @@ void CmdPickUp()
 | `PlayerDataReceived` (event) | - | - | [표시] 서버가 보낸 슬롯·함수·전역 변수를 처음 다 받았을 때, 저장 요청이 성공해 바뀌었을 때. 실제 계정의 소유 클라이언트 (#205) |
 | `RequestSaveFunction(FunctionData)` | 함수 (슬롯 함수 또는 페이지 함수) | - | [소유 클라이언트] 서버 DB에 함수 저장 요청. 새 GUID는 페이지 함수로 셈. 결과는 `PlayerDataRequestAnswered` (#205, #237, [progress-store.md](progress-store.md)) |
 | `RequestSaveGlobals(GlobalVariablesData)` | 전역 변수 선언 | - | [소유 클라이언트] 서버 DB에 전역 변수 저장 요청. 결과는 `PlayerDataRequestAnswered` (#205) |
+| `RequestDeleteFunction(string)` | 페이지 함수의 GUID | - | [소유 클라이언트] 서버 DB에서 페이지 함수 지우기 요청. 슬롯 함수는 `SlotFunctionLocked`, 없는 함수는 `UnknownFunction`. 결과는 `PlayerDataRequestAnswered`(`DeleteFunction`), 성공이면 먼저 `ReceivedFunctions`에서 빠짐 (#494, [progress-store.md](progress-store.md)) |
 | `PlayerDataRequestAnswered` (event) | `PlayerDataRequest`, `PlayerDataRequestResult` | - | [로직] 저장 요청의 결과. 소유 클라이언트 (#205) |
 
 ### 시험

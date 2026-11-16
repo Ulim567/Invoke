@@ -50,7 +50,7 @@ public class SlotLoadout : MonoBehaviour
 	// 슬롯마다 시전할 원본. 장착을 바꾸거나 ReloadFunctions를 부를 때만 새로 만든다
 	readonly FunctionBlock[] originals = new FunctionBlock[SlotCount];
 	// 슬롯마다 원본을 만들지 못했는지(컴파일 오류가 있는 블록 함수 등, #506). 원본을 지울 때(ForgetOriginal) 함께 지운다
-	// 화면(HudView)이 매 프레임 TryGetFunction을 부르므로, 실패를 기억하지 않으면 매 프레임 다시 만들며 콘솔 오류를 남기기 때문
+	// 화면(HudView)이 매 프레임 TryGetFunction을 부르므로, 실패를 기억하지 않으면 매 프레임 다시 만들며 콘솔 경고를 남기기 때문
 	readonly bool[] buildFailed = new bool[SlotCount];
 	bool loaded;
 	// 서버가 보낸 이 캐릭터의 함수 전부 (#263). null이면 이 컴퓨터의 파일을 쓴다
@@ -281,7 +281,7 @@ public class SlotLoadout : MonoBehaviour
 			Debug.LogWarning($"[SlotLoadout] 슬롯 {slot + 1}: 지워진 함수 ({entry.Id})");
 			return null;
 		}
-		// 실행할 수 없는 함수면 변환기가 콘솔 오류를 남긴다
+		// 실행할 수 없는 함수면 변환기가 콘솔 경고를 남긴다
 		return FunctionDataConverter.TryConvert(data, owned, out UserFunction function) ? function : null;
 	}
 

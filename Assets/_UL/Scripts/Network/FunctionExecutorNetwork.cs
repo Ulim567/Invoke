@@ -862,7 +862,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	}
 
 	// 슬롯 하나의 원본. 빈 슬롯, 없는 스킬, 없는 함수, 실행할 수 없는 함수면 null
-	// 실행할 수 없는 함수는 FunctionDataConverter가 콘솔 오류를 남긴다
+	// 실행할 수 없는 함수는 FunctionDataConverter가 콘솔 경고를 남긴다
 	FunctionBlock BuildOriginal(int slot, SlotLoadout.Entry entry, IReadOnlyList<FunctionData> functions)
 	{
 		if (entry.IsEmpty) return null;

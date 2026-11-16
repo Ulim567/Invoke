@@ -65,7 +65,7 @@ public class WaitTest : MonoBehaviour
 		// 초 칸에 string → 틱 1에 TypeMismatch
 		CastWait("WaitString", Literal(String, "a"));
 
-		// 빈 초 칸(함수 탭에서 놓은 그대로) → 변환 거부. 변환기가 콘솔 오류를 남기는 것이 정상이다
+		// 빈 초 칸(함수 탭에서 놓은 그대로) → 변환 거부. 변환기가 콘솔 경고를 남기는 것이 정상이다
 		FunctionData empty = FunctionData.Create("WaitEmpty");
 		empty.Blocks.Add(BlockData.Wait(SlotData.EmptyValue()));
 		Check("빈 초 칸: 변환 거부", !FunctionDataConverter.TryConvert(empty, System.Array.Empty<FunctionData>(), out _));

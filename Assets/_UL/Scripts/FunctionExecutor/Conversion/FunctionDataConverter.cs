@@ -17,7 +17,7 @@ using UnityEngine;
 /// - 재귀 호출(자기 자신이나 서로를 부르는 함수)도 바꾼다. 끝나지 않는 재귀는 실행 중에 스택이 모자라 Overflow로 끝난다.
 /// </para>
 /// <para>
-/// 거부(false)하는 함수: 지금 실행기가 아직 실행할 수 없는 기능을 쓴 함수다. 콘솔 오류를 남긴다.<br/>
+/// 거부(false)하는 함수: 지금 실행기가 아직 실행할 수 없는 기능을 쓴 함수다. 콘솔 경고를 남긴다 (#506부터 오류가 아니라 경고).<br/>
 /// - 예: 위치 타입 변수, 앞에 if가 없는 else, 비어 있는 value slot(사전 정의 함수 블록의 파라미터 칸은 비워도 됨), 없는 고정 ID, 없는 GUID<br/>
 /// - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등)은 거부하지 않는다. 실행 중에 그 블록이 실패 종류를 기록하고 실패한다.
 /// </para>
@@ -67,7 +67,7 @@ public static class FunctionDataConverter
 			}
 		}
 
-		// 함수 하나를 바꾼다. 같은 GUID를 이미 바꾸기 시작했으면 그 객체를 돌려준다. 바꿀 수 없으면 콘솔 오류를 남기고 null
+		// 함수 하나를 바꾼다. 같은 GUID를 이미 바꾸기 시작했으면 그 객체를 돌려준다. 바꿀 수 없으면 콘솔 경고를 남기고 null
 		public UserFunction ConvertFunction(FunctionData data)
 		{
 			if (data.Guid != null && convertedByGuid.TryGetValue(data.Guid, out UserFunction started)) return started;
@@ -205,7 +205,7 @@ public static class FunctionDataConverter
 		IReadOnlyList<BlockData> InnerBlocksOf(BlockData block) =>
 			block.InnerBlocks ?? (IReadOnlyList<BlockData>)Array.Empty<BlockData>();
 
-		// function body에 놓인 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
+		// function body에 놓인 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 경고를 남기고 null
 		Block ConvertStatement(FunctionData data, BlockData block)
 		{
 			switch (block.Kind)
@@ -325,7 +325,7 @@ public static class FunctionDataConverter
 			return Reject(data, $"{block.Kind} 블록은 아직 실행할 수 없습니다.");
 		}
 
-		// 함수 블록의 부를 함수와 argument를 바꾼다. statement로 부른 호출과 expression으로 부른 호출이 함께 쓴다. 바꿀 수 없으면 콘솔 오류를 남기고 false
+		// 함수 블록의 부를 함수와 argument를 바꾼다. statement로 부른 호출과 expression으로 부른 호출이 함께 쓴다. 바꿀 수 없으면 콘솔 경고를 남기고 false
 		bool TryConvertCall(FunctionData data, BlockData block, out FunctionBlock function, out ValueBlock[] arguments)
 		{
 			function = null;
@@ -380,7 +380,7 @@ public static class FunctionDataConverter
 			return true;
 		}
 
-		// 함수 블록이 GUID로 부르는 사용자 정의 함수를 찾아 바꾼다. 부른 함수를 바꿀 수 없으면 그 함수 이름으로 콘솔 오류가 남는다
+		// 함수 블록이 GUID로 부르는 사용자 정의 함수를 찾아 바꾼다. 부른 함수를 바꿀 수 없으면 그 함수 이름으로 콘솔 경고가 남는다
 		bool TryFindUserFunction(FunctionData data, BlockData block, out FunctionBlock function)
 		{
 			function = null;
@@ -394,7 +394,7 @@ public static class FunctionDataConverter
 			return function != null;
 		}
 
-		// value slot 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
+		// value slot 하나를 바꾼다. 바꿀 수 없으면 콘솔 경고를 남기고 null
 		ValueBlock ConvertValue(FunctionData data, SlotData slot)
 		{
 			if (slot.Block != null) return ConvertValueBlock(data, slot.Block);
@@ -405,7 +405,7 @@ public static class FunctionDataConverter
 			return Reject<ValueBlock>(data, "value slot이 비어 있습니다.");
 		}
 
-		// expression으로 쓴 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 오류를 남기고 null
+		// expression으로 쓴 블록 하나를 바꾼다. 바꿀 수 없으면 콘솔 경고를 남기고 null
 		ValueBlock ConvertValueBlock(FunctionData data, BlockData block)
 		{
 			switch (block.Kind)
@@ -501,9 +501,11 @@ public static class FunctionDataConverter
 	static bool IsEmpty(SlotData slot) => slot.Block == null && slot.VariableName == null && slot.Literal == null;
 
 	// 거부 이유를 남기고 null을 돌려준다. Block과 ValueBlock 어느 쪽 자리에서도 쓰기 위해 제네릭으로 둔다
+	// 오류가 아니라 경고로 남기는 이유: #506부터 컴파일 오류가 있는 함수도 저장되므로, 바꾸지 못하는 함수는 플레이어가 만든 게임 상황이지 개발 버그가 아니다
+	// 오류로 남기면 에디터의 Error Pause가 그때마다 Play를 멈춘다. 시전은 빌드 실패(CastRejection.CompileError)가 막는다
 	static T Reject<T>(FunctionData data, string reason) where T : class
 	{
-		Debug.LogError($"함수 {data.Name}을(를) 실행할 수 없습니다: {reason}");
+		Debug.LogWarning($"함수 {data.Name}을(를) 실행할 수 없습니다: {reason}");
 		return null;
 	}
 

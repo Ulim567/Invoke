@@ -93,12 +93,13 @@
   - 값: `RuntimeValue.FromBug(몬스터)`. 「대상 없음」은 `FromBug(null)`
   - 초기값을 비운 `Target` 변수: 「대상 없음」(언어와 상관없음)
   - 비교: 같은 종류의 대상끼리 `==`, `!=`만. 같은 대상인지. `NULL`과 비교, 크기 비교, 다른 종류끼리 비교: `TypeMismatch` (#474에서 `NULL` 비교를 막음. Target은 포인터가 아님)
-  - 쓸 수 있는 대상인지 확인: 사전 정의 함수 `is_valid_target(b)` (`game.is_valid_target`, #474). 「대상 없음」·죽음·없어짐이면 false. 판정은 스킬에 넘길 때의 `InvalidTarget` 검사(`RuntimeValue.IsUsableTarget`)와 같음
+  - 쓸 수 있는 대상인지 확인: 사전 정의 함수 `is_valid_target(b)` (`game.is_valid_target`, #474). 「대상 없음」·죽음·없어짐이면 false. 판정은 스킬에 넘길 때의 `NoTarget`·`InvalidTarget` 검사(`RuntimeValue.IsUsableTarget`)와 같음
   - `NULL`을 Target 변수에 넣기: `TypeMismatch`. 「대상 없음」은 처음 값을 비운 Target 변수
   - 직접 입력한 `0`: `NULL`로 보지 않음(`zeroIsNull`은 포인터 자리의 규칙)
   - 계산, 조건으로 쓰기(`if (b)`): `TypeMismatch`
-  - 스킬에 argument로 넘길 때: 「대상 없음」, 죽은 대상(`Monster.IsDead`), 오브젝트가 없어진 대상이면 `InvalidTarget`. 변수에 담거나 비교할 때는 검사하지 않음(C의 해제한 포인터처럼 쓰는 순간에 에러)
-  - `Target` array를 스킬에 넘길 때 (#191): 원소 하나라도 쓸 수 없는 대상이면 `InvalidTarget`(단일 대상과 같은 규칙). 빈 array는 통과
+  - 스킬에 argument로 넘길 때: 「대상 없음」이면 `NoTarget`, 죽은 대상(`Monster.IsDead`)이나 오브젝트가 없어진 대상이면 `InvalidTarget` (#504). 변수에 담거나 비교할 때는 검사하지 않음(C의 해제한 포인터처럼 쓰는 순간에 에러)
+    - 둘을 나눈 이유: 플레이어가 고칠 곳이 다름. 「대상 없음」은 대상을 찾은 뒤 확인할 일, 죽은 대상은 넘기기 전에 다시 확인할 일
+  - `Target` array를 스킬에 넘길 때 (#191): 원소를 앞에서부터 보고, 처음 걸린 원소에 따라 `NoTarget` 또는 `InvalidTarget`(단일 대상과 같은 규칙). 빈 array는 통과
     - 검사 시점: 스킬이 시작하기 직전 한 번. 스킬이 시작한 뒤에 죽은 대상은 그 스킬이 거름
   - 값 만들기·꺼내기 (#191): `RuntimeValue.FromBugs(몬스터들)`(타입 `ArrayOf(TargetOf(Bug))`), `value.AsBugs()`(원소 순서의 몬스터 목록, 「대상 없음」은 `null`)
 - 지역 변수
@@ -158,7 +159,7 @@
 - 사전 정의 함수 블록
   - 찾기: 고정 ID로 `PredefinedFunctionRegistry`
   - argument: 왼쪽부터 실행 후 스킬 복사본에 넘김. 비운 칸은 「값 없음」. 스킬은 `TryGetArgument`로 읽음([predefined-function.md](predefined-function.md))
-    - 쓸 수 없는 대상(「대상 없음」, 죽음, 없어짐): 스킬이 시작하기 직전(쿨타임 기다림 뒤)에 `InvalidTarget`. 스킬은 시작하지 않고 쿨타임도 걸리지 않음. 슬롯 직접 시전(`Cast(스킬, 대상)`)도 같음 (#131)
+    - 쓸 수 없는 대상: 스킬이 시작하기 직전(쿨타임 기다림 뒤)에 「대상 없음」이면 `NoTarget`, 죽음·없어짐이면 `InvalidTarget` (#504). 스킬은 시작하지 않고 쿨타임도 걸리지 않음. 슬롯 직접 시전(`Cast(스킬, 대상)`)도 같음 (#131)
   - tick: argument에 expression으로 쓴 블록이 없으면 그 스킬의 `TickCount`(슬롯에서 바로 시전했을 때와 같음)
   - 클래스: statement와 expression, 사전 정의 함수와 사용자 정의 함수 모두 `CallBlock` (#132)
   - statement로 놓음: 반환 값은 버림. `Return` 누락·반환 타입 불일치는 expression으로 썼을 때와 같이 실패
@@ -267,7 +268,8 @@
     - heap이 모자람: 만들기 함수를 부르지 않고 `NullPointer`
     - 만들기 함수가 `null`(예: 소환검 5개): `NullPointer`. heap 부족과 같음. 플레이어는 `if (s != NULL)` 하나로 두 경우를 함께 처리
   - 등록하지 않은 struct: 어떤 struct인지만 가진 객체(`StructInstance`). 화면의 오브젝트 없음
-- `free` 블록 (#90): value slot의 포인터를 해제. 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)이면 `InvalidPointer`(플레이어 코드 에러)
+- `free` 블록 (#90): value slot의 포인터를 해제. 이미 해제한 포인터이면 `DoubleFree`, 그 밖의 쓸 수 없는 포인터(누수된 포인터, 준 적 없는 값)이면 `InvalidPointer` (#504)
+  - 이미 해제한 포인터인지: `HeapStorage.WasFreed`. 포인터 값을 다시 쓰지 않으므로, 준 적 있는 값인데 heap에 없으면 해제한 것
   - `NULL`(`NullPointer`, 직접 입력한 `NULL`, C에서 직접 입력한 `0`): C처럼 아무 일도 하지 않고 1 tick 뒤 끝남 (#120). 스킬이 쓰는 `PredefinedFunction.Free`는 그대로 `NullPointer`를 에러로 봄
 - 포인터 값: 1부터 하나씩 커짐. 해제한 값은 다시 쓰지 않음
   - `int` 최댓값에 닿을 때: 1로 되돌리고, 아직 쓰는 값은 건너뜀
@@ -330,18 +332,20 @@
 | `DuplicateVariable` | 같은 이름의 변수를 두 번 선언함 (#90) |
 | `TypeMismatch` | 값을 변수·파라미터 타입으로 바꿀 수 없음, 그 타입에 쓸 수 없는 연산. 예: `int x = "abc"`, C의 `float %` (#90) |
 | `DivideByZero` | 0으로 나누기, `% 0` (#90) |
-| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣음. `NULL`은 실패가 아님 (#120) |
+| `InvalidPointer` | `free` 블록에 쓸 수 없는 포인터(누수된 포인터, 준 적 없는 값)를 넣음. `NULL`은 실패가 아님 (#120). 이미 해제한 포인터는 `DoubleFree` (#504) |
 | `NotInLoop` | 반복문 밖에서 `break`, `continue`를 만남 (#120) |
-| `InvalidTarget` | 스킬에 넘긴 대상이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어짐 (#131). `Target` array는 원소 하나라도 그러함 (#191) |
+| `InvalidTarget` | 스킬에 넘긴 대상이 죽었거나 오브젝트가 없어짐 (#131). `Target` array는 처음 걸린 원소가 그러함 (#191). 「대상 없음」은 `NoTarget` (#504) |
 | `MissingReturn` | 반환 타입이 있는 사용자 정의 함수가 return 없이 끝나거나 `return;`을 만남 (#132) |
 | `IndexOutOfRange` | array의 범위 밖 원소를 읽거나 씀(음수 포함) (#132) |
+| `NoTarget` | 스킬에 넘긴 대상이 「대상 없음」. 예: `get_bug`가 몬스터를 찾지 못함, 처음 값을 비운 `Target` 변수 (#504) |
+| `DoubleFree` | `free` 블록에 이미 해제한 포인터를 넣음 (C의 double free, #504) |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
   - `CompileError`: 그 언어에서 실행 전에 찾아내는 잘못
   - `RuntimeError`: 그 언어에서 실행 중에 찾아내는 잘못
   - 언어마다 다름. 예: 선언하지 않은 변수는 C에서 `CompileError`, Python에서 `RuntimeError`
-  - 찾아내는 시점: 분류와 상관없이 지금은 모두 실행 중. compile error를 편집 화면에서 저장할 때 검사하는 일은 별도 이슈
+  - 찾아내는 시점: C의 compile error는 편집 화면이 저장하기 전에 `FunctionChecker`로 먼저 찾음([block-editor.md](block-editor.md)). 실행기도 실행 중에 같은 실패를 다시 검사함(서버에서 받은 함수 등)
   - `SkillFailed`는 한 줄이므로 스킬 에러는 종류와 상관없이 같은 분류
 - 처리 종류(`FailureHandling`)
   - `EndTask`: 그 `FunctionTask`만 `Failed`로 끝남
@@ -356,7 +360,7 @@
 
 | 끊는 방법 | 부르는 곳 | 끊는 대상 | 끝난 이유 | heap | 전역 변수 |
 | --- | --- | --- | --- | --- | --- |
-| 실행 중단 공격 `InterruptAll` | 몬스터 공격의 실행 중단 효과 | 그 캐릭터의 모든 작업 | `Interrupted` | 그대로. 끊긴 작업이 쥐던 객체는 누수 | 그대로 |
+| 실행 중단 공격 `InterruptAll` | 몬스터 공격의 실행 중단 효과 (원인 `MonsterAttack`). 사망·장소 이동도 같은 방법으로 끊음 (원인 `System`, #504) | 그 캐릭터의 모든 작업 | `Interrupted` | 그대로. 끊긴 작업이 쥐던 객체는 누수 | 그대로 |
 | 슬롯 취소 `Cancel` | 슬롯 입력(`SlotCaster`) | 그 슬롯의 원본으로 시전한 작업만 | `Cancelled` | 그대로. 끊긴 작업이 쥐던 객체는 누수 | 그대로 |
 | Overflow (C, `RestartProcess` 처리) | 실행기(언어 규칙 표) | 그 캐릭터의 모든 작업 | Overflow를 낸 작업 `Failed`, 나머지 `Interrupted` | 비움(소환검 포함) | 파일의 초기값 |
 
@@ -427,12 +431,14 @@
 | `TickEnabled` | - | `bool` (읽기·쓰기) | tick을 진행하는지. false이면 tick을 세지 않고 작업도 진행하지 않는다. 처음 값 true. 클라이언트의 실행기를 멈출 때 `FunctionExecutorNetwork`가 쓴다 (#173) |
 | `TryGetTask(int id, out FunctionTask task)` | 작업 번호(`FunctionTask.Id`) | `bool` | 진행 중인 작업과 다음 tick을 기다리는 작업에서 번호로 찾는다. 목록에서 빠졌거나 없는 번호면 `false`. 클라이언트가 보낸 작업 번호를 서버의 작업으로 바꿀 때 쓴다 (#173) |
 | `IsRunning(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 function의 `FunctionTask`가 진행 중이거나 다음 tick을 기다리면 `true`. 스킬이면 같은 스킬이 다른 function 안에서 실행 중일 때도 `true` |
-| `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
+| `InterruptAll()` | - | - | 실행 중단 공격에 맞았을 때 부른다. `InterruptAll(InterruptCause.MonsterAttack)`과 같다. 진행 중인 `FunctionTask`와 다음 tick을 기다리는 `FunctionTask`를 모두 `Interrupted`로 끝낸다. 끊긴 `FunctionTask`도 tick이 끝날 때 목록에서 빠지며 `TaskEnded`가 불린다. 진행을 시작하기 전에 끊긴 `FunctionTask`는 `TaskStarted` 없이 `TaskEnded`만 불린다. |
+| `InterruptAll(InterruptCause cause)` | 끊은 원인 | - | `InterruptAll()`과 같이 끊고, 끊긴 `FunctionTask`의 `InterruptCause`에 원인을 남긴다. `MonsterAttack`(실행 중단 공격)만 HUD에 알린다. 사망(`FunctionExecutorNetwork`), 장소 이동(`InvokeNetworkManager.TravelPlayer`), `RestartProcess`는 `System`으로 부른다. (#504) |
 | `Cancel(FunctionBlock function)` | 슬롯의 function (원본) | `bool` | 그 원본으로 시전한 `FunctionTask`만 `Cancelled`로 끊는다(진행 중, 다음 tick을 기다리는 것 모두). 끊은 작업이 있으면 `true`, 없으면 `false`. 플레이어가 그 슬롯의 작업을 취소할 때 부른다. 스킬 슬롯은 같은 스킬이 다른 function 안에서 실행 중이어도 끊지 않으므로, `IsRunning`이 `true`여도 `false`일 수 있다. 처리는 「끊기는 경우」 (#143) |
-| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll`과 같음), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 로비 도착(`TravelPlayer`, #435), 연습장 초기화에서 부른다. (#139) |
+| `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll(InterruptCause.System)`), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 로비 도착(`TravelPlayer`, #435), 연습장 초기화에서 부른다. (#139) |
 | `SetGlobalVariablesFile(GlobalVariablesData file)` | 전역 변수 파일 (`null`이면 이 컴퓨터의 파일) | - | 초기화 때 읽을 전역 변수 파일을 정한다. 정하기만 하고 초기화하지 않는다. 서버가 플레이어가 보낸 파일로 전역 변수를 만들 때 쓴다 (#173) |
 | `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장하고, 저장한 파일을 초기화 때 읽을 파일로 정한 뒤(`SetGlobalVariablesFile`, #478) `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
 | `CanUseGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | `TrySaveGlobalVariables`와 같은 검사만 한다. 저장·반영하지 않음. 서버가 DB에 저장하기 전에 쓴다(`FunctionExecutorNetwork`). (#205) |
+| `CanUseGlobalVariables(GlobalVariablesData file, out string error)` | 전역 변수 파일 | `bool`, 첫 번째 이유 | 같은 검사. 쓸 수 없으면 `error`에 첫 번째 이유를 compile error 문장으로 돌려준다(예: 「같은 scope에서 재정의할 수 없음: x」). 편집 화면이 Global Variables를 컴파일할 때 오류 창에 보인다 (#504) |
 
 ### `FunctionTask`
 
@@ -445,6 +451,7 @@
 | `Name` | - | `string` | cast한 function의 이름 |
 | `State` | - | `FunctionTaskState` | `Running`(진행 중), `WaitingInput`(입력 함수가 입력을 기다리는 중, #131), `Ended`(끝남) |
 | `EndReason` | - | `FunctionTaskEndReason` | `None`(진행 중), `Completed`(정상 종료), `Interrupted`(실행 중단 공격), `Failed`(플레이어 책임인 실패. 실패 종류는 `Failure`), `InternalError`(개발자 책임. 플레이어의 에러로 보여 주지 않음), `Cancelled`(플레이어가 슬롯 취소, #143). Overflow로 프로세스를 새로 시작하면 Overflow를 낸 작업은 `Failed`, 함께 끊긴 작업은 `Interrupted` |
+| `InterruptCause` | - | `InterruptCause` | 끊은 원인. `MonsterAttack`(실행 중단 공격), `System`(사망, 장소 이동, `RestartProcess`). `EndReason`이 `Interrupted`일 때만 뜻이 있음 (#504) |
 | `IsEnded` | - | `bool` | 끝났으면 `true` |
 | `IsFailed` | - | `bool` | `Failed`(플레이어 책임)로 끝났으면 `true`. `InternalError`는 `false`. 실패 여부는 `Failure`가 아니라 이 값으로 판단한다. |
 | `Failure` | - | `FunctionFailure?` | `Failed`로 끝났을 때 실패 종류. 그 밖에는 `null` |
@@ -483,33 +490,36 @@
 | `Failure` | `FunctionFailure` | 실패 종류. `EndReason`이 `Failed`일 때만 뜻이 있음 |
 | `Category` | `FailureCategory` | 시전자 언어에서의 분류(`LanguageRule.GetFailureCategory`). `Failed`일 때만 |
 | `ErrorName`, `ErrorMessage` | `string` | 스킬 에러 클래스 이름(예: `UnarmedError`)과 `SkillError.Message`. `SkillFailed`일 때만, 그 밖에는 빈 글자열 |
+| `InterruptCause` | `InterruptCause` | 끊은 원인(`MonsterAttack`, `System`). `EndReason`이 `Interrupted`일 때만 뜻이 있음 (#504) |
 | `From(FunctionTask task, LanguageRule language)` (static) | `TaskEndInfo` | 끝난 작업에서 값을 모음. `language`가 없으면 분류는 `RuntimeError` |
 
 ### `FailureNotice` (실패 알림 문장, #480)
 
-시전 거부와 끝난 작업을 HUD 알림 문장으로 바꿈. 형식은 두 줄 `[분류] 이름` / 현상 설명. 알리지 않는 것이면 `null`
+시전 거부와 끝난 작업을 HUD 알림 문장으로 바꿈. 형식은 두 줄 `[분류] 이름` / 원인 설명. 알리지 않는 것이면 `null`
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `ForRejection(CastRejection rejection)` (static) | 시전 거부 이유 | `string` | `NotEnoughMemory`만 `[Cast Rejected] NotEnoughMemory` / `남은 메모리가 함수 크기보다 적음`. 그 밖의 거부는 `null`(슬롯 덮개, 빨간 테두리, 무채색이 이미 보여 줌) |
-| `ForTaskEnd(TaskEndInfo info)` (static) | 끝난 이유 | `string` | `Interrupted`, runtime error로 분류된 `Failed`만. 정상 종료, `Cancelled`, `InternalError`, compile error는 `null` |
+| `ForTaskEnd(TaskEndInfo info)` (static) | 끝난 이유 | `string` | 원인이 `MonsterAttack`인 `Interrupted`, runtime error로 분류된 `Failed`만. 원인이 `System`인 `Interrupted`(사망, 장소 이동, 재시작), 정상 종료, `Cancelled`, `InternalError`, compile error는 `null` (#504) |
 
 - 문장 표
 
 | 첫 줄 | 둘째 줄 |
 | --- | --- |
 | `[Cast Rejected] NotEnoughMemory` | 남은 메모리가 함수 크기보다 적음 |
-| `[Runtime Error] Interrupted` | 실행 중단 공격으로 함수가 멈춤 |
+| `[Interrupted] 실행 중단 공격` | 함수가 모두 멈춤 |
 | `[Runtime Error] Overflow` | stack이 가득 차 프로세스 재시작 |
 | `[Runtime Error] DivideByZero` | 0으로 나눔 |
-| `[Runtime Error] InvalidPointer` | free할 수 없는 포인터를 free함 |
-| `[Runtime Error] InvalidTarget` | 대상이 없거나 죽음 |
+| `[Runtime Error] InvalidPointer` | free할 수 없는 포인터를 free |
+| `[Runtime Error] DoubleFree` | 이미 free한 포인터를 다시 free |
+| `[Runtime Error] NoTarget` | 스킬에 전달한 대상이 비어 있음 |
+| `[Runtime Error] InvalidTarget` | 스킬에 전달한 대상이 죽었거나 사라짐 |
 | `[Runtime Error] IndexOutOfRange` | array 범위 밖 index |
-| `[Runtime Error]` + 스킬 에러 클래스 이름 | 그 에러의 `Message` (`UnarmedError` 손에 검이 없음, `NoSummonedSwordError` 쓸 수 있는 소환검이 없음, `InvalidPointerError` 쓸 수 없는 포인터 N) |
+| `[Runtime Error]` + 스킬 에러 클래스 이름 | 그 에러의 `Message` (`UnarmedError` 손에 검이 없음, `NoSummonedSwordError` 쓸 수 있는 소환검이 없음, `NullPointerError` 스킬에 NULL 포인터 전달, `FreedPointerError` 스킬에 이미 free한 포인터 전달, `InvalidPointerError` 사용할 수 없는 포인터: N) |
 
 - 스킬 에러의 설명은 이 표에 두지 않음. 새 스킬 에러는 `Message`만 덮어쓰면 됨([predefined-function.md](predefined-function.md)). `Message`는 현상만 짧게(예: 「손에 검이 없음」)
 - 표에 설명이 없는 runtime error(다른 언어에서 runtime error가 되는 실패)는 첫 줄만
-- compile error를 알리지 않는 이유: 편집 화면이 저장할 때 잡고, 실행 중에는 runtime error만 나야 함(이우림 결정 11/1, 11/9). 저장 검사가 놓치는 compile error(`DuplicateVariable`, 연산의 `TypeMismatch`, `InvalidLiteral`)는 별도 이슈
+- compile error를 알리지 않는 이유: 편집 화면이 저장할 때 잡고, 실행 중에는 runtime error만 나야 함(이우림 결정 11/1, 11/9). 저장 검사가 놓치던 `DuplicateVariable`, C의 `float %`(`TypeMismatch`)는 #504에서 저장 검사에 더함. `InvalidLiteral`은 편집 화면의 칸이 적은 글자로 타입을 정하므로 나지 않음
 
 ### `LanguageRuleData` (언어 규칙 파일)
 
@@ -539,6 +549,8 @@
 | `InvalidTarget` | `EndTask` | `RuntimeError` |
 | `MissingReturn` | `EndTask` | `CompileError` |
 | `IndexOutOfRange` | `EndTask` | `RuntimeError` |
+| `NoTarget` | `EndTask` | `RuntimeError` |
+| `DoubleFree` | `EndTask` | `RuntimeError` |
 
 - C 파일의 그 밖의 값: 기본값 0, 0, `false`, 글자 번호 0, 빈 글자열. 숫자 타입 변환 `ImplicitAll`, `float %` 허용하지 않음
 

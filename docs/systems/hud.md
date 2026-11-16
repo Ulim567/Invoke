@@ -51,11 +51,11 @@
 
 | 알리는 것 | 받는 곳 |
 | --- | --- |
-| 시전 거부 중 `NotEnoughMemory`만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
+| 시전 거부 중 `NotEnoughMemory`, `CompileError`(빌드 실패, 문장 `[Cast Rejected] CompileError` / `컴파일 오류가 있는 함수`, #506)만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
 | 몬스터의 실행 중단 공격으로 끊긴 내 작업(`Interrupted`, 원인 `MonsterAttack`). 문장 `[Interrupted] 실행 중단 공격` / `함수가 모두 멈춤` (#504) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
 | runtime error로 분류된 실패(스킬 에러 포함) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
 
-- 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 사망·장소 이동·재시작으로 끊긴 작업(원인 `System`, #504), 개발자 책임(`InternalError`), compile error(편집 화면이 저장할 때 잡음)
+- 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 사망·장소 이동·재시작으로 끊긴 작업(원인 `System`, #504), 개발자 책임(`InternalError`), 실행 중에 난 compile error(시전 전에 빌드가 `CompileError` 거부로 잡음, #506)
 
 - 아래 띠 (#431): 띠 전체를 칠하지 않는다 (바닥을 너무 가림). 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자(`hud_band_fade`)
 

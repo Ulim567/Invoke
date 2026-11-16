@@ -232,7 +232,7 @@
   - 이름이 같을 때: 지역 변수가 전역 변수를 가림 (C 규칙)
 - 초기값: 직접 입력한 값만. 비우면 언어 규칙 파일의 기본값. 포인터는 `NULL`만
 - 전역 array (#478)
-  - 만들기: 전역 변수 파일에 배열 만들기 블록(`int scores[3]`). 선언 블록의 array 타입은 저장 검사에서 거부
+  - 만들기: 전역 변수 파일에 배열 만들기 블록(`int scores[3]`). 선언 블록의 array 타입은 컴파일 오류(빌드 실패, #506)
   - 길이: 지역 array와 같음. 직접 입력한 1 이상의 정수만
   - 처음 값: 모든 원소가 언어 규칙 파일의 기본값. 초기값 목록(`{1, 2, 3}`) 없음. 초기화 때마다 새 array로 다시 만듦
   - 원소 타입: 지역 array와 같음(int, float, bool, char, string, `Sword*`, `Target`). `Target` 원소는 처음에 「대상 없음」
@@ -241,7 +241,8 @@
 - memory: 전역 변수 하나 = 데이터 영역 1칸, 전역 array = 길이만큼(`DataUsed`). 예: `int x; int scores[3];` → 1 + 3 = 4칸. 초기화 때 자동으로 잡히고 다음 초기화까지 유지. `malloc` 아님
   - 포인터 전역 변수: 변수 자체는 데이터 영역 1칸, 가리키는 객체는 heap
   - 실행 중에 `Capacity`가 줄어도 잡힌 칸은 유지. `Free`가 0이 됨 (stack 규칙과 같음)
-- 저장 검사(`FunctionExecutor.TrySaveGlobalVariables`): 걸리면 저장하지 않음. 콘솔 오류
+- 검사(`FunctionExecutor.CanUseGlobalVariables`): 편집 화면의 저장은 검사에 걸려도 저장하고(#506), 그때는 빌드가 실패해 모든 슬롯이 시전되지 않음 (network.md 「함수 데이터 전송」의 빌드). `TrySaveGlobalVariables`는 지금처럼 걸리면 저장하지 않고 콘솔 오류
+  - 찾은 오류를 모두 돌려줌 (#506, `GlobalVariablesConverter.TryConvert(…, out failures)`): 선언마다 한 개(선언 번호, 칸 번호, 이유), 데이터 영역 초과는 한 개. 이유를 받는 검사는 콘솔에 남기지 않음 (편집 화면이 다시 그릴 때마다 부르기 때문)
   - 데이터 영역 칸 수 합계 > `Capacity`
   - 선언·배열 만들기 블록이 아닌 블록, 다룰 수 없는 타입 (대상(Target) 타입은 #474부터 받음. 처음 값은 비워 두는 것만 = 「대상 없음」)
   - 선언 블록의 array 타입, 직접 입력한 1 이상의 정수가 아닌 배열 길이 (#478)
@@ -345,7 +346,7 @@
   - `CompileError`: 그 언어에서 실행 전에 찾아내는 잘못
   - `RuntimeError`: 그 언어에서 실행 중에 찾아내는 잘못
   - 언어마다 다름. 예: 선언하지 않은 변수는 C에서 `CompileError`, Python에서 `RuntimeError`
-  - 찾아내는 시점: C의 compile error는 편집 화면이 저장하기 전에 `FunctionChecker`로 먼저 찾음([block-editor.md](block-editor.md)). 실행기도 실행 중에 같은 실패를 다시 검사함(서버에서 받은 함수 등)
+  - 찾아내는 시점: C의 compile error는 서버가 함수 데이터를 받을 때 빌드로 찾고(`SlotCompileChecker`, 같은 `FunctionChecker`), 빌드에 실패하면 시전을 `CompileError`로 거부함 (#506, network.md). 편집 화면도 저장한 뒤 같은 검사로 보여 줌([block-editor.md](block-editor.md)). 실행기도 실행 중에 같은 실패를 다시 검사함
   - `SkillFailed`는 한 줄이므로 스킬 에러는 종류와 상관없이 같은 분류
 - 처리 종류(`FailureHandling`)
   - `EndTask`: 그 `FunctionTask`만 `Failed`로 끝남
@@ -437,8 +438,9 @@
 | `RestartProcess()` | - | - | 초기화. 진행 중인 `FunctionTask`를 모두 끊고(`InterruptAll(InterruptCause.System)`), heap(소환검 포함)을 비운 뒤, 전역 변수 파일(`SetGlobalVariablesFile`, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다. 사망, 재부팅, 로비 도착(`TravelPlayer`, #435), 연습장 초기화에서 부른다. (#139) |
 | `SetGlobalVariablesFile(GlobalVariablesData file)` | 전역 변수 파일 (`null`이면 이 컴퓨터의 파일) | - | 초기화 때 읽을 전역 변수 파일을 정한다. 정하기만 하고 초기화하지 않는다. 서버가 플레이어가 보낸 파일로 전역 변수를 만들 때 쓴다 (#173) |
 | `TrySaveGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | 검사해서 저장하고, 저장한 파일을 초기화 때 읽을 파일로 정한 뒤(`SetGlobalVariablesFile`, #478) `RestartProcess`를 부른다. 검사에 걸리면 저장하지 않고 `false`, 이유는 콘솔 오류(「전역 변수」의 저장 검사). 전역 변수 편집 화면이 저장할 때 부른다. (#139) |
-| `CanUseGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | `TrySaveGlobalVariables`와 같은 검사만 한다. 저장·반영하지 않음. 서버가 DB에 저장하기 전에 쓴다(`FunctionExecutorNetwork`). (#205) |
-| `CanUseGlobalVariables(GlobalVariablesData file, out string error)` | 전역 변수 파일 | `bool`, 첫 번째 이유 | 같은 검사. 쓸 수 없으면 `error`에 첫 번째 이유를 compile error 문장으로 돌려준다(예: 「같은 scope에서 재정의할 수 없음: x」). 편집 화면이 Global Variables를 컴파일할 때 오류 창에 보인다 (#504) |
+| `CanUseGlobalVariables(GlobalVariablesData file)` | 전역 변수 파일 | `bool` | `TrySaveGlobalVariables`와 같은 검사만 한다. 저장·반영하지 않음. 콘솔에 남기지 않음. 서버가 빌드할 때 쓴다(`FunctionExecutorNetwork.Build`, #506). (#205) |
+| `CanUseGlobalVariables(GlobalVariablesData file, out string error)` | 전역 변수 파일 | `bool`, 첫 번째 이유 | 같은 검사. 쓸 수 없으면 `error`에 첫 번째 이유를 compile error 문장으로 돌려준다(예: 「같은 scope에서 재정의할 수 없음: x」) (#504) |
+| `CanUseGlobalVariables(GlobalVariablesData file, out List<GlobalVariablesConverter.Failure> failures)` | 전역 변수 파일 | `bool`, 찾은 오류 모두 | 같은 검사. 쓸 수 없으면 찾은 오류를 선언 순서대로(선언 번호 `Index`, 칸 번호 `Slot`(선언 전체면 -1), 이유 `Message`). 편집 화면이 오류마다 카드를 만들고 그 자리를 빨갛게 표시·깜빡일 때 쓴다 (#506) |
 
 ### `FunctionTask`
 
@@ -499,7 +501,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `ForRejection(CastRejection rejection)` (static) | 시전 거부 이유 | `string` | `NotEnoughMemory`만 `[Cast Rejected] NotEnoughMemory` / `남은 메모리가 함수 크기보다 적음`. 그 밖의 거부는 `null`(슬롯 덮개, 빨간 테두리, 무채색이 이미 보여 줌) |
+| `ForRejection(CastRejection rejection)` (static) | 시전 거부 이유 | `string` | `NotEnoughMemory`, `CompileError`(#506)만 문장(아래 표). 그 밖의 거부는 `null`(슬롯 덮개, 빨간 테두리, 무채색이 이미 보여 줌) |
 | `ForTaskEnd(TaskEndInfo info)` (static) | 끝난 이유 | `string` | 원인이 `MonsterAttack`인 `Interrupted`, runtime error로 분류된 `Failed`만. 원인이 `System`인 `Interrupted`(사망, 장소 이동, 재시작), 정상 종료, `Cancelled`, `InternalError`, compile error는 `null` (#504) |
 
 - 문장 표
@@ -507,6 +509,7 @@
 | 첫 줄 | 둘째 줄 |
 | --- | --- |
 | `[Cast Rejected] NotEnoughMemory` | 남은 메모리가 함수 크기보다 적음 |
+| `[Cast Rejected] CompileError` | 컴파일 오류가 있는 함수 (#506, 빌드 실패) |
 | `[Interrupted] 실행 중단 공격` | 함수가 모두 멈춤 |
 | `[Runtime Error] Overflow` | stack이 가득 차 프로세스 재시작 |
 | `[Runtime Error] DivideByZero` | 0으로 나눔 |
@@ -519,7 +522,7 @@
 
 - 스킬 에러의 설명은 이 표에 두지 않음. 새 스킬 에러는 `Message`만 덮어쓰면 됨([predefined-function.md](predefined-function.md)). `Message`는 현상만 짧게(예: 「손에 검이 없음」)
 - 표에 설명이 없는 runtime error(다른 언어에서 runtime error가 되는 실패)는 첫 줄만
-- compile error를 알리지 않는 이유: 편집 화면이 저장할 때 잡고, 실행 중에는 runtime error만 나야 함(이우림 결정 11/1, 11/9). 저장 검사가 놓치던 `DuplicateVariable`, C의 `float %`(`TypeMismatch`)는 #504에서 저장 검사에 더함. `InvalidLiteral`은 편집 화면의 칸이 적은 글자로 타입을 정하므로 나지 않음
+- 실행 중에 난 compile error를 알리지 않는 이유: 시전하기 전에 서버가 빌드로 잡아 `CompileError` 거부로 알리고(#506), 실행 중에는 runtime error만 나야 함(이우림 결정 11/1, 11/9). 실행 중에 나면 빌드 검사가 놓친 것. 저장 검사가 놓치던 `DuplicateVariable`, C의 `float %`(`TypeMismatch`)는 #504에서 저장 검사에 더함. `InvalidLiteral`은 편집 화면의 칸이 적은 글자로 타입을 정하므로 나지 않음
 
 ### `LanguageRuleData` (언어 규칙 파일)
 

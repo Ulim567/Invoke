@@ -138,12 +138,17 @@ void CmdPickUp()
 ### 함수 데이터 전송 (#173)
 - 대상: 「로그인 건너뛰기」 임시 계정만. 실제 계정은 서버 DB가 원본(`ApplyLoadedData`)이고, 슬롯은 늘 슬롯 함수 8개라 장착을 바꾸는 요청이 없음 (#237, [progress-store.md](progress-store.md))
 - 보내는 것: 슬롯 8칸, 이 컴퓨터에 저장한 함수 전부(`FunctionStorage.LoadAll`), 전역 변수 파일(`GlobalVariablesStorage.Load`)
-- 보내는 때: 로컬 플레이어 오브젝트가 생길 때(`OnStartLocalPlayer`) 전부, `SlotLoadout.Changed` 때 슬롯과 함수(다음 `Update`에 한 번)
+- 보내는 때: 로컬 플레이어 오브젝트가 생길 때(`OnStartLocalPlayer`) 전부, `SlotLoadout.Changed` 때 슬롯과 함수(다음 `Update`에 한 번), 편집 화면이 전역 변수를 저장한 뒤(`ResendLocalGlobals`) 전역 변수까지 (#506)
+  - 장착만 바뀐 경우에는 전역 변수를 보내지 않음. 받으면 서버가 프로세스를 새로 시작해 실행 중인 함수가 끊기기 때문
 - 함수: 하나씩 따로 보냄. 한 메시지 한도(KCP `ReliableMaxMessageSize`, `Base` 씬 설정 297,433바이트)
+- 저장 요청의 크기 (#506): 문자열 하나는 `NetworkWriter.MaxStringLength`(65,534바이트), 메시지 전체는 `NetworkMessages.MaxContentSize`를 넘을 수 없음. `RequestSaveAll`은 보내기 전에 재고, 넘으면 보내지 않고 `TooLarge`로 바로 답함 (넘는 Command는 Mirror가 보내지 못해 답이 오지 않기 때문)
 - 서버: `ApplyPlayerData` 한 곳에서 슬롯마다 원본 생성
   - C 스킬: `PredefinedFunctionRegistry`, 블록 함수: `FunctionDataConverter`
   - 블록 함수 원본: 함수 데이터가 모두 같으면 이어 씀(쿨타임·실행 중 검사 유지), 하나라도 바뀌면 모두 새로 만듦
   - 전역 변수: `SetGlobalVariablesFile` 뒤 `RestartProcess`. 장착만 바뀐 경우는 다시 시작 안 함
+  - 빌드 (#506): 원본을 만든 뒤 `Build`로 빌드 결과(`IsBuildSucceeded`)를 정함. 슬롯 함수들, 그 함수가 부르는 함수(`SlotCompileChecker`), 마지막에 받은 전역 변수 파일(`CanUseGlobalVariables`) 중 하나라도 컴파일 오류가 있으면 실패
+    - 실패하면 모든 슬롯의 시전을 `CompileError`로 거부. 슬롯이 부르지 않는 페이지 함수는 빌드에 넣지 않음. 함수 데이터를 받지 못한 슬롯은 빌드에서 빼고 시전 때 `NoFunction`
+    - 실제 계정·임시 계정 모두 같은 규칙 (임시 계정도 이 함수로 데이터가 들어옴)
 - 「데이터 준비됨」: 처음 슬롯·함수·전역 변수를 모두 적용하면 `IsDataReady` true, `DataReady` 한 번
 - 받은 데이터 검사: 없음(보안은 나중). 검사 자리: `ApplyPlayerData`, `ProvideTarget`의 서버 처리
 
@@ -161,7 +166,7 @@ void CmdPickUp()
 | `RequestCancel(int slot)` | 슬롯 번호 | - | [소유 클라이언트] 그 슬롯으로 시전한 작업 끊기 요청(`FunctionExecutor.Cancel`). 끊기면 `TaskEnded(Cancelled)` |
 | `ProvideTarget(int taskId, GameObject target)` | 작업 번호, 고른 몬스터(없으면 `null`) | - | [소유 클라이언트] 입력을 기다리는 이 플레이어의 작업에 몬스터 넣기 요청. 이미 끝난 작업이면 서버가 버림 |
 | `CastAccepted` (event) | `int` 슬롯, `int` 작업 번호 | - | [로직] 시전 성공. 소유 클라이언트에만 |
-| `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음), `CannotAct`(시전자가 죽었거나 경직 중, #310), `InNoCastPlace`(시전자가 공격할 수 없는 장소에 있음, #313) |
+| `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음), `CannotAct`(시전자가 죽었거나 경직 중, #310), `InNoCastPlace`(시전자가 공격할 수 없는 장소에 있음, #313), `CompileError`(빌드 실패, `NoFunction`보다 먼저 봄, #506) |
 | `TaskStarted` (event) | `int` 작업 번호, `int` 슬롯(비동기 작업 -1), `string` 함수 이름 | - | [연출] 작업이 진행 시작. 모든 클라이언트. 시전 모션 |
 | `TaskEnded` (event) | `int` 작업 번호, `FunctionTaskEndReason` | - | [로직] 작업이 끝남. 모든 클라이언트. 시작 전에 끊긴 작업은 이것만 |
 | `OwnTaskEnded` (event) | `int` 작업 번호, `TaskEndInfo` | - | [표시] 내 작업이 끝남. 소유 클라이언트에만, `TaskEnded`보다 먼저. `TaskEndInfo`: 끝난 이유, 실패 종류·분류(`Failed`일 때), 스킬 에러 클래스 이름·`Message`(`SkillFailed`일 때). HUD 알림 문장은 `FailureNotice.ForTaskEnd` (#480, [function-executor.md](function-executor.md)) |
@@ -172,11 +177,15 @@ void CmdPickUp()
 | `ApplyLoadedData(CharacterProgressData, ProgressStore, characterKey)` | DB에서 불러온 진행도, 저장할 DB, 캐릭터 key | - | [서버] 실제 계정의 슬롯·함수·전역 변수를 넣음. 플레이어를 연결에 붙이기 전에 `AccountServer`가 부름 (#205) |
 | `UsesServerData` | - | `bool` | 슬롯·함수·전역 변수의 원본이 서버 DB이면 true(실제 계정). 이때 클라이언트는 파일을 보내지 않음 (#205) |
 | `ReceivedSlots`, `ReceivedFunctions`, `ReceivedGlobals` | - | 슬롯 8개(슬롯 함수 GUID), 함수 목록(슬롯 함수 + 페이지 함수), 전역 변수 선언 | [소유 클라이언트] 서버가 보낸 데이터. 받기 전이면 `null` (#205, #237) |
-| `PlayerDataReceived` (event) | - | - | [표시] 서버가 보낸 슬롯·함수·전역 변수를 처음 다 받았을 때, 저장 요청이 성공해 바뀌었을 때. 실제 계정의 소유 클라이언트 (#205) |
-| `RequestSaveFunction(FunctionData)` | 함수 (슬롯 함수 또는 페이지 함수) | - | [소유 클라이언트] 서버 DB에 함수 저장 요청. 새 GUID는 페이지 함수로 셈. 가진 개수보다 많이 쓰게 되면 `CountExceeded` (#500). 결과는 `PlayerDataRequestAnswered` (#205, #237, [progress-store.md](progress-store.md)) |
-| `RequestSaveGlobals(GlobalVariablesData)` | 전역 변수 선언 | - | [소유 클라이언트] 서버 DB에 전역 변수 저장 요청. 가진 개수보다 많이 쓰게 되면 `CountExceeded` (#500). 결과는 `PlayerDataRequestAnswered` (#205) |
+| `PlayerDataReceived` (event) | - | - | [표시] 서버가 보낸 슬롯·함수·전역 변수를 처음 다 받았을 때, 저장 요청이 성공해 바뀌었을 때(요청 하나에 한 번). 실제 계정의 소유 클라이언트 (#205) |
+| `IsBuildSucceeded` | - | `bool` | 빌드에 성공했으면 true (#506, 위 「함수 데이터 전송」의 빌드). false면 서버가 모든 슬롯의 시전을 `CompileError`로 거부. 서버와 소유 클라이언트에서만 맞는 값(Sync Mode Owner). 데이터를 받기 전이면 false |
+| `BuildResultChanged` (event) | - | - | [내 화면] `IsBuildSucceeded`가 바뀌었을 때. 호스트에서도 불림 (#506) |
+| `RequestSaveAll(IReadOnlyList<FunctionData>, GlobalVariablesData)` | 고친 함수들(슬롯 함수, 페이지 함수), 고친 전역 변수(고치지 않았으면 `null`) | - | [소유 클라이언트] 서버 DB에 한꺼번에 저장 요청 (#506). 서버가 모두 검사한 뒤 한 트랜잭션으로 모두 저장하거나 하나도 저장하지 않음. 컴파일 오류는 보지 않음(빌드가 따로 정함). 거부 이유는 `RequestSaveFunction`과 같음. 결과는 `PlayerDataRequestAnswered`(`SaveAll`), 성공이면 먼저 `ReceivedFunctions`·`ReceivedGlobals`가 바뀌고 `PlayerDataReceived` 한 번 |
+| `RequestSaveFunction(FunctionData)` | 함수 (슬롯 함수 또는 페이지 함수) | - | [소유 클라이언트] 서버 DB에 함수 저장 요청. 새 GUID는 페이지 함수로 셈. 가진 개수보다 많이 쓰게 되면 `CountExceeded` (#500). 결과는 `PlayerDataRequestAnswered` (#205, #237, [progress-store.md](progress-store.md)). `RequestSaveAll`과 같은 서버 검사·저장을 거침 (#506) |
+| `RequestSaveGlobals(GlobalVariablesData)` | 전역 변수 선언 | - | [소유 클라이언트] 서버 DB에 전역 변수 저장 요청. 가진 개수보다 많이 쓰게 되면 `CountExceeded` (#500). 결과는 `PlayerDataRequestAnswered` (#205). 컴파일 오류가 있어도 저장하고 그때는 빌드가 실패 (#506, 예전의 `GlobalsRejected`는 쓰지 않음) |
+| `ResendLocalGlobals()` | - | - | [내 화면, 임시 계정] 이 컴퓨터의 전역 변수 파일을 슬롯·함수와 함께 서버로 다시 보냄. 다음 `Update`에 한 번. 편집 화면이 전역 변수를 저장한 뒤 부름. 실제 계정이면 아무 일도 안 함 (#506) |
 | `CheckItemCounts(슬롯 함수 GUID들, 저장 전 함수들, 저장 후 함수들, 저장 전 전역 변수, 저장 후 전역 변수, 가진 개수)` (static) | | `PlayerDataRequestResult` | 저장 요청의 블록·함수 개수 검사. 통과면 `Saved`, 아니면 `CountExceeded`. 서버 없이 부를 수 있음 (#500, [progress-store.md](progress-store.md) 「함수 내용 검사」) |
-| `RequestDeleteFunction(string)` | 페이지 함수의 GUID | - | [소유 클라이언트] 서버 DB에서 페이지 함수 지우기 요청. 슬롯 함수는 `SlotFunctionLocked`, 없는 함수는 `UnknownFunction`. 결과는 `PlayerDataRequestAnswered`(`DeleteFunction`), 성공이면 먼저 `ReceivedFunctions`에서 빠짐 (#494, [progress-store.md](progress-store.md)) |
+| `RequestDeleteFunction(string)` | 페이지 함수의 GUID | - | [소유 클라이언트] 서버 DB에서 페이지 함수 지우기 요청. 슬롯 함수는 `SlotFunctionLocked`, 없는 함수는 `UnknownFunction`. 결과는 `PlayerDataRequestAnswered`(`DeleteFunction`), 성공이면 먼저 `ReceivedFunctions`에서 빠짐 (#494, [progress-store.md](progress-store.md)). 다른 함수가 불러도 지우고, 다시 빌드함 (#506) |
 | `PlayerDataRequestAnswered` (event) | `PlayerDataRequest`, `PlayerDataRequestResult` | - | [로직] 저장 요청의 결과. 소유 클라이언트 (#205) |
 
 ### 시험

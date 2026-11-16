@@ -152,7 +152,7 @@
 - 캐릭터 하나에 정확히 row 하나
 - 저장하는 것은 선언(이름, 타입, 초기값)만. 실행 중 바뀐 값은 `FunctionExecutor`의 데이터 영역(메모리)에만 있고 저장하지 않음 (초기화 때 초기값으로 돌아감)
 - 캐릭터를 만들 때 전역 변수가 없는 JSON으로 `Characters` row와 한 트랜잭션으로 함께 넣음
-- 전역 변수를 저장하면 JSON 전체를 덮어씀. 편집 화면이 전역 변수를 한꺼번에 저장하기 때문 (`FunctionExecutor.TrySaveGlobalVariables`)
+- 전역 변수를 저장하면 JSON 전체를 덮어씀. 편집 화면이 전역 변수를 한꺼번에 저장하기 때문. 컴파일 오류가 있어도 저장함 (#506, 빌드가 실패해 시전만 막힘)
 - 불러올 때 `FunctionDataJson.TryGlobalVariablesFromJson`이 실패하면 전역 변수 없음으로 보고 로그를 남김
 
 ### 불러온 데이터 (`CharacterProgressData`)
@@ -242,7 +242,8 @@
 
 | 요청 함수 (소유 클라이언트) | 서버가 하는 일 | 거부 |
 | --- | --- | --- |
-| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 슬롯 함수 틀 검사 → 내용 검사(아래) → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded`, `CountExceeded` |
+| `RequestSaveAll(함수들, 전역 변수 또는 null)` (#506) | JSON 읽기(같은 GUID가 두 번이면 `InvalidData`) → 함수마다 슬롯 함수 틀 검사·내용 검사(아래, 코드 영역은 함께 저장할 함수들을 반영한 목록으로) → 블록·함수 개수 검사(저장 후 함수와 전역 변수로) → 새 GUID 수만큼 개수 제한 검사 → `ProgressStore.SaveFiles`로 한 트랜잭션에 씀 → 슬롯 원본을 다시 만들고 다시 빌드. 하나라도 걸리면 아무것도 쓰지 않음. 컴파일 오류는 보지 않음. 편집 화면의 저장 버튼이 씀 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded`, `CountExceeded`, `TooLarge`(보내기 전에 소유 클라이언트가 답함) |
+| `RequestSaveFunction(FunctionData)` | `RequestSaveAll`과 같은 처리를 함수 하나로 (#506부터 같은 서버 함수 `ServerSaveFiles`). 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `RequestSaveAll`과 같음 |
 
 #### 함수 내용 검사 (`FunctionExecutorNetwork.CheckFunctionContent`, #306)
 - 서버가 저장 요청의 함수를 `PlayerProgress.Unlocked`(해금한 노드 ID)로 검사. 네트워크와 상관없는 `static` 함수라 서버 없이 부를 수 있음
@@ -260,10 +261,10 @@
 - 크기는 슬롯 8개 전체를 셈 (`function-data.md` 「코드 영역 크기 규칙」). 슬롯 함수가 부르는 함수를 고쳐도 그 함수를 저장하는 순간 걸림. 슬롯에서 닿지 않는 함수는 세지 않으므로 거부하지 않음
 - 이미 저장된 함수는 다시 검사하지 않음. 나중에 해금 규칙이 바뀌어도 저장된 함수는 그대로 남고, 그 함수를 다시 저장할 때 걸림
 - 개수 검사에서 「저장 전보다 늘어난 항목」만 거부하는 이유: 개수 기능 전에 만든 캐릭터는 이미 가진 것보다 많이 쓰고 있을 수 있음. 그 항목을 더 쓰지 않는 저장(관계없는 함수 고치기, 줄이기)은 받음. 새 캐릭터는 가진 개수가 줄지 않으므로 「저장 후 가진 개수를 넘으면 거부」와 같음
-| `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → 블록·함수 개수 검사(`CheckItemCounts`, 전역 변수 파일의 블록도 개수를 씀) → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected`, `CountExceeded` |
-| `RequestDeleteFunction(함수 GUID)` (#494) | 슬롯 함수인지 봄 → `CharacterFunctions`에서 지움 → 슬롯 원본을 다시 만듦 (지운 함수를 부르던 슬롯은 시전 거부) | `InvalidData`, `SlotFunctionLocked`(슬롯 함수), `UnknownFunction`(없는 함수) |
+| `RequestSaveGlobals(GlobalVariablesData)` | `RequestSaveAll`과 같은 처리를 전역 변수만으로: 블록·함수 개수 검사(`CheckItemCounts`, 전역 변수 파일의 블록도 개수를 씀) → `CharacterGlobals`에 씀 → 프로세스를 새로 시작하고 다시 빌드. 컴파일 오류(`CanUseGlobalVariables`)가 있어도 저장 (#506) | `InvalidData`, `CountExceeded` (`GlobalsRejected`는 #506부터 쓰지 않음) |
+| `RequestDeleteFunction(함수 GUID)` (#494) | 슬롯 함수인지 봄 → `CharacterFunctions`에서 지움 → 슬롯 원본을 다시 만들고 다시 빌드 (슬롯에서 지운 함수를 부르고 있었으면 빌드 실패, #506) | `InvalidData`, `SlotFunctionLocked`(슬롯 함수), `UnknownFunction`(없는 함수) |
 
-- 함수 지우기: 다른 함수가 지울 함수를 부르는지는 서버가 보지 않음. 편집 화면이 지우기 전에 막음 (block-editor.md 「저장 버튼」의 「다른 함수 검사」)
+- 함수 지우기: 다른 함수가 지울 함수를 불러도 지움 (#506). 편집 화면도 막지 않고, 지운 뒤 자동 컴파일이 「선언하지 않은 함수」로 알림 (block-editor.md 「페이지 함수 지우기」)
 
 - 장착을 바꾸는 요청: 없음 (슬롯 함수 GUID 고정)
 - 결과: `PlayerDataRequestAnswered(요청 종류, 결과)`. 성공(`Saved`)이면 그보다 먼저 `ReceivedFunctions`·`ReceivedGlobals`가 새 값으로 바뀌고 `PlayerDataReceived`가 불림
@@ -272,7 +273,7 @@
 - `SlotLoadout` 연결 (#325): 실제 계정의 소유 클라이언트(호스트 포함)에서 `FunctionExecutorNetwork`가 `PlayerDataReceived` 때마다 박진우의 `SlotLoadout.SetEntries(ReceivedSlots, ReceivedFunctions)`를 부름
   - 이유: 서버의 시전은 서버의 슬롯 원본으로 되지만, 내 화면의 `SlotCaster`는 `SlotLoadout`을 보고 시전 요청 여부와 방식(바로, 대상 고르기)을 정함. 연결 전에는 `SlotLoadout`이 이 컴퓨터의 `SlotLoadout.json`·기본값이라 서버에 함수가 있어도 빈 슬롯은 시전되지 않고 방식이 어긋났음
   - 구독은 `OnStartLocalPlayer`(실제 계정)에서 하고 `PlayerDataReceived`의 다른 구독자(편집 화면, 장착 화면)보다 먼저 연결됨
-- 함수 구조 검사: 「만든 함수를 서버로 보내 검사·저장하기」. 해금한 블록·스킬만 썼는지, 코드 영역 한도는 위 「함수 내용 검사」
+- 함수 구조 검사(컴파일): 저장 때는 하지 않고, 서버가 빌드할 때 함 (#506, network.md 「함수 데이터 전송」의 빌드). 해금한 블록·스킬만 썼는지, 코드 영역 한도는 위 「함수 내용 검사」
 
 ### `ProgressStore` 함수 (서버)
 - 부르는 곳: `AccountStore`, `AccountServer`, `PlayerProgress`, `FunctionExecutorNetwork`만. 다른 시스템은 `PlayerProgress`를 부름
@@ -290,6 +291,7 @@
 | `SaveFunction(캐릭터 key, 함수 GUID, JSON)` | 넣거나 덮어씀 | Functions |
 | `DeleteFunction(캐릭터 key, 함수 GUID)` | 그 함수 row를 지움. 지웠으면 true, 없으면 false. 슬롯 함수인지는 부르는 쪽이 봄 (#494) | Functions |
 | `SaveGlobals(캐릭터 key, JSON)` | row 하나를 덮어씀 | Globals |
+| `SaveFiles(캐릭터 key, (함수 GUID, JSON) 목록, 전역 변수 JSON 또는 null)` | 함수들을 넣거나 덮어쓰고, 전역 변수가 있으면 덮어씀. 한 트랜잭션이라 모두 쓰이거나 하나도 쓰이지 않음. 검사는 부르는 쪽(`FunctionExecutorNetwork`)이 먼저 함 (#506) | Functions, Globals |
 
 - 표의 테이블 이름은 앞의 `Character`를 뺀 것 (예: Progress = `CharacterProgress`)
 
@@ -318,7 +320,6 @@
 - `ProgressRules.SlotFunctionName(슬롯 번호)`: 슬롯 함수 이름 `slot1`~`slot8`
 
 ## 정할 것
-- `FunctionStorage`(임혜원)가 PC 파일 대신 `RequestSaveFunction`을 부르게 바꾸는 일
 - `SlotLoadout.SetEntries`(박진우)가 생긴 뒤 `FunctionExecutorNetwork`에서 부르는 일
 - `Player_JW`(박진우)와 `Player_HW`(임혜원)에 직접 붙은 중복 컴포넌트를 지우는 일: 별도 이슈
   - `Player_JW`: `PlayerHealth` 2개

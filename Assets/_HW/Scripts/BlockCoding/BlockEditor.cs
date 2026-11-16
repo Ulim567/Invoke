@@ -141,6 +141,19 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("편집 영역 위의 「반환 타입 이름(파라미터) {」와 아래의 「}」 (#432)")]
 	FunctionFrameView functionFrame;
 
+	[SerializeField, Tooltip("고칠 수 있는 함수 이름 칸의 밑줄 (blk_underline). 비워 두면 밑줄 없이 글자만 보인다")]
+	Sprite nameFieldSprite;
+
+	[SerializeField, Tooltip("고칠 수 있는 함수 이름 칸의 밑줄 색")]
+	Color nameFieldColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+
+	[Header("오른쪽 창 너비·접기 (비워 두면 너비를 바꿀 수 없고 접히지 않는다)")]
+	[SerializeField, Tooltip("오른쪽 창 왼쪽 끝의 손잡이 (PanelHandle의 EditorSidePanel). 열린 탭을 다시 누르면 이걸로 창을 접는다")]
+	EditorSidePanel sidePanel;
+
+	[SerializeField, Tooltip("세로 탭 맨 아래의 > < 버튼 (PanelToggle). 누르면 오른쪽 창을 접거나 편다")]
+	Button panelToggleButton;
+
 	[Header("확인창 (비워 두면 묻지 않고 바로 연다)")]
 	[SerializeField, Tooltip("저장하지 않은 변경이 있을 때 다른 함수를 열거나 나가기 전에 묻는 확인창 (#432)")]
 	ConfirmDialog confirmDialog;
@@ -312,6 +325,13 @@ public class BlockEditor : MonoBehaviour
 	const float GhostAlpha = 0.4f;
 
 	BlockValueSlot highlightedSlot;
+	// 값 블록을 끌 때 마우스에서 이 거리(캔버스 단위) 안의 칸에 붙인다. 값 칸이 작아 마우스 끝 한 점으로는 맞히기 어렵기 때문
+	const float SnapDistance = 16f;
+	// 함수 틀 안 이름 칸의 높이. 머리줄(28)에서 위아래 여백을 뺀 정도
+	const float NameFieldHeight = 20f;
+	// 지금 붙어 있는 칸(highlightedSlot)이 붙기 직전의 화면 사각형. 미리보기를 끼워 칸이 넓어지거나 줄이 바뀌어도
+	// 마우스가 이 자리 근처에 있으면 그 칸에 그대로 붙어 있게 한다 (미리보기가 왔다 갔다 하지 않게)
+	Rect snapRect;
 	// 블록을 끄는 동안 청록·어둡게 표시한 빈 칸들 (#487). 놓으면 표시를 지운다
 	readonly List<BlockValueSlot> hintedSlots = new List<BlockValueSlot>();
 	Button asyncButton;
@@ -319,6 +339,16 @@ public class BlockEditor : MonoBehaviour
 	readonly List<BlockValueSlot> errorSlots = new List<BlockValueSlot>();
 	readonly List<RectTransform> errorFrames = new List<RectTransform>();
 	readonly List<GameObject> errorItems = new List<GameObject>();
+	// 오류 창에 지금 보이는 오류들의 글자·자리를 이은 것. 같으면 다시 만들지 않는다 (고칠 때마다 Redraw가 오류 창을 다시 그리기 때문)
+	string shownErrorsKey;
+	// 컴파일 버튼으로 찾은 지금 함수의 오류. 컴파일은 저장된 전역 변수·함수로 검사해서 작업본 기준 검사와 다를 수 있으므로 오류 창에 합친다. 고치면 비운다
+	List<FunctionChecker.Error> compileErrors;
+	// 전역 변수를 컴파일했을 때의 오류. 전역 변수 검사는 실행기(FunctionExecutor)가 하므로 고칠 때마다 하지 않고 컴파일 때만 한다
+	List<FunctionChecker.Error> globalsErrors;
+	// 저장·지우기를 막은 이유: 저장하면(지우면) 다른 함수에 생길 오류 (ShowBroken, #494). 지금 내용에는 없는 오류라 따로 두고 오류 창 맨 위에 보인다. 고치거나 다른 함수를 열면 비운다
+	List<ShownError> brokenErrors;
+	// 함수 목록 줄을 눌렀을 때 하는 일 (함수 GUID → 열기). 오류 창의 「블록 보기」가 다른 함수의 오류일 때 그 함수를 먼저 열 때 쓴다
+	readonly Dictionary<string, Action> openActions = new Dictionary<string, Action>();
 	string compileFailedKey; // 마지막 컴파일에서 오류가 난 함수 (목록에서 빨간 밑줄)
 	GlobalVariablesData listGlobals; // 함수 목록의 오류 검사에 쓰는 전역 변수
 	Coroutine successRoutine;
@@ -330,15 +360,22 @@ public class BlockEditor : MonoBehaviour
 	void Start()
 	{
 		if (trashZone != null) trashZone.SetActive(false);
-		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => ShowTab(RightTab.Blocks));
-		if (functionTabButton != null) functionTabButton.onClick.AddListener(() => ShowTab(RightTab.Functions));
-		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(RightTab.Errors));
-		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => ShowTab(RightTab.Reference));
+		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Blocks));
+		if (functionTabButton != null) functionTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Functions));
+		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Errors));
+		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Reference));
+		if (panelToggleButton != null)
+		{
+			panelToggleButton.onClick.AddListener(TogglePanel);
+			panelToggleButton.gameObject.SetActive(sidePanel != null); // 접을 창(손잡이)이 없으면 버튼도 숨긴다
+		}
+		// 창 너비가 바뀐 그 자리에서 블록 자리의 최소 크기를 맞춘다. Update에서만 맞추면 손잡이를 끄는 프레임에 가로 스크롤바가 깜빡인다
+		if (sidePanel != null) sidePanel.Resized += OnSidePanelResized;
 		if (referenceSearch != null) referenceSearch.onValueChanged.AddListener(_ => RebuildReference());
 		if (paletteSearch != null) paletteSearch.onValueChanged.AddListener(_ => RebuildPalette());
 		if (functionSearch != null) functionSearch.onValueChanged.AddListener(_ => RebuildFunctionTab());
 		if (functionFrame != null && functionFrame.ReturnButton != null) functionFrame.ReturnButton.onClick.AddListener(OpenReturnTypeDropdown);
-		ShowErrors(new List<FunctionChecker.Error>());
+		ShowErrors(new List<ShownError>());
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
 		ShowTab(RightTab.Blocks);
 
@@ -375,6 +412,14 @@ public class BlockEditor : MonoBehaviour
 		fittedViewportSize = size;
 		workspaceMinSize.minWidth = size.x;
 		workspaceMinSize.minHeight = size.y;
+	}
+
+	// 오른쪽 창 너비가 바뀐 직후 (EditorSidePanel.Resized). 최소 크기만 바꾸면 블록 자리의 실제 크기는 화면 배치를 다시 계산할 때에야 줄어드는데,
+	// 그 전에 ScrollRect가 LateUpdate에서 줄기 전의 블록 자리와 좁아진 보이는 칸을 비교해 가로 스크롤바를 켠다. 그래서 블록 자리 배치를 바로 다시 계산한다
+	void OnSidePanelResized()
+	{
+		FitWorkspaceToViewport();
+		if (layoutRoot != null) LayoutRebuilder.ForceRebuildLayoutImmediate(layoutRoot);
 	}
 
 	// 설명창 (#476) -------------------------------------------------------------
@@ -688,7 +733,7 @@ public class BlockEditor : MonoBehaviour
 		if (functionNameField != null)
 		{
 			functionNameField.Text = DisplayNameOf(function);
-			functionNameField.Interactable = !IsSlotFunction(function); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
+			SetNameFieldEditable(!IsSlotFunction(function)); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
 		}
 		dirty = fromDraft;
 		SetMessage("");
@@ -707,14 +752,14 @@ public class BlockEditor : MonoBehaviour
 		if (stale) ReloadSavedFunctions();
 	}
 
-	// 다른 함수를 열면 지난 컴파일 결과(오류 창, 빨간 표시, 성공 알림)를 지우고 블록 목록으로 돌아간다
+	// 다른 함수를 열면 지난 컴파일 결과(빨간 표시, 성공 알림)를 지운다.
+	// 오류 창과 열린 탭은 그대로 둔다. 오류 창은 모든 함수의 오류를 보이므로 다른 함수를 열어도 목록이 바뀌지 않기 때문
 	void ResetCompileResult()
 	{
 		compileFailedKey = null;
+		compileErrors = null;
+		brokenErrors = null;
 		ClearErrorMarks();
-		ShowErrors(new List<FunctionChecker.Error>());
-		// 지난 오류 창만 블록 목록으로 돌린다. 참고 창을 보던 중이면 그대로 둔다
-		if (rightTab == RightTab.Errors) ShowTab(RightTab.Blocks);
 		HideSuccess();
 	}
 
@@ -742,7 +787,7 @@ public class BlockEditor : MonoBehaviour
 		if (functionNameField != null)
 		{
 			functionNameField.Text = "Global Variables";
-			functionNameField.Interactable = false;
+			SetNameFieldEditable(false);
 		}
 		dirty = fromDraft;
 		SetMessage("");
@@ -874,13 +919,13 @@ public class BlockEditor : MonoBehaviour
 	// 다른 함수에 새로 생길 오류를 오류 창과 상태 줄에 보인다. 상태 줄은 「슬롯 Q, 페이지 a」 뒤에 what을 붙인 글자 (#494)
 	void ShowBroken(List<(FunctionData function, List<FunctionChecker.Error> errors)> broken, string what)
 	{
-		// 오류 창에 「슬롯 Q  x = 1;」처럼 어느 함수의 어느 블록인지 보인다. 다른 함수의 블록은 편집 영역에 없으므로 「블록 보기」는 없다
-		var errors = new List<FunctionChecker.Error>();
+		// 오류 창 맨 위에 어느 함수의 어느 블록인지 보인다. 저장(지우기)했다면 생길 오류라 지금 내용에는 없으므로,
+		// 「> 이름」을 누르면 그 함수만 열고 블록은 깜빡이지 않는다 (작업본과 검사한 내용의 블록 순서가 다를 수 있음)
+		brokenErrors = new List<ShownError>();
 		foreach ((FunctionData function, List<FunctionChecker.Error> list) in broken)
 			foreach (FunctionChecker.Error error in list)
-				errors.Add(new FunctionChecker.Error { Code = $"{LabelOf(function)}  {error.Code}", Message = error.Message });
+				brokenErrors.Add(new ShownError { Message = error.Message, Code = CodeOf(error), Location = LocationOf(function), Guid = function.Guid, BlockIndex = -1 });
 		HideSuccess(); // 저장 버튼의 컴파일이 띄운 「컴파일 성공」을 지운다
-		ShowErrors(errors);
 		ShowTab(RightTab.Errors);
 		// 오류가 생기는 함수를 작업본에서 이미 고쳤으면, 목록에는 밑줄이 없어도 저장된 내용 기준으로는 오류다. 그 함수를 먼저 저장하라고 알린다 (#494)
 		string hint = broken.Any(b => drafts.ContainsKey(b.function.Guid)) ? ". 고친 함수를 먼저 저장해 주세요" : "";
@@ -983,11 +1028,16 @@ public class BlockEditor : MonoBehaviour
 			errors = new List<FunctionChecker.Error>();
 			NetworkIdentity localPlayer = NetworkClient.localPlayer;
 			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
-			if (!ok) errors.Add(new FunctionChecker.Error { Code = "Global Variables", Message = "int x = 3; 같은 선언 블록과 int arr[5]; 같은 배열 만들기 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
+			if (!ok) errors.Add(new FunctionChecker.Error { Code = "", Message = "int x = 3; 같은 선언 블록과 int arr[5]; 같은 배열 만들기 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
+			globalsErrors = errors.Count > 0 ? errors : null;
 		}
-		else errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
+		else
+		{
+			errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
+			compileErrors = errors;
+		}
 
-		ShowErrors(errors);
+		// 오류 창(모든 함수의 오류)은 아래 Redraw가 다시 그린다
 		MarkErrors(errors);
 		compileFailedKey = errors.Count > 0 ? OpenKey : null;
 		if (errors.Count > 0) ShowTab(RightTab.Errors);
@@ -1065,6 +1115,98 @@ public class BlockEditor : MonoBehaviour
 		errorSlots.Clear();
 		errorFrames.Clear();
 	}
+
+	// 모든 함수(작업본 포함)의 오류. 키는 함수 GUID, 전역 변수는 GlobalsKey. 오류가 없는 함수는 들어 있지 않다.
+	// 함수 목록의 빨간 밑줄과 오류 창이 같은 결과를 쓴다
+	Dictionary<string, List<FunctionChecker.Error>> FindAllErrors(List<FunctionData> working, GlobalVariablesData workingGlobals)
+	{
+		var all = new Dictionary<string, List<FunctionChecker.Error>>();
+		foreach (FunctionData function in working)
+		{
+			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working);
+			// 방금 컴파일한 함수는 컴파일 결과도 합친다. 컴파일은 저장된 전역 변수·함수로 검사해서 작업본 기준 검사에 없는 오류가 있을 수 있기 때문
+			if (compileErrors != null && !editingGlobals && Function != null && function.Guid == Function.Guid)
+				foreach (FunctionChecker.Error error in compileErrors)
+					if (!errors.Any(e => e.Code == error.Code && e.Message == error.Message)) errors.Add(error);
+			if (errors.Count > 0) all[function.Guid] = errors;
+		}
+		if (globalsErrors != null && globalsErrors.Count > 0) all[GlobalsKey] = globalsErrors;
+		return all;
+	}
+
+	// 오류 창에 모든 함수의 오류를 보인다. 함수 목록 순서(Global Variables, 슬롯, 페이지)대로, 저장·지우기를 막은 이유는 맨 위에
+	void ShowAllErrors(Dictionary<string, List<FunctionChecker.Error>> all, List<FunctionData> working)
+	{
+		var shown = new List<ShownError>();
+		if (brokenErrors != null) shown.AddRange(brokenErrors);
+
+		// 함수 목록에 있는 순서대로. 목록이 없는 화면(위쪽 줄 버튼)이면 작업본 순서대로
+		var order = new List<string>();
+		foreach (var entry in functionItems)
+			if (entry.guid != null && !order.Contains(entry.guid)) order.Add(entry.guid);
+		foreach (string guid in all.Keys)
+			if (!order.Contains(guid)) order.Add(guid);
+
+		foreach (string guid in order)
+		{
+			if (!all.TryGetValue(guid, out List<FunctionChecker.Error> errors)) continue;
+			FunctionData function = guid == GlobalsKey ? null : working.FirstOrDefault(f => f.Guid == guid);
+			string location = function != null ? LocationOf(function) : "Global Variables";
+			foreach (FunctionChecker.Error error in errors)
+			{
+				string code = CodeOf(error);
+				// 저장·지우기 거부로 이미 맨 위에 보인 오류는 다시 적지 않는다
+				if (shown.Any(s => s.Location == location && s.Code == code && s.Message == error.Message)) continue;
+				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
+					BlockIndex = function != null ? IndexOfBlock(function, error.Block) : -1 });
+			}
+		}
+		ShowErrors(shown);
+	}
+
+	// 오류 카드 마지막 줄 「> 이름」의 이름: 슬롯 함수는 「슬롯 Q」, 페이지 함수는 이름만 (「페이지」는 붙이지 않음, 사용자 결정)
+	string LocationOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? $"슬롯 {KeyOf(slot)}" : function.Name;
+	}
+
+	// 오류 카드 가운데 줄의 코드 (예: if ( )). 특정 블록에 붙지 않은 오류(return 없음, 전역 변수 오류)는 빈 글자라 줄이 빠진다
+	static string CodeOf(FunctionChecker.Error error) => error.Block != null ? error.Code : "";
+
+	// 함수 안의 모든 블록을 정해진 순서로 (맨 위 블록부터, 칸·블록 영역 안쪽까지). 함수를 다시 열면 블록 데이터가 새로 만들어지므로 순번으로 같은 블록을 찾는다
+	static IEnumerable<BlockData> AllBlocksOf(FunctionData function) =>
+		function.Blocks == null ? Enumerable.Empty<BlockData>() : function.Blocks.SelectMany(b => b.SelfAndInnerBlocks());
+
+	static int IndexOfBlock(FunctionData function, BlockData block)
+	{
+		if (block == null) return -1;
+		int index = 0;
+		foreach (BlockData b in AllBlocksOf(function))
+		{
+			if (ReferenceEquals(b, block)) return index;
+			index++;
+		}
+		return -1;
+	}
+
+	// 오류 카드의 「> 이름」: 그 함수(또는 Global Variables)가 열려 있지 않으면 함수 목록 줄을 누른 것처럼 먼저 연다 (작업본은 그대로 남음).
+	// 그다음 오류가 난 블록이 있으면 깜빡인다 (blockIndex가 -1이면 열기만)
+	void ShowErrorBlock(string guid, int blockIndex)
+	{
+		if (!IsOpen(guid))
+		{
+			if (!openActions.TryGetValue(guid, out Action open)) return;
+			open();
+			if (!IsOpen(guid)) return; // 저장하는 중이라 열지 못함
+		}
+		if (blockIndex < 0 || editingGlobals) return;
+		BlockData block = AllBlocksOf(Function).ElementAtOrDefault(blockIndex);
+		if (block != null) ShowBlock(block);
+	}
+
+	// guid의 함수(GlobalsKey면 Global Variables)를 지금 편집 영역에 열어 두었으면 true
+	bool IsOpen(string guid) => guid == GlobalsKey ? editingGlobals : !editingGlobals && Function != null && Function.Guid == guid;
 
 	// 「블록 보기」: 그 블록을 세 번 깜빡인다
 	void ShowBlock(BlockData block)
@@ -1182,6 +1324,75 @@ public class BlockEditor : MonoBehaviour
 		}
 	}
 
+	/// <summary>
+	/// 값 칸에 들어갈 블록을 끄는 동안, 마우스에서 SnapDistance 안에 있는 칸 중 끼울 수 있는 가장 가까운 칸 (BlockView가 놓을 자리를 찾을 때 부른다).
+	/// 이미 붙어 있는 칸은 붙기 직전의 자리까지 거리로 치고, 거리가 같으면 그 칸을 그대로 고른다.
+	/// 마우스가 편집 영역 밖(블록 목록, 휴지통)에 있거나 가까운 칸이 없으면 null.
+	/// </summary>
+	public BlockValueSlot FindSnapSlot(BlockData dragged, Vector2 screenPosition, Camera eventCamera)
+	{
+		if (!CanBeValue(dragged)) return null;
+		// 편집 영역 밖에서는 붙지 않는다. 블록 목록에 놓아 지우려는 블록이 편집 영역 가장자리의 칸에 붙지 않게
+		RectTransform area = workspaceViewport != null ? workspaceViewport : (RectTransform)workspace.transform;
+		if (!RectTransformUtility.RectangleContainsScreenPoint(area, screenPosition, eventCamera)) return null;
+		Rect areaRect = ScreenRectOf(area, eventCamera);
+		float scale = CanvasScale();
+
+		BlockValueSlot best = null;
+		float bestDistance = float.MaxValue;
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			if (!slot.CanAccept(dragged)) continue;
+			Rect rect = ScreenRectOf((RectTransform)slot.transform, eventCamera);
+			if (!rect.Overlaps(areaRect)) continue; // 스크롤로 가려진 칸
+			bool attached = ReferenceEquals(slot, highlightedSlot);
+			float distance = DistanceTo(rect, screenPosition) / scale;
+			if (attached) distance = Mathf.Min(distance, DistanceTo(snapRect, screenPosition) / scale);
+			if (distance > SnapDistance) continue;
+			if (distance < bestDistance || (distance <= bestDistance && attached))
+			{
+				best = slot;
+				bestDistance = distance;
+			}
+		}
+
+		// 새 칸에 붙을 때 그 칸의 지금 자리(미리보기를 끼우기 전)를 기억한다
+		if (best != null && !ReferenceEquals(best, highlightedSlot)) snapRect = ScreenRectOf((RectTransform)best.transform, eventCamera);
+		return best;
+	}
+
+	// rect의 화면 좌표 사각형
+	static Rect ScreenRectOf(RectTransform rect, Camera eventCamera)
+	{
+		var corners = new Vector3[4];
+		rect.GetWorldCorners(corners);
+		Vector2 min = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[0]);
+		Vector2 max = min;
+		for (int i = 1; i < 4; i++)
+		{
+			Vector2 p = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[i]);
+			min = Vector2.Min(min, p);
+			max = Vector2.Max(max, p);
+		}
+		return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+	}
+
+	// 점에서 사각형까지 거리 (사각형 안이면 0)
+	static float DistanceTo(Rect rect, Vector2 point)
+	{
+		float dx = Mathf.Max(rect.xMin - point.x, 0f, point.x - rect.xMax);
+		float dy = Mathf.Max(rect.yMin - point.y, 0f, point.y - rect.yMax);
+		return Mathf.Sqrt(dx * dx + dy * dy);
+	}
+
+	// 화면 픽셀 → 캔버스 단위. 해상도가 달라도 붙는 거리가 화면의 UI 크기에 맞게
+	float CanvasScale()
+	{
+		Canvas canvas = dragLayer != null ? dragLayer.GetComponentInParent<Canvas>() : null;
+		float scale = canvas != null ? canvas.rootCanvas.scaleFactor : 1f;
+		return scale > 0f ? scale : 1f;
+	}
+
 	/// <summary>끄는 동안의 칸 표시를 모두 지운다. 블록을 놓을 때 BlockView가 부른다 (#487)</summary>
 	public void HideDragHints()
 	{
@@ -1272,18 +1483,53 @@ public class BlockEditor : MonoBehaviour
 
 	RightTab rightTab = RightTab.Blocks;
 
-	// 오른쪽: 블록 목록, 함수 탭, 오류 창, 참고 창 중 하나만 보인다
-	void ShowTab(RightTab tab)
+	// 오른쪽 창이 접혀 세로 탭만 보이면 true
+	bool PanelCollapsed => sidePanel != null && sidePanel.Collapsed;
+
+	// 세로 탭을 눌렀을 때: 이미 열린 탭을 다시 누르면 오른쪽 창을 접고, 접혀 있으면 펴서 누른 탭을 연다.
+	// 편집 영역을 넓게 쓰고 싶을 때 창을 치울 수 있게
+	void OnTabClicked(RightTab tab)
+	{
+		if (sidePanel != null && !PanelCollapsed && rightTab == tab)
+		{
+			sidePanel.SetCollapsed(true);
+			ShowTab(tab, expand: false);
+			return;
+		}
+		ShowTab(tab);
+	}
+
+	// 세로 탭 맨 아래 > < 버튼: 열려 있으면 접고, 접혀 있으면 마지막에 보던 탭으로 편다
+	void TogglePanel()
+	{
+		if (sidePanel == null) return;
+		if (PanelCollapsed)
+		{
+			ShowTab(rightTab);
+			return;
+		}
+		sidePanel.SetCollapsed(true);
+		ShowTab(rightTab, expand: false);
+	}
+
+	// 오른쪽: 블록 목록, 함수 탭, 오류 창, 참고 창 중 하나만 보인다. 접혀 있으면 하나도 보이지 않는다.
+	// expand면 접힌 창을 편다. 컴파일 오류처럼 바로 보여 줘야 할 때도 펴서 연다 (사용자 결정).
+	// 다른 함수를 열 때 오류 탭을 문법 탭으로 돌리는 것처럼, 탭만 바꿔 둘 때는 expand를 false로 해 접힌 채 둔다
+	void ShowTab(RightTab tab, bool expand = true)
 	{
 		rightTab = tab;
-		if (paletteView != null) paletteView.SetActive(tab == RightTab.Blocks);
-		if (functionView != null) functionView.SetActive(tab == RightTab.Functions);
-		if (errorView != null) errorView.SetActive(tab == RightTab.Errors);
-		if (referenceView != null) referenceView.SetActive(tab == RightTab.Reference);
-		SetTabLook(blockTabButton, tab == RightTab.Blocks);
-		SetTabLook(functionTabButton, tab == RightTab.Functions);
-		SetTabLook(errorTabButton, tab == RightTab.Errors);
-		SetTabLook(referenceTabButton, tab == RightTab.Reference);
+		if (expand && sidePanel != null) sidePanel.SetCollapsed(false);
+		bool open = !PanelCollapsed;
+		if (paletteView != null) paletteView.SetActive(open && tab == RightTab.Blocks);
+		if (functionView != null) functionView.SetActive(open && tab == RightTab.Functions);
+		if (errorView != null) errorView.SetActive(open && tab == RightTab.Errors);
+		if (referenceView != null) referenceView.SetActive(open && tab == RightTab.Reference);
+		// 접혀 있으면 어느 탭도 고른 모양이 아니다
+		SetTabLook(blockTabButton, open && tab == RightTab.Blocks);
+		SetTabLook(functionTabButton, open && tab == RightTab.Functions);
+		SetTabLook(errorTabButton, open && tab == RightTab.Errors);
+		SetTabLook(referenceTabButton, open && tab == RightTab.Reference);
+		if (!open) return;
 		// 참고 탭을 열 때마다 카드를 다시 만든다. 스킬 트리 설명이나 해금 상태가 바뀌어도 다음에 열 때 맞춰진다
 		if (tab == RightTab.Reference) RebuildReference();
 		// 함수 탭도 열 때마다 다시 만든다. 그 사이 해금하거나 함수를 저장했어도 맞춰진다
@@ -1332,8 +1578,23 @@ public class BlockEditor : MonoBehaviour
 		if (tab.targetGraphic != null) tab.targetGraphic.color = active ? Color.white : new Color(1, 1, 1, 0.35f);
 	}
 
-	void ShowErrors(List<FunctionChecker.Error> errors)
+	// 오류 창의 오류 하나: 설명, 코드, 「> 이름」 세 줄. Guid·BlockIndex는 「> 이름」을 누를 때 열 함수와 깜빡일 블록 (BlockIndex가 -1이면 함수만 연다)
+	struct ShownError
 	{
+		public string Message;  // 설명 (예: 비어 있는 값 칸 1개)
+		public string Code;     // 오류가 난 블록의 글자 (예: if ( )). 블록이 없으면 빈 글자
+		public string Location; // 함수 이름 (예: temp, 슬롯 Q, Global Variables)
+		public string Guid;
+		public int BlockIndex;
+	}
+
+	void ShowErrors(List<ShownError> errors)
+	{
+		// 고칠 때마다 불리므로, 보이는 내용이 같으면 다시 만들지 않는다
+		string key = string.Join("\n", errors.Select(e => $"{e.Message}\t{e.Code}\t{e.Location}\t{e.Guid}\t{e.BlockIndex}"));
+		if (key == shownErrorsKey) return;
+		shownErrorsKey = key;
+
 		foreach (GameObject item in errorItems) if (item != null) Destroy(item);
 		errorItems.Clear();
 
@@ -1341,16 +1602,17 @@ public class BlockEditor : MonoBehaviour
 		if (errorText != null)
 		{
 			errorText.gameObject.SetActive(errors.Count == 0 || !useItems);
-			errorText.text = errors.Count == 0 ? "오류 없음\n\n컴파일을 누르면 여기에 결과가 나와요."
-				: "- " + string.Join("\n\n- ", errors.ConvertAll(e => $"{e.Code}  {e.Message}"));
+			errorText.text = errors.Count == 0 ? "오류 없음\n\n모든 함수의 오류가 여기에 나와요."
+				: string.Join("\n\n", errors.Select(e => string.IsNullOrEmpty(e.Code) ? $"{e.Message}\n> {e.Location}" : $"{e.Message}\n{e.Code}\n> {e.Location}"));
 		}
 		if (useItems)
 		{
-			foreach (FunctionChecker.Error error in errors)
+			foreach (ShownError error in errors)
 			{
 				ErrorItemView item = Instantiate(errorItemPrefab, errorList);
-				BlockData block = error.Block;
-				item.Show(error.Code, error.Message, block != null ? () => ShowBlock(block) : null);
+				string guid = error.Guid;
+				int index = error.BlockIndex;
+				item.Show(error.Message, error.Code, error.Location, guid != null ? () => ShowErrorBlock(guid, index) : null);
 				errorItems.Add(item.gameObject);
 			}
 		}
@@ -1495,6 +1757,10 @@ public class BlockEditor : MonoBehaviour
 	{
 		dirty = true;
 		ClearErrorMarks(); // 고쳤으면 지난 컴파일의 빨간 표시를 지운다
+		// 지난 컴파일·저장 거부의 오류도 지금 내용과 맞지 않으므로 지운다. 오류 창은 아래 Redraw가 지금 내용으로 다시 검사해 그린다
+		compileErrors = null;
+		brokenErrors = null;
+		if (editingGlobals) globalsErrors = null;
 		SetMessage(""); // 「저장됨」을 지우고 「저장하지 않은 변경 있음」을 보인다
 		Redraw();
 	}
@@ -1536,19 +1802,20 @@ public class BlockEditor : MonoBehaviour
 		// 함수 목록: 지금 연 것을 고른 모양으로, 저장하지 않은 변경이 있으면 이름 뒤 * (지금 페이지와 작업본이 있는 페이지, #494)
 		// 컴파일 오류가 있으면 이름에 빨간 밑줄. 작업본까지 반영해 고칠 때마다 다시 본다 (#494).
 		// 예: 전역 변수 x를 지우면 저장하기 전에도 x를 쓰는 슬롯 Q에 밑줄이 생겨 어디를 고쳐야 하는지 보인다
+		// 오류 창도 같은 검사 결과로 모든 함수의 오류를 보인다 (지금 연 함수만이 아니라, 사용자 요청)
 		string openKey = editingGlobals ? GlobalsKey : Function.Guid;
 		List<FunctionData> working = WorkingFunctions();
 		GlobalVariablesData workingGlobals = WorkingGlobals();
+		Dictionary<string, List<FunctionChecker.Error>> allErrors = FindAllErrors(working, workingGlobals);
 		foreach (var entry in functionItems)
 		{
 			if (entry.item == null) continue;
 			bool open = entry.guid != null && entry.guid == openKey;
 			bool unsaved = open ? CurrentUnsaved : entry.guid != null && (drafts.ContainsKey(entry.guid) || (entry.guid == GlobalsKey && globalsDraft != null));
-			FunctionData function = entry.guid != null ? working.FirstOrDefault(f => f.Guid == entry.guid) : null;
-			bool error = (function != null && FunctionChecker.HasErrors(function, workingGlobals, working))
-				|| (entry.guid != null && entry.guid == compileFailedKey);
+			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid) || entry.guid == compileFailedKey);
 			entry.item.Show(entry.prefix, entry.name + (unsaved ? " <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
 		}
+		ShowAllErrors(allErrors, working);
 
 		if (messageLabel != null)
 		{
@@ -1589,8 +1856,7 @@ public class BlockEditor : MonoBehaviour
 
 		bool slot = IsSlotFunction(Function);
 		string parameters = string.Join(", ", (Function.Parameters ?? new List<ParameterData>()).Select(p => $"{BlockLabels.TypeName(p.Type)} {p.Name}"));
-		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), DisplayNameOf(Function), parameters,
-			slot ? "슬롯 함수 · 이름(슬롯 키)과 반환 타입은 고정" : "페이지 함수 · 반환 타입을 고를 수 있음", !slot);
+		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), DisplayNameOf(Function), parameters, !slot);
 	}
 
 	// 반환 타입을 누르면 드롭다운으로 고른다. 고르면 고친 것으로 치고, 틀린 곳(return이 없는 길 등)은 저장할 때 컴파일이 알려 준다
@@ -1887,14 +2153,33 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (topBar == null) return;
 
-		functionNameField = CreateField(topBar);
-		functionNameField.MinWidth = 60f;
-		functionNameField.SetBackground(null, Color.clear); // 견본처럼 이름만 보이게
-		functionNameField.transform.SetSiblingIndex(0); // 상태 글자(Message Label)가 위쪽 줄 안에 있으면 그 앞에
+		// 함수 이름은 함수 틀(「void 이름( ) {」)에만 보이고 거기서 고친다 (사용자 요청: 위쪽 줄과 두 번 보여 혼잡함).
+		// 함수 틀이 없는 화면이면 예전처럼 위쪽 줄 맨 앞에 둔다
+		if (functionFrame != null)
+		{
+			functionNameField = CreateField(topBar);
+			functionFrame.PlaceNameField((RectTransform)functionNameField.transform);
+			// 칸을 머리줄 높이만큼 키운다. 밑줄은 칸 아래 끝에 그려지고 글자는 칸 가운데에 있으므로, 칸이 높을수록 글자와 밑줄 사이가 벌어진다
+			// (칸 기본 높이 14로는 밑줄이 글자에 붙어 보였다)
+			if (functionNameField.TryGetComponent(out LayoutElement nameSize)) nameSize.minHeight = NameFieldHeight;
+		}
+		else
+		{
+			functionNameField = CreateField(topBar);
+			functionNameField.transform.SetSiblingIndex(0); // 상태 글자(Message Label)가 위쪽 줄 안에 있으면 그 앞에
+		}
+		functionNameField.MinWidth = 30f;
+		// 함수 틀의 다른 글자(반환 타입, 괄호)와 같은 크기, 굵게
+		if (functionNameField.TryGetComponent(out TMP_InputField nameInput))
+		{
+			nameInput.pointSize = 12f;
+			if (nameInput.textComponent != null) nameInput.textComponent.fontStyle = FontStyles.Bold;
+		}
+		SetNameFieldEditable(false);
 
-		// 동기·비동기 고르기 (FunctionData.IsAsync, function-data.md #132). 함수 이름 바로 뒤
+		// 동기·비동기 고르기 (FunctionData.IsAsync, function-data.md #132)
 		asyncButton = AddTopButton("동기", ToggleAsync, saveButtonPrefab);
-		asyncButton.transform.SetSiblingIndex(1);
+		asyncButton.transform.SetSiblingIndex(0);
 		// 일단 항상 숨긴다 (#470). 버튼과 ToggleAsync는 남겨 두어, 다시 보일 때 이 줄만 지우면 된다
 		asyncButton.gameObject.SetActive(false);
 		functionNameField.Edited += text =>
@@ -1923,6 +2208,15 @@ public class BlockEditor : MonoBehaviour
 		infoText = infoLabel != null ? infoLabel : CreateText(topBar);
 	}
 
+	// 함수 이름 칸을 고칠 수 있게(페이지 함수) 또는 못 고치게(슬롯 함수, Global Variables) 한다.
+	// 고칠 수 있는 칸에만 청록 밑줄을 긋는다. 블록 안의 이름 칸(선언 이름)도 밑줄이라, 밑줄이 「여기를 고칠 수 있다」는 표시가 된다
+	void SetNameFieldEditable(bool editable)
+	{
+		if (functionNameField == null) return;
+		functionNameField.Interactable = editable;
+		functionNameField.SetBackground(editable ? nameFieldSprite : null, nameFieldColor);
+	}
+
 	Button AddTopButton(string label, Action onClick, Button prefab = null)
 	{
 		Button button = prefab != null ? Instantiate(prefab, topBar) : CreateButton(topBar);
@@ -1944,6 +2238,7 @@ public class BlockEditor : MonoBehaviour
 			item.SetDeleteAction(onDelete);
 			if (onClick != null) item.Button.onClick.AddListener(() => onClick());
 			item.Button.interactable = onClick != null;
+			if (guid != null && onClick != null) openActions[guid] = onClick; // 오류 창의 「블록 보기」가 다른 함수를 열 때
 			savedButtons.Add(item.gameObject);
 			functionItems.Add((item, prefix, guid, name, detail, dim));
 			return;
@@ -2109,6 +2404,7 @@ public class BlockEditor : MonoBehaviour
 		}
 		savedButtons.Clear();
 		functionItems.Clear();
+		openActions.Clear();
 	}
 
 	void NewFunction()

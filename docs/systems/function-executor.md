@@ -19,7 +19,7 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger`, `TaskEndInfo` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임, 화면에 알릴 끝난 이유 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock`, `WaitBlock` | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `InputFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors`, `Input/GetBug` | 스킬 작성자가 쓰는 것, 입력 함수 |
 | `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules`, `FailureNotice` | 언어 규칙, 실패 알림 문장 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance`, `StructObjectRegistry` | stack, heap, malloc할 struct 객체 등록 |
@@ -35,6 +35,7 @@
   - `PredefinedFunction`: `TickCount` tick
   - `UserFunction`: 실제로 실행된 `Block`들의 tick 합
   - `ReturnBlock`, 선언, 대입, 연산, 비교, 논리(`&& || !`), `malloc`, `free`, 배열 만들기(길이와 상관없음), 원소 읽기·쓰기: 1 tick
+  - 기다리기(`wait`, #502): 적은 초만큼. 블록이 쓰는 tick 전체가 적은 시간(올림). 0초·음수는 1 tick. 예: `wait(0.5초)` 25 tick
   - expression으로 쓴 블록(연산, 비교, 논리, `malloc`, 값을 돌려주는 함수, 원소 읽기): 자기 tick을 쓰고, 바깥 블록은 그 다음 tick에 진행. 예: `x = x + 2` → 더하기 1 tick, 대입 1 tick
   - value slot에 직접 입력한 값, 넣은 변수: 블록이 아니므로 tick을 쓰지 않음
   - value slot이 여럿: 왼쪽부터 차례로 실행
@@ -80,7 +81,7 @@
 
 ### 함수 데이터 실행 (#90)
 - 실행 순서: 함수 데이터(`FunctionData`)를 `FunctionDataConverter`가 `UserFunction`으로 바꾼 뒤 `Cast`. 블록 목록을 위에서부터 차례로 실행
-- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), `for`, `while`, `break`, `continue`(#120), 사전 정의 함수 블록, `malloc`, `free`, 사용자 정의 함수 블록, `return`, 배열 만들기, 원소 읽기·쓰기(#132)
+- 지원 블록: 선언, 대입, 연산(`+ - * / %`), 비교(`> < == != >= <=`, #120), 논리(`&& || !`, #120), 조건문(`if`, `else if`, `else`, #120), `for`, `while`, `break`, `continue`(#120), 사전 정의 함수 블록, `malloc`, `free`, 사용자 정의 함수 블록, `return`, 배열 만들기, 원소 읽기·쓰기(#132), 기다리기(#502)
   - list: 없음. list가 문법에 있는 언어(Java, Python)의 캐릭터가 생길 때 (#132)
 - 지원 타입: `int`, `float`, `bool`, `string`, `char`, 미리 정한 struct의 포인터(예: `Sword*`), 대상(`Target`, 종류 `Bug`, #131), 그 타입들의 array(#132)
 - 프레임 크기: 1 + 파라미터 수 + 지역 변수 수(`FunctionData.LocalVariables()`)
@@ -187,6 +188,20 @@
 
   - return 누락의 compile error: 원래는 편집 화면에서 저장할 때 찾아낼 잘못(MSVC 방식). 저장 검사가 생기기 전까지는 실행 중에 `MissingReturn`
   - 저장 검사용 판정: `BlockData.AlwaysReturnsValue(blocks)`. 값을 넣은 `return`, 또는 `else`까지 있고 모든 갈래가 반드시 `return`하는 조건문이 있으면 `true`. 반복문 안의 `return`은 세지 않음. 실행기는 쓰지 않음
+- 기다리기 `wait(초);` (#502)
+  - 칸: 기다릴 초 value slot 하나. 직접 입력한 값, 변수, expression
+    - 비운 칸: 변환 거부. 함수 탭에서 놓으면 빈 칸으로 놓임
+    - expression: 그 블록이 자기 tick을 쓴 뒤 다음 tick부터 셈. 예: `float t = 0.1; wait(t * 2);` → 선언 1, 곱하기 1, 기다리기 10 = 12 tick
+  - 초 → tick: 블록이 쓰는 tick 전체가 적은 시간. 나누어떨어지지 않으면 올림. 예: `wait(0.03초)` → 2 tick(0.04초)
+    - 1 tick의 길이: `FunctionExecutor.SecondsPerTick`. 실행기가 작업을 만들 때 `FunctionContext.SecondsPerTick`으로 넘김
+  - 0초, 음수: 1 tick을 쓰고 다음 블록. 새 실패 종류 없음. 실제 C의 `sleep(-1)`은 부호 없는 정수로 바뀌어 아주 오래 잠
+  - 값의 타입: `float` 변수에 넣을 때와 같은 규칙. C는 `int`, `float`, `char`, `bool`. 그 밖(`string`, 포인터, `Target`)은 `TypeMismatch`
+  - 기다리는 동안
+    - 작업 상태: `Running` 그대로. 입력 대기의 `WaitingInput`과 다름(끝나는 tick이 미리 정해지기 때문)
+    - tick: 그 함수가 쓴 tick에 들어감. 입력 대기와 다름(기다리기가 블록 자신의 동작이기 때문)
+    - stack: 프레임을 돌려주지 않음. memory 게이지에 남음
+    - 실행 중단 공격, 슬롯 취소: 다른 블록과 같음. `Interrupted`, `Cancelled`로 끝나고 프레임 반환
+  - 상한: 없음. 끝나지 않는 반복문과 같음(「끊기는 경우」). int로 셀 수 있는 tick 수까지
 - array (#132)
   - 만들기: 배열 만들기 블록(`int arr[5]`). 일반 선언 블록의 array 타입은 변환 거부
   - 길이: 직접 입력한 1 이상의 정수만(C89). 변수, 값 블록, 0 이하는 변환 거부
@@ -446,7 +461,7 @@
 | --- | --- | --- | --- |
 | `Caster` | - | `GameObject` | 이 작업을 cast한 캐릭터. `PredefinedFunction`은 이것으로 캐릭터의 위치, 방향, 컴포넌트를 찾는다. |
 
-- 그 밖의 값(`Memory`, `Rule`, 지역 변수 목록, 실패 기록, 비동기 시전 요청, `Malloc`)은 실행기 안에서만 씀(`internal`). 스킬은 `PredefinedFunction`의 함수로 씀([predefined-function.md](predefined-function.md))
+- 그 밖의 값(`Memory`, `Rule`, `SecondsPerTick`(#502), 지역 변수 목록, 실패 기록, 비동기 시전 요청, `Malloc`)은 실행기 안에서만 씀(`internal`). 스킬은 `PredefinedFunction`의 함수로 씀([predefined-function.md](predefined-function.md))
 
 ### `LanguageRule` (캐릭터의 언어 컴포넌트)
 

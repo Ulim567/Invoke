@@ -313,6 +313,13 @@ public static class FunctionDataConverter
 					ValueBlock value = ConvertValue(data, block.Slots[0]);
 					return value == null ? null : new ReturnBlock(value);
 				}
+
+				// 칸: 기다릴 초. 변수와 expression도 받는다. 함수 탭에서 놓으면 빈 칸으로 놓이므로, 비운 채 저장한 함수는 다른 value slot처럼 거부한다 (#502)
+				case BlockKind.Wait when block.Slots.Count >= 1:
+				{
+					ValueBlock seconds = ConvertValue(data, block.Slots[0]);
+					return seconds == null ? null : new WaitBlock(seconds);
+				}
 			}
 
 			return Reject(data, $"{block.Kind} 블록은 아직 실행할 수 없습니다.");

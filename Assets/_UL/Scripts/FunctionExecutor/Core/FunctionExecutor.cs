@@ -227,7 +227,7 @@ public class FunctionExecutor : MonoBehaviour
 		FunctionBlock copy = (FunctionBlock)function.Clone();
 		if (arguments != null) copy.SetArguments(arguments);
 
-		FunctionTask task = new FunctionTask(++lastTaskId, gameObject, memory, cooldowns, language, copy);
+		FunctionTask task = new FunctionTask(++lastTaskId, gameObject, memory, cooldowns, language, copy, SecondsPerTick);
 		pendingTasks.Add(task);
 		return task;
 	}

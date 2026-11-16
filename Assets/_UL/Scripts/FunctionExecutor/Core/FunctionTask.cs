@@ -101,13 +101,13 @@ public class FunctionTask
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	// 실행기를 받지 않는다. 작업은 결과만 남기고, 실행기가 읽어서 처리하기 때문
-	internal FunctionTask(int id, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function)
+	internal FunctionTask(int id, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function, float secondsPerTick)
 	{
 		Id = id;
 		Caster = caster;
 		Name = function.Name;
 		this.function = function;
-		context = new FunctionContext(this, caster, memory, cooldowns, language);
+		context = new FunctionContext(this, caster, memory, cooldowns, language, secondsPerTick);
 	}
 
 	/// <summary>

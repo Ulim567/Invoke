@@ -19,7 +19,7 @@ public class ProgressTestData : MonoBehaviour
 	[Tooltip("진행도를 바꿀 캐릭터의 언어 (CharacterLanguages). 예: C")]
 	[SerializeField] string language = CharacterLanguages.C;
 
-	[Tooltip("CharacterProgressData의 JSON. Level, Exp, Money, Materials, Unlocked, Slots(8개, Kind: UserFunction, Id: 슬롯 함수 GUID), Functions(슬롯 함수 + 페이지 함수), Globals. 슬롯의 함수가 Functions에 없으면 서버가 새 캐릭터와 같은 슬롯 함수를 만든다")]
+	[Tooltip("CharacterProgressData의 JSON. Level, Exp, Money, Materials, ItemCounts(블록·함수 항목 ID → 가진 개수, 비우면 서버가 처음 개수를 넣음), Unlocked,Slots(8개, Kind: UserFunction, Id: 슬롯 함수 GUID), Functions(슬롯 함수 + 페이지 함수), Globals. 슬롯의 함수가 Functions에 없으면 서버가 새 캐릭터와 같은 슬롯 함수를 만든다")]
 	[SerializeField, TextArea(6, 30)] string json =
 		"{\"Level\":10,\"Exp\":0,\"Money\":1000," +
 		"\"Materials\":{\"bug_fragment\":50,\"field_boss_core\":2,\"boss_core\":1}," +
@@ -56,6 +56,7 @@ public class ProgressTestData : MonoBehaviour
 	{
 		var data = new CharacterProgressData();
 		data.FillInitialSlotFunctions();
+		data.ItemCounts = ItemCountRules.Initial();
 		json = FunctionDataJson.ToJson(data);
 	}
 

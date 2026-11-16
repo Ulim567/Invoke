@@ -60,10 +60,14 @@ public class UnlockTest : MonoBehaviour
 			playerObject.SetActive(true);
 			NetworkServer.Spawn(playerObject);
 			progress.ApplyLoaded(store.Progress.Load(key), store.Progress, key);
+			Check("처음 개수가 들어옴: thrust 1, sword_throw 1, get_bug 2 (#500)",
+				progress.GetItemCount(PredefinedFunctionIds.Thrust) == 1 && progress.GetItemCount(PredefinedFunctionIds.SwordThrow) == 1
+				&& progress.GetItemCount(PredefinedFunctionIds.GetBug) == 2 && progress.ItemCounts.Count == 3);
 
 			// 재료가 없으면 거부하고 아무것도 바꾸지 않는다
 			Check("재료 없이 집중찌르기 → MaterialShort", progress.TryUnlock(focused.Id) == UnlockResult.MaterialShort);
 			Check("거부되면 해금 목록 그대로", !progress.Unlocked.Contains(focused.Id));
+			Check("거부되면 개수도 그대로", progress.GetItemCount(focused.Id) == 0);
 
 			// 선행이 없으면 재료가 있어도 거부하고, 재료를 빼지 않는다
 			Give(progress, summonedThrust);
@@ -81,6 +85,7 @@ public class UnlockTest : MonoBehaviour
 			Check("집중찌르기 → Unlocked", progress.TryUnlock(focused.Id) == UnlockResult.Unlocked);
 			Check("집중찌르기가 해금 목록에 있음", progress.Unlocked.Contains(focused.Id));
 			Check("집중찌르기 재료가 Cost만큼 줆", progress.GetMaterialCount(focused.Cost[0].MaterialId) == focusedBefore - focused.Cost[0].Count);
+			Check("스킬 노드를 해금하면 그 함수 1개 받음 (집중찌르기)", progress.GetItemCount(focused.Id) == 1);
 
 			// 이미 해금한 노드, 없는 노드
 			int afterUnlock = progress.GetMaterialCount(focused.Cost[0].MaterialId);
@@ -93,12 +98,36 @@ public class UnlockTest : MonoBehaviour
 			Give(progress, summon);
 			Check("검 소환 → Unlocked", progress.TryUnlock(summon.Id) == UnlockResult.Unlocked);
 			Check("같이 열리는 해제도 해금됨", progress.Unlocked.Contains(PredefinedFunctionIds.FreeSword));
+			Check("검 소환 1개, 같이 열린 해제도 1개 받음", progress.GetItemCount(summon.Id) == 1 && progress.GetItemCount(PredefinedFunctionIds.FreeSword) == 1);
+
+			// 문법 노드: 노드가 여는 블록 종류마다 1개 (변수 → Declare, Assign)
+			const string variableNode = "syntax.variable";
+			if (SkillTree.TryGet(variableNode, out SkillTreeNode variable))
+			{
+				Give(progress, variable);
+				Check("변수 노드 → Unlocked", progress.TryUnlock(variableNode) == UnlockResult.Unlocked);
+				Check("변수 노드를 해금하면 Declare 1, Assign 1 받음", progress.GetItemCount("Declare") == 1 && progress.GetItemCount("Assign") == 1);
+			}
+			else Check($"SkillTree에 {variableNode} 노드가 있음", false);
+
+			// if문 노드는 Conditional 하나를 열지만 개수는 If, ElseIf, Else로 나눠 준다
+			if (SkillTree.TryGet("syntax.if", out SkillTreeNode ifNode))
+			{
+				List<string> keys = ItemCountRules.KeysUnlockedBy(ifNode);
+				Check("if문 노드가 주는 항목 = If, ElseIf, Else, Compare", keys.OrderBy(k => k).SequenceEqual(new[] { "Compare", "Else", "ElseIf", "If" }));
+			}
+			else Check("SkillTree에 syntax.if 노드가 있음", false);
+
+			progress.AddItem("Declare", ItemCountRules.MaxCount + 10);
+			Check($"AddItem은 {ItemCountRules.MaxCount}개에서 멈춤", progress.GetItemCount("Declare") == ItemCountRules.MaxCount);
 
 			// 접속을 끊고 다시 들어오는 것을 DB에서 다시 읽는 것으로 대신 확인
 			loaded = store.Progress.Load(key);
 			Check("DB에 집중찌르기·검 소환·해제가 저장됨",
 				loaded.Unlocked.Contains(focused.Id) && loaded.Unlocked.Contains(summon.Id) && loaded.Unlocked.Contains(PredefinedFunctionIds.FreeSword));
 			Check("DB의 재료 개수가 메모리와 같음", SameMaterials(loaded, progress, focused, summon, summonedThrust));
+			Check("DB의 블록·함수 개수가 메모리와 같음", loaded.ItemCounts.Count == progress.ItemCounts.Count
+				&& loaded.ItemCounts.All(pair => progress.GetItemCount(pair.Key) == pair.Value));
 			NetworkServer.Destroy(playerObject);
 		}
 

@@ -17,6 +17,9 @@ public class CharacterProgressData
 	/// <summary>재료 ID → 개수. 없는 재료는 0개다.</summary>
 	public Dictionary<string, int> Materials = new Dictionary<string, int>();
 
+	/// <summary>블록·함수의 항목 ID → 가진 개수 (#500, ItemCountRules). 없는 항목은 0개다.</summary>
+	public Dictionary<string, int> ItemCounts = new Dictionary<string, int>();
+
 	/// <summary>해금한 스킬 트리 노드 ID (문법 노드와 스킬 노드).</summary>
 	public List<string> Unlocked = new List<string>();
 

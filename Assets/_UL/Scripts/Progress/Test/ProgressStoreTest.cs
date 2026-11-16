@@ -72,6 +72,10 @@ public class ProgressStoreTest : MonoBehaviour
 			Check($"처음 해금 = SkillTree 처음 노드 ({string.Join(", ", startingNodes)})", startingNodes.Count > 0 && first.Unlocked.OrderBy(x => x).SequenceEqual(startingNodes.OrderBy(x => x)));
 			Check("처음 함수 = 슬롯 함수 8개, 페이지 함수 0개", first.Functions.Count == SlotLoadout.SlotCount && progress.CountPageFunctions(characterKey) == 0);
 			Check("처음 슬롯 = slot1~slot8, 파라미터 없음, slot1 thrust(GetBug()), slot2 sword_throw(GetBug()), 나머지 빈 본문", IsInitialSlots(first));
+			Check("처음 개수 = thrust 1, sword_throw 1, get_bug 2 (#500)", SameCounts(first.ItemCounts, new Dictionary<string, int>
+				{ { PredefinedFunctionIds.Thrust, 1 }, { PredefinedFunctionIds.SwordThrow, 1 }, { PredefinedFunctionIds.GetBug, 2 } }));
+			Check("처음 슬롯 함수가 쓰는 개수 = 처음 가진 개수 (남은 개수 모두 0)",
+				SameCounts(BlockUsageCounter.Count(firstSlotGuids, first.Functions, first.Globals), first.ItemCounts));
 
 			// 저장
 			progress.SaveProgress(characterKey, 5, 30, 500);
@@ -80,6 +84,11 @@ public class ProgressStoreTest : MonoBehaviour
 			progress.SetMaterialCount(characterKey, BossCore, 0);
 			progress.SaveUnlock(characterKey, new List<string> { "syntax.variable", "removed.node" }, new Dictionary<string, int> { { Bug, 8 } });
 			progress.SaveUnlock(characterKey, new List<string> { "syntax.variable" }, null);
+			// 블록·함수 개수 (#500): 넣기, 최대 개수에서 멈춤, 0이면 row를 지움, 해금과 한 트랜잭션으로 지급
+			progress.SetItemCount(characterKey, "Declare", 3);
+			progress.SetItemCount(characterKey, "For", ItemCountRules.MaxCount + 50);
+			progress.SetItemCount(characterKey, PredefinedFunctionIds.Thrust, 0);
+			progress.SaveUnlock(characterKey, new List<string> { "syntax.variable" }, null, new Dictionary<string, int> { { "Assign", 1 } });
 
 			Check("새 함수는 없음", !progress.HasFunction(characterKey, function.Guid));
 			progress.SaveFunction(characterKey, function.Guid, FunctionDataJson.ToJson(function));
@@ -121,12 +130,18 @@ public class ProgressStoreTest : MonoBehaviour
 			Check($"ReplaceAll: 페이지 함수는 {ProgressRules.MaxPageFunctions}개까지",
 				progress.CountPageFunctions(replacedCharacter.Key) == ProgressRules.MaxPageFunctions
 				&& replacedLoaded.Functions.Count == SlotLoadout.SlotCount + ProgressRules.MaxPageFunctions);
+			Check("ReplaceAll: 개수를 비우면 처음 개수", SameCounts(replacedLoaded.ItemCounts, ItemCountRules.Initial()));
+
+			var replacedWithCounts = new CharacterProgressData();
+			replacedWithCounts.ItemCounts["If"] = 4;
+			progress.ReplaceAll(replacedCharacter.Key, replacedWithCounts);
+			Check("ReplaceAll: 개수를 적으면 적은 개수만", SameCounts(progress.Load(replacedCharacter.Key).ItemCounts, new Dictionary<string, int> { { "If", 4 } }));
 		}
 
 		// 이 기능 전에 만든 캐릭터처럼 진행도 row가 없는 캐릭터를 만든다
 		using (var raw = new SQLiteConnection(path))
 		{
-			foreach (string table in new[] { "CharacterProgress", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals" })
+			foreach (string table in new[] { "CharacterProgress", "CharacterItemCounts", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals" })
 				raw.Execute($"DELETE FROM {table} WHERE CharacterKey = ?", oldCharacterKey);
 			raw.Execute("DELETE FROM CharacterProgress WHERE CharacterKey = ?", partialCharacterKey);
 		}
@@ -144,9 +159,16 @@ public class ProgressStoreTest : MonoBehaviour
 			FunctionData page = loaded.Functions.Find(f => f.Guid == function.Guid);
 			Check("페이지 함수는 마지막에 저장한 내용", loaded.Functions.Count == SlotLoadout.SlotCount + 1 && page != null && page.Name == "RenamedFunction");
 			Check("전역 변수 선언 1개 (mySword)", loaded.Globals.Declarations.Count == 1);
+			Check($"개수: Declare 3, For {ItemCountRules.MaxCount}(최대에서 멈춤), Assign 1(해금과 함께), 0으로 만든 thrust는 없음, sword_throw 1, get_bug 2",
+				SameCounts(loaded.ItemCounts, new Dictionary<string, int>
+				{
+					{ "Declare", 3 }, { "For", ItemCountRules.MaxCount }, { "Assign", 1 },
+					{ PredefinedFunctionIds.SwordThrow, 1 }, { PredefinedFunctionIds.GetBug, 2 },
+				}));
 
 			CharacterProgressData old = store.Progress.Load(oldCharacterKey);
 			Check("진행도 row가 없던 캐릭터는 처음 값으로 채움", old.Level == 1 && IsInitialSlots(old) && old.Functions.Count == SlotLoadout.SlotCount && old.Unlocked.Count == startingNodes.Count);
+			Check("개수 row가 없던 캐릭터는 처음 개수로 채움", SameCounts(old.ItemCounts, ItemCountRules.Initial()));
 
 			CharacterProgressData partial = store.Progress.Load(partialCharacterKey);
 			Check("진행도 row만 빠진 캐릭터: 예외 없이 레벨 1, 슬롯 함수·페이지 함수·해금은 그대로",
@@ -168,6 +190,10 @@ public class ProgressStoreTest : MonoBehaviour
 	}
 
 	static List<string> SlotGuids(CharacterProgressData data) => data.Slots.Select(entry => entry.Id).ToList();
+
+	// 두 개수 사전의 항목과 개수가 모두 같으면 true
+	static bool SameCounts(IReadOnlyDictionary<string, int> a, IReadOnlyDictionary<string, int> b) =>
+		a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out int count) && count == pair.Value);
 
 	// 슬롯마다 서로 다른 함수(EntryKind.UserFunction)가 있고, 그 함수가 Functions에 있으면 true
 	static bool AllSlotsAreFunctions(CharacterProgressData data)

@@ -500,8 +500,19 @@ public static class InvokeUIBuilder
 		outlineImage.raycastTarget = false;
 		outlineImage.enabled = false;
 
-		TMP_Text titleText = Text(root.transform, "Title", "검 찌르기", 11, Hex("F4F1FA"), TextAlignmentOptions.MidlineLeft);
+		// 제목 줄: 왼쪽에 제목, 오른쪽 끝에 「남은/가진」 개수 (#500, 시안 6-12). 개수가 없는 항목(내가 만든 함수)은 FunctionItemView가 개수 글자를 숨긴다
+		GameObject titleRow = NewUI("TitleRow", root.transform);
+		HorizontalLayoutGroup rowLayout = titleRow.AddComponent<HorizontalLayoutGroup>();
+		rowLayout.spacing = 6;
+		rowLayout.childAlignment = TextAnchor.MiddleLeft;
+		rowLayout.childControlWidth = rowLayout.childControlHeight = true;
+		rowLayout.childForceExpandWidth = rowLayout.childForceExpandHeight = false;
+
+		TMP_Text titleText = Text(titleRow.transform, "Title", "검 찌르기", 11, Hex("F4F1FA"), TextAlignmentOptions.MidlineLeft);
 		titleText.fontStyle = FontStyles.Bold;
+		titleText.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+		TMP_Text countText = Text(titleRow.transform, "Count", "2/3", 11, Hex("F4F1FA"), TextAlignmentOptions.MidlineRight);
+		countText.overflowMode = TextOverflowModes.Overflow;
 
 		// 원형: 길면 잘리지 않고 다음 줄로 감싼다 (void battlefield_sweep(Target / array targets);)
 		// 부분마다의 색은 FunctionItemView가 리치 텍스트로 칠한다 (BlockReference.ColorCode). 여기 색은 괄호·쉼표와 같은 밝은 회색
@@ -512,6 +523,7 @@ public static class InvokeUIBuilder
 		Set(view, "dashedOutline", outlineImage);
 		Set(view, "titleText", titleText);
 		Set(view, "prototypeText", prototypeText);
+		Set(view, "countText", countText);
 		return SavePrefab(root, "FunctionItem").GetComponent<FunctionItemView>();
 	}
 

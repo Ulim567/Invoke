@@ -4,7 +4,7 @@
 
 ## 하는 일
 - 서버가 캐릭터의 진행도를 SQLite DB에 저장하고 불러온다. 서버를 껐다 켜도 저장한 값이 그대로 남는다.
-- 저장하는 것: 레벨, 경험치, 돈, 재료, 스킬 트리 해금 목록, 슬롯 8개, 사용자 정의 함수, 전역 변수
+- 저장하는 것: 레벨, 경험치, 돈, 재료, 블록·함수의 가진 개수(#500), 스킬 트리 해금 목록, 슬롯 8개, 사용자 정의 함수, 전역 변수
 - 클라이언트는 DB에 직접 접근하지 않는다. 클라이언트가 필요한 값은 서버가 보낸다.
 - 하지 않는 일
   - 레벨업 규칙, 경험치 표: `LevelRules`(김도훈, `player-stats.md`). `AddExp`가 이 규칙으로 레벨을 올린다
@@ -22,6 +22,10 @@
 | 시작 장소 | 항상 로비. 장소·위치는 저장하지 않음 |
 | 새 캐릭터 처음 값 | 레벨 1, 경험치 0, 돈 0, 재료·페이지 함수·전역 변수 없음 |
 | 새 캐릭터 처음 해금 | `SkillTree.StartingNodes()` + `SkillTree.AutoUnlockedBy` |
+| 블록·함수 개수 (#500) | 가진 개수만큼만 함수에 놓을 수 있음. DB는 가진 개수만 저장. 블록을 놓거나 지워도 가진 개수는 그대로이고, 남은 개수 = 가진 개수 − 함수에서 센 개수(`BlockUsageCounter`, `function-data.md` 「개수 세기 규칙」). 항목 하나당 최대 `ItemCountRules.MaxCount`(99) |
+| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수와 같음 (`ItemCountRules.Initial`): thrust 1, sword_throw 1, get_bug 2. 처음 남은 개수는 모두 0 (기획의 「튜토리얼을 마친 상태」) |
+| 해금할 때 지급 | 연 노드(같이 열린 노드 포함)마다 그 노드가 여는 블록·함수 1개씩 (`ItemCountRules.KeysUnlockedBy`) |
+| 임시 계정의 개수 | 개수를 쓰지 않음. 무엇이든 놓을 수 있고 「남은/가진」을 표시하지 않음 |
 | 슬롯 | 슬롯 8개는 언제나 그 슬롯의 슬롯 함수 하나. 빈 슬롯 없음, 장착(다른 함수·C 스킬을 슬롯에 넣기) 없음. C 스킬은 슬롯 함수 function body 안의 블록 |
 | 슬롯 함수 | 캐릭터를 만들 때 서버가 8개를 만듦. 이름 `slot1`~`slot8` 고정, 파라미터 없음, 반환 타입 `Void`, 비동기 아님. 이름·파라미터·반환 타입·비동기 여부 변경 불가. function body만 바꿈(빈 본문 가능) |
 | 새 캐릭터 처음 슬롯 함수 | `slot1` = `thrust(GetBug());`, `slot2` = `sword_throw(GetBug());`, `slot3`~`slot8` = 빈 본문 (`CharacterProgressData.NewSlotFunction`) |
@@ -33,7 +37,7 @@
 
 ### DB
 - 파일: `Accounts.db` (#174의 `AccountStore`와 같은 파일)
-- 코드: `ProgressStore` (서버·에디터만, `#if UNITY_SERVER || UNITY_EDITOR`). 진행도 테이블 6개만 다룸
+- 코드: `ProgressStore` (서버·에디터만, `#if UNITY_SERVER || UNITY_EDITOR`). 진행도 테이블 7개만 다룸
   - `AccountStore`가 연 SQLite 연결 하나를 함께 씀. 그래서 캐릭터를 만들 때 `Characters` row와 진행도 처음 row를 한 트랜잭션으로 넣을 수 있음
   - `AccountStore.CreateCharacter`가 트랜잭션 안에서 `ProgressStore`의 처음 row 넣기를 부름
 - 테이블: 종류마다 하나. 모두 캐릭터 key(`Characters.Key`)로 캐릭터를 가리킴
@@ -43,6 +47,7 @@
 | --- | --- | --- |
 | `CharacterProgress` | 레벨, 현재 레벨 안의 경험치, 돈 | 1개 |
 | `CharacterMaterials` | 재료 ID, 개수 | 가진 재료 종류 수 |
+| `CharacterItemCounts` | 블록·함수 항목 ID, 가진 개수 (#500) | 가진 항목 종류 수 |
 | `CharacterUnlocks` | 해금한 노드 ID | 해금한 노드 수 |
 | `CharacterSlots` | 슬롯 번호(0~7), 종류(`UserFunction`), 슬롯 함수 GUID | 8개 |
 | `CharacterFunctions` | 함수 GUID, 함수 데이터 JSON | 슬롯 함수 8개 + 페이지 함수 수 |
@@ -72,6 +77,19 @@
 - row가 없으면 0개. 개수가 0이 되면 row를 지움
 - 새 캐릭터는 row 없음
 - 재료 ID는 한 번 정하면 바꾸지 않음 (DB에 ID로 저장되기 때문)
+
+#### `CharacterItemCounts` (#500)
+| column | 타입 | 규칙 |
+| --- | --- | --- |
+| `Id` | 정수 | 기본 키. SQLite가 자동으로 붙임 |
+| `CharacterKey` | 문자열 | `Characters.Key` |
+| `ItemId` | 문자열 | 항목 ID (`BlockUsageCounter.KeyOf`와 같음). 예: `c.thrust`, `input.get_bug`, `If`, `Declare` |
+| `Count` | 정수 | 가진 개수. 1 이상 `ItemCountRules.MaxCount`(99) 이하 |
+
+- (`CharacterKey`, `ItemId`) unique: 같은 캐릭터에 같은 항목 row는 하나
+- row가 없으면 0개. 개수가 0이 되면 row를 지움. 99를 넘는 값은 99로 씀
+- 새 캐릭터는 처음 개수(`ItemCountRules.Initial`) row
+- 개수 row가 하나도 없는 캐릭터(#500 전에 만든 캐릭터): `Load`가 처음 개수를 넣은 뒤 돌려줌. 가진 개수는 줄지 않고 처음 개수가 0보다 크므로, row가 하나도 없으면 옛 캐릭터로 봄
 
 #### `CharacterUnlocks`
 | column | 타입 | 규칙 |
@@ -138,12 +156,13 @@
 - 불러올 때 `FunctionDataJson.TryGlobalVariablesFromJson`이 실패하면 전역 변수 없음으로 보고 로그를 남김
 
 ### 불러온 데이터 (`CharacterProgressData`)
-- 「들어가기」 때 `ProgressStore.Load(캐릭터 key)`가 테이블 6개를 읽어 돌려주는 객체. SQLite를 모르는 일반 C# 클래스
+- 「들어가기」 때 `ProgressStore.Load(캐릭터 key)`가 테이블 7개를 읽어 돌려주는 객체. SQLite를 모르는 일반 C# 클래스
 
 | 이름 | 타입 | 내용 |
 | --- | --- | --- |
 | `Level`, `Exp`, `Money` | `int` | `CharacterProgress` |
 | `Materials` | `Dictionary<string, int>` | 재료 ID → 개수. 없는 재료는 0 |
+| `ItemCounts` | `Dictionary<string, int>` | 블록·함수 항목 ID → 가진 개수 (#500). 없는 항목은 0 |
 | `Unlocked` | `List<string>` | 해금한 노드 ID. `SkillTree`에 넘기는 해금 목록 |
 | `Slots` | `SlotLoadout.Entry[8]` | 슬롯 0~7. 각 슬롯의 슬롯 함수 GUID |
 | `Functions` | `List<FunctionData>` | 읽기에 성공한 함수 (슬롯 함수 + 페이지 함수) |
@@ -179,10 +198,12 @@
 | `LeveledUp` (event) | [로직] 레벨이 오른 순간 (새 레벨). 서버에서만. 여러 레벨이 오르면 레벨마다 | 레벨업 연출·알림 |
 | `AddMoney(int)`, `TrySpendMoney(int)` | 돈 더하기, 빼기. 모자라면 빼지 않고 `false` | 드롭 (김도훈), 상점 |
 | `AddMaterial(string, int)` | 재료 더함 | 드롭 (김도훈) |
+| `AddItem(string 항목 ID, int)` | 블록·함수의 가진 개수 더함 (#500). `ItemCountRules.MaxCount`(99)에서 멈춤 | 해금(`TryUnlock`). 나중에 상점, 잡몹 드랍 |
 | `RequestUnlock(string 노드 ID)` | [소유 클라이언트] 서버에 노드 해금을 요청 (`[Command]`). 결과는 `UnlockAnswered`. 내 플레이어가 아니면 아무것도 하지 않음 | 스킬 트리 화면 (임혜원, #294) |
-| `TryUnlock(string 노드 ID)` | [서버] 아래 「노드 해금 검사」 순서로 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가를 `ProgressStore.SaveUnlock`으로 한 트랜잭션에 저장. `UnlockResult`를 돌려줌 | `RequestUnlock` |
+| `TryUnlock(string 노드 ID)` | [서버] 아래 「노드 해금 검사」 순서로 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가 + 블록·함수 지급을 `ProgressStore.SaveUnlock`으로 한 트랜잭션에 저장. `UnlockResult`를 돌려줌 | `RequestUnlock` |
 | `UnlockAnswered(string 노드 ID, UnlockResult)` (event) | [표시] 서버가 처리한 해금 요청의 결과 (`[TargetRpc]`). 성공(`Unlocked`)도 알림. 소유 클라이언트에서 불림 | 스킬 트리 화면 (실패 이유 표시) |
 | `Level`, `Exp`, `Money`, `GetMaterialCount(string)`, `Unlocked` | 값 읽기 | 화면, 스킬 트리 |
+| `GetItemCount(string 항목 ID)`, `ItemCounts` | 블록·함수의 가진 개수 읽기 (#500) | 블록 편집 화면(「남은/가진」), 상점 |
 
 - 레벨업 (김도훈, 이우림 허락): `AddExp` 안에서 `LevelRules`(경험치 표, 최대 레벨)로 레벨을 올린다. 레벨에 따른 능력치는 `PlayerLevelStats`(김도훈)가 `PlayerStats.AddBonus`로 준다
 
@@ -196,7 +217,11 @@
 | 3 | `SkillTree.CanUnlock`: 선행 노드를 모두 해금함 | `PrerequisiteMissing` |
 | 4 | 노드의 `Cost`마다 `GetMaterialCount`가 `Count` 이상 | `MaterialShort` |
 
-- 통과하면 `ProgressStore.SaveUnlock`으로 DB에 먼저 한 번에 쓰고, 성공한 뒤에 메모리를 바꿈 (재료를 `Cost`만큼 빼고, 노드와 `SkillTree.AutoUnlockedBy`가 돌려준 같이 열리는 노드를 해금 목록에 넣음). 저장이 예외로 실패하면 메모리는 그대로
+- 통과하면 `ProgressStore.SaveUnlock`으로 DB에 먼저 한 번에 쓰고, 성공한 뒤에 메모리를 바꿈 (재료를 `Cost`만큼 빼고, 노드와 `SkillTree.AutoUnlockedBy`가 돌려준 같이 열리는 노드를 해금 목록에 넣고, 연 노드마다 블록·함수를 1개씩 줌). 저장이 예외로 실패하면 메모리는 그대로
+- 지급 항목 (`ItemCountRules.KeysUnlockedBy`, #500)
+  - 스킬 노드: 노드 ID (그 함수의 고정 ID와 같음)
+  - 문법 노드: 노드의 `UnlocksBlocks`마다 항목 ID. `Conditional`은 `If`, `ElseIf`, `Else` 셋, `Function`(함수 블록 종류)은 개수가 없어 주지 않음
+  - 지금 트리는 if문 노드 하나가 `Conditional`을 열어서 셋을 함께 줌. 트리를 If·Else If·Else 노드로 나누면 노드마다 여는 갈래를 적을 자리가 `SkillTreeNode`에 필요함
 - `store`가 `null`인 플레이어(임시 계정)는 DB에 쓰지 않고 메모리의 값만 바꿈
 - 화면 쪽(해금 버튼 연결, 목록·재료·실패 이유 표시)은 「재료 써서 스킬 트리 해금하기」(#294)
 
@@ -204,6 +229,7 @@
 - Mirror 동기화로 보냄. 서버가 값을 바꾸면 Mirror가 클라이언트에 같은 값을 맞춤
   - `Level`, `Exp`, `Money`: `[SyncVar]`
   - `Materials`: `SyncDictionary<string, int>`
+  - `ItemCounts`: `SyncDictionary<string, int>` (#500)
   - `Unlocked`: `SyncList<string>`
 - Sync Mode: `Owner`. 그 플레이어의 소유 클라이언트에만 보냄. 다른 플레이어의 클라이언트는 받지 않음
 - 클라이언트에서 값이 바뀌면 `PlayerProgress.Changed` (event)가 불림. 화면은 이것을 받아 다시 그림
@@ -216,7 +242,7 @@
 
 | 요청 함수 (소유 클라이언트) | 서버가 하는 일 | 거부 |
 | --- | --- | --- |
-| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 슬롯 함수 틀 검사 → 내용 검사(아래) → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded` |
+| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 슬롯 함수 틀 검사 → 내용 검사(아래) → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded`, `CountExceeded` |
 
 #### 함수 내용 검사 (`FunctionExecutorNetwork.CheckFunctionContent`, #306)
 - 서버가 저장 요청의 함수를 `PlayerProgress.Unlocked`(해금한 노드 ID)로 검사. 네트워크와 상관없는 `static` 함수라 서버 없이 부를 수 있음
@@ -227,12 +253,14 @@
 | 블록 종류 | `BlockLocked` | `SkillTree.IsBlockUnlocked(블록 종류, 해금 목록)`이 false. 어떤 노드에도 없는 블록 종류는 통과 |
 | C 스킬 | `SkillLocked` | 함수 블록(`IsUserFunction`이 false)이 부르는 고정 ID의 노드가 `SkillTree`에 있는데 해금 목록에 없음. 스킬 트리에 노드가 없는 ID(입력 함수 `input.*`, 테스트 함수 `test.*`)는 통과 |
 | 코드 영역 크기 | `CodeSizeExceeded` | 저장하는 함수를 반영한 함수 목록으로 `CodeSizeCalculator.Calculate(슬롯 함수 GUID 8개, 없음, 목록)`을 센 값이 `ProgressRules.MaxCodeSize`(임시 1000)보다 큼 |
+| 블록·함수 개수 (#500) | `CountExceeded` | `FunctionExecutorNetwork.CheckItemCounts`: 저장 전과 저장 후를 `BlockUsageCounter.Count`로 세어, 저장 후 쓴 개수가 가진 개수(`PlayerProgress.ItemCounts`)보다 많고 저장 전보다 늘어난 항목이 있음 (`ItemCountRules.FindShortage`). 위 세 검사를 통과한 뒤에 봄 |
 
 - 스킬 노드 ID와 고정 ID는 같은 값이라 (`c.thrust`) 해금 목록에서 바로 찾음
 - 해금 목록을 읽을 수 없으면(`PlayerProgress`가 없음) 검사할 수 없으므로 `NotAllowed`로 거부
 - 크기는 슬롯 8개 전체를 셈 (`function-data.md` 「코드 영역 크기 규칙」). 슬롯 함수가 부르는 함수를 고쳐도 그 함수를 저장하는 순간 걸림. 슬롯에서 닿지 않는 함수는 세지 않으므로 거부하지 않음
 - 이미 저장된 함수는 다시 검사하지 않음. 나중에 해금 규칙이 바뀌어도 저장된 함수는 그대로 남고, 그 함수를 다시 저장할 때 걸림
-| `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected` |
+- 개수 검사에서 「저장 전보다 늘어난 항목」만 거부하는 이유: 개수 기능 전에 만든 캐릭터는 이미 가진 것보다 많이 쓰고 있을 수 있음. 그 항목을 더 쓰지 않는 저장(관계없는 함수 고치기, 줄이기)은 받음. 새 캐릭터는 가진 개수가 줄지 않으므로 「저장 후 가진 개수를 넘으면 거부」와 같음
+| `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → 블록·함수 개수 검사(`CheckItemCounts`, 전역 변수 파일의 블록도 개수를 씀) → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected`, `CountExceeded` |
 | `RequestDeleteFunction(함수 GUID)` (#494) | 슬롯 함수인지 봄 → `CharacterFunctions`에서 지움 → 슬롯 원본을 다시 만듦 (지운 함수를 부르던 슬롯은 시전 거부) | `InvalidData`, `SlotFunctionLocked`(슬롯 함수), `UnknownFunction`(없는 함수) |
 
 - 함수 지우기: 다른 함수가 지울 함수를 부르는지는 서버가 보지 않음. 편집 화면이 지우기 전에 막음 (block-editor.md 「저장 버튼」의 「다른 함수 검사」)
@@ -255,7 +283,8 @@
 | `Load(캐릭터 key)` | `CharacterProgressData`를 돌려줌. 진행도 row가 없으면 `CreateInitial` 뒤 돌려줌 | 6개 모두 |
 | `SaveProgress(캐릭터 key, 레벨, 경험치, 돈)` | row 하나를 덮어씀 | Progress |
 | `SetMaterialCount(캐릭터 key, 재료 ID, 개수)` | 넣거나 고침. 0이면 row를 지움 | Materials |
-| `SaveUnlock(캐릭터 key, 노드 ID 목록, 재료 개수 목록)` | 노드 row 추가와 재료 개수 변경을 한 트랜잭션으로 | Unlocks, Materials |
+| `SetItemCount(캐릭터 key, 항목 ID, 개수)` | 블록·함수의 가진 개수를 넣거나 고침 (#500). 0이면 row를 지움, 99에서 멈춤 | ItemCounts |
+| `SaveUnlock(캐릭터 key, 노드 ID 목록, 재료 개수 목록, 블록·함수 개수 목록)` | 노드 row 추가, 재료 개수 변경, 블록·함수 지급을 한 트랜잭션으로. 블록·함수 개수 목록은 없으면 `null` | Unlocks, Materials, ItemCounts |
 | `CountPageFunctions(캐릭터 key)` | 슬롯에 걸리지 않은 함수 row 수 (개수 제한 검사). 읽을 수 없는 함수 row도 셈 | Slots, Functions |
 | `HasFunction(캐릭터 key, 함수 GUID)` | 그 함수 row가 있는지 (새 함수인지 볼 때) | Functions |
 | `SaveFunction(캐릭터 key, 함수 GUID, JSON)` | 넣거나 덮어씀 | Functions |
@@ -269,10 +298,11 @@
 - 컴포넌트: `ProgressTestData`. 진행도 JSON 칸(`Json`)과 언어 칸(`Language`, 기본 C)을 가짐. Base 씬의 오브젝트에 붙임
 - 사용: 에디터에서 로그인 → 캐릭터 화면에서 Inspector ⋮ → 「진행도 넣기」 → 「들어가기」
   - `InvokeAuthenticator.RequestProgressTestData(언어, JSON)` → `ProgressTestDataRequest` → `AccountServer.HandleProgressTestData` → `ProgressStore.ReplaceAll`
-  - 서버가 그 캐릭터의 진행도 테이블 6개를 한 트랜잭션으로 모두 바꿈. 결과는 `ProgressTestDataResult` (Console에 로그)
+  - 서버가 그 캐릭터의 진행도 테이블 7개를 한 트랜잭션으로 모두 바꿈. 결과는 `ProgressTestDataResult` (Console에 로그)
   - 거부: 테스트 허용 설정이 꺼짐, 임시 계정, 이미 들어감, 그 언어 캐릭터가 없음, 읽을 수 없는 JSON
-- JSON 형식: `CharacterProgressData`를 `FunctionDataJson.ToJson`으로 바꾼 모양 (Level, Exp, Money, Materials, Unlocked, Slots, Functions, Globals)
-  - ⋮ → 「처음 값 JSON 채우기」: 새 캐릭터와 같은 모양(슬롯 함수 8개 포함)을 채움
+- JSON 형식: `CharacterProgressData`를 `FunctionDataJson.ToJson`으로 바꾼 모양 (Level, Exp, Money, Materials, ItemCounts, Unlocked, Slots, Functions, Globals)
+  - ⋮ → 「처음 값 JSON 채우기」: 새 캐릭터와 같은 모양(슬롯 함수 8개, 처음 개수 포함)을 채움
+  - ItemCounts: 항목 ID → 가진 개수. 비우거나 빼면 처음 개수를 넣음. 99를 넘는 값은 99
   - Slots: `Kind` `UserFunction`, `Id` 슬롯 함수 GUID. 그 GUID의 함수가 Functions에 없는 슬롯(빠진 슬롯, `Empty`·`Skill`, 다른 슬롯과 같은 GUID)은 새 캐릭터와 같은 슬롯 함수를 만듦
   - Functions: 슬롯 함수 + 페이지 함수. 페이지 함수는 `ProgressRules.MaxPageFunctions`개까지만
 - 서버가 받는 경우: 에디터, 또는 실행 인자 `-allowTestProgressData`로 켠 서버 (`InvokeAuthenticator.AllowTestProgressDataArg`). 씬 설정으로 두지 않아 서비스 서버 빌드에서는 기본으로 꺼짐

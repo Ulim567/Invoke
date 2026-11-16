@@ -658,6 +658,12 @@ public class BlockEditor : MonoBehaviour
 		ShowErrors(new List<FunctionChecker.Error>());
 		// 지난 오류 창만 블록 목록으로 돌린다. 참고 창을 보던 중이면 그대로 둔다
 		if (rightTab == RightTab.Errors) ShowTab(RightTab.Blocks);
+		HideSuccess();
+	}
+
+	// 컴파일 성공 알림(초록)을 바로 지운다
+	void HideSuccess()
+	{
 		if (successRoutine != null) StopCoroutine(successRoutine);
 		successRoutine = null;
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
@@ -736,6 +742,8 @@ public class BlockEditor : MonoBehaviour
 
 		if (editingGlobals)
 		{
+			// 전역 변수를 지우거나 이름·타입을 바꿔서 그 변수를 쓰던 함수에 오류가 생기면 저장하지 않는다 (#494)
+			if (RefuseIfBreaksOthers(savedFunctions, globals)) return;
 			SaveGlobals();
 			return;
 		}
@@ -756,6 +764,9 @@ public class BlockEditor : MonoBehaviour
 			Redraw();
 			return;
 		}
+
+		// 반환 타입을 바꿔서 이 함수를 부르던 다른 함수에 오류가 생기면 저장하지 않는다 (#494)
+		if (RefuseIfBreaksOthers(savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function), CurrentGlobals())) return;
 
 		// 실제 계정: 서버 DB에 저장 요청. 결과는 OnServerAnswered, 목록은 OnServerDataReceived에서 다시 그린다
 		if (server != null)
@@ -784,6 +795,37 @@ public class BlockEditor : MonoBehaviour
 		NetworkIdentity localPlayer = NetworkClient.localPlayer;
 		if (localPlayer != null && localPlayer.TryGetComponent(out SlotLoadout loadout)) loadout.ReloadFunctions();
 		Debug.Log($"[BlockEditor] 「{Function.Name}」 저장함: {FunctionStorage.PathOf(Function)}");
+	}
+
+	// 이 저장 뒤의 함수들(after)과 전역 변수(globalsAfter)로 저장된 다른 함수를 다시 컴파일해, 오류가 새로 생기면 저장하지 않고 true (#494).
+	// 저장된 상태에는 컴파일 오류가 없어야 하기 때문이다. 오류가 난 채로 저장되면 「저장됨」으로 보여 편집 화면을 그대로 나갈 수 있고,
+	// 그 함수는 시전할 때 실패한다 (지운 전역 변수는 UndeclaredVariable, 지운 함수를 부르면 슬롯 전체가 시전되지 않음)
+	bool RefuseIfBreaksOthers(IEnumerable<FunctionData> after, GlobalVariablesData globalsAfter)
+	{
+		List<(FunctionData function, List<FunctionChecker.Error> errors)> broken =
+			FunctionChecker.FindNewlyBroken(savedFunctions, CurrentGlobals(), after, globalsAfter);
+		// 지금 저장하려는 함수 자신은 저장 버튼의 컴파일이 이미 본다
+		if (!editingGlobals) broken.RemoveAll(b => b.function.Guid == Function.Guid);
+		if (broken.Count == 0) return false;
+
+		// 오류 창에 「슬롯 Q  x = 1;」처럼 어느 함수의 어느 블록인지 보인다. 다른 함수의 블록은 편집 영역에 없으므로 「블록 보기」는 없다
+		var errors = new List<FunctionChecker.Error>();
+		foreach ((FunctionData function, List<FunctionChecker.Error> list) in broken)
+			foreach (FunctionChecker.Error error in list)
+				errors.Add(new FunctionChecker.Error { Code = $"{LabelOf(function)}  {error.Code}", Message = error.Message });
+		HideSuccess(); // 저장 버튼의 컴파일이 띄운 「컴파일 성공」을 지운다
+		ShowErrors(errors);
+		ShowTab(RightTab.Errors);
+		SetMessage($"{string.Join(", ", broken.Select(b => LabelOf(b.function)))}에 컴파일 오류가 생겨 저장하지 않았습니다", true);
+		Redraw();
+		return true;
+	}
+
+	// 상태 글자·오류 창에 보일 함수 이름: 슬롯 함수는 「슬롯 Q」, 나머지는 「페이지 이름」 (확인창의 글자와 같음)
+	string LabelOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? $"슬롯 {KeyOf(slot)}" : $"페이지 {function.Name}";
 	}
 
 	/// <summary>

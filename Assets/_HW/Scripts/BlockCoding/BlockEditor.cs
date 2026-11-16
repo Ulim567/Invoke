@@ -135,7 +135,7 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("오류가 난 블록에 씌우는 빨간 테두리와 ! (ErrorFrame 프리팹)")]
 	RectTransform errorFramePrefab;
 
-	[SerializeField, Tooltip("컴파일 성공 알림 (편집 영역 위의 초록 알약. 처음엔 꺼 둔다)")]
+	[SerializeField, Tooltip("빌드 성공 알림 「Build 성공」 (편집 영역 위의 초록 알약. 처음엔 꺼 둔다, #506)")]
 	GameObject compileOkBadge;
 
 	[Header("함수 틀 (비워 두면 편집 영역 위아래에 틀을 두지 않는다)")]
@@ -355,6 +355,15 @@ public class BlockEditor : MonoBehaviour
 	readonly List<GameObject> savedButtons = new List<GameObject>();
 	// 함수 목록의 줄. 컴파일 오류(빨간 밑줄)는 작업본에 따라 바뀌므로 줄에 두지 않고 Redraw가 계산한다 (#494)
 	readonly List<(ListItemView item, string prefix, string guid, string name, string detail, bool dim)> functionItems = new List<(ListItemView, string, string, string, string, bool)>();
+	// 저장된 상태의 빌드 결과 (#506). 목록을 다시 읽을 때(저장, 지우기, 편집 화면 열기) RefreshBuildState가 서버의 빌드와 같은 규칙으로 정한다
+	// 저장된 상태로 보는 이유: 서버가 실제로 실행하는 것은 저장된 함수이므로, 「✓면 시전된다」가 늘 맞게 하기 위함 (사용자 결정 11/16 (가))
+	bool savedBuildOk = true;
+	bool savedGlobalsFailed;
+	readonly List<(int Slot, string Guid)> failedSlots = new List<(int, string)>(); // 빌드 실패의 원인인 슬롯 (✗를 붙인다)
+	// 오류가 있는 함수 GUID → 슬롯에서 그 함수까지의 호출 경로들 (「슬롯 Q > aim > find」). 경로의 단계마다 그 함수 GUID, 보일 이름,
+	// 다음 함수를 부르는 블록의 순번(IndexOfBlock과 같은 순번)을 둔다. 오류 카드에서 이름을 누르면 그 함수를 열고 그 블록을 깜빡이기 위함. 마지막 단계(오류가 난 함수)는 GUID가 null
+	readonly Dictionary<string, List<List<(string Guid, string Label, int CallIndex)>>> buildPaths = new Dictionary<string, List<List<(string, string, int)>>>();
+	ListHeaderView slotHeader; // 함수 목록의 「슬롯」 머리글. 빌드 결과 ✓·✗를 보인다
 	List<FunctionData> savedFunctions = new List<FunctionData>();
 
 	void Start()
@@ -644,11 +653,14 @@ public class BlockEditor : MonoBehaviour
 	/// <summary>
 	/// 편집 화면을 닫기 전에 부른다 (BlockEditorPanel). 저장하지 않은 변경이 어느 페이지에도 없으면 바로 close를 하고, 있으면 확인창에서
 	/// 「나가기」를 눌렀을 때 모든 페이지의 저장하지 않은 내용을 버리고 close를 한다. 「취소」를 누르면 편집 화면에 남는다.
-	/// 버리지 않으면 다음에 열 때 고치던 내용이 저장된 것처럼 남기 때문이다.
+	/// 버리지 않으면 다음에 열 때 고치던 내용이 저장된 것처럼 남기 때문이다.<br/>
+	/// 저장된 상태가 빌드에 실패했으면(모든 슬롯이 시전되지 않음) 같은 확인창으로 알린다. 둘 다면 확인창 하나로 합친다 (#506).
 	/// </summary>
 	public void RequestClose(Action close)
 	{
-		if (!HasUnsavedChanges || confirmDialog == null)
+		bool unsaved = HasUnsavedChanges;
+		bool buildFailed = !savedBuildOk;
+		if ((!unsaved && !buildFailed) || confirmDialog == null)
 		{
 			close();
 			return;
@@ -659,9 +671,13 @@ public class BlockEditor : MonoBehaviour
 			return;
 		}
 		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
-		confirmDialog.Show("파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?", () =>
+		// 둘 다일 때 하나로 합치는 이유: 확인창이 두 번 연달아 뜨지 않게 (사용자 결정 11/16 (가))
+		string text = unsaved && buildFailed ? "파일이 저장되지 않았고, Build에 실패한 상태입니다.\n저장하지 않고 나가시겠습니까?"
+			: unsaved ? "파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?"
+			: "Build에 실패했습니다.\n이대로 나가면 모든 슬롯을 시전할 수 없습니다.";
+		confirmDialog.Show(text, () =>
 		{
-			DiscardUnsaved();
+			if (unsaved) DiscardUnsaved();
 			close();
 		}, "나가기 (Enter)", "취소 (Esc)");
 	}
@@ -809,7 +825,7 @@ public class BlockEditor : MonoBehaviour
 	/// </para>
 	/// </summary>
 	// 예전(#494)에는 지금 페이지만 저장하고 컴파일 오류가 있으면 저장을 거부했다. 다른 함수의 오류 때문에 고친 파일이 저장되지 않아 바꿨다 (사용자 결정 11/16)
-	// 시전을 막는 것은 서버가 정한 슬롯 컴파일 결과(FunctionExecutorNetwork.IsSlotCompiled)다
+	// 시전을 막는 것은 서버가 정한 빌드 결과(FunctionExecutorNetwork.IsBuildSucceeded)다
 	public void Save()
 	{
 		if (savePending)
@@ -892,22 +908,85 @@ public class BlockEditor : MonoBehaviour
 		dirty = false;
 		// 저장한 함수와 전역 변수로 함수 목록, 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
 		ReloadSavedFunctions();
-		int errors = ShowCompileResult();
-		SetMessage(errors == 0 ? "저장됨" : $"저장됨. 컴파일 오류 {errors}개", errors > 0);
+		bool built = ShowCompileResult();
+		SetMessage(built ? "저장됨" : $"저장됨. {BuildFailureText()}", !built);
 		Redraw();
 	}
 
-	// 저장한 뒤의 자동 컴파일 (#506). 모든 함수와 Global Variables를 검사해 오류 창에 보이고, 지금 연 함수의 오류 자리를 칠한다. 오류 수를 돌려준다
-	// 여기서는 어디를 고쳐야 하는지 보이기만 한다. 슬롯이 시전되는지는 서버가 슬롯에서 닿는 함수만 컴파일해 정한다
-	int ShowCompileResult()
+	// 저장·지우기 뒤의 자동 컴파일 (#506). 모든 함수와 Global Variables를 검사해 오류 창에 보이고, 지금 연 함수의 오류 자리를 칠한다.
+	// 빌드 결과는 목록을 다시 읽을 때 RefreshBuildState가 정해 두었다. 성공이면 「Build 성공」 알림을 띄우고 true를 돌려준다
+	// 오류가 하나라도 있으면 오류 탭을 연다 (슬롯이 부르지 않는 페이지 함수의 오류도 보이기 위함)
+	bool ShowCompileResult()
 	{
 		Dictionary<string, List<FunctionChecker.Error>> all = FindAllErrors(WorkingFunctions(), WorkingGlobals());
 
 		MarkErrors(OpenKey != null && all.TryGetValue(OpenKey, out List<FunctionChecker.Error> openErrors) ? openErrors : new List<FunctionChecker.Error>());
-		int count = all.Values.Sum(list => list.Count);
-		if (count > 0) ShowTab(RightTab.Errors);
-		else ShowSuccess();
-		return count;
+		if (all.Count > 0) ShowTab(RightTab.Errors);
+		if (savedBuildOk) ShowSuccess();
+		return savedBuildOk;
+	}
+
+	// 저장된 함수와 전역 변수로 서버의 빌드(FunctionExecutorNetwork.Build)와 같은 규칙의 빌드 결과를 정한다 (#506, 사용자 결정 11/16 (나))
+	// 슬롯 함수들과 그 함수가 부르는 함수, Global Variables 중 하나라도 오류가 있으면 실패. 슬롯이 부르지 않는 페이지 함수의 오류는 넣지 않는다
+	// 실패한 슬롯과, 오류가 있는 함수까지의 호출 경로도 남긴다 (✗와 오류 카드의 「슬롯 Q → aim → find」)
+	// 서버의 결과(IsBuildSucceeded)를 기다리지 않는 이유: 저장의 답과 SyncVar가 오는 순서가 정해져 있지 않아, 답을 받은 순간에는 지난 결과일 수 있기 때문
+	void RefreshBuildState()
+	{
+		failedSlots.Clear();
+		buildPaths.Clear();
+		GlobalVariablesData globalsSaved = CurrentGlobals();
+		savedGlobalsFailed = globalsSaved != null && FindGlobalsErrors(globalsSaved) != null;
+
+		SlotLoadout loadout = null;
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (localPlayer != null) localPlayer.TryGetComponent(out loadout);
+		for (int slot = 0; loadout != null && slot < SlotLoadout.SlotCount; slot++)
+		{
+			SlotLoadout.Entry entry = loadout.GetEntry(slot);
+			if (entry.IsEmpty || entry.Kind != SlotLoadout.EntryKind.UserFunction) continue;
+			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
+			if (slotFunction == null) continue; // 받지 못한 함수는 컴파일 오류가 아니다 (서버도 빌드에서 뺌)
+
+			List<List<FunctionData>> paths = SlotCompileChecker.FailedPaths(slotFunction, savedFunctions, globalsSaved);
+			if (paths.Count == 0) continue;
+			failedSlots.Add((slot, slotFunction.Guid));
+			foreach (List<FunctionData> path in paths)
+			{
+				// 슬롯 함수는 이름(slot1 등) 대신 「슬롯 Q」, 그 뒤는 부른 함수의 이름
+				var steps = new List<(string, string, int)>();
+				for (int i = 0; i < path.Count; i++)
+				{
+					string label = i == 0 ? $"슬롯 {KeyOf(slot)}" : path[i].Name;
+					bool last = i == path.Count - 1;
+					steps.Add((last ? null : path[i].Guid, label, last ? -1 : CallIndexOf(path[i], path[i + 1].Guid)));
+				}
+				string failedGuid = path[path.Count - 1].Guid;
+				if (!buildPaths.TryGetValue(failedGuid, out var list)) buildPaths[failedGuid] = list = new List<List<(string, string, int)>>();
+				list.Add(steps);
+			}
+		}
+		savedBuildOk = !savedGlobalsFailed && failedSlots.Count == 0;
+	}
+
+	// caller 안에서 calleeGuid 함수를 부르는 첫 블록의 순번 (IndexOfBlock과 같은 순번). 없으면 -1
+	static int CallIndexOf(FunctionData caller, string calleeGuid)
+	{
+		int index = 0;
+		foreach (BlockData block in AllBlocksOf(caller.Blocks))
+		{
+			if (block.Kind == BlockKind.Function && block.IsUserFunction && block.FunctionId == calleeGuid) return index;
+			index++;
+		}
+		return -1;
+	}
+
+	// 상태 줄의 「Build 실패: 슬롯 Q, W」: 빌드 실패의 원인 (Global Variables, 실패한 슬롯들)
+	string BuildFailureText()
+	{
+		var causes = new List<string>();
+		if (savedGlobalsFailed) causes.Add("Global Variables");
+		causes.AddRange(failedSlots.Select(s => $"슬롯 {KeyOf(s.Slot)}"));
+		return causes.Count > 0 ? $"Build 실패: {string.Join(", ", causes)}" : "Build 실패";
 	}
 
 	// 전역 변수 파일의 오류. 없으면 null. 내 캐릭터의 실행기가 찾은 첫 번째 이유를 그대로 보인다 (#504). 예: 같은 scope에서 재정의할 수 없음: x
@@ -990,8 +1069,8 @@ public class BlockEditor : MonoBehaviour
 		}
 		ReloadSavedFunctions();
 		// 지운 함수를 부르던 곳이 있으면 자동 컴파일이 오류로 알린다 (#506)
-		int errors = ShowCompileResult();
-		SetMessage(errors == 0 ? $"{label}{Eul(label)} 지웠습니다" : $"{label}{Eul(label)} 지웠습니다. 컴파일 오류 {errors}개", errors > 0);
+		bool built = ShowCompileResult();
+		SetMessage(built ? $"{label}{Eul(label)} 지웠습니다" : $"{label}{Eul(label)} 지웠습니다. {BuildFailureText()}", !built);
 		Redraw();
 	}
 
@@ -1007,7 +1086,7 @@ public class BlockEditor : MonoBehaviour
 	// 컴파일 검사에 쓸 전역 변수 선언: 실제 계정은 서버가 보낸 것, 아니면 이 컴퓨터의 파일
 	GlobalVariablesData CurrentGlobals() => server != null ? server.ReceivedGlobals : GlobalVariablesStorage.Load();
 
-	// 컴파일 성공: 편집 영역 위에 초록 알림을 잠깐 띄운다
+	// 빌드 성공: 편집 영역 위에 초록 알림(「Build 성공」)을 잠깐 띄운다 (#506)
 	void ShowSuccess()
 	{
 		if (compileOkBadge == null) return;
@@ -1135,6 +1214,27 @@ public class BlockEditor : MonoBehaviour
 			if (!all.TryGetValue(guid, out List<FunctionChecker.Error> errors)) continue;
 			FunctionData function = guid == GlobalsKey ? null : working.FirstOrDefault(f => f.Guid == guid);
 			string location = function != null ? LocationOf(function) : "Global Variables";
+			// 슬롯을 거쳐 빌드에 들어간 함수는 슬롯에서 그 함수까지의 호출 경로를 보인다 (#506). 여러 슬롯이 부르면 슬롯마다 한 줄 (사용자 결정 (나))
+			// 이름마다 TMP 링크(<link="번호">)를 달아, 누른 이름의 함수를 열고 다음 함수를 부르는 블록을 깜빡인다. 마지막 이름은 오류 자리를 깜빡인다
+			// 이름 사이는 「 > 」. Galmuri11 글꼴에 「→」가 없기 때문
+			List<(string Guid, int BlockIndex)> pathLinks = null;
+			if (function != null && buildPaths.TryGetValue(guid, out var paths))
+			{
+				pathLinks = new List<(string, int)>();
+				var lines = new List<string>();
+				foreach (var path in paths)
+				{
+					var names = new List<string>();
+					foreach ((string stepGuid, string label, int callIndex) in path)
+					{
+						// 밑줄은 누를 수 있는 이름에만 긋는다. 사이의 「 > 」에는 긋지 않는다 (사용자 요청)
+						names.Add($"<link=\"{pathLinks.Count}\"><u>{label}</u></link>");
+						pathLinks.Add((stepGuid, callIndex));
+					}
+					lines.Add(string.Join(" > ", names));
+				}
+				location = string.Join("\n> ", lines);
+			}
 			// 오류 자리를 순번으로 찾을 블록들: 함수는 그 함수의 블록, Global Variables는 선언들 (#506)
 			List<BlockData> roots = function != null ? function.Blocks : guid == GlobalsKey ? workingGlobals?.Declarations : null;
 			foreach (FunctionChecker.Error error in errors)
@@ -1143,7 +1243,7 @@ public class BlockEditor : MonoBehaviour
 				// 같은 함수 안의 같은 문장은 거르지 않는다. 빈 칸이 둘인 블록은 「expression이 비어 있음」이 두 줄이어야 하기 때문 (#504)
 				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
 					BlockIndex = roots != null ? IndexOfBlock(roots, error.Block) : -1,
-					Slots = roots != null ? SlotIndexesOf(roots, error) : null });
+					Slots = roots != null ? SlotIndexesOf(roots, error) : null, PathLinks = pathLinks });
 			}
 		}
 		ShowErrors(shown);
@@ -1600,7 +1700,8 @@ public class BlockEditor : MonoBehaviour
 	{
 		public string Message;  // 설명 (예: expression이 비어 있음)
 		public string Code;     // 오류가 난 블록의 글자 (예: if ( )). 블록이 없으면 빈 글자
-		public string Location; // 함수 이름 (예: temp, 슬롯 Q, Global Variables)
+		public string Location; // 함수 이름 (예: temp, 슬롯 Q, Global Variables) 또는 호출 경로 (예: <link="0">슬롯 Q</link> > <link="1">temp</link>)
+		public List<(string Guid, int BlockIndex)> PathLinks; // 호출 경로의 링크마다 열 함수와 깜빡일 블록. Guid가 null이면 오류 자리(아래 Guid·BlockIndex·Slots). 경로가 없으면 null
 		public string Guid;
 		public int BlockIndex;
 		public List<(int Block, int Slot)> Slots;
@@ -1634,7 +1735,10 @@ public class BlockEditor : MonoBehaviour
 				string guid = error.Guid;
 				int index = error.BlockIndex;
 				List<(int Block, int Slot)> slots = error.Slots;
-				item.Show(error.Message, error.Code, error.Location, guid != null ? () => ShowErrorBlock(guid, index, slots) : null);
+				Action onLocation = guid != null ? () => ShowErrorBlock(guid, index, slots) : null;
+				// 호출 경로의 이름마다 누를 때 할 일 (#506). 오류가 난 함수의 이름은 「> 이름」을 누른 것과 같다
+				List<Action> links = error.PathLinks?.Select(link => link.Guid == null ? onLocation : (Action)(() => ShowErrorBlock(link.Guid, link.BlockIndex, null))).ToList();
+				item.Show(error.Message, error.Code, error.Location, onLocation, links);
 				errorItems.Add(item.gameObject);
 			}
 		}
@@ -1843,10 +1947,13 @@ public class BlockEditor : MonoBehaviour
 			if (entry.item == null) continue;
 			bool open = entry.guid != null && entry.guid == openKey;
 			bool unsaved = open ? CurrentUnsaved : entry.guid != null && (drafts.ContainsKey(entry.guid) || (entry.guid == GlobalsKey && globalsDraft != null));
-			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid));
+			// 빌드 실패의 원인인 슬롯(자기 함수에는 오류가 없어도 오류가 있는 함수를 부르는 슬롯)도 오류가 있는 함수처럼 빨간 밑줄 (#506, 사용자 결정)
+			// 멀쩡한 슬롯에는 아무것도 붙이지 않는다. 빌드 결과(시전 가능 여부)는 「슬롯」 머리글 하나에만 보인다
+			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid) || failedSlots.Exists(s => s.Guid == entry.guid));
 			entry.item.Show(entry.prefix, entry.name + (unsaved ? " <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
 		}
 		ShowAllErrors(allErrors, working, workingGlobals);
+		if (slotHeader != null) slotHeader.SetBuildStatus(savedBuildOk);
 
 		if (messageLabel != null)
 		{
@@ -2370,12 +2477,13 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	// 함수 목록의 머리글 (「슬롯」, 「페이지 2 / 5 +」). onAdd가 있으면 + 버튼을 보인다
-	void AddFunctionHeader(string title, Action onAdd)
+	ListHeaderView AddFunctionHeader(string title, Action onAdd)
 	{
-		if (!HasFunctionList || headerPrefab == null) return;
+		if (!HasFunctionList || headerPrefab == null) return null;
 		ListHeaderView header = Instantiate(headerPrefab, functionList);
 		header.Show(title, onAdd);
 		savedButtons.Add(header.gameObject);
+		return header;
 	}
 
 	// 저장한 함수를 다시 읽고, 위 줄 맨 뒤에 함수마다 불러오기 버튼을 만든다
@@ -2389,13 +2497,14 @@ public class BlockEditor : MonoBehaviour
 
 		savedFunctions = FunctionStorage.LoadAll();
 		listGlobals = CurrentGlobals();
+		RefreshBuildState();
 		ClearSavedButtons();
 		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => SwitchTo(OpenGlobals));
 
 		// 슬롯 Q~F: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬·빈 슬롯은 누를 수 없음
 		// 실제 계정과 같게 줄에는 슬롯 키만 보인다 (#487, 사용자 결정). 끼운 함수의 이름은 그 줄을 열면 함수 틀에 보인다
 		var equipped = new HashSet<string>();
-		AddFunctionHeader("슬롯", null);
+		slotHeader = AddFunctionHeader("슬롯", null);
 		SlotLoadout loadout = null;
 		NetworkIdentity localPlayer = NetworkClient.localPlayer;
 		if (localPlayer != null) localPlayer.TryGetComponent(out loadout);
@@ -2438,9 +2547,10 @@ public class BlockEditor : MonoBehaviour
 	{
 		savedFunctions = server.ReceivedFunctions?.ToList() ?? new List<FunctionData>();
 		listGlobals = CurrentGlobals();
+		RefreshBuildState();
 		ClearSavedButtons();
 		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => SwitchTo(OpenGlobals));
-		AddFunctionHeader("슬롯", null);
+		slotHeader = AddFunctionHeader("슬롯", null);
 		for (int slot = 0; slot < SlotLoadout.SlotCount; slot++)
 		{
 			FunctionData function = SlotFunction(slot);

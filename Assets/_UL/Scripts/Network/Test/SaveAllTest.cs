@@ -16,7 +16,7 @@ using UnityEngine;
 /// - 씬에 놓지 않는다.
 /// </para>
 /// <para>
-/// 컴파일 오류가 있어도 함수·전역 변수가 함께 저장됨 → 고치면 슬롯 컴파일 성공 → 하나라도 거부되면 아무것도 저장되지 않음(슬롯 함수 틀, 페이지 함수 수, 개수)
+/// 컴파일 오류가 있어도 함수·전역 변수가 함께 저장됨 → 고치면 빌드 성공 → 하나라도 거부되면 아무것도 저장되지 않음(슬롯 함수 틀, 페이지 함수 수, 개수)
 /// → 메시지 크기 한도를 넘으면 보내기 전에 TooLarge → 예전 요청(함수 하나, 전역 변수)도 같은 규칙. 「[SaveAllTest] 전체 통과」면 통과.
 /// </para>
 /// </summary>
@@ -109,14 +109,13 @@ public class SaveAllTest : MonoBehaviour
 		CharacterProgressData saved = store.Load(key);
 		Check("서버 DB에 새 페이지, 고친 슬롯 함수, 전역 변수가 쓰임",
 			Has(saved.Functions, page1) && Same(Find(saved.Functions, slot2.Guid), slot2) && saved.Globals.Declarations.Count == 2);
-		Check("전역 변수 오류라 슬롯 1도 컴파일 실패", !net.IsSlotCompiled(0));
-		Check("없는 함수를 부르는 슬롯 2 컴파일 실패", !net.IsSlotCompiled(1));
+		Check("전역 변수 오류라 빌드 실패", !net.IsBuildSucceeded);
 
 		// 2. 고쳐서 저장하면 슬롯이 다시 컴파일된다
 		slot2.Blocks.Clear();
 		yield return Answer("슬롯 2와 전역 변수를 고쳐 저장",
 			() => net.RequestSaveAll(new[] { slot2 }, Globals("g")), PlayerDataRequest.SaveAll, PlayerDataRequestResult.Saved);
-		Check("고친 뒤 슬롯 1, 2 컴파일 성공", net.IsSlotCompiled(0) && net.IsSlotCompiled(1));
+		Check("고친 뒤 빌드 성공", net.IsBuildSucceeded);
 
 		// 3. 하나라도 거부되면 아무것도 저장되지 않는다: 슬롯 함수의 이름을 바꿈
 		FunctionData slot3Before = Find(net.ReceivedFunctions, slot3.Guid);
@@ -154,9 +153,9 @@ public class SaveAllTest : MonoBehaviour
 		yield return Answer("RequestSaveFunction으로 새 페이지", () => net.RequestSaveFunction(page3), PlayerDataRequest.SaveFunction, PlayerDataRequestResult.Saved);
 		Check("새 페이지가 저장됨", Has(net.ReceivedFunctions, page3) && store.HasFunction(key, page3.Guid));
 		yield return Answer("RequestSaveGlobals로 오류 있는 전역 변수", () => net.RequestSaveGlobals(Globals("h", "h")), PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.Saved);
-		Check("전역 변수 오류라 슬롯 1 컴파일 실패", !net.IsSlotCompiled(0));
+		Check("전역 변수 오류라 빌드 실패 (RequestSaveGlobals)", !net.IsBuildSucceeded);
 		yield return Answer("RequestSaveGlobals로 고침", () => net.RequestSaveGlobals(new GlobalVariablesData()), PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.Saved);
-		Check("고친 뒤 슬롯 1 컴파일 성공", net.IsSlotCompiled(0));
+		Check("고친 뒤 빌드 성공 (RequestSaveGlobals)", net.IsBuildSucceeded);
 	}
 
 	// 서버가 보낸 slot번 슬롯 함수의 복사본. 받은 데이터를 바꾸지 않기 위함

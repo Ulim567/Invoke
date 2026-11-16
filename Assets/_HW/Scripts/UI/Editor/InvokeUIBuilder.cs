@@ -45,6 +45,8 @@ public static class InvokeUIBuilder
 		if (font == null) Debug.LogWarning($"[InvokeUIBuilder] {FontPath}를 찾지 못해 기본 글꼴을 씀");
 		if (!AssetDatabase.IsValidFolder(CommonDir)) AssetDatabase.CreateFolder("Assets/_HW/UI", "Common");
 
+		// 빌드 결과 ✓·✗ 그림 (#506). 목록 줄·머리글 프리팹이 쓰므로 먼저 그린다
+		BuildMarkSprites();
 		ListItemView item = BuildListItem("ListItem", "ui_item");
 		ListItemView equipItem = BuildListItem("EquipItem", "ui_card");
 		ListHeaderView header = BuildListHeader();
@@ -160,6 +162,19 @@ public static class InvokeUIBuilder
 		titleLayout.preferredWidth = 1;
 		titleLayout.flexibleWidth = 1;
 
+		// 빌드 결과 ✓·✗ (#506). 처음엔 꺼 둔다. 편집 화면 함수 목록의 「슬롯」 머리글에서만 BlockEditor가 켠다 (ListHeaderView.SetBuildStatus)
+		GameObject status = NewUI("Status", root.transform);
+		Image statusImage = status.AddComponent<Image>();
+		statusImage.preserveAspect = true;
+		statusImage.raycastTarget = false;
+		LayoutElement statusSize = status.AddComponent<LayoutElement>();
+		statusSize.preferredWidth = 9;
+		statusSize.preferredHeight = 9;
+		status.SetActive(false);
+		// ✓·✗ 오른쪽 글자 「시전 가능」 / 「시전 불가능」 (#506). 머리글 글자와 같은 크기. 색은 ListHeaderView가 ✓·✗와 같게 칠한다
+		TMP_Text statusText = Text(root.transform, "StatusText", "시전 가능", 9, Muted, TextAlignmentOptions.Right);
+		statusText.gameObject.SetActive(false);
+
 		Button add = NewButton(root.transform, "AddButton", "ui_button", "+", 11, Color.white);
 		LayoutElement addSize = add.gameObject.AddComponent<LayoutElement>();
 		addSize.preferredWidth = 13;
@@ -169,6 +184,11 @@ public static class InvokeUIBuilder
 		Set(view, "titleText", title);
 		Set(view, "addButton", add);
 		Set(view, "iconImage", iconImage);
+		Set(view, "statusImage", statusImage);
+		Set(view, "statusText", statusText);
+		Set(view, "okSprite", LoadShape("ui_check"));
+		Set(view, "failSprite", LoadShape("ui_cross"));
+		// ✓·✗와 「시전 가능 / 불가능」의 색은 ListHeaderView의 기본값(초록, 빨강)을 쓴다
 		return SavePrefab(root, "ListHeader").GetComponent<ListHeaderView>();
 	}
 
@@ -266,7 +286,7 @@ public static class InvokeUIBuilder
 		TMP_Text locationText = Text(location.transform, "Text", "> temp", 9, Color.white, TextAlignmentOptions.TopLeft);
 		locationText.textWrappingMode = TextWrappingModes.Normal;
 		locationText.overflowMode = TextOverflowModes.Overflow;
-		locationText.fontStyle = FontStyles.Underline;
+		// 밑줄은 글자 전체가 아니라 누를 수 있는 이름에만 ErrorItemView가 <u>로 긋는다 (#506)
 		Stretch(locationText.rectTransform, 0, 0, 0, 0);
 		Button locationButton = location.AddComponent<Button>();
 		locationButton.navigation = new Navigation { mode = Navigation.Mode.None };
@@ -282,12 +302,16 @@ public static class InvokeUIBuilder
 		HorizontalLayoutGroup locationLayout = location.AddComponent<HorizontalLayoutGroup>();
 		locationLayout.childControlWidth = locationLayout.childControlHeight = true;
 		locationLayout.childForceExpandWidth = locationLayout.childForceExpandHeight = false;
+		// 호출 경로(「> 슬롯 Q > aim > test」)의 이름마다 누를 수 있게, 누른 곳의 TMP 링크를 알려 준다 (#506)
+		TextLinkClick locationLinks = location.AddComponent<TextLinkClick>();
+		Set(locationLinks, "text", locationText);
 
 		ErrorItemView view = root.AddComponent<ErrorItemView>();
 		Set(view, "messageText", message);
 		Set(view, "codeText", code);
 		Set(view, "locationButton", locationButton);
 		Set(view, "locationText", locationText);
+		Set(view, "locationLinks", locationLinks);
 		return SavePrefab(root, "ErrorItem").GetComponent<ErrorItemView>();
 	}
 
@@ -967,6 +991,29 @@ public static class InvokeUIBuilder
 		image.color = color;
 	}
 
+	// 빌드 결과 ✓·✗ 그림을 그려 Shapes 폴더에 저장한다 (#506). Galmuri11 글꼴에 ✓가 없어서 글자 대신 그림을 쓴다
+	// 흰색으로 그리고 색은 Image.color로 칠한다. 두 그림은 같은 크기와 굵기로 그려 나란히 보여도 어색하지 않게 한다
+	static void BuildMarkSprites()
+	{
+		const int size = 11;
+		const float thickness = 0.8f;
+		// 그림 좌표는 아래가 y 0 (텍스처 좌표)
+		WriteShape("ui_check", size, size, (x, y) =>
+			NearSegment(x, y, 1.5f, 5.5f, 4f, 3f, thickness) || NearSegment(x, y, 4f, 3f, 9f, 8.5f, thickness), Vector4.zero);
+		WriteShape("ui_cross", size, size, (x, y) =>
+			NearSegment(x, y, 2f, 2f, 8f, 8f, thickness) || NearSegment(x, y, 2f, 8f, 8f, 2f, thickness), Vector4.zero);
+	}
+
+	// 픽셀 (x, y)의 가운데가 선분 (ax, ay)–(bx, by)에서 radius 안에 있으면 true
+	static bool NearSegment(int x, int y, float ax, float ay, float bx, float by, float radius)
+	{
+		float px = x + 0.5f, py = y + 0.5f;
+		float dx = bx - ax, dy = by - ay;
+		float t = Mathf.Clamp01(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy));
+		float cx = ax + t * dx - px, cy = ay + t * dy - py;
+		return cx * cx + cy * cy <= radius * radius;
+	}
+
 	static Sprite LoadShape(string name)
 	{
 		Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(ShapeDir + name + ".png");
@@ -1240,7 +1287,7 @@ public static class InvokeUIBuilder
 			stripLineImage.color = Hex("443F53");
 			stripLineImage.raycastTarget = false;
 
-			// 컴파일 성공 알림: 편집 영역 위 가운데 초록 알약
+			// 빌드 성공 알림: 편집 영역 위 가운데 초록 알약. 저장한 뒤 빌드에 성공하면 BlockEditor가 띄운다 (#506)
 			RectTransform okBadge = Child(window, "CompileOk");
 			Place(okBadge, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(6, -(LayoutTop + 8)), new Vector2(100, 20));
 			Image okImage = GetOrAdd<Image>(okBadge.gameObject);
@@ -1249,7 +1296,7 @@ public static class InvokeUIBuilder
 			okImage.color = Hex("7ED6A0");
 			okImage.raycastTarget = false;
 			TMP_Text okText = GetOrText(okBadge, "Text", "", 10, Hex("0F3A22"), TextAlignmentOptions.Center);
-			okText.text = "컴파일 성공";
+			okText.text = "Build 성공";
 			okText.overflowMode = TextOverflowModes.Overflow;
 			Stretch(okText.rectTransform, 0, 0, 0, 1);
 

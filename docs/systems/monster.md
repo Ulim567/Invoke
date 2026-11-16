@@ -157,17 +157,22 @@
     - 때린 플레이어가 없거나 모두 받을 수 없으면: 아무도 받지 않음
     - 피해 기록: `Monster`가 `TakeDamage(int, GameObject attacker)`로 받은 피해만 기록. 때린 사람 없이 받은 피해(`TakeDamage(int)`)는 세지 않음
   - `Whole Scene`을 켜면(레이드 보스) 피해량·거리·생사와 상관없이 같은 씬의 플레이어 모두가 받는다. 죽어서 관전 중인 파티원도 받는다.
-  - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴린다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다.
-  - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
+  - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴린다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다. 개수는 `Count`~`Max Count` 사이에서 무작위(`Max Count`가 `Count` 이하면 늘 `Count`개)
+  - 버그 조각은 나중에 상점 등에서 많이 쓰도록 잡몹마다 2~3개씩 넉넉히 준다 (김도훈 결정)
+  - 블록·함수 드롭: 받는 플레이어마다 `Item Chance`로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목 중 무작위로 `Item Count`개의 가진 개수를 1씩 늘린다 (`PlayerProgress.AddItem`, 이우림 #500)
+    - 쓸 수 있는 항목: 새 캐릭터 처음 항목(`ItemCountRules.Initial`의 키: thrust, sword_throw, get_bug) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
+    - 여러 개면 하나씩 따로 고른다 (같은 항목이 겹칠 수 있음). 항목당 최대 99개에서 멈춘다(`ItemCountRules.MaxCount`)
+    - 화면에는 무엇인지 알리지 않고 「블록 ×N」으로만 알린다(`LocalRewardReceived`의 블록 수). 무엇을 받았는지는 블록 편집 화면의 「남은/가진」 개수로 확인한다
+  - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`, `AddItem`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
   - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다.
   - 재료 ID: `bug_fragment`(버그 조각), `boss_core`(보스 코어). 이름표는 `SkillTreeDefaults`(임혜원)와 같다.
   - 몬스터별 보상 (임시)
 
-    | 몬스터 | 경험치 | 돈 | 재료 | 받는 플레이어 |
-    | --- | --- | --- | --- | --- |
-    | Leak | 10 | 5 | 버그 조각 1개 (50%) | 가장 많이 때린 플레이어 한 명 |
-    | Loop | 15 | 8 | 버그 조각 1개 (60%) | 가장 많이 때린 플레이어 한 명 |
-    | Gateway | 200 | 100 | 보스 코어 1개 (100%), 버그 조각 5개 (100%) | 같은 씬 모두 (`Whole Scene`) |
+    | 몬스터 | 경험치 | 돈 | 재료 | 블록·함수 | 받는 플레이어 |
+    | --- | --- | --- | --- | --- | --- |
+    | Leak | 10 | 5 | 버그 조각 2~3개 (100%) | 1개 (10%) | 가장 많이 때린 플레이어 한 명 |
+    | Loop | 15 | 8 | 버그 조각 2~3개 (100%) | 1개 (15%) | 가장 많이 때린 플레이어 한 명 |
+    | Gateway | 200 | 100 | 보스 코어 1개 (100%), 버그 조각 5개 (100%) | 2개 (100%, 사람마다 따로) | 같은 씬 모두 (`Whole Scene`) |
 
   - 기둥·분신·웜·허수아비에는 `MonsterReward`를 붙이지 않는다 (보상 없음).
 
@@ -343,12 +348,14 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
+| `LocalRewardReceived` (static event) | `int` 경험치, `IReadOnlyList<MaterialDrop>` 재료, `int` 블록·함수 수 | - | [연출] 내 캐릭터가 어떤 몬스터에게서든 보상을 받았을 때. 획득 표시(시안 8-5)처럼 몬스터와 상관없이 받는 화면이 쓴다. 블록·함수는 수만 넘긴다(「블록 ×N」). 받은 플레이어의 화면에서만. 재료 목록은 이벤트 안에서만 읽는다 |
 | `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 내 캐릭터가 보상을 받았을 때. 받은 플레이어의 화면(호스트 포함)에서만 불린다 (`[TargetRpc]`, #404). 받은 플레이어 = 그 화면의 내 캐릭터. 네트워크 없는 테스트는 받은 플레이어마다 그 자리에서. "+경험치" 글자, 재료가 날아오는 연출에 쓴다. 재료 목록은 이벤트 안에서만 읽는다. 몬스터는 0.5초 뒤 없어지므로 띄운 그림을 몬스터 자식으로 두지 않는다 |
 
 | Inspector 값 | 설명 |
 | --- | --- |
 | `Exp`, `Money` | 받는 플레이어마다 주는 경험치, 돈 |
-| `Drops` | 재료 드롭 목록 (`Material Id`, `Count`, `Chance`) |
+| `Drops` | 재료 드롭 목록 (`Material Id`, `Count`, `Max Count`, `Chance`) |
+| `Item Chance`, `Item Count` | 블록·함수가 나올 확률(받는 플레이어마다 굴림), 나올 때 주는 수 |
 | `Whole Scene` | 켜면 같은 씬의 플레이어 모두 (레이드 보스). 끄면 가장 많이 때린 플레이어 한 명 (#484) |
 
 - `Reward Range`, `Player Layers`는 #484에서 없앴다. 프리팹에 남은 값은 Unity가 무시한다
@@ -366,6 +373,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 - 이우림과 정한 것
   - 실행 중단 효과(`Interrupt`): `MonsterAttackResolver`가 맞은 대상에서 `GetComponentInParent<FunctionExecutor>()`를 찾아 `InterruptAll()`을 부른다. 없으면 아무것도 하지 않는다 (#143 제안대로). 판정은 서버에서만이라 서버의 실행기가 끊는다
   - 처치 보상은 `PlayerProgress.AddExp`(몬스터 처치), `AddMoney`, `AddMaterial`(드롭)로 준다 (`progress-store.md`). 레벨업 규칙은 김도훈의 레벨 시스템 이슈
+  - 블록·함수 드롭은 `PlayerProgress.AddItem`(#500, 문서의 「잡몹 드랍」)으로 준다. 받는 플레이어가 쓸 수 있는 항목(처음 항목 + 해금한 노드가 여는 항목)에서만 고른다
   - 공용 Physics 2D Layer Collision Matrix에서 Monster ↔ Monster 충돌을 껐다(#81). 그래서 몬스터 프리팹 콜라이더의 Exclude Layers에 `Monster`를 넣지 않아도 몬스터끼리 통과한다.
   - 장소 씬마다 물리 세계가 따로 있어서, 몬스터 판정은 자기 씬의 물리 세계에 한다(#76, #83).
   - 스포너가 몬스터를 만들 수 있도록 김도훈이 Leak에 `NetworkIdentity`를 붙이고 `Base` 씬 NetworkManager의 Registered Spawnable Prefabs에 등록한다(#86, 이우림 허락).

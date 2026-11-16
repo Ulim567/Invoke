@@ -431,14 +431,14 @@ MonoBehaviour:
   drops:
   - materialId: bug_fragment
     count: 5
+    maxCount: 0
     chance: 1
   - materialId: boss_core
     count: 1
+    maxCount: 0
     chance: 1
-  rewardRange: 20
-  playerLayers:
-    serializedVersion: 2
-    m_Bits: 256
+  itemChance: 1
+  itemCount: 2
   wholeScene: 1
 --- !u!114 &4137216757166093200
 MonoBehaviour:

@@ -410,12 +410,11 @@ MonoBehaviour:
   money: 8
   drops:
   - materialId: bug_fragment
-    count: 1
-    chance: 0.6
-  rewardRange: 20
-  playerLayers:
-    serializedVersion: 2
-    m_Bits: 256
+    count: 2
+    maxCount: 3
+    chance: 1
+  itemChance: 0.15
+  itemCount: 1
   wholeScene: 0
 --- !u!114 &2646029998434878842
 MonoBehaviour:

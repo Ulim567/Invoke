@@ -19,6 +19,7 @@ public class BlockUsageCounterTest : MonoBehaviour
 		TestRecursion();
 		TestLoopAndConditional();
 		TestGlobalsAndMissing();
+		TestSaveCheck();
 
 		string summary = $"[BlockUsageCounterTest] {passed}/{total} 통과";
 		if (passed == total) Debug.Log(summary);
@@ -108,6 +109,46 @@ public class BlockUsageCounterTest : MonoBehaviour
 		FunctionData slot = SlotWith(BlockData.CallUserFunction("없는-GUID"));
 		var used = BlockUsageCounter.Count(new[] { slot.Guid }, new[] { slot }, globals);
 		Check("전역 변수 int hp = 3; → Declare 1, 없는 함수 호출은 0", Get(used, "Declare") == 1 && used.Count == 1, Describe(used));
+	}
+
+	// 저장 검사 (FunctionExecutorNetwork.CheckItemCounts, #500): 가진 개수를 넘게 늘리는 저장만 거부한다
+	void TestSaveCheck()
+	{
+		var owned = new Dictionary<string, int> { { PredefinedFunctionIds.Thrust, 1 }, { PredefinedFunctionIds.GetBug, 2 } };
+		FunctionData slot = SlotWith(Thrust());
+		string[] slots = { slot.Guid };
+		var before = new[] { slot };
+
+		FunctionData same = SlotWith(Thrust());
+		same.Guid = slot.Guid;
+		Check("가진 개수 안(thrust 1/1) → Saved",
+			FunctionExecutorNetwork.CheckItemCounts(slots, before, new[] { same }, null, null, owned) == PlayerDataRequestResult.Saved, "");
+
+		FunctionData more = SlotWith(Thrust(), Thrust());
+		more.Guid = slot.Guid;
+		Check("thrust 2개 놓음(1개 가짐) → CountExceeded",
+			FunctionExecutorNetwork.CheckItemCounts(slots, before, new[] { more }, null, null, owned) == PlayerDataRequestResult.CountExceeded, "");
+		var shortage = ItemCountRules.FindShortage(BlockUsageCounter.Count(slots, before, null), BlockUsageCounter.Count(slots, new[] { more }, null), owned);
+		Check("모자란 항목 = thrust, 2개 씀, 1개 가짐",
+			shortage != null && shortage.Value.ItemId == PredefinedFunctionIds.Thrust && shortage.Value.Used == 2 && shortage.Value.Owned == 1, "");
+
+		// 이미 thrust 3개를 쓰는 옛 캐릭터: thrust를 늘리지 않는 저장(하나 빼기)은 통과, 늘리면 거부
+		FunctionData old = SlotWith(Thrust(), Thrust(), Thrust());
+		FunctionData fewer = SlotWith(Thrust(), Thrust());
+		fewer.Guid = old.Guid;
+		FunctionData evenMore = SlotWith(Thrust(), Thrust(), Thrust(), Thrust());
+		evenMore.Guid = old.Guid;
+		var ownedMany = new Dictionary<string, int> { { PredefinedFunctionIds.Thrust, 1 }, { PredefinedFunctionIds.GetBug, 99 } };
+		Check("이미 넘은 thrust를 줄이는 저장 → Saved",
+			FunctionExecutorNetwork.CheckItemCounts(new[] { old.Guid }, new[] { old }, new[] { fewer }, null, null, ownedMany) == PlayerDataRequestResult.Saved, "");
+		Check("이미 넘은 thrust를 더 늘리는 저장 → CountExceeded",
+			FunctionExecutorNetwork.CheckItemCounts(new[] { old.Guid }, new[] { old }, new[] { evenMore }, null, null, ownedMany) == PlayerDataRequestResult.CountExceeded, "");
+
+		// 전역 변수 파일의 블록도 개수를 쓴다 (Declare 0개 가짐)
+		var globals = new GlobalVariablesData();
+		globals.Declarations.Add(BlockData.Declare(Int, "hp", SlotData.FromLiteral(Int, "3")));
+		Check("전역 변수 int hp = 3;을 더함(Declare 0개 가짐) → CountExceeded",
+			FunctionExecutorNetwork.CheckItemCounts(slots, before, before, null, globals, owned) == PlayerDataRequestResult.CountExceeded, "");
 	}
 
 	// thrust(get_bug()); 한 줄

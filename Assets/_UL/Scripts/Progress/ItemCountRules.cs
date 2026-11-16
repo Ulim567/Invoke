@@ -32,6 +32,43 @@ public static class ItemCountRules
 	}
 
 	/// <summary>
+	/// 저장하면 개수가 모자라는 항목을 하나 찾는다. 없으면 null. 서버의 저장 검사(FunctionExecutorNetwork.CheckItemCounts)와
+	/// 편집 화면의 먼저 안내가 같은 규칙을 쓰도록 둘 다 이 함수를 거친다.<br/>
+	/// 모자람 = 저장한 뒤 쓴 개수가 가진 개수보다 많고, 저장하기 전보다 늘었음.
+	/// </summary>
+	/// <param name="usedBefore">저장하기 전에 쓴 개수 (BlockUsageCounter.Count)</param>
+	/// <param name="usedAfter">저장한 뒤에 쓸 개수 (BlockUsageCounter.Count)</param>
+	/// <param name="owned">가진 개수 (PlayerProgress.ItemCounts)</param>
+	// 「늘었음」을 함께 보는 이유: 개수 기능 전에 만든 캐릭터는 이미 가진 것보다 많이 쓰고 있을 수 있다.
+	// 그 항목을 더 쓰지 않는 저장(관계없는 함수 고치기, 줄이기)까지 막으면 고칠 방법이 없어진다
+	public static Shortage? FindShortage(IReadOnlyDictionary<string, int> usedBefore, IReadOnlyDictionary<string, int> usedAfter,
+		IReadOnlyDictionary<string, int> owned)
+	{
+		foreach (KeyValuePair<string, int> pair in usedAfter)
+		{
+			int have = owned != null && owned.TryGetValue(pair.Key, out int count) ? count : 0;
+			int before = usedBefore != null && usedBefore.TryGetValue(pair.Key, out int previous) ? previous : 0;
+			if (pair.Value > have && pair.Value > before) return new Shortage(pair.Key, pair.Value, have);
+		}
+		return null;
+	}
+
+	/// <summary>개수가 모자라는 항목 하나: 항목 ID, 저장하면 쓸 개수, 가진 개수.</summary>
+	public readonly struct Shortage
+	{
+		public readonly string ItemId;
+		public readonly int Used;
+		public readonly int Owned;
+
+		public Shortage(string itemId, int used, int owned)
+		{
+			ItemId = itemId;
+			Used = used;
+			Owned = owned;
+		}
+	}
+
+	/// <summary>
 	/// 노드를 해금할 때 1개씩 주는 항목 ID들.<br/>
 	/// - 스킬 노드: 노드 ID (스킬 노드 ID는 그 함수의 고정 ID와 같다. 예: c.thrust)<br/>
 	/// - 문법 노드: 노드가 여는 블록 종류(UnlocksBlocks)의 항목 ID. Conditional은 If, ElseIf, Else 셋.

@@ -9,7 +9,9 @@
 - 편집 중인 함수는 `FunctionData` 하나다. 블록 UI(`BlockView`)가 `BlockData`를 직접 들고 있어서, 화면에서 블록을 옮기거나 칸을 고치면 함수 데이터가 바로 바뀐다. 데이터 형식은 function-data.md를 따른다.
 - 하지 않는 일
   - 해금 (#396, 이우림 #309): 실제 계정이면 해금한 문법 블록(`SkillTree.IsBlockUnlocked`)과 해금한 C 스킬만 보여 준다. 서버의 저장 검사(`FunctionExecutorNetwork.CheckFunctionContent`)와 같은 규칙. 스킬 트리에 노드가 없는 함수(`input.*` 등)는 늘 보이고, 블록이 다 걸러진 분류는 머리글도 없다. 임시 계정(로그인 건너뛰기)은 모두 보여 준다
-  - 저장 거부 안내: `BlockLocked`(해금 안 한 블록), `SkillLocked`(해금 안 한 스킬), `CodeSizeExceeded`(슬롯 코드 영역 `ProgressRules.MaxCodeSize` 넘음)
+  - 저장 거부 안내: `BlockLocked`(해금 안 한 블록), `SkillLocked`(해금 안 한 스킬), `CodeSizeExceeded`(슬롯 코드 영역 `ProgressRules.MaxCodeSize` 넘음), `CountExceeded`(가진 개수보다 많이 씀, #500)
+  - 블록·함수 개수 (#500): 실제 계정이면 함수와 Global Variables를 저장하기 전에 서버와 같은 규칙(`ItemCountRules.FindShortage`)으로 먼저 검사. 모자라면 서버에 보내지 않고 위쪽 줄에 「개수가 모자라 저장하지 않음 (thrust 2개 씀, 1개 가짐)」. 순서는 컴파일 → 이름·다른 함수 검사 → 페이지 함수 수 → 개수. 임시 계정은 개수를 보지 않음
+    - 항목 이름: 사전 정의 함수는 영문 이름(`thrust`), else if는 `Else If`, 나머지 블록은 `BlockKind` 이름(`If`, `Declare`)
   - 함수 실행은 하지 않는다. `FunctionExecutor`(이우림)가 한다.
   - 구조 검사(빈 칸, 선언하지 않은 변수, 짝 없는 else 등)는 하지 않는다. 「만든 함수를 서버로 보내 검사·저장하기」(이우림)에서 한다.
   - 함수의 구조 검사·저장 판정은 서버가 한다 (`FunctionExecutorNetwork.RequestSaveFunction`, network.md).

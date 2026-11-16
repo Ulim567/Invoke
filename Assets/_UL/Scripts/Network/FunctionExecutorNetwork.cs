@@ -379,7 +379,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// 슬롯 함수(ReceivedSlots의 GUID)와 페이지 함수 모두 이 요청으로 저장한다. 슬롯 함수를 저장하면 그 슬롯은 새 내용으로 시전된다.<br/>
 	/// 새 GUID는 페이지 함수로 세고, 이미 ProgressRules.MaxPageFunctions개면 TooManyFunctions.<br/>
 	/// 슬롯 함수의 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 바뀌어 있으면 SlotFunctionLocked.<br/>
-	/// 해금하지 않은 블록이나 C 스킬을 쓰면 BlockLocked, SkillLocked. 저장한 뒤 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘으면 CodeSizeExceeded (CheckFunctionContent).
+	/// 해금하지 않은 블록이나 C 스킬을 쓰면 BlockLocked, SkillLocked. 저장한 뒤 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘으면 CodeSizeExceeded (CheckFunctionContent).<br/>
+	/// 저장하면 블록·함수를 가진 개수보다 많이 쓰게 되면 CountExceeded (CheckItemCounts, #500).
 	/// </summary>
 	public void RequestSaveFunction(FunctionData function)
 	{
@@ -394,7 +395,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	/// <summary>
 	/// [소유 클라이언트] 전역 변수 선언을 서버에 저장하라고 요청한다. 결과는 PlayerDataRequestAnswered.<br/>
-	/// 서버는 FunctionExecutor.TrySaveGlobalVariables와 같은 검사를 하고, 통과하면 DB에 쓰고 프로세스를 새로 시작한다(RestartProcess).
+	/// 서버는 FunctionExecutor.TrySaveGlobalVariables와 같은 검사를 하고, 통과하면 DB에 쓰고 프로세스를 새로 시작한다(RestartProcess).<br/>
+	/// 전역 변수 파일의 블록도 개수를 쓰므로, 가진 개수보다 많이 쓰게 되면 CountExceeded (CheckItemCounts, #500).
 	/// </summary>
 	public void RequestSaveGlobals(GlobalVariablesData globals)
 	{
@@ -462,6 +464,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		PlayerDataRequestResult contentResult = progress != null
 			? CheckFunctionContent(function, serverFunctions, slotGuids, new HashSet<string>(progress.Unlocked))
 			: PlayerDataRequestResult.NotAllowed;
+		// 블록·함수 개수 (#500): 저장한 뒤의 함수 목록으로 센 개수가 가진 개수를 넘으면 거부한다
+		if (contentResult == PlayerDataRequestResult.Saved)
+			contentResult = CheckItemCounts(slotGuids, serverFunctions, WithFunction(serverFunctions, function), serverGlobals, serverGlobals, progress.ItemCounts);
 		if (contentResult != PlayerDataRequestResult.Saved)
 		{
 			TargetAnswer(PlayerDataRequest.SaveFunction, contentResult);
@@ -529,6 +534,36 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		return size > ProgressRules.MaxCodeSize ? PlayerDataRequestResult.CodeSizeExceeded : PlayerDataRequestResult.Saved;
 	}
 
+	/// <summary>
+	/// 저장하면 블록·함수를 가진 개수보다 많이 쓰게 되는지 검사한다 (#500). 통과하면 Saved, 아니면 CountExceeded.
+	/// 네트워크와 상관없어서 서버 없이 부를 수 있다.<br/>
+	/// 쓴 개수는 BlockUsageCounter.Count로 세고, 모자람은 ItemCountRules.FindShortage로 찾는다 (편집 화면의 먼저 안내와 같은 규칙).
+	/// </summary>
+	/// <param name="slotFunctionGuids">슬롯 함수 GUID들. 세기 시작하는 곳이다</param>
+	/// <param name="functionsBefore">저장하기 전의 모든 함수</param>
+	/// <param name="functionsAfter">저장한 뒤의 모든 함수</param>
+	/// <param name="globalsBefore">저장하기 전의 전역 변수 파일</param>
+	/// <param name="globalsAfter">저장한 뒤의 전역 변수 파일</param>
+	/// <param name="owned">가진 개수 (PlayerProgress.ItemCounts)</param>
+	public static PlayerDataRequestResult CheckItemCounts(IEnumerable<string> slotFunctionGuids,
+		IEnumerable<FunctionData> functionsBefore, IEnumerable<FunctionData> functionsAfter,
+		GlobalVariablesData globalsBefore, GlobalVariablesData globalsAfter, IReadOnlyDictionary<string, int> owned)
+	{
+		var slots = new List<string>(slotFunctionGuids);
+		Dictionary<string, int> before = BlockUsageCounter.Count(slots, functionsBefore, globalsBefore);
+		Dictionary<string, int> after = BlockUsageCounter.Count(slots, functionsAfter, globalsAfter);
+		return ItemCountRules.FindShortage(before, after, owned) == null ? PlayerDataRequestResult.Saved : PlayerDataRequestResult.CountExceeded;
+	}
+
+	// functions에서 같은 GUID의 함수를 function으로 바꾼(없으면 더한) 새 목록. functions는 바꾸지 않는다
+	static List<FunctionData> WithFunction(IEnumerable<FunctionData> functions, FunctionData function)
+	{
+		var result = new List<FunctionData>();
+		foreach (FunctionData f in functions) result.Add(f.Guid == function.Guid ? function : f);
+		if (!result.Contains(function)) result.Add(function);
+		return result;
+	}
+
 	[Command]
 	void CmdSaveGlobals(string json)
 	{
@@ -541,6 +576,20 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		if (!executor.CanUseGlobalVariables(globals))
 		{
 			TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.GlobalsRejected);
+			return;
+		}
+		// 전역 변수 파일의 블록도 개수를 쓴다 (#500). 개수를 읽을 수 없으면 검사할 수 없으므로 통과시키지 않는다
+		var slotGuids = new List<string>();
+		foreach (SlotLoadout.Entry entry in serverSlots)
+		{
+			if (entry.Kind == SlotLoadout.EntryKind.UserFunction) slotGuids.Add(entry.Id);
+		}
+		PlayerDataRequestResult countResult = progress != null
+			? CheckItemCounts(slotGuids, serverFunctions, serverFunctions, serverGlobals, globals, progress.ItemCounts)
+			: PlayerDataRequestResult.NotAllowed;
+		if (countResult != PlayerDataRequestResult.Saved)
+		{
+			TargetAnswer(PlayerDataRequest.SaveGlobals, countResult);
 			return;
 		}
 

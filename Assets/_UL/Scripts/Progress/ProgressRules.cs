@@ -60,5 +60,6 @@ public enum PlayerDataRequestResult
 	CodeSizeExceeded, // 저장하면 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘음
 	GlobalsRejected,  // 전역 변수 검사에 걸림 (칸 부족 등. 이유는 서버 콘솔 오류)
 	UnknownFunction,  // 지우려는 함수가 없음 (#494)
+	CountExceeded,    // 저장하면 가진 개수보다 많이 쓰는 블록·함수가 생김 (#500, ItemCountRules.FindShortage)
 	// 새 값은 맨 끝에만 더한다. 이 값은 네트워크로 보내므로 중간에 끼우면 뒤 값들의 번호가 바뀐다
 }

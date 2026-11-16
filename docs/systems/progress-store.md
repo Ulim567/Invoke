@@ -242,7 +242,7 @@
 
 | 요청 함수 (소유 클라이언트) | 서버가 하는 일 | 거부 |
 | --- | --- | --- |
-| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 슬롯 함수 틀 검사 → 내용 검사(아래) → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded` |
+| `RequestSaveFunction(FunctionData)` | JSON 읽기 → 슬롯 함수 틀 검사 → 내용 검사(아래) → 새 GUID(페이지 함수)면 개수 제한(`ProgressRules.MaxPageFunctions`) 검사 → `CharacterFunctions`에 씀 → 슬롯 원본을 다시 만듦. 슬롯 함수·페이지 함수 모두 이 요청. 슬롯 함수는 이름·파라미터·반환 타입·비동기 여부가 그대로일 때만 | `InvalidData`, `TooManyFunctions`, `SlotFunctionLocked`, `BlockLocked`, `SkillLocked`, `CodeSizeExceeded`, `CountExceeded` |
 
 #### 함수 내용 검사 (`FunctionExecutorNetwork.CheckFunctionContent`, #306)
 - 서버가 저장 요청의 함수를 `PlayerProgress.Unlocked`(해금한 노드 ID)로 검사. 네트워크와 상관없는 `static` 함수라 서버 없이 부를 수 있음
@@ -253,12 +253,14 @@
 | 블록 종류 | `BlockLocked` | `SkillTree.IsBlockUnlocked(블록 종류, 해금 목록)`이 false. 어떤 노드에도 없는 블록 종류는 통과 |
 | C 스킬 | `SkillLocked` | 함수 블록(`IsUserFunction`이 false)이 부르는 고정 ID의 노드가 `SkillTree`에 있는데 해금 목록에 없음. 스킬 트리에 노드가 없는 ID(입력 함수 `input.*`, 테스트 함수 `test.*`)는 통과 |
 | 코드 영역 크기 | `CodeSizeExceeded` | 저장하는 함수를 반영한 함수 목록으로 `CodeSizeCalculator.Calculate(슬롯 함수 GUID 8개, 없음, 목록)`을 센 값이 `ProgressRules.MaxCodeSize`(임시 1000)보다 큼 |
+| 블록·함수 개수 (#500) | `CountExceeded` | `FunctionExecutorNetwork.CheckItemCounts`: 저장 전과 저장 후를 `BlockUsageCounter.Count`로 세어, 저장 후 쓴 개수가 가진 개수(`PlayerProgress.ItemCounts`)보다 많고 저장 전보다 늘어난 항목이 있음 (`ItemCountRules.FindShortage`). 위 세 검사를 통과한 뒤에 봄 |
 
 - 스킬 노드 ID와 고정 ID는 같은 값이라 (`c.thrust`) 해금 목록에서 바로 찾음
 - 해금 목록을 읽을 수 없으면(`PlayerProgress`가 없음) 검사할 수 없으므로 `NotAllowed`로 거부
 - 크기는 슬롯 8개 전체를 셈 (`function-data.md` 「코드 영역 크기 규칙」). 슬롯 함수가 부르는 함수를 고쳐도 그 함수를 저장하는 순간 걸림. 슬롯에서 닿지 않는 함수는 세지 않으므로 거부하지 않음
 - 이미 저장된 함수는 다시 검사하지 않음. 나중에 해금 규칙이 바뀌어도 저장된 함수는 그대로 남고, 그 함수를 다시 저장할 때 걸림
-| `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected` |
+- 개수 검사에서 「저장 전보다 늘어난 항목」만 거부하는 이유: 개수 기능 전에 만든 캐릭터는 이미 가진 것보다 많이 쓰고 있을 수 있음. 그 항목을 더 쓰지 않는 저장(관계없는 함수 고치기, 줄이기)은 받음. 새 캐릭터는 가진 개수가 줄지 않으므로 「저장 후 가진 개수를 넘으면 거부」와 같음
+| `RequestSaveGlobals(GlobalVariablesData)` | `FunctionExecutor.CanUseGlobalVariables`로 검사 → 블록·함수 개수 검사(`CheckItemCounts`, 전역 변수 파일의 블록도 개수를 씀) → `CharacterGlobals`에 씀 → 프로세스를 새로 시작 | `InvalidData`, `GlobalsRejected`, `CountExceeded` |
 | `RequestDeleteFunction(함수 GUID)` (#494) | 슬롯 함수인지 봄 → `CharacterFunctions`에서 지움 → 슬롯 원본을 다시 만듦 (지운 함수를 부르던 슬롯은 시전 거부) | `InvalidData`, `SlotFunctionLocked`(슬롯 함수), `UnknownFunction`(없는 함수) |
 
 - 함수 지우기: 다른 함수가 지울 함수를 부르는지는 서버가 보지 않음. 편집 화면이 지우기 전에 막음 (block-editor.md 「저장 버튼」의 「다른 함수 검사」)

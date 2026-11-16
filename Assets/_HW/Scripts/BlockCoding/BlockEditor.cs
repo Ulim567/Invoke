@@ -580,7 +580,9 @@ public class BlockEditor : MonoBehaviour
 			if (saved) globalsDraft = null;
 			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
 			if (saved) ReloadSavedFunctions();
-			SetMessage(saved ? "저장됨" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
+			SetMessage(saved ? "저장됨"
+				: result == PlayerDataRequestResult.CountExceeded ? CountShortageMessage(FindCountShortage(savedFunctions, globals))
+				: "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
 			Redraw();
 			return;
 		}
@@ -599,6 +601,8 @@ public class BlockEditor : MonoBehaviour
 			PlayerDataRequestResult.BlockLocked => "저장하지 못함 (아직 해금하지 않은 블록이 있음)",
 			PlayerDataRequestResult.SkillLocked => "저장하지 못함 (아직 해금하지 않은 스킬이 있음)",
 			PlayerDataRequestResult.CodeSizeExceeded => $"저장하지 못함 (슬롯의 코드 영역이 {ProgressRules.MaxCodeSize}을 넘음)",
+			PlayerDataRequestResult.CountExceeded => CountShortageMessage(Function == null ? null
+				: FindCountShortage(savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function), CurrentGlobals())),
 			_ => $"저장하지 못함 ({result})",
 		}, result != PlayerDataRequestResult.Saved);
 		Redraw();
@@ -809,6 +813,14 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (server != null)
 		{
+			// 전역 변수 파일의 블록도 개수를 쓴다 (#500). 모자라면 서버에 보내지 않고 알린다
+			ItemCountRules.Shortage? shortage = FindCountShortage(savedFunctions, globals);
+			if (shortage != null)
+			{
+				SetMessage(CountShortageMessage(shortage), true);
+				Redraw();
+				return;
+			}
 			savePending = true; // 요청이 바로 거부되면 답이 이 줄 안에서 와서 곧바로 풀린다
 			server.RequestSaveGlobals(globals);
 			SetMessage("저장하는 중...");
@@ -879,6 +891,14 @@ public class BlockEditor : MonoBehaviour
 			if (isNewPage && PageFunctions().Count() >= ProgressRules.MaxPageFunctions)
 			{
 				SetMessage($"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음", true);
+				Redraw();
+				return;
+			}
+			// 가진 개수보다 많이 쓰면 서버에 보내지 않고 어느 항목이 모자란지 알린다 (#500). 서버도 같은 규칙으로 다시 검사한다
+			ItemCountRules.Shortage? shortage = FindCountShortage(savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function), CurrentGlobals());
+			if (shortage != null)
+			{
+				SetMessage(CountShortageMessage(shortage), true);
 				Redraw();
 				return;
 			}
@@ -1922,6 +1942,41 @@ public class BlockEditor : MonoBehaviour
 			if (!entry.IsEmpty && entry.Kind == SlotLoadout.EntryKind.UserFunction && entry.Id == function.Guid) return i;
 		}
 		return -1;
+	}
+
+	// 블록·함수의 가진 개수 (#500). 실제 계정만 있고, 임시 계정이면 null이어서 개수를 보지 않는다 (무엇이든 놓을 수 있음)
+	IReadOnlyDictionary<string, int> CurrentItemCounts()
+	{
+		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
+			return progress.ItemCounts;
+		return null;
+	}
+
+	// 저장하면 개수가 모자라는 항목 (#500). 서버의 저장 검사(FunctionExecutorNetwork.CheckItemCounts)와 같은 규칙으로 먼저 찾아 안내한다
+	// functionsAfter, globalsAfter: 저장한 뒤의 모든 함수와 전역 변수. 저장하기 전은 서버에 저장된 값(savedFunctions, CurrentGlobals)
+	ItemCountRules.Shortage? FindCountShortage(IEnumerable<FunctionData> functionsAfter, GlobalVariablesData globalsAfter)
+	{
+		IReadOnlyDictionary<string, int> owned = CurrentItemCounts();
+		if (owned == null || server.ReceivedSlots == null) return null;
+		var slotGuids = server.ReceivedSlots.Where(e => e.Kind == SlotLoadout.EntryKind.UserFunction).Select(e => e.Id).ToList();
+		Dictionary<string, int> before = BlockUsageCounter.Count(slotGuids, savedFunctions, CurrentGlobals());
+		Dictionary<string, int> after = BlockUsageCounter.Count(slotGuids, functionsAfter, globalsAfter);
+		return ItemCountRules.FindShortage(before, after, owned);
+	}
+
+	// 개수가 모자라 저장하지 않을 때의 안내. shortage가 없으면(서버만 걸림) 항목 없이 알린다
+	static string CountShortageMessage(ItemCountRules.Shortage? shortage)
+	{
+		if (shortage == null) return "개수가 모자라 저장하지 않음 (가진 개수보다 많이 씀)";
+		ItemCountRules.Shortage s = shortage.Value;
+		return $"개수가 모자라 저장하지 않음 ({ItemDisplayName(s.ItemId)} {s.Used}개 씀, {s.Owned}개 가짐)";
+	}
+
+	// 항목 ID를 화면 이름으로: 사전 정의 함수는 영문 이름(c.thrust → thrust), else if는 띄어 쓰고, 나머지 블록은 그대로 (If, Declare)
+	static string ItemDisplayName(string itemId)
+	{
+		if (itemId.Contains('.')) return BlockLabels.PredefinedFunctionName(itemId);
+		return itemId == ConditionalBranch.ElseIf.ToString() ? "Else If" : itemId;
 	}
 
 	// 함수 하나의 코드 영역 크기 (그 함수 + 그 함수가 부르는 함수들). 편집 중인 함수는 지금 내용으로 센다

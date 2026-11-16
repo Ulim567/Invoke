@@ -420,8 +420,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c76b6abe1e824fbb8cdec3695979ca6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SlotTargetMarker
-  color: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  markedColor: {r: 0, g: 1, b: 1, a: 1}
+  reticlePrefab: {fileID: 0}
+  markedPrefab: {fileID: 0}
+  scale: 0.5
+  markedUnderScale: 1.25
 --- !u!114 &4696210639705928058
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -714,6 +716,7 @@ MonoBehaviour:
   invincibleTime: 1
   hideDelay: 1
   respawnDelay: 3
+  maxDeferTime: 10
 --- !u!114 &5499647203975102261
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -757,7 +760,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerLevelStats
   maxHpPerLevel: 10
   attackPowerPerLevel: 2
-  memoryLevelInterval: 3
+  memoryLevelInterval: 1
   memoryPerStep: 1
 --- !u!114 &640899364796495694
 MonoBehaviour:

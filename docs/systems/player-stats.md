@@ -28,7 +28,7 @@
 - 레벨 (임시 값)
   - 경험치 표(`LevelRules`): 다음 레벨까지 필요한 경험치 = 100 × 지금 레벨 (1→2: 100, 2→3: 200). 최대 레벨 30, 최대 레벨에서는 경험치가 쌓이지 않는다
   - 레벨을 올리는 일은 `PlayerProgress.AddExp`(이우림)가 `LevelRules`로 한다. 남은 경험치는 다음 레벨로 넘어가고, 한 번에 여러 레벨이 오를 수 있다
-  - 레벨 능력치(`PlayerLevelStats`): 레벨 1보다 높은 만큼 레벨당 최대 체력 +10, 공격력 +2, 3레벨마다 메모리 +1(Lv4, 7, …, 28 → Lv30에 19칸)을 `AddBonus`로 더한다 (메모리는 박진우 요청 11/7: 소환검 하나에 2칸이라 10칸이면 4개가 한계). 접속할 때 불러온 레벨에도 같은 값을 맞춘다
+  - 레벨 능력치(`PlayerLevelStats`): 레벨 1보다 높은 만큼 레벨당 최대 체력 +10, 공격력 +2, 레벨마다 메모리 +1(Lv2부터 매 레벨 → Lv30에 39칸)을 `AddBonus`로 더한다 (메모리는 박진우 요청 11/7: 소환검 하나에 2칸이라 10칸이면 4개가 한계였고, 11/16에 3레벨마다 +1에서 매 레벨 +1로 변경). 접속할 때 불러온 레벨에도 같은 값을 맞춘다
   - `PlayerProgress`가 없는 플레이어(테스트용 프리팹)는 레벨 능력치가 없다
 
 ## 다른 시스템이 쓰는 것
@@ -64,7 +64,7 @@
 | --- | --- | --- | --- |
 | `MaxHpPerLevel` | - | `int` | 레벨 1당 오르는 최대 체력. 레벨업 창의 「다음 레벨」 표시용 (임혜원 #332) |
 | `AttackPowerPerLevel` | - | `int` | 레벨 1당 오르는 공격력. 레벨업 창의 「다음 레벨」 표시용 (임혜원 #332) |
-| `MemoryBonusAt(int level)` | 레벨 | `int` | 그 레벨에서 레벨로 더해지는 메모리 칸 수 (레벨 1이면 0, Lv30이면 9). 「다음 레벨」 표시는 `MemoryBonusAt(레벨+1) - MemoryBonusAt(레벨)` |
+| `MemoryBonusAt(int level)` | 레벨 | `int` | 그 레벨에서 레벨로 더해지는 메모리 칸 수 (레벨 1이면 0, Lv30이면 29). 「다음 레벨」 표시는 `MemoryBonusAt(레벨+1) - MemoryBonusAt(레벨)` |
 
 ### `StatType`
 `MaxHp`, `AttackPower`, `AttackSpeed`, `MemorySize`, `CooldownReduction`, `MoveSpeed`

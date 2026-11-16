@@ -43,7 +43,7 @@
   - 해제 후 다시 소환.
 - 해제(free)
   - 해제 스킬이 마지막에 소환한 소환검부터 heap 칸을 돌려주고 오브젝트를 없앤다. 던진 검도 거리와 상관없이 해제된다.
-  - 해제한 포인터는 heap에서 찾을 수 없다. 해제한 포인터로 명령하면 스킬이 `TryGetHeapObject` / `Free`로 쓸 때 `InvalidPointerError`로 그 작업만 끝난다. 추가 페널티는 없다 (기획 결정 후 바뀔 수 있음).
+  - 해제한 포인터는 heap에서 찾을 수 없다. 해제한 포인터로 명령하면 스킬이 `TryGetHeapObject` / `Free`로 쓸 때 `FreedPointerError`(`InvalidPointerError`의 하위 클래스, #504)로 그 작업만 끝난다. 추가 페널티는 없다 (기획 결정 후 바뀔 수 있음).
 - 누수: 작업이 실패·중단으로 끝나면 그 작업이 malloc한 소환검은 heap이 누수로 표시한다 (`ObjectLeaked` → `Leaked`). 영역 비우기(`Heap.Clear`, 재부팅 등)로 heap이 비면 오브젝트도 없앤다 (`ObjectCleared`).
 - 슬롯에서 바로 쓰는 스킬은 가장 먼저 소환한(포인터가 작은) 사용 가능한 검부터 쓴다 (`TryGetFirstReady`, C 배열처럼 앞에서부터).
 - 소환검 필요 스킬(`needsSummonedSword`)은 사용 가능한 소환검이 0개면 `NoSummonedSwordError` (c-skills.md). 여러 명 선택 최대 인원 = 사용 가능한 소환검 수 (slot-caster.md).
@@ -127,7 +127,7 @@
 
 ## 맞춘 결과
 - 박진우 결정
-  - 해제한 포인터로 명령하면 `InvalidPointerError`로 그 작업만 끝남. 추가 페널티는 기획 결정 후.
+  - 해제한 포인터로 명령하면 `FreedPointerError`(`InvalidPointerError`의 하위 클래스, #504)로 그 작업만 끝남. 추가 페널티는 기획 결정 후.
   - 슬롯에서 바로 쓸 때는 가장 먼저 소환한 사용 가능한 검부터.
 - 이우림과 맞출 것 (#102)
   - 검 소환·해제는 function-executor.md·predefined-function.md 대로 `PredefinedFunction.Malloc` / `Free`로 heap을 쓰고, 소환검 오브젝트는 `SummonedSwords`가 만들고 없앤다

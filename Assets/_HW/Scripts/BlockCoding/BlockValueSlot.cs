@@ -31,6 +31,10 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 	/// <summary>이 칸의 데이터 (블록 데이터의 Slots[칸 번호])</summary>
 	public SlotData Slot => ownerBlock.Data.Slots[slotIndex];
 
+	/// <summary>이 칸을 가진 블록의 데이터와 그 블록에서의 칸 번호. BlockEditor가 컴파일 오류가 난 칸(FunctionChecker.Error.Slots)의 UI를 찾을 때 쓴다 (#504)</summary>
+	public BlockData OwnerData => ownerBlock.Data;
+	public int Index => slotIndex;
+
 	/// <summary>
 	/// 꼭 채워야 하는데 비어 있는 칸이면 true (컴파일 오류 표시). 선언의 초기값과 return의 값은 비워도 된다.
 	/// </summary>
@@ -258,7 +262,7 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 			}
 			if (names.Count == 0)
 			{
-				editor.ShowNotice($"이 칸에 넣을 수 있는 변수가 없어요 ({AcceptsText})");
+				editor.ShowNotice("이 칸에 넣을 수 있는 변수 없음");
 				return;
 			}
 			editor.ShowDropdown(anchor, labels.ToArray(), names.IndexOf(Slot.VariableName), picked =>
@@ -369,23 +373,22 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		size.minHeight = held ? -1 : emptyMinSize.y;
 	}
 
-	// 적은 글자를 값으로 읽고, 칸 규칙에 맞지 않으면 넣지 않는다 (#474). 예: if의 조건 칸에 "abc"
+	// 적은 글자를 값으로 읽고, 칸 규칙에 맞는지 본다 (#474). 예: if의 조건 칸에 "abc"
 	// 변수 이름이면 이 블록 자리에서 보이는 변수인지, 그 타입이 칸에 맞는지도 본다 (#474 5단계). 예: 선언하지 않은 hp, int x를 thrust에
-	// 맞지 않는 값도 모양이 틀린 글자(3x)처럼 칸 글자를 빨갛게 남기고 데이터는 비운다. 상태 줄에 이유를 알린다
+	// 맞지 않는 값은 칸 글자를 빨갛게 하고, 상태 줄에 컴파일 오류 창과 같은 문장으로 이유를 알린다
+	// 데이터는 비우지 않고 남긴다 (#504). 비우면 컴파일 오류 창에 진짜 이유 대신 「expression이 비어 있음」이 나오기 때문
+	// 남겨도 저장되지 않는다: 함수는 저장 전에 항상 컴파일하고(#432) FunctionChecker가 같은 값을 오류로 잡으며, 전역 변수는 저장 검사가 거부한다
+	// 모양이 틀린 글자(3x)는 값으로 읽을 수 없으므로 지금처럼 비어 있다
 	void OnEdited(string text)
 	{
 		bool valid = BlockSlotText.TryApply(Slot, text);
 		string reason = null;
-		if (valid && !string.IsNullOrEmpty(Slot.VariableName) && !editor.VisibleVariables(ownerBlock.Data).ContainsKey(Slot.VariableName))
-			reason = $"{Slot.VariableName}은(는) 여기서 쓸 수 있는 변수가 아니에요. 이 블록보다 위에서 선언해야 해요";
+		// 직접 적은 값만 받는 칸(전역 변수의 초기값, array 크기)은 보이는 변수인지와 상관없이 칸 규칙의 문장으로 알린다
+		bool literalOnly = editor.RuleOf(ownerBlock.Data, slotIndex).LiteralOnly;
+		if (valid && !literalOnly && !string.IsNullOrEmpty(Slot.VariableName) && !editor.VisibleVariables(ownerBlock.Data).ContainsKey(Slot.VariableName))
+			reason = FunctionChecker.UndeclaredMessage(Slot.VariableName);
 		else if (valid && !editor.Fits(ownerBlock.Data, slotIndex, Slot))
-			reason = $"이 칸에는 {AcceptsText}만 넣을 수 있어요";
-		if (reason != null)
-		{
-			Slot.Type = null;
-			Slot.Literal = null;
-			Slot.VariableName = null;
-		}
+			reason = editor.WrongValueMessage(ownerBlock.Data, slotIndex, Slot);
 		field.SetInvalid(!valid || reason != null);
 		editor.NotifyChanged();
 		if (reason != null) editor.ShowNotice(reason);

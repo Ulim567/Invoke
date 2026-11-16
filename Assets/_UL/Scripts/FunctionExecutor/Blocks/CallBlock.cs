@@ -5,7 +5,7 @@ using System.Collections.Generic;
 /// <para>
 /// - argument를 왼쪽부터 실행한 뒤, 그 값을 넘긴 함수 복사본을 실행한다.<br/>
 /// - 비운 value slot은 「값 없음」으로 넘긴다. 값을 파라미터 타입으로 바꿀 수 없으면 TypeMismatch로 실패한다.<br/>
-/// - 대상(Target) argument가 「대상 없음」이거나 죽었거나 오브젝트가 없어졌으면 스킬이 시작하기 직전에 InvalidTarget으로 실패한다(PredefinedFunction이 검사).<br/>
+/// - 대상(Target) argument가 「대상 없음」이거나 죽었거나 오브젝트가 없어졌으면 스킬이 시작하기 직전에 NoTarget(대상 없음) 또는 InvalidTarget(죽음, 없어짐)으로 실패한다(PredefinedFunction이 검사).<br/>
 /// - 틱: expression으로 쓴 블록이 없으면 그 함수의 틱과 같다(슬롯에서 바로 시전했을 때와 같음). 끼운 블록이 있으면 그 블록들의 틱이 앞에 더해진다.<br/>
 /// - 같은 스킬이 실행 중이거나 쿨타임 중이면, argument를 계산한 뒤 쓸 수 있을 때까지 실패 없이 기다린다. 기다린 틱도 더해진다.<br/>
 /// - 반환 타입이 Void가 아니면 함수가 끝난 뒤 반환 값을 Result에 넣는다. statement로 놓이면 아무도 Result를 읽지 않으므로 값은 버려진다.<br/>
@@ -88,7 +88,7 @@ public class CallBlock : ValueBlock
 	}
 
 	// value slot의 결과를 파라미터 타입으로 바꿔 함수에 넘길 배열을 만든다
-	// 쓸 수 없는 대상은 여기서 거르지 않는다. 스킬이 시작하기 직전에 PredefinedFunction.TryValidateStart가 InvalidTarget으로 막는다
+	// 쓸 수 없는 대상은 여기서 거르지 않는다. 스킬이 시작하기 직전에 PredefinedFunction.TryValidateStart가 NoTarget 또는 InvalidTarget으로 막는다
 	bool TryMakeArguments(FunctionContext context, out RuntimeValue?[] arguments)
 	{
 		IReadOnlyList<ParameterData> parameters = function.Parameters;

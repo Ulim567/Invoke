@@ -338,6 +338,9 @@ public class BlockEditor : MonoBehaviour
 	bool paletteBuilt;
 	readonly List<BlockValueSlot> errorSlots = new List<BlockValueSlot>();
 	readonly List<RectTransform> errorFrames = new List<RectTransform>();
+	// 컴파일 오류로 칠한 변수 칸(블록 UI, 칸 번호)과 값 칸에 끼운 블록 (#504). 다음에 고치면 errorSlots와 함께 되돌린다
+	readonly List<(BlockView view, int index)> errorVariableSlots = new List<(BlockView, int)>();
+	readonly List<BlockView> errorHeldViews = new List<BlockView>();
 	readonly List<GameObject> errorItems = new List<GameObject>();
 	// 오류 창에 지금 보이는 오류들의 글자·자리를 이은 것. 같으면 다시 만들지 않는다 (고칠 때마다 Redraw가 오류 창을 다시 그리기 때문)
 	string shownErrorsKey;
@@ -586,7 +589,7 @@ public class BlockEditor : MonoBehaviour
 			if (saved) ReloadSavedFunctions();
 			SetMessage(saved ? "저장됨"
 				: result == PlayerDataRequestResult.CountExceeded ? CountShortageMessage(FindCountShortage(savedFunctions, globals))
-				: "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
+				: "전역 변수 저장 실패", !saved);
 			Redraw();
 			return;
 		}
@@ -631,7 +634,7 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
 		StashCurrent();
@@ -663,7 +666,7 @@ public class BlockEditor : MonoBehaviour
 		}
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
 		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
@@ -847,7 +850,7 @@ public class BlockEditor : MonoBehaviour
 			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
 			ReloadSavedFunctions();
 		}
-		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인. 콘솔 참고)", !ok);
+		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수 저장 실패", !ok);
 		Redraw();
 	}
 
@@ -965,12 +968,12 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
 		if (IsSlotFunction(page)) return; // 슬롯 함수는 지울 수 없다 (×도 보이지 않음)
 
-		// 저장할 때와 같은 규칙: 이 함수를 뺀 저장된 함수들로 다시 컴파일해 새 오류(지운 함수를 부르고 있어요)가 생기는 함수를 찾는다
+		// 저장할 때와 같은 규칙: 이 함수를 뺀 저장된 함수들로 다시 컴파일해 새 오류(선언하지 않은 함수)가 생기는 함수를 찾는다
 		// 예: 슬롯 Q가 foo를 부르면 foo를 지우는 순간 슬롯 Q 전체가 시전되지 않으므로 막는다
 		List<(FunctionData function, List<FunctionChecker.Error> errors)> broken = FunctionChecker.FindNewlyBroken(
 			savedFunctions, CurrentGlobals(), savedFunctions.Where(f => f.Guid != page.Guid), CurrentGlobals());
@@ -1051,8 +1054,11 @@ public class BlockEditor : MonoBehaviour
 		{
 			errors = new List<FunctionChecker.Error>();
 			NetworkIdentity localPlayer = NetworkClient.localPlayer;
-			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
-			if (!ok) errors.Add(new FunctionChecker.Error { Code = "", Message = "int x = 3; 같은 선언 블록과 int arr[5]; 같은 배열 만들기 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
+			string error = null;
+			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals, out error);
+			// 실행기가 찾은 첫 번째 이유를 그대로 보인다 (#504). 예: 같은 scope에서 재정의할 수 없음: x
+			// 이유가 없으면 내 캐릭터의 실행기를 찾지 못한 것이다 (접속 전 등)
+			if (!ok) errors.Add(new FunctionChecker.Error { Code = "", Message = error ?? "함수 실행기를 찾을 수 없음" });
 			globalsErrors = errors.Count > 0 ? errors : null;
 		}
 		else
@@ -1092,17 +1098,15 @@ public class BlockEditor : MonoBehaviour
 		successRoutine = null;
 	}
 
-	// 오류가 난 자리를 화면에 표시: 오류가 난 블록에 빨간 테두리와 !, 비어 있는 값 칸은 빨강
+	// 오류가 난 자리를 화면에 표시: 오류가 난 블록에 빨간 테두리와 !, 오류가 난 칸(FunctionChecker.Error.Slots)은 빨강
+	// 칸은 FunctionChecker가 찾은 그대로 칠한다 (#504). 변수 칸과 선언하지 않은 식별자를 적은 칸도 칠해, 블록의 어느 칸이 틀렸는지 보이게
 	void MarkErrors(List<FunctionChecker.Error> errors)
 	{
 		ClearErrorMarks();
 		if (editingGlobals) return;
-		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
-		{
-			if (!slot.IsMissingValue && !slot.HasWrongValue) continue;
-			slot.SetError(true);
-			errorSlots.Add(slot);
-		}
+		foreach (FunctionChecker.Error error in errors)
+			foreach ((BlockData owner, int index) in error.Slots)
+				SetSlotError(owner, index, true, true);
 		if (errorFramePrefab == null) return;
 		foreach (FunctionChecker.Error error in errors)
 		{
@@ -1135,9 +1139,43 @@ public class BlockEditor : MonoBehaviour
 	void ClearErrorMarks()
 	{
 		foreach (BlockValueSlot slot in errorSlots) if (slot != null) slot.SetError(false);
+		foreach ((BlockView view, int index) in errorVariableSlots) if (view != null) view.SetVariableSlotError(index, false);
+		foreach (BlockView view in errorHeldViews) if (view != null) view.SetError(false);
 		foreach (RectTransform frame in errorFrames) if (frame != null) Destroy(frame.gameObject);
 		errorSlots.Clear();
+		errorVariableSlots.Clear();
+		errorHeldViews.Clear();
 		errorFrames.Clear();
+	}
+
+	// owner 블록의 index번 칸 UI를 오류 색으로 칠하거나 되돌린다 (#504)
+	// 값 칸은 BlockValueSlot이, 변수 칸(대입의 왼쪽, array 이름)은 BlockView가 칠한다. 값 칸에 블록을 끼웠으면 칸이 블록에 가려 보이지 않으므로 끼운 블록을 칠한다
+	// remember이면 다음에 고칠 때(ClearErrorMarks) 되돌릴 수 있게 기억한다
+	void SetSlotError(BlockData owner, int index, bool on, bool remember)
+	{
+		BlockView view = ViewOf(owner);
+		if (view == null) return;
+		BlockValueSlot valueSlot = view.GetComponentsInChildren<BlockValueSlot>(true).FirstOrDefault(s => s.OwnerData == owner && s.Index == index);
+		if (valueSlot != null && valueSlot.Held != null)
+		{
+			valueSlot.Held.SetError(on);
+			if (remember && on) errorHeldViews.Add(valueSlot.Held);
+		}
+		else if (valueSlot != null)
+		{
+			valueSlot.SetError(on);
+			if (remember && on) errorSlots.Add(valueSlot);
+		}
+		else if (view.SetVariableSlotError(index, on) && remember && on)
+			errorVariableSlots.Add((view, index));
+	}
+
+	// 컴파일 오류로 칠해 둔 칸들을 다시 칠한다. 칸을 깜빡인 뒤 원래 표시로 돌려놓을 때 쓴다
+	void ReapplyErrorMarks()
+	{
+		foreach (BlockValueSlot slot in errorSlots) if (slot != null) slot.SetError(true);
+		foreach ((BlockView view, int index) in errorVariableSlots) if (view != null) view.SetVariableSlotError(index, true);
+		foreach (BlockView view in errorHeldViews) if (view != null) view.SetError(true);
 	}
 
 	// 모든 함수(작업본 포함)의 오류. 키는 함수 GUID, 전역 변수는 GlobalsKey. 오류가 없는 함수는 들어 있지 않다.
@@ -1180,9 +1218,11 @@ public class BlockEditor : MonoBehaviour
 			{
 				string code = CodeOf(error);
 				// 저장·지우기 거부로 이미 맨 위에 보인 오류는 다시 적지 않는다
-				if (shown.Any(s => s.Location == location && s.Code == code && s.Message == error.Message)) continue;
+				// 같은 함수 안의 같은 문장은 거르지 않는다. 빈 칸이 둘인 블록은 「expression이 비어 있음」이 두 줄이어야 하기 때문 (#504)
+				if (brokenErrors != null && brokenErrors.Any(s => s.Location == location && s.Code == code && s.Message == error.Message)) continue;
 				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
-					BlockIndex = function != null ? IndexOfBlock(function, error.Block) : -1 });
+					BlockIndex = function != null ? IndexOfBlock(function, error.Block) : -1,
+					Slots = function != null ? SlotIndexesOf(function, error) : null });
 			}
 		}
 		ShowErrors(shown);
@@ -1202,6 +1242,10 @@ public class BlockEditor : MonoBehaviour
 	static IEnumerable<BlockData> AllBlocksOf(FunctionData function) =>
 		function.Blocks == null ? Enumerable.Empty<BlockData>() : function.Blocks.SelectMany(b => b.SelfAndInnerBlocks());
 
+	// 오류가 난 칸들을 (블록 순번, 칸 번호)로. 블록 순번은 IndexOfBlock과 같아, 함수를 다시 열어도 같은 칸을 찾는다 (#504)
+	static List<(int Block, int Slot)> SlotIndexesOf(FunctionData function, FunctionChecker.Error error) =>
+		error.Slots.Select(s => (IndexOfBlock(function, s.Owner), s.Index)).Where(s => s.Item1 >= 0).ToList();
+
 	static int IndexOfBlock(FunctionData function, BlockData block)
 	{
 		if (block == null) return -1;
@@ -1215,8 +1259,9 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	// 오류 카드의 「> 이름」: 그 함수(또는 Global Variables)가 열려 있지 않으면 함수 목록 줄을 누른 것처럼 먼저 연다 (작업본은 그대로 남음).
-	// 그다음 오류가 난 블록이 있으면 깜빡인다 (blockIndex가 -1이면 열기만)
-	void ShowErrorBlock(string guid, int blockIndex)
+	// 그다음 오류가 난 칸이 있으면 그 칸만, 칸이 없는 오류면 블록을 깜빡인다 (blockIndex가 -1이면 열기만)
+	// 칸만 깜빡이는 이유: 블록 전체를 깜빡이면 블록의 어느 칸이 틀렸는지 알 수 없기 때문 (#504)
+	void ShowErrorBlock(string guid, int blockIndex, List<(int Block, int Slot)> slots)
 	{
 		if (!IsOpen(guid))
 		{
@@ -1224,9 +1269,33 @@ public class BlockEditor : MonoBehaviour
 			open();
 			if (!IsOpen(guid)) return; // 저장하는 중이라 열지 못함
 		}
-		if (blockIndex < 0 || editingGlobals) return;
-		BlockData block = AllBlocksOf(Function).ElementAtOrDefault(blockIndex);
+		if (editingGlobals) return;
+		List<BlockData> blocks = AllBlocksOf(Function).ToList();
+		if (slots != null && slots.Count > 0)
+		{
+			var targets = slots.Select(s => (owner: blocks.ElementAtOrDefault(s.Block), index: s.Slot)).Where(s => s.owner != null).ToList();
+			if (targets.Count > 0)
+			{
+				StartCoroutine(BlinkSlots(targets));
+				return;
+			}
+		}
+		if (blockIndex < 0) return;
+		BlockData block = blocks.ElementAtOrDefault(blockIndex);
 		if (block != null) ShowBlock(block);
+	}
+
+	// 오류가 난 칸을 세 번 깜빡인다: 오류 색을 켰다 껐다 한 뒤, 컴파일 표시로 칠해 두었던 칸은 다시 칠한다
+	System.Collections.IEnumerator BlinkSlots(List<(BlockData owner, int index)> slots)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			foreach ((BlockData owner, int index) in slots) SetSlotError(owner, index, true, false);
+			yield return new WaitForSeconds(0.15f);
+			foreach ((BlockData owner, int index) in slots) SetSlotError(owner, index, false, false);
+			yield return new WaitForSeconds(0.15f);
+		}
+		ReapplyErrorMarks();
 	}
 
 	// guid의 함수(GlobalsKey면 Global Variables)를 지금 편집 영역에 열어 두었으면 true
@@ -1605,19 +1674,24 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	// 오류 창의 오류 하나: 설명, 코드, 「> 이름」 세 줄. Guid·BlockIndex는 「> 이름」을 누를 때 열 함수와 깜빡일 블록 (BlockIndex가 -1이면 함수만 연다)
+	// Slots는 깜빡일 칸 (블록 순번, 칸 번호). 있으면 블록 대신 그 칸들만 깜빡인다 (#504)
 	struct ShownError
 	{
-		public string Message;  // 설명 (예: 비어 있는 값 칸 1개)
+		public string Message;  // 설명 (예: expression이 비어 있음)
 		public string Code;     // 오류가 난 블록의 글자 (예: if ( )). 블록이 없으면 빈 글자
 		public string Location; // 함수 이름 (예: temp, 슬롯 Q, Global Variables)
 		public string Guid;
 		public int BlockIndex;
+		public List<(int Block, int Slot)> Slots;
 	}
+
+	static string SlotsKey(List<(int Block, int Slot)> slots) =>
+		slots == null ? "" : string.Join(",", slots.Select(s => $"{s.Block}.{s.Slot}"));
 
 	void ShowErrors(List<ShownError> errors)
 	{
 		// 고칠 때마다 불리므로, 보이는 내용이 같으면 다시 만들지 않는다
-		string key = string.Join("\n", errors.Select(e => $"{e.Message}\t{e.Code}\t{e.Location}\t{e.Guid}\t{e.BlockIndex}"));
+		string key = string.Join("\n", errors.Select(e => $"{e.Message}\t{e.Code}\t{e.Location}\t{e.Guid}\t{e.BlockIndex}\t{SlotsKey(e.Slots)}"));
 		if (key == shownErrorsKey) return;
 		shownErrorsKey = key;
 
@@ -1638,7 +1712,8 @@ public class BlockEditor : MonoBehaviour
 				ErrorItemView item = Instantiate(errorItemPrefab, errorList);
 				string guid = error.Guid;
 				int index = error.BlockIndex;
-				item.Show(error.Message, error.Code, error.Location, guid != null ? () => ShowErrorBlock(guid, index) : null);
+				List<(int Block, int Slot)> slots = error.Slots;
+				item.Show(error.Message, error.Code, error.Location, guid != null ? () => ShowErrorBlock(guid, index, slots) : null);
 				errorItems.Add(item.gameObject);
 			}
 		}
@@ -1706,6 +1781,12 @@ public class BlockEditor : MonoBehaviour
 	/// </summary>
 	public bool Fits(BlockData owner, int index, SlotData content) =>
 		SlotRules.Fits(RuleOf(owner, index), content, FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
+	/// owner 블록의 index번 값 칸에 맞지 않는 content를 넣었을 때 컴파일 오류 창에 나올 문장 (#504). 값 칸이 상태 줄에 같은 문장을 띄울 때 부른다.
+	/// </summary>
+	public string WrongValueMessage(BlockData owner, int index, SlotData content) =>
+		FunctionChecker.WrongValueMessage(owner, content, RuleOf(owner, index), FindUserFunction, VariableTypeLookup(owner));
 
 	/// <summary>
 	/// owner 블록의 index번 값 칸에 값 블록 block을 끼울 수 있으면 true.

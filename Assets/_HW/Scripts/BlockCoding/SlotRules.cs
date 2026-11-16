@@ -53,6 +53,9 @@ public static class SlotRules
 		{
 			case BlockKind.Declare when index == 2:
 				return new Rule { Expect = Expect.Typed, Type = owner.Slots[0]?.Type, LiteralOnly = globals };
+			// %의 양쪽은 정수만 받는다. C에서 float의 %는 compile error이기 때문 (#504). 실행기는 TypeMismatch로 멈춘다
+			case BlockKind.Arithmetic when IsModulo(owner):
+				return new Rule { Expect = Expect.Integer };
 			case BlockKind.Arithmetic:
 			case BlockKind.Wait:
 				return new Rule { Expect = Expect.Number };
@@ -143,6 +146,29 @@ public static class SlotRules
 		return type == null || FitsKind(rule, KindOf(type), type);
 	}
 
+	/// <summary>
+	/// 칸 데이터(적은 값, 변수, 끼운 블록)의 타입. 모르면 null. 컴파일 오류 문장에 「넣은 값의 타입」을 보일 때 쓴다 (#504).<br/>
+	/// 연산 블록은 int인지 float인지 실행해야 알 수 있어 null이다.
+	/// </summary>
+	public static VariableType TypeOf(SlotData content, Func<string, FunctionData> findUserFunction, Func<string, VariableType> variableType = null)
+	{
+		if (content == null) return null;
+		if (!string.IsNullOrEmpty(content.VariableName)) return variableType?.Invoke(content.VariableName);
+		if (content.Block == null) return content.Type;
+
+		BlockData block = content.Block;
+		switch (block.Kind)
+		{
+			case BlockKind.Compare:
+			case BlockKind.Logic:
+			case BlockKind.Not: return new VariableType(VariableTypeKind.Bool);
+			case BlockKind.ArrayGet: return VariableTypeOf(block, 0, variableType, true);
+			case BlockKind.Malloc: return VariableType.PointerTo(block.Slots.Count > 0 ? block.Slots[0]?.Type : null);
+			case BlockKind.Function: return ReturnTypeOf(block, findUserFunction);
+			default: return null;
+		}
+	}
+
 	// block의 index번 변수 칸에 적힌 변수의 타입. element면 array의 원소 타입. 모르면 null
 	static VariableType VariableTypeOf(BlockData block, int index, Func<string, VariableType> variableType, bool element)
 	{
@@ -223,7 +249,12 @@ public static class SlotRules
 
 	static bool IsNumeric(Kind kind) => kind is Kind.Int or Kind.Float or Kind.Char or Kind.NumberExpression;
 
-	static bool IsVoid(Rule rule) => rule.Expect == Expect.Typed && rule.Type?.Kind == VariableTypeKind.Void;
+	/// <summary>void 함수의 return 칸이면 true. 아무것도 받지 않는 칸이다</summary>
+	public static bool IsVoid(Rule rule) => rule.Expect == Expect.Typed && rule.Type?.Kind == VariableTypeKind.Void;
+
+	// 연산 블록의 연산자 칸(1번)이 %인지
+	static bool IsModulo(BlockData arithmetic) =>
+		arithmetic.Slots.Count > 1 && arithmetic.Slots[1]?.Option == nameof(ArithmeticOperator.Modulo);
 
 	// 값의 종류(kind, 타입을 알면 type)가 규칙에 맞는지
 	static bool FitsKind(Rule rule, Kind kind, VariableType type)

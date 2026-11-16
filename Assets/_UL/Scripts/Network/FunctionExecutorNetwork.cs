@@ -214,7 +214,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	// 죽은 캐릭터가 시전해 둔 함수가 관전하는 동안 계속 돌지 않도록 모두 끊는다 (이우림 결정 #310).
 	// Died는 판정하는 곳(서버, 호스트, 네트워크를 켜지 않은 테스트)에서만 불리므로 서버의 실행기가 끊는다. 끊긴 작업은 EndReason Interrupted
-	void OnPlayerDied() => executor.InterruptAll();
+	// 원인은 System이다. 플레이어는 사망 화면으로 이미 알고 있으므로 실행 중단 알림을 띄우지 않는다 (#504)
+	void OnPlayerDied() => executor.InterruptAll(InterruptCause.System);
 
 	public override void OnStartClient()
 	{

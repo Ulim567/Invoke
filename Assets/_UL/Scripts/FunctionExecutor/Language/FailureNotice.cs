@@ -6,8 +6,8 @@
 /// - null이 오면 알림을 띄우지 않는다.
 /// </para>
 /// <para>
-/// 알리는 것: 시전 거부의 NotEnoughMemory / 실행 중단(Interrupted) / runtime error로 분류된 실패.<br/>
-/// 알리지 않는 것: 그 밖의 시전 거부, 정상 종료, 취소(Cancelled), 개발자 책임(InternalError), compile error.
+/// 알리는 것: 시전 거부의 NotEnoughMemory / 몬스터 공격으로 끊긴 실행 중단(Interrupted, InterruptCause.MonsterAttack) / runtime error로 분류된 실패.<br/>
+/// 알리지 않는 것: 그 밖의 시전 거부, 사망·장소 이동·재시작으로 끊긴 작업(InterruptCause.System), 정상 종료, 취소(Cancelled), 개발자 책임(InternalError), compile error.
 /// </para>
 /// </summary>
 // compile error를 알리지 않는 이유: compile error는 편집 화면이 저장할 때 잡고, 실행 중에는 runtime error만 나야 한다(이우림 결정 11/1, 11/9)
@@ -17,6 +17,8 @@ public static class FailureNotice
 {
 	const string RejectedLabel = "[Cast Rejected]";
 	const string RuntimeLabel = "[Runtime Error]";
+	// 실행 중단은 플레이어 코드의 에러가 아니므로 [Runtime Error]와 다른 분류로 보인다 (#504)
+	const string InterruptedLabel = "[Interrupted]";
 
 	/// <summary>
 	/// 시전 거부 rejection의 알림 문장. NotEnoughMemory만 알리고, 그 밖의 거부면 null.
@@ -36,7 +38,9 @@ public static class FailureNotice
 		switch (info.EndReason)
 		{
 			case FunctionTaskEndReason.Interrupted:
-				return $"{RuntimeLabel} Interrupted\n실행 중단 공격으로 함수가 멈춤";
+				// 사망·장소 이동·재시작은 플레이어가 화면으로 이미 알고 있으므로 알리지 않는다
+				if (info.InterruptCause != InterruptCause.MonsterAttack) return null;
+				return $"{InterruptedLabel} 실행 중단 공격\n함수가 모두 멈춤";
 			case FunctionTaskEndReason.Failed:
 				if (info.Category != FailureCategory.RuntimeError) return null;
 				return ForRuntimeFailure(info);
@@ -61,8 +65,10 @@ public static class FailureNotice
 		{
 			case FunctionFailure.Overflow: return "stack이 가득 차 프로세스 재시작";
 			case FunctionFailure.DivideByZero: return "0으로 나눔";
-			case FunctionFailure.InvalidPointer: return "free할 수 없는 포인터를 free함";
-			case FunctionFailure.InvalidTarget: return "대상이 없거나 죽음";
+			case FunctionFailure.InvalidPointer: return "free할 수 없는 포인터를 free";
+			case FunctionFailure.DoubleFree: return "이미 free한 포인터를 다시 free";
+			case FunctionFailure.NoTarget: return "스킬에 전달한 대상이 비어 있음";
+			case FunctionFailure.InvalidTarget: return "스킬에 전달한 대상이 죽었거나 사라짐";
 			case FunctionFailure.IndexOutOfRange: return "array 범위 밖 index";
 		}
 		return null;

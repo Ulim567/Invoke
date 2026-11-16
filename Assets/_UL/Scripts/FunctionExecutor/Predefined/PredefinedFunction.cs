@@ -73,12 +73,12 @@ public abstract class PredefinedFunction : FunctionBlock
 	internal sealed override bool CanStartNow(FunctionContext context) => context.Cooldowns.CanUseSkill(Id);
 	internal sealed override void AfterFrameAllocated(FunctionContext context) => context.Cooldowns.SkillStarted(this);
 	/// <summary>
-	/// 시작하기 전에 Target argument가 쓸 수 있는 대상인지 검사하면 true(기본). 검사에 걸리면 InvalidTarget으로 시작하지 않는다.<br/>
+	/// 시작하기 전에 Target argument가 쓸 수 있는 대상인지 검사하면 true(기본). 검사에 걸리면 NoTarget(「대상 없음」) 또는 InvalidTarget(죽음, 없어짐)으로 시작하지 않는다.<br/>
 	/// 대상을 쓰지 않고 상태만 묻는 함수(is_valid_target)만 false로 둔다. 쓸 수 없는 대상을 받아 false를 돌려줘야 하기 때문이다 (#474).
 	/// </summary>
 	protected virtual bool ValidatesTargets => true;
 
-	// 넘겨받은 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면 시작하지 않고 InvalidTarget으로 실패한다. 대상 array는 원소 하나라도 쓸 수 없으면 실패한다
+	// 넘겨받은 대상이 쓸 수 없는 대상이면 시작하지 않고 실패한다. 「대상 없음」은 NoTarget, 죽음·없어짐은 InvalidTarget (#504). 대상 array는 원소 하나라도 쓸 수 없으면 실패한다
 	// 함수 안의 호출(CallBlock)과 슬롯 직접 시전(FunctionExecutor.Cast의 argument)이 모두 여기를 지난다. 스킬마다 검사 코드를 넣지 않기 위함
 	internal sealed override bool TryValidateStart(FunctionContext context)
 	{
@@ -86,29 +86,41 @@ public abstract class PredefinedFunction : FunctionBlock
 
 		foreach (RuntimeValue? argument in Arguments)
 		{
-			if (!argument.HasValue || HasOnlyUsableTargets(argument.Value)) continue;
+			if (!argument.HasValue) continue;
 
-			context.RecordFailure(FunctionFailure.InvalidTarget);
+			FunctionFailure? failure = FindTargetFailure(argument.Value);
+			if (failure == null) continue;
+
+			context.RecordFailure(failure.Value);
 			return false;
 		}
 		return true;
 	}
 
-	// 대상 값이면 그 대상을, 대상 array이면 모든 원소를 검사한다. 대상이 아닌 값은 검사하지 않는다
+	// 대상 값이면 그 대상을, 대상 array이면 모든 원소를 검사해 처음 걸린 원소의 실패 종류를 돌려준다. 모두 쓸 수 있거나 대상이 아닌 값이면 null
 	// array도 단일 대상과 같은 규칙으로 막는 이유: 여러 명을 고르는 스킬(전장 휩쓸기)과 한 명을 고르는 스킬이 죽은 대상에 다르게 반응하지 않게 하기 위함
-	static bool HasOnlyUsableTargets(RuntimeValue value)
+	static FunctionFailure? FindTargetFailure(RuntimeValue value)
 	{
 		switch (value.Type?.Kind)
 		{
 			case VariableTypeKind.Target:
-				return value.IsUsableTarget;
+				return TargetFailureOf(value);
 
 			case VariableTypeKind.Array when value.Type.ElementType?.Kind == VariableTypeKind.Target:
 				foreach (RuntimeValue element in value.AsArray().Elements)
-					if (!element.IsUsableTarget) return false;
-				return true;
+				{
+					FunctionFailure? failure = TargetFailureOf(element);
+					if (failure != null) return failure;
+				}
+				return null;
 		}
-		return true;
+		return null;
+	}
+
+	static FunctionFailure? TargetFailureOf(RuntimeValue target)
+	{
+		if (target.IsUsableTarget) return null;
+		return target.IsNoTarget ? FunctionFailure.NoTarget : FunctionFailure.InvalidTarget;
 	}
 
 	// 끝까지 실행한 직후 한 번 불린다. 반환 값을 확인하고, 통과하면(정상 종료) 이 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮긴다
@@ -287,7 +299,7 @@ public abstract class PredefinedFunction : FunctionBlock
 
 	/// <summary>
 	/// 포인터의 객체를 해제하고 힙 칸을 돌려준다. OnStart, OnTick, OnEnd에서 부른다.<br/>
-	/// 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터)이면 Fail(InvalidPointerError)로 에러를 내고 false를 돌려준다.<br/>
+	/// 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터)이면 Fail(InvalidPointerError 또는 그 하위 클래스)로 에러를 내고 false를 돌려준다.<br/>
 	/// 오브젝트를 없애지는 않는다. 오브젝트는 스킬 코드가 따로 없앤다.
 	/// </summary>
 	protected bool Free(FunctionContext context, int pointer)
@@ -295,20 +307,20 @@ public abstract class PredefinedFunction : FunctionBlock
 		if (IsInCancel(nameof(Free))) return false;
 		if (context.Memory.Heap.Free(pointer)) return true;
 
-		Fail(new InvalidPointerError(pointer));
+		Fail(InvalidPointerError.For(context.Memory.Heap, pointer));
 		return false;
 	}
 
 	/// <summary>
 	/// 포인터의 객체를 T 타입으로 꺼낸다.<br/>
-	/// 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터, 타입이 T가 아닌 객체의 포인터)이면 Fail(InvalidPointerError)로 에러를 내고 false를 돌려준다.
+	/// 쓸 수 없는 포인터(NullPointer, 해제한 포인터, 누수된 포인터, 타입이 T가 아닌 객체의 포인터)이면 Fail(InvalidPointerError 또는 그 하위 클래스)로 에러를 내고 false를 돌려준다.
 	/// </summary>
 	// C에서 null이나 해제한 포인터를 역참조하면 프로그램이 오류를 내는 것처럼, 꺼내지 못하면 바로 스킬 에러로 끝낸다
 	protected bool TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)
 	{
 		if (context.Memory.Heap.TryGet(pointer, out obj)) return true;
 
-		Fail(new InvalidPointerError(pointer));
+		Fail(InvalidPointerError.For(context.Memory.Heap, pointer));
 		return false;
 	}
 

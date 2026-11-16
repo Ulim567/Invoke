@@ -168,6 +168,34 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		ApplyShape(value ? valueSprite : chipSprite, value, false, true);
 		AddText(() => editor.PaletteNameOf(Data));
 		RefreshTexts();
+		// 이름 뒤의 「남은/가진」 개수 (#500, 시안 6). 개수가 없으면(임시 계정) RefreshCount가 숨긴다
+		countLabel = editor.CreateText(row);
+		RefreshCount();
+	}
+
+	// 문법 탭 칩의 「남은/가진」 (#500). 함수 탭 항목(FunctionItemView)과 같은 색 규칙
+	TMP_Text countLabel;
+	bool countDimmed; // 남은 개수가 0 이하라 흐리게 보이는 중 (끌 수 없음)
+
+	/// <summary>
+	/// 문법 탭 칩의 「남은/가진」 개수를 다시 쓴다 (#500). 편집 영역의 블록이면 아무것도 하지 않는다.
+	/// 남은 개수가 0 이하면 칩을 흐리게, 0보다 작으면 남은 개수를 빨갛게 보인다. BlockEditor가 블록을 바꿀 때마다 부른다.
+	/// </summary>
+	public void RefreshCount()
+	{
+		if (templateFactory == null || countLabel == null) return;
+		(int Remaining, int Owned)? count = editor.CountOf(Data);
+		countDimmed = count != null && count.Value.Remaining <= 0;
+		countLabel.gameObject.SetActive(count != null);
+		if (count != null)
+		{
+			(int remaining, int owned) = count.Value;
+			string left = remaining < 0 ? $"<color=#FF9B8A>{remaining}</color>" : remaining.ToString();
+			countLabel.text = $"{left}<size=80%><color={(countDimmed ? "#6E688A" : "#8A84A0")}>/{owned}</color></size>";
+		}
+		// 흐린 칩: 바탕은 분류 색 8%(시안 6), 글자는 반투명
+		foreach (TMP_Text text in row.GetComponentsInChildren<TMP_Text>(true)) text.alpha = countDimmed ? 0.55f : 1f;
+		Fill.color = FillColor();
 	}
 
 	// 값 칸에 끼우는 블록 (알약 모양)
@@ -202,6 +230,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	// 선 없이도 같은 색 블록이 겹친 경계(is_valid_target(get_bug()))가 보이게 하기 위함 (Scratch와 같은 방식)
 	Color FillColor()
 	{
+		if (countDimmed) return Tint(BlockLabels.ColorOf(Data), 0.08f); // 남은 개수가 0인 문법 탭 칩 (#500)
 		float alpha = IsValueBlock(Data) ? valueAlpha : rowAlpha;
 		if (SlotDepth() % 2 == 1) alpha += nestedBoost;
 		return Tint(BlockLabels.ColorOf(Data), alpha);
@@ -649,6 +678,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	{
 		if (templateFactory != null)
 		{
+			// 남은 개수가 0이면 끌지 않고 편집 화면이 안내한다 (#500, 사용자 결정 (가))
+			if (!editor.CanDragNew(Data)) return;
 			// 견본: 새 블록을 만들어서 그걸 끈다. 이후 끌기 이벤트는 새 블록이 받는다
 			editor.BeginNewBlockDrag(templateFactory(), eventData);
 			return;

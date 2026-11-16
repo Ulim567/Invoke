@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Mirror;
 using UnityEngine;
@@ -409,12 +410,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			PlayerDataRequestAnswered?.Invoke(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.InvalidData);
 			return;
 		}
-		CmdSaveFunction(FunctionDataJson.ToJson(function));
+		SendSave(PlayerDataRequest.SaveFunction, new[] { function }, null);
 	}
 
 	/// <summary>
 	/// [소유 클라이언트] 전역 변수 선언을 서버에 저장하라고 요청한다. 결과는 PlayerDataRequestAnswered.<br/>
-	/// 서버는 FunctionExecutor.TrySaveGlobalVariables와 같은 검사를 하고, 통과하면 DB에 쓰고 프로세스를 새로 시작한다(RestartProcess).<br/>
+	/// 컴파일 오류(FunctionExecutor.CanUseGlobalVariables에 걸림)가 있어도 저장한다. 그때는 서버가 모든 함수 슬롯을 컴파일 실패로 본다 (#506, IsSlotCompiled).<br/>
+	/// 저장하면 서버가 프로세스를 새로 시작한다(RestartProcess).<br/>
 	/// 전역 변수 파일의 블록도 개수를 쓰므로, 가진 개수보다 많이 쓰게 되면 CountExceeded (CheckItemCounts, #500).
 	/// </summary>
 	public void RequestSaveGlobals(GlobalVariablesData globals)
@@ -425,14 +427,64 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			PlayerDataRequestAnswered?.Invoke(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.InvalidData);
 			return;
 		}
-		CmdSaveGlobals(FunctionDataJson.ToJson(globals));
+		SendSave(PlayerDataRequest.SaveGlobals, new FunctionData[0], globals);
+	}
+
+	/// <summary>
+	/// [소유 클라이언트] 편집 화면이 고친 함수들과 전역 변수를 한꺼번에 서버에 저장하라고 요청한다 (#506). 결과는 PlayerDataRequestAnswered(SaveAll, 결과).<br/>
+	/// 서버는 모두 저장하거나 하나도 저장하지 않는다. 거부 이유는 RequestSaveFunction, RequestSaveGlobals와 같다. 컴파일 오류가 있어도 저장한다.<br/>
+	/// functions: 고친 함수들 (슬롯 함수, 페이지 함수. 비어도 된다). globals: 고친 전역 변수 선언, 고치지 않았으면 null.<br/>
+	/// 성공이면 결과보다 먼저 ReceivedFunctions, ReceivedGlobals가 바뀌고 PlayerDataReceived가 한 번 불린다.<br/>
+	/// 보낼 내용이 네트워크 메시지 한 개의 크기 한도를 넘으면 보내지 않고 바로 TooLarge로 답한다.
+	/// </summary>
+	public void RequestSaveAll(IReadOnlyList<FunctionData> functions, GlobalVariablesData globals)
+	{
+		if (!CanRequest(PlayerDataRequest.SaveAll)) return;
+		if (functions == null || functions.Contains(null))
+		{
+			PlayerDataRequestAnswered?.Invoke(PlayerDataRequest.SaveAll, PlayerDataRequestResult.InvalidData);
+			return;
+		}
+		SendSave(PlayerDataRequest.SaveAll, functions, globals);
+	}
+
+	// 저장 요청 셋(함수 하나, 전역 변수, 한꺼번에)이 함께 쓰는 보내기. 서버의 검사·저장도 ServerSaveFiles 하나로 모은다
+	// 메시지 크기 한도를 보내기 전에 본다. 한도를 넘는 Command는 Mirror가 보내지 못해 답이 오지 않고, 편집 화면이 「저장하는 중」에 멈추기 때문
+	void SendSave(PlayerDataRequest request, IReadOnlyList<FunctionData> functions, GlobalVariablesData globals)
+	{
+		string[] functionJsons = new string[functions.Count];
+		for (int i = 0; i < functions.Count; i++) functionJsons[i] = FunctionDataJson.ToJson(functions[i]);
+		string globalsJson = globals != null ? FunctionDataJson.ToJson(globals) : null;
+
+		if (!FitsInOneMessage(functionJsons, globalsJson))
+		{
+			PlayerDataRequestAnswered?.Invoke(request, PlayerDataRequestResult.TooLarge);
+			return;
+		}
+		CmdSaveFiles(request, functionJsons, globalsJson);
+	}
+
+	// 문자열 하나는 NetworkWriter.MaxStringLength(약 64KB), 메시지 전체는 MaxContentSize(Base 씬 KCP 설정 약 290KB)를 넘을 수 없다
+	// 메시지 전체는 문자열 크기의 합에 글자 수 칸(문자열마다 2바이트)과 Command의 다른 칸을 넉넉히 더해 본다
+	static bool FitsInOneMessage(string[] functionJsons, string globalsJson)
+	{
+		const int MessageOverhead = 256;
+		int total = MessageOverhead;
+		foreach (string json in functionJsons.Append(globalsJson))
+		{
+			if (json == null) continue;
+			int bytes = Encoding.UTF8.GetByteCount(json);
+			if (bytes > NetworkWriter.MaxStringLength) return false;
+			total += bytes + 2;
+		}
+		return Transport.active == null || total <= NetworkMessages.MaxContentSize(Channels.Reliable);
 	}
 
 	/// <summary>
 	/// [소유 클라이언트] 페이지 함수 하나를 서버 DB에서 지우라고 요청한다 (#494). 결과는 PlayerDataRequestAnswered(DeleteFunction, 결과).<br/>
 	/// 성공이면 Saved이고, 그보다 먼저 ReceivedFunctions에서 그 함수가 빠지고 PlayerDataReceived가 불린다.<br/>
 	/// 슬롯 함수(ReceivedSlots의 GUID)는 지울 수 없어 SlotFunctionLocked, 없는 함수는 UnknownFunction.<br/>
-	/// 다른 함수가 이 함수를 부르는지는 서버가 보지 않는다. 편집 화면이 지우기 전에 막는다 (FunctionChecker.FindNewlyBroken).
+	/// 다른 함수가 이 함수를 불러도 지운다. 지운 뒤 서버가 슬롯을 다시 컴파일하므로, 이 함수를 부르던 슬롯은 컴파일에 실패한다 (#506, IsSlotCompiled).
 	/// </summary>
 	public void RequestDeleteFunction(string functionGuid)
 	{
@@ -454,60 +506,90 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	}
 
 	[Command]
-	void CmdSaveFunction(string json)
+	void CmdSaveFiles(PlayerDataRequest request, string[] functionJsons, string globalsJson) => ServerSaveFiles(request, functionJsons, globalsJson);
+
+	// [서버] 저장 요청 셋(함수 하나, 전역 변수, 한꺼번에)을 모두 여기서 검사하고 저장한다 (#506)
+	// 모두 검사한 뒤에 한 트랜잭션으로 쓴다. 하나라도 걸리면 아무것도 쓰지 않는다. 일부만 저장되면 편집 화면의 「저장됨」과 서버의 내용이 어긋나기 때문
+	// 컴파일 오류는 보지 않는다. 저장은 항상 되고, 컴파일 결과는 ApplyPlayerData가 슬롯마다 정한다 (사용자 결정 11/16)
+	// 나중에 보안 검사(받은 데이터의 모양)를 넣을 곳이다
+	void ServerSaveFiles(PlayerDataRequest request, string[] functionJsons, string globalsJson)
 	{
-		if (!usesServerData) { TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.NotAllowed); return; }
-		if (!FunctionDataJson.TryFromJson(json, out FunctionData function) || function == null || string.IsNullOrEmpty(function.Guid))
+		if (!usesServerData) { TargetAnswer(request, PlayerDataRequestResult.NotAllowed); return; }
+		functionJsons ??= new string[0];
+
+		// 읽을 수 없거나, GUID가 없거나, 같은 GUID가 두 번 오면 데이터 오류
+		var functions = new List<FunctionData>();
+		var guids = new HashSet<string>();
+		foreach (string json in functionJsons)
 		{
-			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.InvalidData);
+			if (!FunctionDataJson.TryFromJson(json, out FunctionData function) || function == null
+				|| string.IsNullOrEmpty(function.Guid) || !guids.Add(function.Guid))
+			{
+				TargetAnswer(request, PlayerDataRequestResult.InvalidData);
+				return;
+			}
+			functions.Add(function);
+		}
+		GlobalVariablesData globals = null;
+		if (globalsJson != null && (!FunctionDataJson.TryGlobalVariablesFromJson(globalsJson, out globals) || globals == null))
+		{
+			TargetAnswer(request, PlayerDataRequestResult.InvalidData);
 			return;
 		}
 
-		// 슬롯 함수는 function body만 바꿀 수 있다. 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 다르면 거부한다
-		int slot = Array.FindIndex(serverSlots, e => e.Kind == SlotLoadout.EntryKind.UserFunction && e.Id == function.Guid);
-		if (slot >= 0 && !KeepsSlotFrame(function, slot))
+		PlayerDataRequestResult result = CheckSave(functions, globals);
+		if (result != PlayerDataRequestResult.Saved)
 		{
-			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.SlotFunctionLocked);
+			TargetAnswer(request, result);
 			return;
 		}
+#if UNITY_SERVER || UNITY_EDITOR
+		// 새 GUID는 페이지 함수다. 슬롯 함수 8개는 캐릭터를 만들 때 서버가 만들고, 그 GUID는 바뀌지 않기 때문
+		int newPages = functions.Count(f => !store.HasFunction(characterKey, f.Guid));
+		if (newPages > 0 && store.CountPageFunctions(characterKey) + newPages > ProgressRules.MaxPageFunctions)
+		{
+			TargetAnswer(request, PlayerDataRequestResult.TooManyFunctions);
+			return;
+		}
+		var rows = new List<(string Guid, string Json)>();
+		for (int i = 0; i < functions.Count; i++) rows.Add((functions[i].Guid, functionJsons[i]));
+		store.SaveFiles(characterKey, rows, globalsJson);
+#endif
+		serverFunctions = WithFunctions(serverFunctions, functions);
+		if (globals != null) serverGlobals = globals;
+		// 바뀐 함수를 쓰는 슬롯 원본을 다시 만들고 슬롯을 다시 컴파일한다. 전역 변수를 저장했으면 프로세스를 새로 시작한다(TrySaveGlobalVariables와 같음)
+		ApplyPlayerData(serverSlots, serverFunctions, globals);
 
-		int index = serverFunctions.FindIndex(f => f.Guid == function.Guid);
+		TargetFilesSaved(functionJsons, globalsJson);
+		TargetAnswer(request, PlayerDataRequestResult.Saved);
+	}
 
-		// 해금하지 않은 블록·스킬과 코드 영역 한도를 검사한다. 해금 목록은 서버의 PlayerProgress가 원본이다
-		// 해금 목록을 읽을 수 없으면 검사할 수 없으므로 통과시키지 않는다
+	// [서버] 고친 함수들(functions)과 전역 변수(globals, 고치지 않았으면 null)를 저장해도 되는지 본다. 통과하면 Saved
+	// 슬롯 함수의 틀, 해금하지 않은 블록·스킬, 슬롯의 코드 영역 크기, 가진 개수를 본다
+	PlayerDataRequestResult CheckSave(List<FunctionData> functions, GlobalVariablesData globals)
+	{
+		// 해금 목록과 가진 개수는 서버의 PlayerProgress가 원본이다. 읽을 수 없으면 검사할 수 없으므로 통과시키지 않는다
+		if (progress == null) return PlayerDataRequestResult.NotAllowed;
+
 		var slotGuids = new List<string>();
 		foreach (SlotLoadout.Entry entry in serverSlots)
 		{
 			if (entry.Kind == SlotLoadout.EntryKind.UserFunction) slotGuids.Add(entry.Id);
 		}
-		PlayerDataRequestResult contentResult = progress != null
-			? CheckFunctionContent(function, serverFunctions, slotGuids, new HashSet<string>(progress.Unlocked))
-			: PlayerDataRequestResult.NotAllowed;
-		// 블록·함수 개수 (#500): 저장한 뒤의 함수 목록으로 센 개수가 가진 개수를 넘으면 거부한다
-		if (contentResult == PlayerDataRequestResult.Saved)
-			contentResult = CheckItemCounts(slotGuids, serverFunctions, WithFunction(serverFunctions, function), serverGlobals, serverGlobals, progress.ItemCounts);
-		if (contentResult != PlayerDataRequestResult.Saved)
+		List<FunctionData> after = WithFunctions(serverFunctions, functions);
+		var unlocked = new HashSet<string>(progress.Unlocked);
+		foreach (FunctionData function in functions)
 		{
-			TargetAnswer(PlayerDataRequest.SaveFunction, contentResult);
-			return;
-		}
-#if UNITY_SERVER || UNITY_EDITOR
-		// 새 GUID는 페이지 함수다. 슬롯 함수 8개는 캐릭터를 만들 때 서버가 만들고, 그 GUID는 바뀌지 않기 때문
-		bool isNew = !store.HasFunction(characterKey, function.Guid);
-		if (isNew && store.CountPageFunctions(characterKey) >= ProgressRules.MaxPageFunctions)
-		{
-			TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.TooManyFunctions);
-			return;
-		}
-		store.SaveFunction(characterKey, function.Guid, json);
-#endif
-		if (index < 0) serverFunctions.Add(function);
-		else serverFunctions[index] = function;
-		// 바뀐 함수를 쓰는 슬롯 원본을 다시 만든다. 전역 변수는 그대로 둔다(null)
-		ApplyPlayerData(serverSlots, serverFunctions, null);
+			// 슬롯 함수는 function body만 바꿀 수 있다. 이름(slot1~slot8)·파라미터(없음)·반환 타입(Void)·비동기 여부(아님) 중 하나라도 다르면 거부한다
+			int slot = Array.FindIndex(serverSlots, e => e.Kind == SlotLoadout.EntryKind.UserFunction && e.Id == function.Guid);
+			if (slot >= 0 && !KeepsSlotFrame(function, slot)) return PlayerDataRequestResult.SlotFunctionLocked;
 
-		TargetFunctionSaved(json);
-		TargetAnswer(PlayerDataRequest.SaveFunction, PlayerDataRequestResult.Saved);
+			// 코드 영역 크기는 저장한 뒤의 함수 목록으로 센다. 함께 저장하는 다른 함수의 새 내용도 넣기 위함
+			PlayerDataRequestResult content = CheckFunctionContent(function, after, slotGuids, unlocked);
+			if (content != PlayerDataRequestResult.Saved) return content;
+		}
+		// 블록·함수 개수 (#500): 저장한 뒤의 함수와 전역 변수로 센 개수가 가진 개수를 넘으면 거부한다
+		return CheckItemCounts(slotGuids, serverFunctions, after, serverGlobals, globals ?? serverGlobals, progress.ItemCounts);
 	}
 
 	// 슬롯 함수의 틀(이름·파라미터·반환 타입·비동기 여부)이 서버가 만든 그대로인지 본다.
@@ -574,53 +656,16 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		return ItemCountRules.FindShortage(before, after, owned) == null ? PlayerDataRequestResult.Saved : PlayerDataRequestResult.CountExceeded;
 	}
 
-	// functions에서 같은 GUID의 함수를 function으로 바꾼(없으면 더한) 새 목록. functions는 바꾸지 않는다
-	static List<FunctionData> WithFunction(IEnumerable<FunctionData> functions, FunctionData function)
+	// functions에서 changed와 GUID가 같은 함수를 changed의 것으로 바꾸고, 없는 것은 끝에 더한 새 목록. functions는 바꾸지 않는다
+	static List<FunctionData> WithFunctions(IEnumerable<FunctionData> functions, IReadOnlyList<FunctionData> changed)
 	{
+		var byGuid = new Dictionary<string, FunctionData>();
+		foreach (FunctionData f in changed) byGuid[f.Guid] = f;
 		var result = new List<FunctionData>();
-		foreach (FunctionData f in functions) result.Add(f.Guid == function.Guid ? function : f);
-		if (!result.Contains(function)) result.Add(function);
+		foreach (FunctionData f in functions) result.Add(byGuid.TryGetValue(f.Guid, out FunctionData c) ? c : f);
+		foreach (FunctionData f in changed)
+			if (!result.Contains(f)) result.Add(f);
 		return result;
-	}
-
-	[Command]
-	void CmdSaveGlobals(string json)
-	{
-		if (!usesServerData) { TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.NotAllowed); return; }
-		if (!FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) || globals == null)
-		{
-			TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.InvalidData);
-			return;
-		}
-		if (!executor.CanUseGlobalVariables(globals))
-		{
-			TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.GlobalsRejected);
-			return;
-		}
-		// 전역 변수 파일의 블록도 개수를 쓴다 (#500). 개수를 읽을 수 없으면 검사할 수 없으므로 통과시키지 않는다
-		var slotGuids = new List<string>();
-		foreach (SlotLoadout.Entry entry in serverSlots)
-		{
-			if (entry.Kind == SlotLoadout.EntryKind.UserFunction) slotGuids.Add(entry.Id);
-		}
-		PlayerDataRequestResult countResult = progress != null
-			? CheckItemCounts(slotGuids, serverFunctions, serverFunctions, serverGlobals, globals, progress.ItemCounts)
-			: PlayerDataRequestResult.NotAllowed;
-		if (countResult != PlayerDataRequestResult.Saved)
-		{
-			TargetAnswer(PlayerDataRequest.SaveGlobals, countResult);
-			return;
-		}
-
-#if UNITY_SERVER || UNITY_EDITOR
-		store.SaveGlobals(characterKey, json);
-#endif
-		serverGlobals = globals;
-		// 전역 변수를 저장하면 프로세스를 새로 시작한다(TrySaveGlobalVariables와 같음)
-		ApplyPlayerData(serverSlots, serverFunctions, serverGlobals);
-
-		TargetGlobalsSaved(json);
-		TargetAnswer(PlayerDataRequest.SaveGlobals, PlayerDataRequestResult.Saved);
 	}
 
 	[Command]
@@ -660,24 +705,22 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		PlayerDataRequestAnswered?.Invoke(request, result);
 	}
 
-	// [소유 클라이언트] 저장이 성공한 값으로 ReceivedXxx를 바꾼다. 결과(TargetAnswer)보다 먼저 온다
+	// [소유 클라이언트] 저장이 성공한 값으로 ReceivedFunctions, ReceivedGlobals를 바꾸고 PlayerDataReceived를 한 번 부른다. 결과(TargetAnswer)보다 먼저 온다
+	// globalsJson이 null이면 전역 변수는 저장하지 않은 것이다
 	[TargetRpc]
-	void TargetFunctionSaved(string json)
+	void TargetFilesSaved(string[] functionJsons, string globalsJson)
 	{
-		if (!FunctionDataJson.TryFromJson(json, out FunctionData function)) return;
 		var functions = ReceivedFunctions != null ? new List<FunctionData>(ReceivedFunctions) : new List<FunctionData>();
-		int index = functions.FindIndex(f => f.Guid == function.Guid);
-		if (index < 0) functions.Add(function);
-		else functions[index] = function;
+		foreach (string json in functionJsons)
+		{
+			if (!FunctionDataJson.TryFromJson(json, out FunctionData function)) continue;
+			int index = functions.FindIndex(f => f.Guid == function.Guid);
+			if (index < 0) functions.Add(function);
+			else functions[index] = function;
+		}
 		ReceivedFunctions = functions;
-		PlayerDataReceived?.Invoke();
-	}
-
-	[TargetRpc]
-	void TargetGlobalsSaved(string json)
-	{
-		if (!FunctionDataJson.TryGlobalVariablesFromJson(json, out GlobalVariablesData globals) || globals == null) return;
-		ReceivedGlobals = globals;
+		if (globalsJson != null && FunctionDataJson.TryGlobalVariablesFromJson(globalsJson, out GlobalVariablesData globals) && globals != null)
+			ReceivedGlobals = globals;
 		PlayerDataReceived?.Invoke();
 	}
 

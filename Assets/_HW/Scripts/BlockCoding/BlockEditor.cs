@@ -352,7 +352,7 @@ public class BlockEditor : MonoBehaviour
 	List<FunctionChecker.Error> globalsErrors;
 	// 함수 목록 줄을 눌렀을 때 하는 일 (함수 GUID → 열기). 오류 창의 「블록 보기」가 다른 함수의 오류일 때 그 함수를 먼저 열 때 쓴다
 	readonly Dictionary<string, Action> openActions = new Dictionary<string, Action>();
-	GlobalVariablesData listGlobals; // 함수 목록의 오류 검사에 쓰는 전역 변수
+	GlobalVariablesData listGlobals; // 저장된 전역 변수. 작업본이 없을 때 WorkingGlobals가 쓴다
 	Coroutine successRoutine;
 	readonly List<GameObject> savedButtons = new List<GameObject>();
 	// 함수 목록의 줄. 컴파일 오류(빨간 밑줄)는 작업본에 따라 바뀌므로 줄에 두지 않고 Redraw가 계산한다 (#494)
@@ -724,7 +724,7 @@ public class BlockEditor : MonoBehaviour
 	// fromDraft: 저장하지 않은 작업본을 다시 여는지. 그러면 연 뒤에도 「저장하지 않은 변경 있음」으로 둔다
 	void OpenFunction(FunctionData function, bool fromDraft)
 	{
-		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수의 작업본이 있어도 저장된 것을 본다 (#474)
+		// 저장된 전역 변수. 변수 고르기와 칸 규칙은 작업본이 있으면 작업본을 본다 (VisibleVariables, #506)
 		listGlobals = CurrentGlobals();
 		workspace.ClearViews();
 		editingGlobals = false;
@@ -1713,7 +1713,8 @@ public class BlockEditor : MonoBehaviour
 	{
 		Dictionary<string, VariableType> found;
 		if (editingGlobals) found = VariableScopes.VisibleAt(globals?.Declarations, new VariableScopes.Stack(), owner);
-		else found = VariableScopes.VisibleAt(Function?.Blocks, VariableScopes.Start(Function, listGlobals), owner);
+		// 전역 변수는 저장하지 않은 작업본까지 본다 (#506). 저장 버튼이 모든 파일을 함께 저장하므로, Global Variables에 더한 변수를 저장하기 전에도 고를 수 있게
+		else found = VariableScopes.VisibleAt(Function?.Blocks, VariableScopes.Start(Function, WorkingGlobals()), owner);
 		return found ?? new Dictionary<string, VariableType>();
 	}
 
@@ -1746,7 +1747,8 @@ public class BlockEditor : MonoBehaviour
 		if (!block.IsUserFunction) return BlockLabels.FunctionName(block);
 		if (Function != null && Function.Guid == block.FunctionId) return Function.Name;
 		FunctionData found = savedFunctions.FirstOrDefault(f => f.Guid == block.FunctionId);
-		return found != null ? found.Name : "없는_함수";
+		// 지운 함수: 플레이어가 지을 수 없는 이름(@는 함수 이름 규칙 BlockSlotText.IsFunctionName에 없음)으로 보여, 진짜 함수와 헷갈리지 않게 한다 (#506)
+		return found != null ? found.Name : "@unknown";
 	}
 
 	/// <summary>

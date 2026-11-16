@@ -130,6 +130,25 @@
   - 슬롯에서 닿지 않는 함수(어느 슬롯 함수도 부르지 않는 페이지 함수)는 크기에 들어가지 않으므로 그 함수가 커도 거부하지 않음. 슬롯 함수가 그 함수를 부르게 저장하는 순간 검사됨
   - 캐릭터별 한도, 한도의 최종 위치: 메모리 작업 때 결정
 
+### 개수 세기 규칙 (#500)
+- 하는 일: 블록·함수의 항목마다 쓴 개수를 셈. 가진 개수와 비교하지 않음
+- 시작점: 슬롯 함수 8개. 슬롯에서 닿지 않는 페이지 함수는 세지 않음
+- 블록 1개: 그 항목 1개
+- 내가 만든 함수 호출: 부를 때마다 그 함수 안의 블록을 그 자리에서 다시 셈. 호출 블록 자체는 세지 않음
+  - 예: `aim()` 안에 `thrust` 1개, 슬롯 함수가 `aim()`을 2번 부름 → `thrust` 2개
+- 재귀 호출: 지금 세고 있는 함수를 다시 만나면 그 함수 안은 다시 세지 않음
+- 반복 횟수: 곱하지 않음
+- 전역 변수 파일의 블록: 한 번씩 셈
+- 없는 함수 호출(지운 함수의 GUID): 건너뜀
+- 코드 영역 크기와 다른 점: 코드 영역 크기는 같은 함수를 몇 번 부르든 한 번만 셈. 개수는 부를 때마다 다시 셈
+
+| 항목 ID | 블록 |
+| --- | --- |
+| 고정 ID (예: `c.thrust`, `input.get_bug`) | 사전 정의 함수 호출 |
+| `If`, `ElseIf`, `Else` | 조건문. `BlockKind.Conditional` 하나를 갈래(`ConditionalBranch`)마다 나눔 |
+| `BlockKind` 이름 (예: `Declare`, `For`, `Wait`, `Malloc`) | 나머지 블록 |
+| 없음 | 내가 만든 함수 호출 |
+
 ### 저장 형식
 - 형식: JSON 글자열 (Newtonsoft Json)
   - `TypeNameHandling` 사용 안 함: 조작된 데이터가 엉뚱한 클래스를 만들지 못하게
@@ -147,7 +166,8 @@
   - `Json/`: `FunctionDataJson`
   - `Storage/`: `GlobalVariablesStorage` (#139)
   - `CodeSize/`: `CodeSizeCalculator`
-  - `Test/`: `FunctionDataTest` (씬의 아무 오브젝트에 붙이고 Play, 콘솔 로그로 결과 확인)
+  - `Usage/`: `BlockUsageCounter` (#500)
+  - `Test/`: `FunctionDataTest`, `BlockUsageCounterTest` (씬의 아무 오브젝트에 붙이고 Play, 콘솔 로그로 결과 확인)
 
 ### `FunctionData` (함수 하나)
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
@@ -251,6 +271,12 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Calculate(slotUserFunctionGuids, slotPredefinedFunctionIds, ownedFunctions)` | 슬롯의 사용자 정의 함수 GUID들, 슬롯에 바로 넣은 C 스킬 ID들, 캐릭터가 가진 모든 함수 | `int` | 한도와 비교는 하지 않음. 재귀, 없는 함수를 만나도 멈추지 않음 |
+
+### `BlockUsageCounter` (블록·함수 개수, #500)
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `KeyOf(block)` | 블록 하나 | `string` | 그 블록이 개수를 쓰는 항목 ID (위 「개수 세기 규칙」 표). 내가 만든 함수 호출은 `null` |
+| `Count(slotFunctionGuids, ownedFunctions, globals)` | 슬롯 함수 GUID들, 캐릭터가 가진 모든 함수, 전역 변수 파일(없으면 `null`) | `Dictionary<string, int>` | 항목 ID → 쓴 개수. 쓰지 않은 항목은 없음. 편집 중인 함수는 저장 전 내용으로 바꿔 넘김 |
 
 ```csharp
 // 예시: 편집 화면이 새 함수를 만들고 블록을 넣은 뒤 저장

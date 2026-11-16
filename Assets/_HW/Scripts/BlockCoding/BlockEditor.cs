@@ -348,8 +348,6 @@ public class BlockEditor : MonoBehaviour
 	readonly List<GameObject> errorItems = new List<GameObject>();
 	// 오류 창에 지금 보이는 오류들의 글자·자리를 이은 것. 같으면 다시 만들지 않는다 (고칠 때마다 Redraw가 오류 창을 다시 그리기 때문)
 	string shownErrorsKey;
-	// 전역 변수의 오류. 전역 변수 검사는 실행기(FunctionExecutor)가 하므로 고칠 때마다 하지 않고 저장한 뒤의 자동 컴파일 때만 한다 (#506)
-	List<FunctionChecker.Error> globalsErrors;
 	// 함수 목록 줄을 눌렀을 때 하는 일 (함수 GUID → 열기). 오류 창의 「블록 보기」가 다른 함수의 오류일 때 그 함수를 먼저 열 때 쓴다
 	readonly Dictionary<string, Action> openActions = new Dictionary<string, Action>();
 	GlobalVariablesData listGlobals; // 저장된 전역 변수. 작업본이 없을 때 WorkingGlobals가 쓴다
@@ -903,9 +901,7 @@ public class BlockEditor : MonoBehaviour
 	// 여기서는 어디를 고쳐야 하는지 보이기만 한다. 슬롯이 시전되는지는 서버가 슬롯에서 닿는 함수만 컴파일해 정한다
 	int ShowCompileResult()
 	{
-		GlobalVariablesData workingGlobals = WorkingGlobals();
-		globalsErrors = FindGlobalsErrors(workingGlobals);
-		Dictionary<string, List<FunctionChecker.Error>> all = FindAllErrors(WorkingFunctions(), workingGlobals);
+		Dictionary<string, List<FunctionChecker.Error>> all = FindAllErrors(WorkingFunctions(), WorkingGlobals());
 
 		MarkErrors(OpenKey != null && all.TryGetValue(OpenKey, out List<FunctionChecker.Error> openErrors) ? openErrors : new List<FunctionChecker.Error>());
 		int count = all.Values.Sum(list => list.Count);
@@ -919,11 +915,22 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (file == null) return null;
 		NetworkIdentity localPlayer = NetworkClient.localPlayer;
-		string error = null;
-		bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(file, out error);
-		if (ok) return null;
-		// 이유가 없으면 내 캐릭터의 실행기를 찾지 못한 것이다 (접속 전 등)
-		return new List<FunctionChecker.Error> { new FunctionChecker.Error { Code = "", Message = error ?? "함수 실행기를 찾을 수 없음" } };
+		// 내 캐릭터의 실행기를 찾지 못하면(접속 전 등) 검사할 수 없으므로 오류가 없는 것으로 본다. 다시 그릴 때마다 부르므로 카드가 깜빡이지 않게
+		if (localPlayer == null || !localPlayer.TryGetComponent(out FunctionExecutor executor)) return null;
+		if (executor.CanUseGlobalVariables(file, out List<GlobalVariablesConverter.Failure> failures)) return null;
+
+		// 찾은 오류마다 거부한 선언과 칸을 담는다 (#506). 함수의 오류처럼 빨간 표시를 하고, 오류 카드를 누르면 그 자리를 깜빡이기 위함
+		// 칸은 값 칸(처음 값, array 길이)만 담는다. 타입·이름 칸은 칠할 UI가 없어서, 그 오류는 선언 블록 전체를 깜빡인다
+		var errors = new List<FunctionChecker.Error>();
+		foreach (GlobalVariablesConverter.Failure failure in failures)
+		{
+			BlockData block = file.Declarations != null && failure.Index >= 0 && failure.Index < file.Declarations.Count ? file.Declarations[failure.Index] : null;
+			var found = new FunctionChecker.Error { Block = block, Code = block != null ? BlockLabels.TextOf(block) : "", Message = failure.Message };
+			if (block?.Slots != null && failure.Slot >= 0 && failure.Slot < block.Slots.Count && block.Slots[failure.Slot].Kind == SlotKind.Value)
+				found.Slots.Add((block, failure.Slot));
+			errors.Add(found);
+		}
+		return errors;
 	}
 
 	// 페이지 함수 지우기 (#494) ---------------------------------------------------
@@ -1021,7 +1028,6 @@ public class BlockEditor : MonoBehaviour
 	void MarkErrors(List<FunctionChecker.Error> errors)
 	{
 		ClearErrorMarks();
-		if (editingGlobals) return;
 		foreach (FunctionChecker.Error error in errors)
 			foreach ((BlockData owner, int index) in error.Slots)
 				SetSlotError(owner, index, true, true);
@@ -1106,12 +1112,14 @@ public class BlockEditor : MonoBehaviour
 			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working);
 			if (errors.Count > 0) all[function.Guid] = errors;
 		}
-		if (globalsErrors != null && globalsErrors.Count > 0) all[GlobalsKey] = globalsErrors;
+		// Global Variables도 함수처럼 고칠 때마다 다시 검사한다 (#506). 저장할 때만 검사해 두면 고치거나 다른 페이지로 갈 때 지워져 오류가 사라져 보였기 때문
+		List<FunctionChecker.Error> globalsErrors = FindGlobalsErrors(workingGlobals);
+		if (globalsErrors != null) all[GlobalsKey] = globalsErrors;
 		return all;
 	}
 
 	// 오류 창에 모든 함수의 오류를 보인다. 함수 목록 순서(Global Variables, 슬롯, 페이지)대로
-	void ShowAllErrors(Dictionary<string, List<FunctionChecker.Error>> all, List<FunctionData> working)
+	void ShowAllErrors(Dictionary<string, List<FunctionChecker.Error>> all, List<FunctionData> working, GlobalVariablesData workingGlobals)
 	{
 		var shown = new List<ShownError>();
 
@@ -1127,13 +1135,15 @@ public class BlockEditor : MonoBehaviour
 			if (!all.TryGetValue(guid, out List<FunctionChecker.Error> errors)) continue;
 			FunctionData function = guid == GlobalsKey ? null : working.FirstOrDefault(f => f.Guid == guid);
 			string location = function != null ? LocationOf(function) : "Global Variables";
+			// 오류 자리를 순번으로 찾을 블록들: 함수는 그 함수의 블록, Global Variables는 선언들 (#506)
+			List<BlockData> roots = function != null ? function.Blocks : guid == GlobalsKey ? workingGlobals?.Declarations : null;
 			foreach (FunctionChecker.Error error in errors)
 			{
 				string code = CodeOf(error);
 				// 같은 함수 안의 같은 문장은 거르지 않는다. 빈 칸이 둘인 블록은 「expression이 비어 있음」이 두 줄이어야 하기 때문 (#504)
 				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
-					BlockIndex = function != null ? IndexOfBlock(function, error.Block) : -1,
-					Slots = function != null ? SlotIndexesOf(function, error) : null });
+					BlockIndex = roots != null ? IndexOfBlock(roots, error.Block) : -1,
+					Slots = roots != null ? SlotIndexesOf(roots, error) : null });
 			}
 		}
 		ShowErrors(shown);
@@ -1150,18 +1160,19 @@ public class BlockEditor : MonoBehaviour
 	static string CodeOf(FunctionChecker.Error error) => error.Block != null ? error.Code : "";
 
 	// 함수 안의 모든 블록을 정해진 순서로 (맨 위 블록부터, 칸·블록 영역 안쪽까지). 함수를 다시 열면 블록 데이터가 새로 만들어지므로 순번으로 같은 블록을 찾는다
-	static IEnumerable<BlockData> AllBlocksOf(FunctionData function) =>
-		function.Blocks == null ? Enumerable.Empty<BlockData>() : function.Blocks.SelectMany(b => b.SelfAndInnerBlocks());
+	// roots는 함수의 블록(FunctionData.Blocks) 또는 Global Variables의 선언(GlobalVariablesData.Declarations, #506)
+	static IEnumerable<BlockData> AllBlocksOf(List<BlockData> roots) =>
+		roots == null ? Enumerable.Empty<BlockData>() : roots.SelectMany(b => b.SelfAndInnerBlocks());
 
 	// 오류가 난 칸들을 (블록 순번, 칸 번호)로. 블록 순번은 IndexOfBlock과 같아, 함수를 다시 열어도 같은 칸을 찾는다 (#504)
-	static List<(int Block, int Slot)> SlotIndexesOf(FunctionData function, FunctionChecker.Error error) =>
-		error.Slots.Select(s => (IndexOfBlock(function, s.Owner), s.Index)).Where(s => s.Item1 >= 0).ToList();
+	static List<(int Block, int Slot)> SlotIndexesOf(List<BlockData> roots, FunctionChecker.Error error) =>
+		error.Slots.Select(s => (IndexOfBlock(roots, s.Owner), s.Index)).Where(s => s.Item1 >= 0).ToList();
 
-	static int IndexOfBlock(FunctionData function, BlockData block)
+	static int IndexOfBlock(List<BlockData> roots, BlockData block)
 	{
 		if (block == null) return -1;
 		int index = 0;
-		foreach (BlockData b in AllBlocksOf(function))
+		foreach (BlockData b in AllBlocksOf(roots))
 		{
 			if (ReferenceEquals(b, block)) return index;
 			index++;
@@ -1180,8 +1191,7 @@ public class BlockEditor : MonoBehaviour
 			open();
 			if (!IsOpen(guid)) return; // 저장하는 중이라 열지 못함
 		}
-		if (editingGlobals) return;
-		List<BlockData> blocks = AllBlocksOf(Function).ToList();
+		List<BlockData> blocks = AllBlocksOf(editingGlobals ? globals?.Declarations : Function?.Blocks).ToList();
 		if (slots != null && slots.Count > 0)
 		{
 			var targets = slots.Select(s => (owner: blocks.ElementAtOrDefault(s.Block), index: s.Slot)).Where(s => s.owner != null).ToList();
@@ -1777,8 +1787,7 @@ public class BlockEditor : MonoBehaviour
 	{
 		dirty = true;
 		ClearErrorMarks(); // 고쳤으면 지난 컴파일의 빨간 표시를 지운다
-		// 전역 변수의 지난 오류는 지금 내용과 맞지 않으므로 지운다. 함수의 오류 창은 아래 Redraw가 지금 내용으로 다시 검사해 그린다
-		if (editingGlobals) globalsErrors = null;
+		// 오류 창은 아래 Redraw가 지금 내용으로 다시 검사해 그린다
 		SetMessage(""); // 「저장됨」을 지우고 「저장하지 않은 변경 있음」을 보인다
 		Redraw();
 	}
@@ -1837,7 +1846,7 @@ public class BlockEditor : MonoBehaviour
 			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid));
 			entry.item.Show(entry.prefix, entry.name + (unsaved ? " <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
 		}
-		ShowAllErrors(allErrors, working);
+		ShowAllErrors(allErrors, working, workingGlobals);
 
 		if (messageLabel != null)
 		{

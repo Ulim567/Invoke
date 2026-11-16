@@ -11,7 +11,7 @@ using UnityEngine;
 /// - capacity는 캐릭터의 메모리 전체 칸 수(ProcessMemory.Capacity)다. 전역 변수 하나가 데이터 영역 1칸, 전역 array는 길이만큼 칸을 쓴다(CellsOf).
 /// </para>
 /// <para>
-/// 거부(false)하는 파일. 콘솔 오류를 남기고, error에 첫 번째 이유를 C 용어로 쓴 한국어 문장으로 돌려준다 (#504). 예: 같은 scope에서 재정의할 수 없음: x<br/>
+/// 거부(false)하는 파일. 이유는 C 용어로 쓴 한국어 문장이다 (#504). 예: 같은 scope에서 재정의할 수 없음: x. 찾은 오류를 모두 돌려받을 수도 있다 (failures, #506)<br/>
 /// - 데이터 영역 칸 수 합계가 capacity보다 많음<br/>
 /// - 선언·배열 만들기 블록이 아닌 블록, 지금 실행기가 다룰 수 없는 타입, 선언 블록의 array 타입<br/>
 /// - 배열 길이가 직접 입력한 1 이상의 정수가 아님<br/>
@@ -21,61 +21,138 @@ using UnityEngine;
 /// </summary>
 public static class GlobalVariablesConverter
 {
-	public static bool TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables) =>
-		TryConvert(data, rule, capacity, out variables, out _);
+	public static bool TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables)
+	{
+		if (TryConvert(data, rule, capacity, out variables, out string error)) return true;
+		// 이유를 받지 않는 쪽(프로세스 초기화 등)은 이유를 콘솔 오류로 남긴다
+		Debug.LogError($"전역 변수 파일을 저장할 수 없습니다: {error}");
+		return false;
+	}
 
 	/// <summary>
-	/// TryConvert와 같다. 거부하면 error에 첫 번째 이유를 돌려준다. 편집 화면이 Global Variables의 오류 카드에 보인다 (#504).
+	/// TryConvert와 같다. 거부하면 error에 첫 번째 이유를 돌려준다 (#504).<br/>
+	/// 이 함수는 콘솔에 남기지 않는다. 편집 화면이 다시 그릴 때마다 부르기 때문이다 (#506).
 	/// </summary>
-	// 이유 문장을 C 컴파일러(gcc, clang)의 오류를 C 용어 그대로 옮긴 한국어로 쓰는 이유: 함수의 컴파일 오류(FunctionChecker)와 같은 형식으로 보이기 위함
 	public static bool TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables, out string error)
 	{
-		error = null;
+		bool ok = TryConvert(data, rule, capacity, out variables, out List<Failure> failures);
+		error = ok ? null : failures[0].Message;
+		return ok;
+	}
+
+	/// <summary>
+	/// 전역 변수 파일의 오류 하나 (#506). Index는 data.Declarations 안의 선언 번호,
+	/// Slot은 그 선언의 칸 번호(0 타입, 1 이름, 2 처음 값 또는 array 길이)이고 선언 전체의 오류(선언이 아닌 블록, 데이터 영역 초과)면 -1이다.
+	/// </summary>
+	public readonly struct Failure
+	{
+		public readonly int Index;
+		public readonly int Slot;
+		public readonly string Message;
+
+		public Failure(int index, int slot, string message)
+		{
+			Index = index;
+			Slot = slot;
+			Message = message;
+		}
+	}
+
+	/// <summary>
+	/// TryConvert와 같다. 거부하면 찾은 오류를 모두 선언 순서대로 failures에 돌려준다 (#506). 통과하면 failures는 비어 있다.<br/>
+	/// 편집 화면이 오류마다 카드를 만들고, 그 선언·칸을 빨갛게 표시하고 깜빡일 때 쓴다. 콘솔에 남기지 않는다.<br/>
+	/// 선언 하나에서 오류를 찾으면 그 선언은 더 보지 않고 다음 선언으로 넘어간다. 데이터 영역 초과는 파일 전체에 한 번만 알린다.
+	/// </summary>
+	// 끝까지 검사하는 이유: C 컴파일러처럼 한 파일의 오류를 모두 보여, 하나 고칠 때마다 다음 오류가 나타나지 않게 하기 위함 (함수의 FunctionChecker와 같음)
+	// 이유 문장을 C 컴파일러(gcc, clang)의 오류를 C 용어 그대로 옮긴 한국어로 쓰는 이유: 함수의 컴파일 오류(FunctionChecker)와 같은 형식으로 보이기 위함
+	public static bool TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables,
+		out List<Failure> failures)
+	{
 		if (data == null) throw new ArgumentNullException(nameof(data));
 		if (rule == null) throw new ArgumentNullException(nameof(rule));
 
 		variables = null;
+		failures = new List<Failure>();
 		List<BlockData> declarations = data.Declarations ?? new List<BlockData>();
 		var converted = new List<(string, VariableType, RuntimeValue)>();
 		var names = new HashSet<string>();
 		// 데이터 영역 칸 수 합계. long으로 더하는 이유: 조작한 파일의 아주 큰 길이로 int가 넘쳐 음수가 되면 칸 검사를 지나기 때문
 		long cells = 0;
-		foreach (BlockData block in declarations)
+		bool overflowed = false;
+		for (int i = 0; i < declarations.Count; i++)
 		{
+			BlockData block = declarations[i];
 			// 칸: 타입(배열 만들기는 원소 타입), 이름, 초기값(배열 만들기는 길이). 함수 몸통의 블록과 같음
 			if (block == null || (block.Kind != BlockKind.Declare && block.Kind != BlockKind.ArrayDeclare) || block.Slots == null || block.Slots.Count < 3)
-				return Reject(out error, "전역 scope에는 선언만 둘 수 있음");
+			{
+				failures.Add(new Failure(i, -1, "전역 scope에는 선언만 둘 수 있음"));
+				continue;
+			}
 
 			string name = block.Slots[1].Name;
-			if (string.IsNullOrEmpty(name)) return Reject(out error, "선언에 식별자가 없음");
-			if (!names.Add(name)) return Reject(out error, $"같은 scope에서 재정의할 수 없음: {name}");
+			if (string.IsNullOrEmpty(name))
+			{
+				failures.Add(new Failure(i, 1, "선언에 식별자가 없음"));
+				continue;
+			}
+			if (!names.Add(name))
+			{
+				failures.Add(new Failure(i, 1, $"같은 scope에서 재정의할 수 없음: {name}"));
+				continue;
+			}
 
 			int length = 1;
-			if (block.Kind == BlockKind.ArrayDeclare && !TryGetArrayLength(block, out length, out string lengthReason)) return Reject(out error, lengthReason);
+			if (block.Kind == BlockKind.ArrayDeclare && !TryGetArrayLength(block, out length, out string lengthReason))
+			{
+				failures.Add(new Failure(i, 2, lengthReason));
+				continue;
+			}
 			// 초기화할 때 이 칸 수만큼 데이터 영역을 잡으므로, 칸이 모자란 파일은 저장할 때 막는다
 			// Capacity와 비교하는 이유: 초기화가 stack과 heap을 모두 비우므로, 그 순간에는 전역 변수만 칸을 쓰기 때문
-			// array를 만들기 전에 검사한다. 칸보다 큰 array의 원소를 먼저 만들지 않기 위함
+			// array를 만들기 전에 검사한다. 칸보다 큰 array의 원소를 먼저 만들지 않기 위함. 넘친 뒤로는 칸을 쓰는 값을 만들지 않는다
 			cells += length;
-			// 넘친 칸 수는 파일 전체로 센다. 여기의 cells는 넘친 순간까지만 더한 값이라 뒤의 블록이 빠지기 때문
-			if (cells > capacity) return Reject(out error, $"데이터 영역 크기를 {CountCells(data) - capacity}칸 초과함");
+			if (cells > capacity)
+			{
+				// 넘친 칸 수는 파일 전체로 센다. 여기의 cells는 넘친 순간까지만 더한 값이라 뒤의 블록이 빠지기 때문
+				if (!overflowed) failures.Add(new Failure(i, -1, $"데이터 영역 크기를 {CountCells(data) - capacity}칸 초과함"));
+				overflowed = true;
+				continue;
+			}
 
 			if (block.Kind == BlockKind.ArrayDeclare)
 			{
-				if (!TryCreateArray(block.Slots[0].Type, name, length, rule, out RuntimeValue array, out string arrayReason)) return Reject(out error, arrayReason);
+				if (!TryCreateArray(block.Slots[0].Type, name, length, rule, out RuntimeValue array, out string arrayReason))
+				{
+					failures.Add(new Failure(i, 0, arrayReason));
+					continue;
+				}
 				converted.Add((name, array.Type, array));
 				continue;
 			}
 
 			VariableType type = block.Slots[0].Type;
-			if (!RuntimeValue.IsSupportedType(type)) return Reject(out error, $"전역 변수로 지원하지 않는 타입: {TypeText(type)}");
+			if (!RuntimeValue.IsSupportedType(type))
+			{
+				failures.Add(new Failure(i, 0, $"전역 변수로 지원하지 않는 타입: {TypeText(type)}"));
+				continue;
+			}
 			// 함수 몸통과 같은 규칙. array는 배열 만들기 블록으로만 만든다(길이가 있어야 칸 수를 알 수 있기 때문)
-			if (type.Kind == VariableTypeKind.Array) return Reject(out error, $"array는 크기를 지정해 선언해야 함: {name}");
+			if (type.Kind == VariableTypeKind.Array)
+			{
+				failures.Add(new Failure(i, 0, $"array는 크기를 지정해 선언해야 함: {name}"));
+				continue;
+			}
 			// 대상(Target) 전역 변수는 받는다 (#474). 담아 둔 몬스터가 죽거나 없어지면 플레이어가 is_valid_target(b)로 확인하고,
 			// 그대로 스킬에 넘기면 NoTarget이 난다. 처음 값은 비워 두는 것만 된다(「대상 없음」). 대상은 직접 적을 수 있는 값이 없기 때문
-			if (!TryGetInitialValue(block.Slots[2], type, rule, out RuntimeValue value, out string reason)) return Reject(out error, reason);
+			if (!TryGetInitialValue(block.Slots[2], type, rule, out RuntimeValue value, out string reason))
+			{
+				failures.Add(new Failure(i, 2, reason));
+				continue;
+			}
 			converted.Add((name, type, value));
 		}
 
+		if (failures.Count > 0) return false;
 		variables = converted;
 		return true;
 	}
@@ -173,13 +250,6 @@ public static class GlobalVariablesConverter
 	}
 
 	static bool IsEmpty(SlotData slot) => slot.Block == null && slot.VariableName == null && slot.Literal == null;
-
-	static bool Reject(out string error, string reason)
-	{
-		error = reason;
-		Debug.LogError($"전역 변수 파일을 저장할 수 없습니다: {reason}");
-		return false;
-	}
 
 	// 오류 문장에 쓸 타입 글자. C처럼 소문자 이름, 포인터는 가리키는 struct 이름 뒤에 *
 	static string TypeText(VariableType type)

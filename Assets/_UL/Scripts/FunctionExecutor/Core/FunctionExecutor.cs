@@ -329,7 +329,11 @@ public class FunctionExecutor : MonoBehaviour
 	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
 	public bool TrySaveGlobalVariables(GlobalVariablesData file)
 	{
-		if (!CanUseGlobalVariables(file)) return false;
+		if (!CanUseGlobalVariables(file, out string error))
+		{
+			Debug.LogError($"전역 변수 파일을 저장할 수 없습니다: {error}");
+			return false;
+		}
 
 		GlobalVariablesStorage.Save(file);
 		// 저장한 파일로 초기화하도록 정한다. 접속 때 SetGlobalVariablesFile로 정한 예전 파일이 남아 있으면,
@@ -341,9 +345,9 @@ public class FunctionExecutor : MonoBehaviour
 
 	/// <summary>
 	/// 전역 변수 파일이 검사(칸 부족, 대상 타입, 직접 입력한 값이 아닌 초기값 등)를 통과하면 true. 저장하거나 반영하지는 않는다.<br/>
-	/// 거부 이유는 콘솔 오류로 남는다. 서버가 전역 변수를 DB에 저장하기 전에 쓴다(FunctionExecutorNetwork).
+	/// 콘솔에 남기지 않는다. 이유가 필요하면 CanUseGlobalVariables(file, out error)를 쓴다. 서버가 슬롯을 컴파일할 때 쓴다(FunctionExecutorNetwork, #506).
 	/// </summary>
-	public bool CanUseGlobalVariables(GlobalVariablesData file) => CanUseGlobalVariables(file, out _);
+	public bool CanUseGlobalVariables(GlobalVariablesData file) => CanUseGlobalVariables(file, out string _);
 
 	/// <summary>
 	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 error에 첫 번째 이유를 C 용어로 쓴 한국어 문장으로 돌려준다 (#504). 예: 같은 scope에서 재정의할 수 없음: x<br/>
@@ -351,8 +355,19 @@ public class FunctionExecutor : MonoBehaviour
 	/// </summary>
 	public bool CanUseGlobalVariables(GlobalVariablesData file, out string error)
 	{
+		bool ok = CanUseGlobalVariables(file, out List<GlobalVariablesConverter.Failure> failures);
+		error = ok ? null : failures[0].Message;
+		return ok;
+	}
+
+	/// <summary>
+	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 찾은 오류를 모두(선언 번호, 칸 번호, 이유) 선언 순서대로 돌려준다 (#506). GlobalVariablesConverter.TryConvert와 같다.<br/>
+	/// 편집 화면이 Global Variables의 오류마다 카드를 만들고, 그 자리를 빨갛게 표시하고 깜빡일 때 쓴다.
+	/// </summary>
+	public bool CanUseGlobalVariables(GlobalVariablesData file, out List<GlobalVariablesConverter.Failure> failures)
+	{
 		if (file == null) throw new ArgumentNullException(nameof(file));
-		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _, out error);
+		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _, out failures);
 	}
 
 	void Awake()

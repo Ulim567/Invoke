@@ -410,6 +410,32 @@ public class ProgressStore
 		db.InsertOrReplace(new GlobalsRow { CharacterKey = characterKey, Json = json });
 	}
 
+	/// <summary>
+	/// 편집 화면이 고친 파일들을 한 트랜잭션으로 저장한다 (#506). 모두 쓰이거나, 중간에 실패하면 하나도 쓰이지 않는다.<br/>
+	/// functions: (GUID, JSON) 목록. 같은 GUID의 row는 덮어쓰고 없으면 넣는다. globalsJson: 전역 변수 선언 JSON, null이면 전역 변수는 그대로 둔다.<br/>
+	/// 검사(개수, 해금, 슬롯 함수의 틀 등)는 부르는 쪽이 먼저 한다.
+	/// </summary>
+	public void SaveFiles(string characterKey, IReadOnlyList<(string Guid, string Json)> functions, string globalsJson)
+	{
+		db.RunInTransaction(() =>
+		{
+			foreach ((string guid, string json) in functions)
+			{
+				FunctionRow row = FindFunction(characterKey, guid);
+				if (row == null)
+				{
+					db.Insert(new FunctionRow { CharacterKey = characterKey, FunctionGuid = guid, Json = json });
+				}
+				else
+				{
+					row.Json = json;
+					db.Update(row);
+				}
+			}
+			if (globalsJson != null) db.InsertOrReplace(new GlobalsRow { CharacterKey = characterKey, Json = globalsJson });
+		});
+	}
+
 	// 트랜잭션 안에서 부른다
 	void WriteMaterialCount(string characterKey, string materialId, int count)
 	{

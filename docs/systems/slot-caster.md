@@ -24,6 +24,8 @@
 
 ## 동작 규칙
 - 시전이 거부되면(쿨타임, 메모리 부족 등, `Cast`가 `null`) 시전 로그와 `CastRequested`를 내지 않는다. 거부 이유는 실행기가 `CastRejected`로 알린다 (#152).
+- 함수를 넣었지만 이 컴퓨터의 `SlotLoadout`이 실행할 함수로 만들지 못한 슬롯(컴파일 오류가 있는 블록 함수)도 서버에 시전을 부탁한다 (#506). 서버가 `CompileError`로 거부해야 HUD가 이유를 알리기 때문. 빈 슬롯만 부탁하지 않는다
+  - `SlotLoadout`은 만들지 못한 슬롯을 기억해 다시 만들지 않는다(`TryGetFunction`). 장착을 바꾸거나 `ReloadFunctions`·`SetEntries`를 부르면 다시 만든다. HUD가 매 프레임 `TryGetFunction`을 불러, 기억하지 않으면 매 프레임 콘솔 오류가 쌓였음
 - 대상 찾기(가까운 몬스터, 범위 안 몬스터)는 플레이어가 속한 장소 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D().OverlapCircle`)에 묻는다. `Physics2D`로 바로 찾으면 서버에서 장소 씬의 몬스터를 못 찾는다 (place-scenes.md, #125).
 - 입력 방식 (`CastMode`)
   - 스킬 표(c-skills.md)의 대상 지정 방식이 `Area`이면 범위.

@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 7701386414936887016}
   - component: {fileID: 3180583838956461795}
   - component: {fileID: 8009481309735576055}
+  - component: {fileID: 5849111989035892888}
   m_Layer: 5
   m_Name: LocationButton
   m_TagString: Untagged
@@ -148,6 +149,19 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!114 &5849111989035892888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1811254444452154067}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9aadef420d847a1479bbabb793553e63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TextLinkClick
+  text: {fileID: 6798304081945993743}
 --- !u!1 &2326752196661330796
 GameObject:
   m_ObjectHideFlags: 0
@@ -504,7 +518,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 4
+  m_fontStyle: 0
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 256
   m_textAlignment: 65535
@@ -609,7 +623,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\uC120\uC5B8\uD558\uC9C0 \uC54A\uC740 \uBCC0\uC218 hpp"
+  m_text: "\uC120\uC5B8\uD558\uC9C0 \uC54A\uC740 \uC2DD\uBCC4\uC790: hpp"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
   m_sharedMaterial: {fileID: 6593387878686915224, guid: 9e83369d660df4747b1a9a2f9cb9849a, type: 2}
@@ -849,3 +863,7 @@ MonoBehaviour:
   codeText: {fileID: 7433686174880167185}
   locationButton: {fileID: 3180583838956461795}
   locationText: {fileID: 6798304081945993743}
+  locationLinks: {fileID: 5849111989035892888}
+  linkColor: {r: 0.36862746, g: 0.9490196, b: 0.8392157, a: 1}
+  hoverColor: {r: 1, g: 1, b: 1, a: 1}
+  disabledColor: {r: 0.3529412, g: 0.38431373, b: 0.5647059, a: 1}

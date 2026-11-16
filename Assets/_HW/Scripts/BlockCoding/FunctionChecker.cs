@@ -4,12 +4,12 @@ using System.Linq;
 /// <summary>
 /// 블록 함수 하나를 저장·장착 전에 검사한다 (편집 화면의 「컴파일」). 데이터는 바꾸지 않고 오류 목록만 돌려준다.
 /// <para>
-/// - 편집 화면(BlockEditor)의 컴파일 버튼·오류 창·빨간 테두리, 함수 목록의 빨간 밑줄, 장착 화면(SlotEquipPanel)에서 오류 있는 함수를 막을 때 쓴다.<br/>
+/// - 편집 화면(BlockEditor)의 저장 뒤 자동 컴파일·오류 창·빨간 테두리, 함수 목록의 빨간 밑줄, 장착 화면(SlotEquipPanel)에서 오류 있는 함수를 막을 때 쓴다.<br/>
 /// - 검사: for·while 밖의 break·continue, 값을 돌려줘야 하는데 return이 없는 길(BlockData.AlwaysReturnsValue), 비어 있는 값 칸,
 ///   선언하지 않은 변수(함수 안의 선언·배열·for의 변수, 파라미터, 전역 변수에 없는 이름), 지운 함수를 부르는 블록 (function-data.md, function-executor.md),
 ///   같은 { } 안에서 두 번 선언한 변수, 칸 규칙(SlotRules)에 맞지 않는 값 (#504).<br/>
 /// - 오류 문장은 C 컴파일러의 오류를 C 용어 그대로 한국어로 옮긴 문장이다. 예: 선언하지 않은 식별자: x (#504).<br/>
-/// - 저장하기 전에 FindNewlyBroken으로, 이 저장 때문에 다른 함수에 오류가 새로 생기는지도 본다 (#494).
+/// - 서버도 슬롯을 컴파일할 때(SlotCompileChecker) 같은 검사를 쓴다 (#506).
 /// </para>
 /// </summary>
 public static class FunctionChecker
@@ -51,38 +51,6 @@ public static class FunctionChecker
 			errors.Add(new Error { Code = function.Name, Message = "void가 아닌 함수는 모든 경로에서 return해야 함" });
 		return errors;
 	}
-
-	/// <summary>
-	/// 저장하려는 변경 때문에 컴파일 오류가 새로 생기는 함수와 그 새 오류들. 편집 화면이 저장하기 전에 부른다 (#494).
-	/// <para>
-	/// - before·globalsBefore: 지금 저장된 함수들과 전역 변수. after·globalsAfter: 이 변경을 저장했을 때의 함수들과 전역 변수.<br/>
-	/// - 예: 전역 변수 x를 지우면 x를 쓰던 함수, 페이지 함수의 반환 타입을 바꾸면 그 값을 쓰던 함수, 페이지 함수를 지우면 그 함수를 부르던 함수.<br/>
-	/// - 이미 있던 오류는 세지 않는다. 이 변경과 상관없는 예전 오류 때문에 저장을 막지 않기 위함.
-	/// </para>
-	/// </summary>
-	public static List<(FunctionData function, List<Error> errors)> FindNewlyBroken(
-		IEnumerable<FunctionData> before, GlobalVariablesData globalsBefore,
-		IEnumerable<FunctionData> after, GlobalVariablesData globalsAfter)
-	{
-		List<FunctionData> beforeList = before?.Where(f => f != null).ToList() ?? new List<FunctionData>();
-		List<FunctionData> afterList = after?.Where(f => f != null).ToList() ?? new List<FunctionData>();
-		var broken = new List<(FunctionData, List<Error>)>();
-		foreach (FunctionData function in afterList)
-		{
-			List<Error> errorsAfter = Find(function, globalsAfter, afterList);
-			if (errorsAfter.Count == 0) continue;
-
-			// 저장된 상태에서도 같은 오류가 있었으면 이 변경 때문에 생긴 것이 아니다
-			FunctionData old = beforeList.FirstOrDefault(f => f.Guid == function.Guid);
-			var known = new HashSet<string>(old != null ? Find(old, globalsBefore, beforeList).Select(KeyOf) : Enumerable.Empty<string>());
-			List<Error> added = errorsAfter.Where(e => !known.Contains(KeyOf(e))).ToList();
-			if (added.Count > 0) broken.Add((function, added));
-		}
-		return broken;
-	}
-
-	// 같은 오류인지 비교할 때 쓰는 글자: 오류가 난 블록의 C 글자와 오류 문장
-	static string KeyOf(Error error) => error.Code + "\n" + error.Message;
 
 	/// <summary>오류 문장만 (예전 쓰임새)</summary>
 	public static List<string> Check(FunctionData function, GlobalVariablesData globals = null) =>

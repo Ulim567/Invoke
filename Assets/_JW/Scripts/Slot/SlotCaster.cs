@@ -191,6 +191,14 @@ public class SlotCaster : NetworkBehaviour
 
 		if (!TryGetSlotFunction(slot, out FunctionBlock slotFunction))
 		{
+			// 함수를 넣었지만 이 컴퓨터에서 실행할 함수로 만들지 못한 슬롯(컴파일 오류가 있는 블록 함수)도 서버에 시전을 부탁한다 (#506)
+			// 서버가 CompileError로 거부해야 HUD가 이유를 알린다. 빈 슬롯처럼 부탁하지 않으면 플레이어는 왜 시전되지 않는지 알 수 없다
+			if (net != null && loadout != null && !loadout.GetEntry(slot).IsEmpty)
+			{
+				Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 함수를 만들지 못해 서버에 그대로 부탁함 (컴파일 오류면 서버가 거부)");
+				net.RequestCast(slot);
+				return;
+			}
 			Debug.Log($"[SlotCaster] 슬롯 {slot + 1}: 빈 슬롯");
 			return;
 		}
@@ -364,7 +372,7 @@ public class SlotCaster : NetworkBehaviour
 		CastRequested?.Invoke(slot, cast.Function, cast.Targets);
 	}
 
-	// [내 화면] 서버가 시전을 거부함 (쿨타임, 메모리 부족, 서버에 그 슬롯의 함수 없음)
+	// [내 화면] 서버가 시전을 거부함 (쿨타임, 메모리 부족, 서버에 그 슬롯의 함수 없음, 컴파일 오류 #506)
 	void OnCastRejected(int slot, CastRejection reason)
 	{
 		string fn = pending.TryGetValue(slot, out PendingCast cast) ? cast.Function.Name : "";

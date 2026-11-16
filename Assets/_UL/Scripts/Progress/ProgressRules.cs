@@ -44,6 +44,7 @@ public enum PlayerDataRequest
 	SaveFunction,
 	SaveGlobals,
 	DeleteFunction, // 페이지 함수 지우기 (#494). 성공이면 결과는 Saved (저장소에 반영됨)
+	SaveAll,        // 편집 화면이 고친 함수들과 전역 변수를 한꺼번에 저장 (#506). 모두 저장하거나 모두 거부
 	// 새 값은 맨 끝에만 더한다. 이 값은 네트워크로 보내므로 중간에 끼우면 뒤 값들의 번호가 바뀐다
 }
 
@@ -58,8 +59,9 @@ public enum PlayerDataRequestResult
 	BlockLocked,      // 해금하지 않은 문법의 블록을 씀 (SkillTree.IsBlockUnlocked)
 	SkillLocked,      // 해금하지 않은 C 스킬을 부름 (스킬 트리에 노드가 있는 사전 정의 함수만 해당)
 	CodeSizeExceeded, // 저장하면 슬롯 8개의 코드 영역 크기가 ProgressRules.MaxCodeSize를 넘음
-	GlobalsRejected,  // 전역 변수 검사에 걸림 (칸 부족 등. 이유는 서버 콘솔 오류)
+	GlobalsRejected,  // 쓰지 않음 (#506부터 전역 변수는 컴파일 오류가 있어도 저장한다). 예전에는 전역 변수 검사에 걸렸을 때. 뒤 값들의 번호를 지키려고 남겨 둠
 	UnknownFunction,  // 지우려는 함수가 없음 (#494)
 	CountExceeded,    // 저장하면 가진 개수보다 많이 쓰는 블록·함수가 생김 (#500, ItemCountRules.FindShortage)
+	TooLarge,         // 저장할 내용이 네트워크 메시지 한 개의 크기 한도를 넘음. 보내기 전에 소유 클라이언트가 막는다 (#506)
 	// 새 값은 맨 끝에만 더한다. 이 값은 네트워크로 보내므로 중간에 끼우면 뒤 값들의 번호가 바뀐다
 }

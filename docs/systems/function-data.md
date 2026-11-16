@@ -253,9 +253,9 @@
 | `Declarations` | - | `List<BlockData>` | 전역 변수 선언. 함수 몸통과 같은 선언 블록(`BlockData.Declare`)과 배열 만들기 블록(`BlockData.ArrayDeclare`, #478). 위에서부터 순서대로 |
 
 - 선언 블록을 쓰는 이유: 편집 화면이 함수 몸통의 선언 블록 UI를 그대로 쓸 수 있음
-- 초기값 칸: 직접 입력한 값, `NULL`(`SlotData.FromNull`), 비움(기본값)만. 그 밖은 저장 검사에서 거부
+- 초기값 칸: 직접 입력한 값, `NULL`(`SlotData.FromNull`), 비움(기본값)만. 그 밖은 컴파일 오류(빌드 실패, #506)
 - 배열 만들기 블록의 길이 칸: 직접 입력한 1 이상의 int만 (지역 array와 같음). 원소의 처음 값은 언제나 기본값 (#478)
-- 저장: 편집 화면은 `FunctionExecutor.TrySaveGlobalVariables`를 부름. 검사 → 저장 → 초기화
+- 저장: 편집 화면이 함수와 함께 저장 버튼으로 저장 (#506, block-editor.md 「저장 버튼」). 오류가 있어도 저장하고 빌드가 실패함. 임시 계정은 `GlobalVariablesStorage.Save` 뒤 `FunctionExecutorNetwork.ResendLocalGlobals`로 서버가 초기화
 
 ### `GlobalVariablesStorage` (전역 변수 파일 저장소, #139)
 - 이 컴퓨터의 `Application.persistentDataPath/GlobalVariables.json` 하나. 서버 저장 전까지의 임시 저장소

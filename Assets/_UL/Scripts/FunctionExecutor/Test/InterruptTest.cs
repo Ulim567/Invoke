@@ -5,6 +5,7 @@ using UnityEngine;
 /// - 시작: TestMallocFunction(5틱), TestLongMallocFunction(20틱), 사용자 정의 함수 안의 TestFunctionA(30틱)를 함께 시전한다. 두 malloc 함수는 1틱째에 TestSword를 힙 2칸에 올린다.<br/>
 /// - 틱 7: TestMallocFunction은 이미 정상 종료해 객체가 숨은 시스템 전역에 있다. 다음 틱을 기다리는 작업 하나를 더 시전한 뒤 InterruptAll을 부른다.<br/>
 /// - 확인: 진행 중이던 작업과 기다리던 작업이 모두 Interrupted, 스택 0, 끊긴 TestLongMallocFunction의 객체만 누수, 힙 사용량 4칸이 그대로 남음.<br/>
+/// - 틱 9 뒤(#504): 끊긴 원인이 MonsterAttack이고 HUD 알림이 [Interrupted]인지 본 뒤, 작업 하나를 시전하고 RestartProcess로 끊어 원인 System, 알림 없음을 확인한다.<br/>
 /// 남은 칸이 7칸 이상이어야 한다(스택 3칸 + 힙 4칸). 다른 테스트 컴포넌트와 함께 붙이지 않는다. 「[InterruptTest] 전체 통과」가 나오면 통과다.
 /// </summary>
 [RequireComponent(typeof(FunctionExecutor))]
@@ -13,6 +14,8 @@ public class InterruptTest : MonoBehaviour
 	FunctionExecutor executor;
 	ProcessMemory memory;
 	FunctionTask finishedMalloc, longMalloc, userFunction, pending;
+	// RestartProcess로 끊을 작업 (#504)
+	FunctionTask restarted;
 	// 누수된 객체 수. ObjectLeaked가 불릴 때마다 센다
 	int leakedCount;
 	// 기다리던 작업이 진행을 시작했는지. 진행하기 전에 끊긴 작업은 TaskStarted 없이 끝나야 한다
@@ -67,6 +70,22 @@ public class InterruptTest : MonoBehaviour
 				Check("힙 4 그대로 (시스템 전역 2, 누수 2)", memory.HeapUsed == 4 && usage.SystemGlobals == 2 && usage.Leaked == 2, $"실제 {memory.HeapUsed}, {usage}");
 				// 누수 객체도 개수에 들어간다
 				Check("TestSword 2개 (누수 포함)", memory.Heap.CountObjects<TestSword>() == 2, $"실제 {memory.Heap.CountObjects<TestSword>()}개");
+
+				// 실행 중단 공격(InterruptAll())으로 끊긴 작업은 원인이 MonsterAttack이고 HUD 알림이 있다 (#504)
+				Check("InterruptAll(): 원인 MonsterAttack", longMalloc.InterruptCause == InterruptCause.MonsterAttack, $"실제 {longMalloc.InterruptCause}");
+				string notice = FailureNotice.ForTaskEnd(TaskEndInfo.From(longMalloc, GetComponent<LanguageRule>()));
+				Check("InterruptAll(): HUD 알림 [Interrupted]", notice == "[Interrupted] 실행 중단 공격\n함수가 모두 멈춤", $"실제 {notice}");
+
+				// 재시작으로 끊길 작업. 끊긴 원인이 System인지 다음 단계에서 본다
+				restarted = executor.Cast(new TestFunctionB());
+				executor.RestartProcess();
+				break;
+
+			case 2 when tick >= 11:
+				CheckInterrupted(restarted);
+				Check("RestartProcess: 원인 System", restarted.InterruptCause == InterruptCause.System, $"실제 {restarted.InterruptCause}");
+				string restartNotice = FailureNotice.ForTaskEnd(TaskEndInfo.From(restarted, GetComponent<LanguageRule>()));
+				Check("RestartProcess: HUD 알림 없음", restartNotice == null, $"실제 {restartNotice}");
 
 				if (failedCount == 0) Debug.Log("[InterruptTest] 전체 통과");
 				else Debug.LogError($"[InterruptTest] 실패 {failedCount}개");

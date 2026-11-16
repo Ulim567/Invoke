@@ -235,16 +235,23 @@ public class FunctionExecutor : MonoBehaviour
 	/// <summary>
 	/// 진행 중인 작업과 다음 틱을 기다리는 작업을 모두 끊는다. 실행 중단 공격에 맞았을 때 부른다.<br/>
 	/// 끊긴 작업은 EndReason이 Interrupted가 되고, 실행 중이던 함수들은 OnEnd 대신 OnCancel을 받으며 스택을 돌려준다.<br/>
-	/// 끊긴 작업도 다른 작업처럼 틱이 끝날 때 목록에서 빠지며 TaskEnded가 불린다.
+	/// 끊긴 작업도 다른 작업처럼 틱이 끝날 때 목록에서 빠지며 TaskEnded가 불린다.<br/>
+	/// 끊긴 원인(FunctionTask.InterruptCause)은 MonsterAttack이다. HUD가 실행 중단 알림을 띄운다 (#504).
 	/// </summary>
-	public void InterruptAll()
+	public void InterruptAll() => InterruptAll(InterruptCause.MonsterAttack);
+
+	/// <summary>
+	/// 진행 중인 작업과 다음 틱을 기다리는 작업을 모두 끊고, 끊긴 원인을 cause로 남긴다.<br/>
+	/// 사망, 장소 이동처럼 실행 중단 공격이 아닌 이유로 끊을 때 InterruptCause.System을 넘긴다. 그러면 HUD가 알리지 않는다 (#504).
+	/// </summary>
+	public void InterruptAll(InterruptCause cause)
 	{
 		// foreach 대신 번호로 돈다. OnCancel에서 Cast를 부르면 목록이 늘어나는데, foreach는 그때 오류를 내기 때문
 		// 늘어난 작업도 끊어야 하므로 Count를 매번 다시 읽는다
 		for (int i = 0; i < tasks.Count; i++)
-			tasks[i].Interrupt();
+			tasks[i].Interrupt(FunctionTaskEndReason.Interrupted, cause);
 		for (int i = 0; i < pendingTasks.Count; i++)
-			pendingTasks[i].Interrupt();
+			pendingTasks[i].Interrupt(FunctionTaskEndReason.Interrupted, cause);
 	}
 
 	/// <summary>
@@ -281,13 +288,13 @@ public class FunctionExecutor : MonoBehaviour
 	/// <summary>
 	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 전역 변수 파일(SetGlobalVariablesFile, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다.<br/>
 	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
-	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
+	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다. 끊긴 원인은 System이라 HUD가 알리지 않는다 (#504).
 	/// </summary>
 	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서만 실행되도록 [Server]를 붙인다
 	public void RestartProcess()
 	{
 		// 작업을 먼저 끊는다. 끊기 전에 heap을 비우면, 이번 틱에 남은 작업이 사라진 객체의 포인터를 쓰게 되기 때문
-		InterruptAll();
+		InterruptAll(InterruptCause.System);
 		memory.Heap.Clear();
 		LoadGlobalVariables();
 	}

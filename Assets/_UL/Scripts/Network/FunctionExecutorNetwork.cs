@@ -74,6 +74,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	GlobalVariablesData receivingGlobals;
 	// [서버] 전역 변수를 한 번이라도 받아 적용했는지. 슬롯·함수와 전역 변수를 모두 받아야 준비된 것으로 본다
 	bool globalsApplied;
+	// [서버] 마지막으로 적용한 전역 변수 파일. ApplyPlayerData에 전역 변수가 오지 않을 때(그대로 둠)도 슬롯을 이 파일로 컴파일하기 위함 (#506)
+	GlobalVariablesData appliedGlobals;
 
 	// 서버 DB의 데이터를 쓰는 플레이어(실제 계정)면 true. 서버가 플레이어를 연결에 붙이기 전에 정한다(ApplyLoadedData)
 	// 실제 계정의 원본은 서버 DB이므로, 소유 클라이언트는 이 컴퓨터의 파일을 보내지 않고 서버가 보낸 데이터를 받는다
@@ -107,6 +109,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	[SyncVar(hook = nameof(OnMemoryChanged))] int memoryStackUsed;
 	[SyncVar(hook = nameof(OnMemoryChanged))] int memoryHeapUsed;
 
+	// 슬롯마다 컴파일에 성공했는지. 비트 i가 슬롯 i다. 서버가 ApplyPlayerData에서 정한다 (#506)
+	// 이 컴포넌트의 Sync Mode가 Owner라서 내 화면만 받는다
+	[SyncVar(hook = nameof(OnCompiledSlotsChanged))] byte compiledSlots;
+
 	/// <summary>
 	/// 서버가 이 플레이어의 함수 데이터(슬롯, 함수, 전역 변수)를 처음 다 받아 시전할 준비가 되었으면 true. 로딩 화면이 기다린다.
 	/// </summary>
@@ -116,6 +122,18 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// 이 플레이어의 슬롯·함수·전역 변수 원본이 서버 DB이면 true(실제 계정). false면 이 컴퓨터의 파일이다(임시 계정, 네트워크를 켜지 않은 테스트).
 	/// </summary>
 	public bool UsesServerData => usesServerData;
+
+	/// <summary>
+	/// slot번(0~7) 슬롯이 컴파일에 성공했으면 true (#506). 서버가 함수 데이터를 받을 때마다(접속, 저장, 지우기) 슬롯 함수와 그 함수가 부르는 함수, 전역 변수 파일을 컴파일해 정한다.<br/>
+	/// false인 슬롯은 서버가 시전을 CastRejection.CompileError로 거부한다. 편집 화면이 슬롯 줄의 체크를 그릴 때 쓴다.<br/>
+	/// 빈 슬롯, C 스킬 슬롯, 함수 데이터를 받지 못한 슬롯은 컴파일할 것이 없어 true다. 서버와 내 화면에서만 맞는 값이다 (다른 플레이어의 화면에는 오지 않음).
+	/// </summary>
+	public bool IsSlotCompiled(int slot) => slot >= 0 && slot < SlotLoadout.SlotCount && (compiledSlots & (1 << slot)) != 0;
+
+	/// <summary>
+	/// [내 화면] 슬롯의 컴파일 결과(IsSlotCompiled)가 바뀌었을 때 (#506). 호스트에서도 불린다.
+	/// </summary>
+	public event Action SlotCompileChanged;
 
 	/// <summary>[내 화면] 서버가 보낸 슬롯 8개. 받기 전이면 null.</summary>
 	public IReadOnlyList<SlotLoadout.Entry> ReceivedSlots { get; private set; }
@@ -740,7 +758,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			executor.SetGlobalVariablesFile(globals);
 			executor.RestartProcess();
 			globalsApplied = true;
+			appliedGlobals = globals;
 		}
+		compiledSlots = CompileSlots(slots, functions);
 
 		Debug.Log($"[FunctionExecutorNetwork] {name}: 함수 {functions.Count}개, 슬롯 [{DescribeSlots()}]{(globals != null ? $", 전역 변수 {globals.Declarations.Count}개" : "")} 받음", this);
 		if (!dataReady && globalsApplied) dataReady = true;
@@ -809,6 +829,34 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		userFunctionOriginals[entry.Id] = converted;
 		return converted;
 	}
+
+	// [서버] 슬롯마다 컴파일해 성공한 슬롯의 비트를 켠다 (#506). 원본(slotOriginals)을 만든 뒤에 부른다
+	// 전역 변수 파일에 오류가 있으면 블록 함수 슬롯이 모두 실패한다. C에서 파일 하나가 컴파일되지 않으면 실행 파일 전체가 만들어지지 않는 것과 같다 (사용자 결정 11/16)
+	byte CompileSlots(IReadOnlyList<SlotLoadout.Entry> slots, IReadOnlyList<FunctionData> functions)
+	{
+		bool globalsCompile = appliedGlobals == null || executor.CanUseGlobalVariables(appliedGlobals);
+		int mask = 0;
+		for (int i = 0; i < SlotLoadout.SlotCount; i++)
+		{
+			SlotLoadout.Entry entry = slots != null && i < slots.Count ? slots[i] : SlotLoadout.Entry.Empty;
+			if (SlotCompiles(i, entry, functions, globalsCompile)) mask |= 1 << i;
+		}
+		return (byte)mask;
+	}
+
+	// 함수 데이터를 받지 못한 슬롯은 컴파일 오류가 아니므로 성공으로 두고, 시전할 때 NoFunction으로 거부한다
+	// FunctionChecker가 통과해도 실행기가 바꾸지 못한 함수(원본 null)는 실행할 수 없으므로 실패로 본다
+	bool SlotCompiles(int slot, SlotLoadout.Entry entry, IReadOnlyList<FunctionData> functions, bool globalsCompile)
+	{
+		if (entry.IsEmpty || entry.Kind != SlotLoadout.EntryKind.UserFunction) return true;
+		FunctionData data = null;
+		foreach (FunctionData function in functions)
+			if (function.Guid == entry.Id) { data = function; break; }
+		if (data == null) return true;
+		return globalsCompile && slotOriginals[slot] != null && SlotCompileChecker.Compiles(data, functions, appliedGlobals);
+	}
+
+	void OnCompiledSlotsChanged(byte oldValue, byte newValue) => SlotCompileChanged?.Invoke();
 
 	// 로그용: 슬롯마다 원본 이름. 비었거나 만들지 못했으면 -
 	string DescribeSlots()
@@ -918,6 +966,14 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		if (PlaceScenes.IsPlayerInNoCastPlace(gameObject))
 		{
 			ReplyCastRejected(slot, CastRejection.InNoCastPlace);
+			return;
+		}
+
+		// 컴파일에 실패한 슬롯은 시전하지 않는다 (#506). 원본이 없는 이유가 컴파일 오류이면 NoFunction 대신 이 이유로 알리기 위해 먼저 본다
+		// 네트워크를 켜지 않은 테스트는 서버가 데이터를 받지 않아(ApplyPlayerData) 컴파일 결과가 없으므로 보지 않는다
+		if (!IsOffline && !IsSlotCompiled(slot))
+		{
+			ReplyCastRejected(slot, CastRejection.CompileError);
 			return;
 		}
 

@@ -760,10 +760,14 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		transform.localPosition = local;
 	}
 
-	// 마우스 아래에서 가장 안쪽에 있는 놓을 자리를 찾는다.
-	// 값 칸은 이 블록을 끼울 수 있을 때만 고르고, 아니면 더 바깥의 블록 자리를 찾는다
+	// 놓을 자리를 찾는다. 값 칸에 들어가는 블록은 먼저 마우스 가까이의 칸을 찾는다 (BlockEditor.FindSnapSlot).
+	// 없으면 마우스 아래에서 가장 안쪽에 있는 놓을 자리: 값 칸은 이 블록을 끼울 수 있을 때만 고르고, 아니면 더 바깥의 블록 자리를 찾는다
 	Component FindDropTarget(PointerEventData eventData)
 	{
+		// 값 칸은 작아서 마우스 끝을 정확히 맞히기 어렵고, 칸을 조금 벗어나면 바깥 블록 줄 자리로 들어가 버리기 때문
+		BlockValueSlot snap = editor.FindSnapSlot(Data, eventData.position, eventData.pressEventCamera);
+		if (snap != null) return snap;
+
 		var results = new List<RaycastResult>();
 		EventSystem.current.RaycastAll(eventData, results);
 		foreach (RaycastResult result in results)

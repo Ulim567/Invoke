@@ -35,7 +35,8 @@ public static class InvokeUIBuilder
 	const float LayoutPalette = 207; // 오른쪽 블록 목록
 	const float LayoutStrip = 33;    // 오른쪽 끝 세로 탭
 	const float LayoutStatus = 22;   // 아래 줄
-	const float LayoutFrame = 20;    // 편집 영역 위아래의 함수 틀 줄 (#432)
+	const float LayoutFrame = 20;    // 편집 영역 아래의 함수 틀 줄 「}」 (#432)
+	const float LayoutFrameHeader = 28; // 편집 영역 위의 함수 틀 머리줄 「void 이름( ) {」. 이름을 여기서만 보이고 고치므로 아래 줄보다 크게
 
 	[MenuItem("Invoke/UI/편집·장착 화면 새 디자인으로 만들기")]
 	public static void BuildAll()
@@ -220,7 +221,7 @@ public static class InvokeUIBuilder
 		return SavePrefab(root, "DropdownPopup").GetComponent<RectTransform>();
 	}
 
-	// 오류 창의 오류 하나: 빨간 세로줄, 오류가 난 줄, 이유, 「블록 보기」
+	// 오류 창의 오류 하나: 빨간 세로줄, 설명, 오류가 난 블록의 코드, 「> 함수 이름」(누르면 그 함수를 엶)
 	static ErrorItemView BuildErrorItem()
 	{
 		GameObject root = NewUI("ErrorItem", null);
@@ -246,24 +247,47 @@ public static class InvokeUIBuilder
 		barRect.offsetMin = new Vector2(1, 1);
 		barRect.offsetMax = new Vector2(3, -1);
 
-		TMP_Text code = Text(root.transform, "Code", "hp = hpp - 1;", 10, Color.white, TextAlignmentOptions.TopLeft);
-		code.textWrappingMode = TextWrappingModes.Normal;
-		code.overflowMode = TextOverflowModes.Overflow;
-		code.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
-		TMP_Text message = Text(root.transform, "Message", "선언하지 않은 변수 hpp", 9, Muted, TextAlignmentOptions.TopLeft);
+		// 설명이 맨 위 (무엇이 잘못됐는지), 그 아래 코드, 마지막에 「> 함수 이름」 (사용자 결정. 예전에는 「함수 이름  코드」가 제목이라 이름과 코드가 한 덩어리로 읽혔다)
+		TMP_Text message = Text(root.transform, "Message", "선언하지 않은 변수 hpp", 10, Color.white, TextAlignmentOptions.TopLeft);
 		message.textWrappingMode = TextWrappingModes.Normal;
 		message.overflowMode = TextOverflowModes.Overflow;
 		message.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
-		Button show = NewButton(root.transform, "ShowButton", "ui_button", "블록 보기", 9, Color.white);
-		LayoutElement showSize = show.gameObject.AddComponent<LayoutElement>();
-		showSize.preferredWidth = 44;
-		showSize.preferredHeight = 13;
-		showSize.flexibleWidth = 0;
+		TMP_Text code = Text(root.transform, "Code", "hp = hpp - 1;", 9, Hex("C8CEEA"), TextAlignmentOptions.TopLeft);
+		code.textWrappingMode = TextWrappingModes.Normal;
+		code.overflowMode = TextOverflowModes.Overflow;
+		code.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+
+		// 「> 함수 이름」: 「블록 보기」 버튼 대신 이름 글자를 누른다. 바탕 없이 청록 글자에 밑줄(누를 수 있다는 표시, 사용자 요청), 마우스를 올리면 밝게
+		GameObject location = NewUI("LocationButton", root.transform);
+		// 마우스를 받는 투명 바탕. 글자(TMP)는 StyleText가 Raycast Target을 꺼 두어 글자만으로는 눌리지 않는다
+		Image locationHit = location.AddComponent<Image>();
+		locationHit.color = new Color(0, 0, 0, 0);
+		locationHit.raycastTarget = true;
+		TMP_Text locationText = Text(location.transform, "Text", "> temp", 9, Color.white, TextAlignmentOptions.TopLeft);
+		locationText.textWrappingMode = TextWrappingModes.Normal;
+		locationText.overflowMode = TextOverflowModes.Overflow;
+		locationText.fontStyle = FontStyles.Underline;
+		Stretch(locationText.rectTransform, 0, 0, 0, 0);
+		Button locationButton = location.AddComponent<Button>();
+		locationButton.navigation = new Navigation { mode = Navigation.Mode.None };
+		locationButton.targetGraphic = locationText; // 글자 색이 곧 버튼 색 (Color Tint가 흰 글자에 곱해진다)
+		ColorBlock colors = locationButton.colors;
+		colors.normalColor = Hex("5EF2D6");
+		colors.highlightedColor = Hex("B8FFF2");
+		colors.selectedColor = Hex("5EF2D6");
+		colors.pressedColor = Hex("3FBFA8");
+		colors.disabledColor = Muted;
+		locationButton.colors = colors;
+		// 글자만큼만 누를 수 있게 (카드 오른쪽 빈 곳을 눌러도 열리지 않게). 카드의 세로 배치가 이 글자 너비(preferred)로 버튼 너비를 정한다
+		HorizontalLayoutGroup locationLayout = location.AddComponent<HorizontalLayoutGroup>();
+		locationLayout.childControlWidth = locationLayout.childControlHeight = true;
+		locationLayout.childForceExpandWidth = locationLayout.childForceExpandHeight = false;
 
 		ErrorItemView view = root.AddComponent<ErrorItemView>();
-		Set(view, "codeText", code);
 		Set(view, "messageText", message);
-		Set(view, "showButton", show);
+		Set(view, "codeText", code);
+		Set(view, "locationButton", locationButton);
+		Set(view, "locationText", locationText);
 		return SavePrefab(root, "ErrorItem").GetComponent<ErrorItemView>();
 	}
 
@@ -274,37 +298,63 @@ public static class InvokeUIBuilder
 		float right = LayoutPalette + LayoutStrip;
 
 		RectTransform header = Child(window, "FrameHeader");
-		TopStretch(header, LayoutLeft, right, -LayoutTop, LayoutFrame);
+		// 머리줄은 아래 「}」 줄보다 높고 글자도 크다. 이름이 위쪽 줄에서 빠지고 여기에만 보이므로 눈에 띄게 (사용자 요청)
+		TopStretch(header, LayoutLeft, right, -LayoutTop, LayoutFrameHeader);
 		SetImage(header.gameObject, "ui_bar", Image.Type.Sliced).raycastTarget = false;
 		HorizontalLayoutGroup row = GetOrAdd<HorizontalLayoutGroup>(header.gameObject);
-		row.padding = new RectOffset(8, 8, 2, 2);
+		row.padding = new RectOffset(8, 8, 3, 3);
 		row.spacing = 5;
 		row.childAlignment = TextAnchor.MiddleLeft;
 		row.childControlWidth = row.childControlHeight = true;
 		row.childForceExpandWidth = row.childForceExpandHeight = false;
 
-		Button returnButton = GetOrButton(header, "ReturnButton", "ui_button", "void ▾");
+		Button returnButton = GetOrButton(header, "ReturnButton", "ui_button", "void");
 		LayoutElement returnSize = GetOrAdd<LayoutElement>(returnButton.gameObject);
+		// 너비는 FunctionFrameView가 글자와 ▾ 그림에 맞춘다. 예전처럼 44로 고정하면 ▾가 잘려 보이지 않았다
 		returnSize.minWidth = 40;
-		returnSize.preferredWidth = 44;
-		returnSize.preferredHeight = 14;
+		returnSize.preferredWidth = 52;
+		returnSize.preferredHeight = 18;
 		returnSize.flexibleWidth = 0;
 		TMP_Text returnLabel = returnButton.transform.Find("Text").GetComponent<TMP_Text>();
-		TMP_Text nameText = GetOrText(header, "Name", "combo", 10, Color.white, TextAlignmentOptions.MidlineLeft);
+		returnLabel.fontSize = 12;
+		returnLabel.text = "void";
+		// 드롭다운 표시 ▾: 글자가 아니라 그림(blk_arrow). Galmuri11 TMP 글꼴에 ▾ 글자가 없어 글자로 쓰면 보이지 않는다
+		RectTransform returnArrow = Child(returnButton.transform, "Arrow");
+		returnArrow.anchorMin = returnArrow.anchorMax = new Vector2(1, 0.5f);
+		returnArrow.pivot = new Vector2(1, 0.5f);
+		returnArrow.sizeDelta = new Vector2(8, 5);
+		returnArrow.anchoredPosition = new Vector2(-6, 0);
+		Image returnArrowImage = GetOrAdd<Image>(returnArrow.gameObject);
+		returnArrowImage.sprite = LoadShape("blk_arrow");
+		returnArrowImage.color = new Color(1, 1, 1, 0.8f);
+		returnArrowImage.raycastTarget = false;
+		// 이름은 BlockEditor가 실행 중에 이 자리에 이름 칸(BlockField)을 넣어 보인다 (FunctionFrameView.PlaceNameField). 이 글자는 칸이 없을 때만 쓴다
+		TMP_Text nameText = GetOrText(header, "Name", "combo", 12, Color.white, TextAlignmentOptions.MidlineLeft);
 		nameText.fontStyle = FontStyles.Bold;
-		TMP_Text paramsText = GetOrText(header, "Params", "( ) {", 10, Hex("C8CEEA"), TextAlignmentOptions.MidlineLeft);
+		TMP_Text paramsText = GetOrText(header, "Params", "( ) {", 12, Hex("C8CEEA"), TextAlignmentOptions.MidlineLeft);
+		// 오른쪽 안내(「페이지 함수 · 반환 타입을 고를 수 있음」)는 뺐다 (사용자 요청). 오른쪽 빈 곳을 채우는 칸으로만 남긴다
 		TMP_Text tagText = GetOrText(header, "Tag", "", 8, Muted, TextAlignmentOptions.MidlineRight);
+		tagText.text = "";
 		GetOrAdd<LayoutElement>(tagText.gameObject).flexibleWidth = 1;
+		// 편집 영역과의 경계선: 아래 「}」 줄 위쪽 선(ui_bar의 맨 윗줄)과 같은 색·두께로 머리줄 아래에 긋는다
+		RectTransform line = Child(header, "BottomLine");
+		BottomStretch(line, 0, 0, 0, 1);
+		Image lineImage = GetOrAdd<Image>(line.gameObject);
+		lineImage.sprite = null;
+		lineImage.color = Hex("443F53");
+		lineImage.raycastTarget = false;
+		GetOrAdd<LayoutElement>(line.gameObject).ignoreLayout = true; // 머리줄의 가로 배치(Horizontal Layout Group)에 끼지 않게
 
 		RectTransform footer = Child(window, "FrameFooter");
 		BottomStretch(footer, LayoutLeft, right, LayoutStatus, LayoutFrame);
 		SetImage(footer.gameObject, "ui_bar", Image.Type.Sliced).raycastTarget = false;
-		TMP_Text footerText = GetOrText(footer, "Text", "}", 10, Color.white, TextAlignmentOptions.MidlineLeft);
+		TMP_Text footerText = GetOrText(footer, "Text", "}", 12, Color.white, TextAlignmentOptions.MidlineLeft);
 		Stretch(footerText.rectTransform, 10, 8, 0, 0);
 
 		FunctionFrameView view = GetOrAdd<FunctionFrameView>(header.gameObject);
 		Set(view, "returnButton", returnButton);
 		Set(view, "returnLabel", returnLabel);
+		Set(view, "returnArrow", returnArrow.gameObject);
 		Set(view, "nameText", nameText);
 		Set(view, "paramsText", paramsText);
 		Set(view, "tagText", tagText);
@@ -1158,6 +1208,25 @@ public static class InvokeUIBuilder
 			TMP_Text tabBadgeText = GetOrText(tabBadge, "Count", "1", 8, Color.white, TextAlignmentOptions.Center);
 			tabBadgeText.overflowMode = TextOverflowModes.Overflow;
 			Stretch(tabBadgeText.rectTransform, 0, 0, 0, 1);
+			// 오른쪽 창 접기·펴기 버튼 (세로 탭 맨 아래). 글자 >(접기) <(펴기)는 EditorSidePanel이 창 상태에 맞춰 바꾼다.
+			// 세로 탭은 창을 접어도 남으므로 버튼이 늘 같은 자리에 보인다. 열린 탭을 다시 눌러 접는 방법도 그대로 둔다 (사용자 결정)
+			Button panelToggle = GetOrButton(strip, "PanelToggle", "ui_button", ">");
+			Place(Rect(panelToggle.gameObject), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 6), new Vector2(22, 22));
+			TMP_Text panelToggleText = panelToggle.transform.Find("Text").GetComponent<TMP_Text>();
+			panelToggleText.fontSize = 12;
+			panelToggleText.text = ">";
+			// 세로 탭 왼쪽 끝 경계선: 창을 접으면 편집 영역이 세로 탭에 바로 붙어 경계가 보이지 않으므로, 접혔을 때만 EditorSidePanel이 보인다.
+			// 색은 함수 틀 머리줄 아래 선(BottomLine)과 같다
+			RectTransform stripLine = Child(strip, "LeftLine");
+			stripLine.anchorMin = new Vector2(0, 0);
+			stripLine.anchorMax = new Vector2(0, 1);
+			stripLine.pivot = new Vector2(0, 0.5f);
+			stripLine.sizeDelta = new Vector2(1, 0);
+			stripLine.anchoredPosition = Vector2.zero;
+			Image stripLineImage = GetOrAdd<Image>(stripLine.gameObject);
+			stripLineImage.sprite = null;
+			stripLineImage.color = Hex("443F53");
+			stripLineImage.raycastTarget = false;
 
 			// 컴파일 성공 알림: 편집 영역 위 가운데 초록 알약
 			RectTransform okBadge = Child(window, "CompileOk");
@@ -1187,7 +1256,7 @@ public static class InvokeUIBuilder
 			// 가운데 편집 영역 (블록은 자기 너비만큼)
 			RectTransform workspace = (RectTransform)window.Find("Workspace");
 			// 위아래에 함수 틀 줄(「반환 타입 이름() {」, 「}」)이 있으므로 그만큼 줄인다. 블록은 이 사이(함수 body)에만 놓인다
-			Stretch(workspace, LayoutLeft, LayoutPalette + LayoutStrip, LayoutTop + LayoutFrame, LayoutStatus + LayoutFrame);
+			Stretch(workspace, LayoutLeft, LayoutPalette + LayoutStrip, LayoutTop + LayoutFrameHeader, LayoutStatus + LayoutFrame);
 			SetImage(workspace.gameObject, "ui_grid", Image.Type.Tiled);
 			// 블록이 길어지면 세로·가로로 스크롤한다 (#476): Workspace(Scroll Rect, 격자 바탕) → Viewport → Content(블록 자리)
 			(RectTransform workspaceViewport, RectTransform workspaceContent) = GetOrBuildWorkspaceScroll(workspace);
@@ -1208,6 +1277,12 @@ public static class InvokeUIBuilder
 			// 저장하지 않은 변경을 버리기 전에 묻는 확인창 (맨 위에 그린다)
 			ConfirmDialog confirmDialog = GetOrBuildConfirmDialog(window);
 
+			// 오른쪽 창 왼쪽 끝의 세로 손잡이: 끌면 창 너비가 바뀌고, 창·편집 영역·함수 틀·아래 줄이 같이 움직인다.
+			// 열린 탭을 다시 누르면 접히는 것도 이 컴포넌트가 한다 (BlockEditor가 부름)
+			EditorSidePanel sidePanel = GetOrBuildPanelHandle(window, new[] { palette, errorPanel, referencePanel, functionTabPanel },
+				new[] { workspace, statusBar, Rect(functionFrame), (RectTransform)window.Find("FrameFooter") }, trash, trashText, panelToggleText, stripLine.gameObject);
+
+			sidePanel.transform.SetAsLastSibling();
 			okBadge.SetAsLastSibling();
 			trash.SetAsLastSibling();
 			if (close != null) close.SetAsLastSibling();
@@ -1254,9 +1329,12 @@ public static class InvokeUIBuilder
 			Set(editor, "functionFrame", functionFrame);
 			Set(editor, "functionView", functionTabPanel.gameObject);
 			Set(editor, "functionTabButton", functionTab);
+			Set(editor, "panelToggleButton", panelToggle);
 			Set(editor, "functionTabList", functionTabList);
 			Set(editor, "functionSearch", functionSearch);
 			Set(editor, "functionTabItemPrefab", functionItem);
+			Set(editor, "sidePanel", sidePanel);
+			Set(editor, "nameFieldSprite", LoadShape("blk_underline"));
 
 			PrefabUtility.SaveAsPrefabAsset(root, EditorCanvasPath);
 		}
@@ -1376,6 +1454,42 @@ public static class InvokeUIBuilder
 		text.textWrappingMode = TextWrappingModes.Normal;
 		text.lineSpacing = -10;
 		return tab;
+	}
+
+	// 오른쪽 창 너비 손잡이 (EditorSidePanel). 창 왼쪽 끝 안쪽에 6 너비로 세로로 길게, 위 줄 아래부터 바닥까지.
+	// 평소에는 투명하고 마우스를 올리면 청록 선이 보인다. 자리(가로)는 EditorSidePanel이 창 너비에 맞춰 옮긴다
+	static EditorSidePanel GetOrBuildPanelHandle(Transform window, RectTransform[] panels, RectTransform[] followers, RectTransform trash, TMP_Text trashText, TMP_Text toggleText, GameObject collapsedLine)
+	{
+		RectTransform handle = Child(window, "PanelHandle");
+		handle.anchorMin = new Vector2(1, 0);
+		handle.anchorMax = new Vector2(1, 1);
+		handle.pivot = new Vector2(0.5f, 0.5f);
+		handle.sizeDelta = new Vector2(6, -LayoutTop);
+		handle.anchoredPosition = new Vector2(-(LayoutStrip + LayoutPalette) + 3, -LayoutTop / 2f); // 창 왼쪽 끝 안쪽 (EditorSidePanel.Apply와 같음)
+		Image image = GetOrAdd<Image>(handle.gameObject);
+		image.sprite = null;
+		image.color = new Color(0, 0, 0, 0);
+		image.raycastTarget = true; // 투명해도 마우스를 받아야 끌 수 있다
+
+		EditorSidePanel panel = GetOrAdd<EditorSidePanel>(handle.gameObject);
+		var so = new SerializedObject(panel);
+		so.FindProperty("defaultWidth").floatValue = LayoutPalette;
+		so.FindProperty("stripWidth").floatValue = LayoutStrip;
+		SetArray(so.FindProperty("panels"), panels);
+		SetArray(so.FindProperty("followers"), followers);
+		so.FindProperty("trashZone").objectReferenceValue = trash;
+		so.FindProperty("trashText").objectReferenceValue = trashText;
+		so.FindProperty("handleImage").objectReferenceValue = image;
+		so.FindProperty("toggleText").objectReferenceValue = toggleText;
+		so.FindProperty("collapsedLine").objectReferenceValue = collapsedLine;
+		so.ApplyModifiedPropertiesWithoutUndo();
+		return panel;
+	}
+
+	static void SetArray(SerializedProperty property, Object[] values)
+	{
+		property.arraySize = values.Length;
+		for (int i = 0; i < values.Length; i++) property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
 	}
 
 	// 편집 화면 오른쪽 창 하나 (#489): 문법 탭과 같은 자리·바탕, 머리글 없음.

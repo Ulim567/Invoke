@@ -15,7 +15,8 @@ using UnityEngine.UI;
 /// - 블록 목록 해금 (#396, 이우림 #309): 실제 계정(server != null)이면 해금한 문법 블록(SkillTree.IsBlockUnlocked)과 해금한 C 스킬만 보여 준다.
 ///   서버가 저장 때 하는 검사(FunctionExecutorNetwork.CheckFunctionContent)와 같은 규칙이다. 스킬 트리에 노드가 없는 함수(input.* 등)는 늘 보인다.
 ///   임시 계정은 서버가 검사하지 않고 해금 목록도 비어 있으므로 모두 보여 준다. 편집 화면을 열 때마다 목록을 다시 만들어서, 스킬 트리에서 해금하면 다음에 열 때 보인다.<br/>
-/// - 저장: 실제 계정(내 캐릭터의 FunctionExecutorNetwork.UsesServerData)이면 서버 DB(RequestSaveFunction), 아니면 이 컴퓨터의 파일(FunctionStorage). (이우림 #226, #239)<br/>
+/// - 저장: 저장 버튼이 고친 모든 파일(함수, 전역 변수)을 한꺼번에 저장하고 자동으로 컴파일한다. 컴파일 오류가 있어도 저장한다 (#506, Save).<br/>
+///   실제 계정(내 캐릭터의 FunctionExecutorNetwork.UsesServerData)이면 서버 DB(RequestSaveAll), 아니면 이 컴퓨터의 파일(FunctionStorage, GlobalVariablesStorage). (이우림 #226, #239)<br/>
 ///   실제 계정은 슬롯 함수 slot1~slot8이 늘 있고(이름 고정), 페이지 함수는 ProgressRules.MaxPageFunctions개까지 더할 수 있다.
 /// </para>
 /// <para>
@@ -25,7 +26,7 @@ using UnityEngine.UI;
 /// 화면 배치 (이우림의 「블록 견본」): 왼쪽 함수 목록(Global Variables, 슬롯 1~8, 페이지 함수), 위쪽 함수 이름·저장 상태·저장 버튼,
 /// 가운데 편집 영역, 오른쪽 분류별 블록 목록. 목록 줄과 머리글은 ListItemView, ListHeaderView 프리팹으로 만든다.<br/>
 /// - Global Variables를 누르면 전역 변수 선언(GlobalVariablesData.Declarations)을 같은 편집 영역에서 고친다.
-///   저장: 실제 계정이면 RequestSaveGlobals, 아니면 내 캐릭터의 FunctionExecutor.TrySaveGlobalVariables (function-executor.md 「전역 변수」).
+///   저장은 함수와 함께 저장 버튼으로 한다 (function-executor.md 「전역 변수」).
 /// </para>
 /// </summary>
 public class BlockEditor : MonoBehaviour
@@ -84,7 +85,7 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("저장 버튼 프리팹. 비워 두면 Button Prefab")]
 	Button saveButtonPrefab;
 
-	[SerializeField, Tooltip("컴파일 버튼 프리팹 (보라색). 비워 두면 컴파일 버튼을 만들지 않는다")]
+	[SerializeField, Tooltip("쓰지 않음 (#506). 컴파일은 저장할 때 자동으로 한다. 빌더(InvokeUIBuilder)가 연결하므로 칸만 남겨 둠")]
 	Button compileButtonPrefab;
 
 	[SerializeField, Tooltip("블록 목록에서 분류 하나의 칩들을 담는 칸 (PaletteGroup 프리팹: Flow Layout Group). 비워 두면 칩을 한 줄씩 쌓는다")]
@@ -292,6 +293,9 @@ public class BlockEditor : MonoBehaviour
 	GlobalVariablesData globalsDraft; // 저장하지 않은 전역 변수 작업본. 없으면 null
 
 	// 서버에 페이지 함수 지우기를 요청하고 답을 기다리는 함수의 GUID와 상태 줄에 보일 이름 (#494). 답이 오면 비운다
+	// 서버에 한꺼번에 저장을 요청한 함수들의 GUID와 전역 변수를 함께 보냈는지 (#506). 성공하면 그 작업본을 뺀다
+	List<string> pendingSaveGuids;
+	bool pendingSaveGlobals;
 	string pendingDeleteGuid;
 	string pendingDeleteLabel;
 
@@ -344,15 +348,10 @@ public class BlockEditor : MonoBehaviour
 	readonly List<GameObject> errorItems = new List<GameObject>();
 	// 오류 창에 지금 보이는 오류들의 글자·자리를 이은 것. 같으면 다시 만들지 않는다 (고칠 때마다 Redraw가 오류 창을 다시 그리기 때문)
 	string shownErrorsKey;
-	// 컴파일 버튼으로 찾은 지금 함수의 오류. 컴파일은 저장된 전역 변수·함수로 검사해서 작업본 기준 검사와 다를 수 있으므로 오류 창에 합친다. 고치면 비운다
-	List<FunctionChecker.Error> compileErrors;
-	// 전역 변수를 컴파일했을 때의 오류. 전역 변수 검사는 실행기(FunctionExecutor)가 하므로 고칠 때마다 하지 않고 컴파일 때만 한다
+	// 전역 변수의 오류. 전역 변수 검사는 실행기(FunctionExecutor)가 하므로 고칠 때마다 하지 않고 저장한 뒤의 자동 컴파일 때만 한다 (#506)
 	List<FunctionChecker.Error> globalsErrors;
-	// 저장·지우기를 막은 이유: 저장하면(지우면) 다른 함수에 생길 오류 (ShowBroken, #494). 지금 내용에는 없는 오류라 따로 두고 오류 창 맨 위에 보인다. 고치거나 다른 함수를 열면 비운다
-	List<ShownError> brokenErrors;
 	// 함수 목록 줄을 눌렀을 때 하는 일 (함수 GUID → 열기). 오류 창의 「블록 보기」가 다른 함수의 오류일 때 그 함수를 먼저 열 때 쓴다
 	readonly Dictionary<string, Action> openActions = new Dictionary<string, Action>();
-	string compileFailedKey; // 마지막 컴파일에서 오류가 난 함수 (목록에서 빨간 밑줄)
 	GlobalVariablesData listGlobals; // 함수 목록의 오류 검사에 쓰는 전역 변수
 	Coroutine successRoutine;
 	readonly List<GameObject> savedButtons = new List<GameObject>();
@@ -561,7 +560,7 @@ public class BlockEditor : MonoBehaviour
 
 	void OnServerAnswered(PlayerDataRequest request, PlayerDataRequestResult result)
 	{
-		if (request == PlayerDataRequest.SaveFunction || request == PlayerDataRequest.SaveGlobals || request == PlayerDataRequest.DeleteFunction) savePending = false;
+		if (request == PlayerDataRequest.SaveAll || request == PlayerDataRequest.DeleteFunction) savePending = false;
 		if (request == PlayerDataRequest.DeleteFunction)
 		{
 			// 성공이면 이 답보다 먼저 ReceivedFunctions에서 빠지고 목록을 다시 그렸다 (OnServerDataReceived)
@@ -580,38 +579,30 @@ public class BlockEditor : MonoBehaviour
 			}
 			return;
 		}
-		if (request == PlayerDataRequest.SaveGlobals)
+		if (request != PlayerDataRequest.SaveAll) return;
+		// 답을 기다리는 동안 다른 페이지를 열 수 없으므로, 보낸 파일들의 작업본이 그대로 있다
+		List<string> sentGuids = pendingSaveGuids ?? new List<string>();
+		bool sentGlobals = pendingSaveGlobals;
+		pendingSaveGuids = null;
+		pendingSaveGlobals = false;
+		if (result == PlayerDataRequestResult.Saved)
 		{
-			bool saved = result == PlayerDataRequestResult.Saved;
-			if (saved && editingGlobals) dirty = false;
-			if (saved) globalsDraft = null;
-			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
-			if (saved) ReloadSavedFunctions();
-			SetMessage(saved ? "저장됨"
-				: result == PlayerDataRequestResult.CountExceeded ? CountShortageMessage(FindCountShortage(savedFunctions, globals))
-				: "전역 변수 저장 실패", !saved);
-			Redraw();
+			AfterSaved(sentGuids, sentGlobals);
 			return;
 		}
-		if (request != PlayerDataRequest.SaveFunction) return;
-		if (result == PlayerDataRequestResult.Saved && !editingGlobals)
-		{
-			dirty = false;
-			drafts.Remove(Function.Guid); // 답을 기다리는 동안 다른 페이지를 열 수 없으므로 지금 연 함수가 저장한 함수다
-		}
+		// 거부되면 어느 파일도 저장되지 않았다. 고친 내용은 작업본으로 남는다
 		SetMessage(result switch
 		{
-			PlayerDataRequestResult.Saved => "저장됨",
 			PlayerDataRequestResult.TooManyFunctions => $"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음",
 			PlayerDataRequestResult.SlotFunctionLocked => "슬롯 함수는 이름, 파라미터를 바꿀 수 없음",
 			PlayerDataRequestResult.InvalidData => "저장하지 못함 (함수 데이터 오류)",
 			PlayerDataRequestResult.BlockLocked => "저장하지 못함 (아직 해금하지 않은 블록이 있음)",
 			PlayerDataRequestResult.SkillLocked => "저장하지 못함 (아직 해금하지 않은 스킬이 있음)",
 			PlayerDataRequestResult.CodeSizeExceeded => $"저장하지 못함 (슬롯의 코드 영역이 {ProgressRules.MaxCodeSize}을 넘음)",
-			PlayerDataRequestResult.CountExceeded => CountShortageMessage(Function == null ? null
-				: FindCountShortage(savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function), CurrentGlobals())),
+			PlayerDataRequestResult.CountExceeded => CountShortageMessage(FindCountShortage(WorkingFunctions(), WorkingGlobals())),
+			PlayerDataRequestResult.TooLarge => "저장하지 못함 (저장할 내용이 너무 큼)",
 			_ => $"저장하지 못함 ({result})",
-		}, result != PlayerDataRequestResult.Saved);
+		}, true);
 		Redraw();
 	}
 
@@ -734,7 +725,6 @@ public class BlockEditor : MonoBehaviour
 	void OpenFunction(FunctionData function, bool fromDraft)
 	{
 		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수의 작업본이 있어도 저장된 것을 본다 (#474)
-		// 저장할 때의 검사가 「이 페이지의 새 내용 + 나머지는 저장된 상태」이기 때문이다 (#494)
 		listGlobals = CurrentGlobals();
 		workspace.ClearViews();
 		editingGlobals = false;
@@ -767,9 +757,6 @@ public class BlockEditor : MonoBehaviour
 	// 오류 창과 열린 탭은 그대로 둔다. 오류 창은 모든 함수의 오류를 보이므로 다른 함수를 열어도 목록이 바뀌지 않기 때문
 	void ResetCompileResult()
 	{
-		compileFailedKey = null;
-		compileErrors = null;
-		brokenErrors = null;
 		ClearErrorMarks();
 		HideSuccess();
 	}
@@ -815,155 +802,133 @@ public class BlockEditor : MonoBehaviour
 			: new GlobalVariablesData();
 	}
 
-	// 전역 변수 저장. 검사에 걸리면 저장하지 않는다 (function-executor.md 「전역 변수」 저장 검사)
-	void SaveGlobals()
-	{
-		if (server != null)
-		{
-			// 전역 변수 파일의 블록도 개수를 쓴다 (#500). 모자라면 서버에 보내지 않고 알린다
-			ItemCountRules.Shortage? shortage = FindCountShortage(savedFunctions, globals);
-			if (shortage != null)
-			{
-				SetMessage(CountShortageMessage(shortage), true);
-				Redraw();
-				return;
-			}
-			savePending = true; // 요청이 바로 거부되면 답이 이 줄 안에서 와서 곧바로 풀린다
-			server.RequestSaveGlobals(globals);
-			SetMessage("저장하는 중...");
-			Redraw();
-			return;
-		}
-
-		NetworkIdentity localPlayer = NetworkClient.localPlayer;
-		if (localPlayer == null || !localPlayer.TryGetComponent(out FunctionExecutor executor))
-		{
-			SetMessage("내 캐릭터의 함수 실행기를 찾지 못해 저장하지 못함", true);
-			Redraw();
-			return;
-		}
-		bool ok = executor.TrySaveGlobalVariables(globals);
-		if (ok)
-		{
-			dirty = false;
-			globalsDraft = null;
-			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
-			ReloadSavedFunctions();
-		}
-		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수 저장 실패", !ok);
-		Redraw();
-	}
-
 	/// <summary>
-	/// 지금 함수를 저장하고 저장한 함수 목록을 다시 읽는다. 저장하기 전에 컴파일(Compile과 같은 검사)을 하고, 오류가 있으면 저장하지 않는다.
-	/// 전역 변수는 컴파일 대신 저장 검사(FunctionExecutor.CanUseGlobalVariables)가 막는다.
+	/// 저장 버튼 (#506). 고친 모든 파일(지금 페이지, 다른 페이지의 작업본, Global Variables의 작업본)을 한꺼번에 저장한다.
+	/// 컴파일 오류가 있어도 저장한다. 저장한 뒤 자동으로 컴파일해 오류를 오류 창과 빨간 표시로 보인다 (ShowCompileResult).
+	/// <para>
+	/// 저장하지 않는 경우: 같은 이름의 함수, 실제 계정의 페이지 함수 수 초과·가진 개수 부족(서버도 다시 검사), 서버가 거부한 경우(해금, 코드 영역, 슬롯 함수의 틀).
+	/// 이때는 어느 파일도 저장하지 않고, 고친 내용은 작업본으로 남는다.
+	/// </para>
 	/// </summary>
-	public void SaveFunction()
+	// 예전(#494)에는 지금 페이지만 저장하고 컴파일 오류가 있으면 저장을 거부했다. 다른 함수의 오류 때문에 고친 파일이 저장되지 않아 바꿨다 (사용자 결정 11/16)
+	// 시전을 막는 것은 서버가 정한 슬롯 컴파일 결과(FunctionExecutorNetwork.IsSlotCompiled)다
+	public void Save()
 	{
+		if (savePending)
+		{
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
+			return;
+		}
+
 		// 펼쳐 두고 비운 선언의 처음 값 칸을 접는다. 빈 처음 값은 기본값으로 실행되므로 저장한 모양을 int x;로 맞춘다 (#474)
 		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.CollapseEmptyInitialValue();
-
-		if (editingGlobals)
+		// 지금 페이지의 고친 내용도 작업본에 넣어 다른 페이지와 함께 저장한다
+		StashCurrent();
+		List<FunctionData> changed = drafts.Values.ToList();
+		GlobalVariablesData changedGlobals = globalsDraft;
+		if (changed.Count == 0 && changedGlobals == null)
 		{
-			// 전역 변수를 지우거나 이름·타입을 바꿔서 그 변수를 쓰던 함수에 오류가 생기면 저장하지 않는다 (#494)
-			if (RefuseIfBreaksOthers(savedFunctions, globals)) return;
-			SaveGlobals();
-			return;
-		}
-
-		// 저장하기 전에 항상 컴파일한다. 오류가 있으면 서버에도 파일에도 저장하지 않고, 오류 창과 빨간 표시를 보여 준다 (#432)
-		// 저장하지 않은 내용은 편집 화면에 그대로 남으므로, 고친 뒤 다시 저장하면 된다
-		int compileErrors = RunCompile();
-		if (compileErrors > 0)
-		{
-			SetMessage($"컴파일 오류 {compileErrors}개가 있어 저장하지 않았습니다", true);
+			SetMessage("저장됨");
 			Redraw();
 			return;
 		}
 
-		if (NameTaken(Function.Name, Function.Guid))
+		string refusal = FindSaveRefusal(changed);
+		if (refusal != null)
 		{
-			SetMessage($"이미 「{Function.Name}」 함수가 있어서 저장하지 못했어요. 이름을 바꿔 주세요", true);
+			SetMessage(refusal, true);
 			Redraw();
 			return;
 		}
 
-		// 반환 타입을 바꿔서 이 함수를 부르던 다른 함수에 오류가 생기면 저장하지 않는다 (#494)
-		if (RefuseIfBreaksOthers(savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function), CurrentGlobals())) return;
-
-		// 실제 계정: 서버 DB에 저장 요청. 결과는 OnServerAnswered, 목록은 OnServerDataReceived에서 다시 그린다
+		// 실제 계정: 서버 DB에 한꺼번에 저장 요청. 결과는 OnServerAnswered, 목록은 OnServerDataReceived에서 다시 그린다
 		if (server != null)
 		{
-			bool isNewPage = savedFunctions.All(f => f.Guid != Function.Guid);
-			if (isNewPage && PageFunctions().Count() >= ProgressRules.MaxPageFunctions)
-			{
-				SetMessage($"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음", true);
-				Redraw();
-				return;
-			}
-			// 가진 개수보다 많이 쓰면 서버에 보내지 않고 어느 항목이 모자란지 알린다 (#500). 서버도 같은 규칙으로 다시 검사한다
-			ItemCountRules.Shortage? shortage = FindCountShortage(savedFunctions.Where(f => f.Guid != Function.Guid).Append(Function), CurrentGlobals());
-			if (shortage != null)
-			{
-				SetMessage(CountShortageMessage(shortage), true);
-				Redraw();
-				return;
-			}
 			savePending = true; // 요청이 바로 거부되면 답이 이 줄 안에서 와서 곧바로 풀린다
-			server.RequestSaveFunction(Function);
-			SetMessage("저장하는 중...");
+			pendingSaveGuids = changed.Select(f => f.Guid).ToList();
+			pendingSaveGlobals = changedGlobals != null;
+			server.RequestSaveAll(changed, changedGlobals);
+			if (savePending) SetMessage("저장하는 중...");
 			Redraw();
 			return;
 		}
 
-		FunctionStorage.Save(Function);
-		dirty = false;
-		drafts.Remove(Function.Guid);
-		SetMessage("저장됨");
-		ReloadSavedFunctions();
-
+		// 임시 계정: 이 컴퓨터의 파일에 쓴다
+		foreach (FunctionData function in changed) FunctionStorage.Save(function);
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (changedGlobals != null)
+		{
+			GlobalVariablesStorage.Save(changedGlobals);
+			// 서버(호스트면 이 컴퓨터)가 새 전역 변수로 프로세스를 새로 시작하고 슬롯을 다시 컴파일하게 보낸다
+			if (localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutorNetwork network)) network.ResendLocalGlobals();
+		}
 		// 슬롯에 넣어 둔 함수를 고쳤을 수 있으므로, 내 캐릭터의 슬롯 원본을 새로 만든다 (slot-caster.md 「ReloadFunctions」)
 		// ReloadFunctions가 Changed를 내면 FunctionExecutorNetwork가 서버로 함수를 다시 보낸다 (network.md 「함수 데이터 전송」)
-		NetworkIdentity localPlayer = NetworkClient.localPlayer;
-		if (localPlayer != null && localPlayer.TryGetComponent(out SlotLoadout loadout)) loadout.ReloadFunctions();
-		Debug.Log($"[BlockEditor] 「{Function.Name}」 저장함: {FunctionStorage.PathOf(Function)}");
+		if (changed.Count > 0 && localPlayer != null && localPlayer.TryGetComponent(out SlotLoadout loadout)) loadout.ReloadFunctions();
+		Debug.Log($"[BlockEditor] 함수 {changed.Count}개{(changedGlobals != null ? ", 전역 변수" : "")} 저장함: {Application.persistentDataPath}");
+		AfterSaved(changed.Select(f => f.Guid).ToList(), changedGlobals != null);
 	}
 
-	// 이 저장 뒤의 함수들(after)과 전역 변수(globalsAfter)로 저장된 다른 함수를 다시 컴파일해, 오류가 새로 생기면 저장하지 않고 true (#494).
-	// 저장된 상태에는 컴파일 오류가 없어야 하기 때문이다. 오류가 난 채로 저장되면 「저장됨」으로 보여 편집 화면을 그대로 나갈 수 있고,
-	// 그 함수는 시전할 때 실패한다 (지운 전역 변수는 UndeclaredVariable, 지운 함수를 부르면 슬롯 전체가 시전되지 않음)
-	bool RefuseIfBreaksOthers(IEnumerable<FunctionData> after, GlobalVariablesData globalsAfter)
+	// 저장하지 않을 이유. 없으면 null. 실제 계정의 페이지 함수 수와 개수는 서버도 같은 규칙으로 다시 검사한다
+	string FindSaveRefusal(List<FunctionData> changed)
 	{
-		List<(FunctionData function, List<FunctionChecker.Error> errors)> broken =
-			FunctionChecker.FindNewlyBroken(savedFunctions, CurrentGlobals(), after, globalsAfter);
-		// 지금 저장하려는 함수 자신은 저장 버튼의 컴파일이 이미 본다
-		if (!editingGlobals) broken.RemoveAll(b => b.function.Guid == Function.Guid);
-		if (broken.Count == 0) return false;
-		ShowBroken(broken, "에 컴파일 오류가 생겨 저장하지 않았습니다");
-		return true;
+		foreach (FunctionData function in changed)
+		{
+			if (NameTaken(function.Name, function.Guid))
+				return $"이미 「{function.Name}」 함수가 있어서 저장하지 못했어요. 이름을 바꿔 주세요";
+		}
+		if (server == null) return null;
+
+		if (PageFunctions().Count() + NewPages().Count > ProgressRules.MaxPageFunctions)
+			return $"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음";
+		// 가진 개수보다 많이 쓰면 서버에 보내지 않고 어느 항목이 모자란지 알린다 (#500)
+		ItemCountRules.Shortage? shortage = FindCountShortage(WorkingFunctions(), WorkingGlobals());
+		return shortage != null ? CountShortageMessage(shortage) : null;
 	}
 
-	// 다른 함수에 새로 생길 오류를 오류 창과 상태 줄에 보인다. 상태 줄은 「슬롯 Q, 페이지 a」 뒤에 what을 붙인 글자 (#494)
-	void ShowBroken(List<(FunctionData function, List<FunctionChecker.Error> errors)> broken, string what)
+	// 저장한 뒤: 저장한 파일의 작업본을 빼고, 목록을 다시 읽고, 자동 컴파일 결과를 보인다
+	void AfterSaved(IEnumerable<string> savedGuids, bool savedGlobals)
 	{
-		// 오류 창 맨 위에 어느 함수의 어느 블록인지 보인다. 저장(지우기)했다면 생길 오류라 지금 내용에는 없으므로,
-		// 「> 이름」을 누르면 그 함수만 열고 블록은 깜빡이지 않는다 (작업본과 검사한 내용의 블록 순서가 다를 수 있음)
-		brokenErrors = new List<ShownError>();
-		foreach ((FunctionData function, List<FunctionChecker.Error> list) in broken)
-			foreach (FunctionChecker.Error error in list)
-				brokenErrors.Add(new ShownError { Message = error.Message, Code = CodeOf(error), Location = LocationOf(function), Guid = function.Guid, BlockIndex = -1 });
-		HideSuccess(); // 저장 버튼의 컴파일이 띄운 「컴파일 성공」을 지운다
-		ShowTab(RightTab.Errors);
-		// 오류가 생기는 함수를 작업본에서 이미 고쳤으면, 목록에는 밑줄이 없어도 저장된 내용 기준으로는 오류다. 그 함수를 먼저 저장하라고 알린다 (#494)
-		string hint = broken.Any(b => drafts.ContainsKey(b.function.Guid)) ? ". 고친 함수를 먼저 저장해 주세요" : "";
-		SetMessage($"{string.Join(", ", broken.Select(b => LabelOf(b.function)))}{what}{hint}", true);
+		foreach (string guid in savedGuids) drafts.Remove(guid);
+		if (savedGlobals) globalsDraft = null;
+		dirty = false;
+		// 저장한 함수와 전역 변수로 함수 목록, 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
+		ReloadSavedFunctions();
+		int errors = ShowCompileResult();
+		SetMessage(errors == 0 ? "저장됨" : $"저장됨. 컴파일 오류 {errors}개", errors > 0);
 		Redraw();
+	}
+
+	// 저장한 뒤의 자동 컴파일 (#506). 모든 함수와 Global Variables를 검사해 오류 창에 보이고, 지금 연 함수의 오류 자리를 칠한다. 오류 수를 돌려준다
+	// 여기서는 어디를 고쳐야 하는지 보이기만 한다. 슬롯이 시전되는지는 서버가 슬롯에서 닿는 함수만 컴파일해 정한다
+	int ShowCompileResult()
+	{
+		GlobalVariablesData workingGlobals = WorkingGlobals();
+		globalsErrors = FindGlobalsErrors(workingGlobals);
+		Dictionary<string, List<FunctionChecker.Error>> all = FindAllErrors(WorkingFunctions(), workingGlobals);
+
+		MarkErrors(OpenKey != null && all.TryGetValue(OpenKey, out List<FunctionChecker.Error> openErrors) ? openErrors : new List<FunctionChecker.Error>());
+		int count = all.Values.Sum(list => list.Count);
+		if (count > 0) ShowTab(RightTab.Errors);
+		else ShowSuccess();
+		return count;
+	}
+
+	// 전역 변수 파일의 오류. 없으면 null. 내 캐릭터의 실행기가 찾은 첫 번째 이유를 그대로 보인다 (#504). 예: 같은 scope에서 재정의할 수 없음: x
+	List<FunctionChecker.Error> FindGlobalsErrors(GlobalVariablesData file)
+	{
+		if (file == null) return null;
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		string error = null;
+		bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(file, out error);
+		if (ok) return null;
+		// 이유가 없으면 내 캐릭터의 실행기를 찾지 못한 것이다 (접속 전 등)
+		return new List<FunctionChecker.Error> { new FunctionChecker.Error { Code = "", Message = error ?? "함수 실행기를 찾을 수 없음" } };
 	}
 
 	// 페이지 함수 지우기 (#494) ---------------------------------------------------
 
-	// 함수 목록의 페이지 줄 ×를 눌렀을 때. 저장된 다른 함수가 이 함수를 부르면 지우지 않고 그 함수들을 알린다.
-	// 부르지 않으면 확인창에서 「지우기」를 눌렀을 때 지운다. 지우는 것은 바로 저장소(서버 DB, 이 컴퓨터 파일)에 반영되므로 「지우기를 저장하는 버튼」이다
+	// 함수 목록의 페이지 줄 ×를 눌렀을 때. 확인창에서 「지우기」를 눌렀을 때 지운다. 지우는 것은 바로 저장소(서버 DB, 이 컴퓨터 파일)에 반영되므로 「지우기를 저장하는 버튼」이다
 	void RequestDeletePage(FunctionData page)
 	{
 		if (savePending)
@@ -972,16 +937,7 @@ public class BlockEditor : MonoBehaviour
 			return;
 		}
 		if (IsSlotFunction(page)) return; // 슬롯 함수는 지울 수 없다 (×도 보이지 않음)
-
-		// 저장할 때와 같은 규칙: 이 함수를 뺀 저장된 함수들로 다시 컴파일해 새 오류(선언하지 않은 함수)가 생기는 함수를 찾는다
-		// 예: 슬롯 Q가 foo를 부르면 foo를 지우는 순간 슬롯 Q 전체가 시전되지 않으므로 막는다
-		List<(FunctionData function, List<FunctionChecker.Error> errors)> broken = FunctionChecker.FindNewlyBroken(
-			savedFunctions, CurrentGlobals(), savedFunctions.Where(f => f.Guid != page.Guid), CurrentGlobals());
-		if (broken.Count > 0)
-		{
-			ShowBroken(broken, $"에서 {page.Name}{Eul(page.Name)} 불러서 지우지 않았습니다");
-			return;
-		}
+		// 다른 함수가 이 함수를 불러도 지운다 (#506). 지운 뒤 자동 컴파일이 「선언하지 않은 함수」 오류로 알리고, 그 함수를 부르는 슬롯은 서버가 시전을 거부한다
 
 		string label = LabelOf(page);
 		if (confirmDialog == null)
@@ -1026,7 +982,9 @@ public class BlockEditor : MonoBehaviour
 			else Open(FunctionData.Create(UniqueName("새_함수")));
 		}
 		ReloadSavedFunctions();
-		SetMessage($"{label}{Eul(label)} 지웠습니다");
+		// 지운 함수를 부르던 곳이 있으면 자동 컴파일이 오류로 알린다 (#506)
+		int errors = ShowCompileResult();
+		SetMessage(errors == 0 ? $"{label}{Eul(label)} 지웠습니다" : $"{label}{Eul(label)} 지웠습니다. 컴파일 오류 {errors}개", errors > 0);
 		Redraw();
 	}
 
@@ -1035,46 +993,6 @@ public class BlockEditor : MonoBehaviour
 	{
 		int slot = SlotIndexOf(function);
 		return slot >= 0 ? $"슬롯 {KeyOf(slot)}" : $"페이지 {function.Name}";
-	}
-
-	/// <summary>
-	/// 저장하기 전에 지금 함수(또는 전역 변수)를 검사한다. 결과는 위쪽 상태 글자에 보인다. 저장은 하지 않는다.
-	/// <para>
-	/// 검사: 반복문 밖의 break·continue(BlockData.HasJumpOutsideLoop), 값을 돌려줘야 하는데 return이 없는 길(BlockData.AlwaysReturnsValue),
-	/// 비어 있는 값 칸. 전역 변수는 FunctionExecutor.CanUseGlobalVariables (function-data.md, function-executor.md).
-	/// </para>
-	/// </summary>
-	public void Compile() => RunCompile();
-
-	// 컴파일 버튼과 저장이 함께 쓰는 검사. 오류 수를 돌려준다 (0이면 성공)
-	int RunCompile()
-	{
-		List<FunctionChecker.Error> errors;
-		if (editingGlobals)
-		{
-			errors = new List<FunctionChecker.Error>();
-			NetworkIdentity localPlayer = NetworkClient.localPlayer;
-			string error = null;
-			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals, out error);
-			// 실행기가 찾은 첫 번째 이유를 그대로 보인다 (#504). 예: 같은 scope에서 재정의할 수 없음: x
-			// 이유가 없으면 내 캐릭터의 실행기를 찾지 못한 것이다 (접속 전 등)
-			if (!ok) errors.Add(new FunctionChecker.Error { Code = "", Message = error ?? "함수 실행기를 찾을 수 없음" });
-			globalsErrors = errors.Count > 0 ? errors : null;
-		}
-		else
-		{
-			errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
-			compileErrors = errors;
-		}
-
-		// 오류 창(모든 함수의 오류)은 아래 Redraw가 다시 그린다
-		MarkErrors(errors);
-		compileFailedKey = errors.Count > 0 ? OpenKey : null;
-		if (errors.Count > 0) ShowTab(RightTab.Errors);
-		else ShowSuccess();
-		SetMessage(errors.Count == 0 ? "컴파일 성공" : $"컴파일 오류 {errors.Count}개", errors.Count > 0);
-		Redraw();
-		return errors.Count;
 	}
 
 	string OpenKey => editingGlobals ? GlobalsKey : Function?.Guid;
@@ -1186,21 +1104,16 @@ public class BlockEditor : MonoBehaviour
 		foreach (FunctionData function in working)
 		{
 			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working);
-			// 방금 컴파일한 함수는 컴파일 결과도 합친다. 컴파일은 저장된 전역 변수·함수로 검사해서 작업본 기준 검사에 없는 오류가 있을 수 있기 때문
-			if (compileErrors != null && !editingGlobals && Function != null && function.Guid == Function.Guid)
-				foreach (FunctionChecker.Error error in compileErrors)
-					if (!errors.Any(e => e.Code == error.Code && e.Message == error.Message)) errors.Add(error);
 			if (errors.Count > 0) all[function.Guid] = errors;
 		}
 		if (globalsErrors != null && globalsErrors.Count > 0) all[GlobalsKey] = globalsErrors;
 		return all;
 	}
 
-	// 오류 창에 모든 함수의 오류를 보인다. 함수 목록 순서(Global Variables, 슬롯, 페이지)대로, 저장·지우기를 막은 이유는 맨 위에
+	// 오류 창에 모든 함수의 오류를 보인다. 함수 목록 순서(Global Variables, 슬롯, 페이지)대로
 	void ShowAllErrors(Dictionary<string, List<FunctionChecker.Error>> all, List<FunctionData> working)
 	{
 		var shown = new List<ShownError>();
-		if (brokenErrors != null) shown.AddRange(brokenErrors);
 
 		// 함수 목록에 있는 순서대로. 목록이 없는 화면(위쪽 줄 버튼)이면 작업본 순서대로
 		var order = new List<string>();
@@ -1217,9 +1130,7 @@ public class BlockEditor : MonoBehaviour
 			foreach (FunctionChecker.Error error in errors)
 			{
 				string code = CodeOf(error);
-				// 저장·지우기 거부로 이미 맨 위에 보인 오류는 다시 적지 않는다
 				// 같은 함수 안의 같은 문장은 거르지 않는다. 빈 칸이 둘인 블록은 「expression이 비어 있음」이 두 줄이어야 하기 때문 (#504)
-				if (brokenErrors != null && brokenErrors.Any(s => s.Location == location && s.Code == code && s.Message == error.Message)) continue;
 				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
 					BlockIndex = function != null ? IndexOfBlock(function, error.Block) : -1,
 					Slots = function != null ? SlotIndexesOf(function, error) : null });
@@ -1864,9 +1775,7 @@ public class BlockEditor : MonoBehaviour
 	{
 		dirty = true;
 		ClearErrorMarks(); // 고쳤으면 지난 컴파일의 빨간 표시를 지운다
-		// 지난 컴파일·저장 거부의 오류도 지금 내용과 맞지 않으므로 지운다. 오류 창은 아래 Redraw가 지금 내용으로 다시 검사해 그린다
-		compileErrors = null;
-		brokenErrors = null;
+		// 전역 변수의 지난 오류는 지금 내용과 맞지 않으므로 지운다. 함수의 오류 창은 아래 Redraw가 지금 내용으로 다시 검사해 그린다
 		if (editingGlobals) globalsErrors = null;
 		SetMessage(""); // 「저장됨」을 지우고 「저장하지 않은 변경 있음」을 보인다
 		Redraw();
@@ -1923,7 +1832,7 @@ public class BlockEditor : MonoBehaviour
 			if (entry.item == null) continue;
 			bool open = entry.guid != null && entry.guid == openKey;
 			bool unsaved = open ? CurrentUnsaved : entry.guid != null && (drafts.ContainsKey(entry.guid) || (entry.guid == GlobalsKey && globalsDraft != null));
-			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid) || entry.guid == compileFailedKey);
+			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid));
 			entry.item.Show(entry.prefix, entry.name + (unsaved ? " <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
 		}
 		ShowAllErrors(allErrors, working);
@@ -2406,8 +2315,7 @@ public class BlockEditor : MonoBehaviour
 		};
 
 		if (functionList == null || functionItemPrefab == null) AddTopButton("새 함수", NewFunction); // 함수 목록이 없으면 위쪽 줄에
-		if (compileButtonPrefab != null) AddTopButton("컴파일", Compile, compileButtonPrefab);
-		AddTopButton("저장", SaveFunction, saveButtonPrefab);
+		AddTopButton("저장", Save, saveButtonPrefab);
 
 		infoText = infoLabel != null ? infoLabel : CreateText(topBar);
 	}

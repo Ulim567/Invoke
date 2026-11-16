@@ -20,7 +20,7 @@ using UnityEngine;
 /// <para>
 /// 함수 데이터 - 임시 계정, 네트워크를 켜지 않은 테스트 (내 화면 → 서버)<br/>
 /// - 내 캐릭터가 생기면 슬롯 8칸, 이 컴퓨터에 저장한 함수 전부, 전역 변수 파일을 서버로 보낸다.<br/>
-/// - 슬롯 장착 내용이 바뀌면(SlotLoadout.Changed) 슬롯과 함수를 다시 보낸다. 전역 변수는 접속할 때만 보낸다.<br/>
+/// - 슬롯 장착 내용이 바뀌면(SlotLoadout.Changed) 슬롯과 함수를 다시 보낸다. 전역 변수는 접속할 때와 편집 화면이 저장할 때(ResendLocalGlobals)만 보낸다.<br/>
 /// - 서버는 받은 데이터로 슬롯마다 원본 함수를 만든다(ApplyPlayerData). 처음 다 만들면 IsDataReady가 true가 되고 DataReady가 불린다. 로딩 화면은 이것을 기다린다.
 /// </para>
 /// <para>
@@ -98,6 +98,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// [내 화면] 슬롯 장착이 바뀌어 다시 보내야 하는지
 	// 장착을 한 번 바꿀 때 Changed가 여러 번 불리므로(자리 바꾸기, 다른 슬롯에서 옮겨 오기), 모아 두었다가 다음 Update에서 한 번만 보낸다
 	bool resendRequested;
+	// [내 화면] 다시 보낼 때 전역 변수 파일도 보낼지 (ResendLocalGlobals, #506)
+	// 슬롯 장착만 바뀐 경우에는 보내지 않는다. 전역 변수를 받으면 서버가 프로세스를 새로 시작해 실행 중인 함수가 끊기기 때문
+	bool resendGlobalsRequested;
 
 	// 서버가 이 플레이어의 데이터를 처음 다 받아 슬롯 원본을 만들었는지. 서버만 바꾼다
 	[SyncVar(hook = nameof(OnDataReadyChanged))]
@@ -292,7 +295,21 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 		if (!resendRequested) return;
 		resendRequested = false;
-		SendPlayerData(false);
+		SendPlayerData(resendGlobalsRequested);
+		resendGlobalsRequested = false;
+	}
+
+	/// <summary>
+	/// [내 화면, 임시 계정] 이 컴퓨터에 저장한 전역 변수 파일을 슬롯·함수와 함께 서버로 다시 보낸다 (#506). 편집 화면이 전역 변수 파일을 저장한 뒤 부른다.<br/>
+	/// 서버는 받은 전역 변수로 프로세스를 새로 시작하고(RestartProcess) 슬롯을 다시 컴파일한다. 다음 Update에 한 번 보낸다.<br/>
+	/// 실제 계정은 RequestSaveAll, RequestSaveGlobals를 쓰므로 아무 일도 하지 않는다.
+	/// </summary>
+	// 예전에는 전역 변수를 접속할 때만 보내서, 호스트가 아닌 클라이언트에서는 저장한 전역 변수가 서버에 가지 않았다
+	public void ResendLocalGlobals()
+	{
+		if (usesServerData || !isLocalPlayer) return;
+		resendRequested = true;
+		resendGlobalsRequested = true;
 	}
 
 	// [서버] 메모리 값을 SyncVar로 옮긴다. 같은 값을 넣으면 Mirror가 보내지 않으므로 매 프레임 옮겨도 된다

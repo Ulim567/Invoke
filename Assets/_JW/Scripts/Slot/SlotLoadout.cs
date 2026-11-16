@@ -49,6 +49,9 @@ public class SlotLoadout : MonoBehaviour
 	readonly Entry[] entries = new Entry[SlotCount];
 	// 슬롯마다 시전할 원본. 장착을 바꾸거나 ReloadFunctions를 부를 때만 새로 만든다
 	readonly FunctionBlock[] originals = new FunctionBlock[SlotCount];
+	// 슬롯마다 원본을 만들지 못했는지(컴파일 오류가 있는 블록 함수 등, #506). 원본을 지울 때(ForgetOriginal) 함께 지운다
+	// 화면(HudView)이 매 프레임 TryGetFunction을 부르므로, 실패를 기억하지 않으면 매 프레임 다시 만들며 콘솔 오류를 남기기 때문
+	readonly bool[] buildFailed = new bool[SlotCount];
 	bool loaded;
 	// 서버가 보낸 이 캐릭터의 함수 전부 (#263). null이면 이 컴퓨터의 파일을 쓴다
 	List<FunctionData> serverFunctions;
@@ -80,7 +83,7 @@ public class SlotLoadout : MonoBehaviour
 		for (int i = 0; i < SlotCount; i++)
 		{
 			entries[i] = slots != null && i < slots.Count ? slots[i] : Entry.Empty;
-			originals[i] = null;
+			ForgetOriginal(i);
 		}
 		Changed?.Invoke(-1);
 	}
@@ -93,7 +96,7 @@ public class SlotLoadout : MonoBehaviour
 		if (serverFunctions == null) return;
 		serverFunctions = null;
 		loaded = false;
-		for (int i = 0; i < SlotCount; i++) originals[i] = null;
+		for (int i = 0; i < SlotCount; i++) ForgetOriginal(i);
 		EnsureLoaded();
 		Changed?.Invoke(-1);
 	}
@@ -147,7 +150,7 @@ public class SlotLoadout : MonoBehaviour
 		if (RefuseOnServerData("Unequip")) return;
 		if (!IsValidSlot(slot) || entries[slot].IsEmpty) return;
 		entries[slot] = Entry.Empty;
-		originals[slot] = null;
+		ForgetOriginal(slot);
 		SaveAndNotify(slot);
 	}
 
@@ -159,9 +162,17 @@ public class SlotLoadout : MonoBehaviour
 		if (!IsValidSlot(a) || !IsValidSlot(b) || a == b) return;
 		(entries[a], entries[b]) = (entries[b], entries[a]);
 		(originals[a], originals[b]) = (originals[b], originals[a]);
+		(buildFailed[a], buildFailed[b]) = (buildFailed[b], buildFailed[a]);
 		Save();
 		Changed?.Invoke(a);
 		Changed?.Invoke(b);
+	}
+
+	// 슬롯의 원본을 지워 다음 TryGetFunction이 다시 만들게 한다. 만들지 못했다는 기억도 지운다
+	void ForgetOriginal(int slot)
+	{
+		originals[slot] = null;
+		buildFailed[slot] = false;
 	}
 
 	/// <summary>
@@ -173,7 +184,11 @@ public class SlotLoadout : MonoBehaviour
 		EnsureLoaded();
 		function = null;
 		if (!IsValidSlot(slot) || entries[slot].IsEmpty) return false;
-		if (originals[slot] == null) originals[slot] = BuildOriginal(slot, OwnedFunctions());
+		if (originals[slot] == null && !buildFailed[slot])
+		{
+			originals[slot] = BuildOriginal(slot, OwnedFunctions());
+			buildFailed[slot] = originals[slot] == null;
+		}
 		function = originals[slot];
 		return function != null;
 	}
@@ -188,7 +203,7 @@ public class SlotLoadout : MonoBehaviour
 		EnsureLoaded();
 		for (int i = 0; i < SlotCount; i++)
 		{
-			if (entries[i].Kind == EntryKind.UserFunction) originals[i] = null;
+			if (entries[i].Kind == EntryKind.UserFunction) ForgetOriginal(i);
 		}
 		Changed?.Invoke(-1);
 	}
@@ -242,11 +257,11 @@ public class SlotLoadout : MonoBehaviour
 		{
 			if (i == slot || entries[i].Kind != entry.Kind || entries[i].Id != entry.Id) continue;
 			entries[i] = Entry.Empty;
-			originals[i] = null;
+			ForgetOriginal(i);
 			Changed?.Invoke(i);
 		}
 		entries[slot] = entry;
-		originals[slot] = null;
+		ForgetOriginal(slot);
 		SaveAndNotify(slot);
 	}
 

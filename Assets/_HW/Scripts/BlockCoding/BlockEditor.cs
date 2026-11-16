@@ -1342,6 +1342,8 @@ public class BlockEditor : MonoBehaviour
 		float bestDistance = float.MaxValue;
 		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
 		{
+			// 미리보기(DropGhost)는 끄는 블록을 Instantiate한 복사본이라 칸이 Init되지 않았다(editor가 null). 편집 영역에 들어와 있어도 진짜 칸이 아니므로 건너뛴다 (#498)
+			if (dropGhost != null && slot.transform.IsChildOf(dropGhost)) continue;
 			if (!slot.CanAccept(dragged)) continue;
 			Rect rect = ScreenRectOf((RectTransform)slot.transform, eventCamera);
 			if (!rect.Overlaps(areaRect)) continue; // 스크롤로 가려진 칸
@@ -1783,6 +1785,8 @@ public class BlockEditor : MonoBehaviour
 		// 칸 테두리(실선·점선·없음, #487)도 내용이 바뀌면 달라지므로 함께 다시 그린다
 		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
 		{
+			// 미리보기(DropGhost)의 칸은 Init되지 않은 복사본이라 건너뛴다. 지금은 끄는 동안 Redraw를 부르지 않지만, 부르게 되어도 오류가 나지 않게 (#498)
+			if (dropGhost != null && slot.transform.IsChildOf(dropGhost)) continue;
 			slot.RefreshPlaceholder();
 			slot.RefreshLook();
 		}

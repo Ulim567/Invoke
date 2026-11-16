@@ -272,6 +272,12 @@ public class BlockEditor : MonoBehaviour
 	bool unsavedNewPage; // 「+」로 만든 새 페이지를 아직 저장하지 않았는지. 비어 있어도 저장하지 않은 것으로 친다 (HasUnsavedChanges)
 	bool savePending; // 서버에 저장을 요청하고 답을 기다리는 중인지. 답이 오기 전에는 저장했는지 알 수 없어 다른 함수를 열지 못하게 한다
 
+	// 저장하지 않은 작업본 (#494). 다른 페이지로 옮겨도 고친 내용을 버리지 않고 여기에 두었다가, 다시 열면 이어서 고친다.
+	// 예: 전역 변수 x를 지운 채로 x를 쓰는 슬롯 Q를 고치러 갈 수 있어야 하기 때문이다.
+	// 함수는 GUID로 찾고, 「+」로 만들어 아직 저장하지 않은 새 페이지도 들어 있다. 저장하면 빼고, 나가기 확인창에서 「나가기」를 누르면 모두 버린다
+	readonly Dictionary<string, FunctionData> drafts = new Dictionary<string, FunctionData>();
+	GlobalVariablesData globalsDraft; // 저장하지 않은 전역 변수 작업본. 없으면 null
+
 	// 전역 변수 편집 중이면 true. 이때 편집 영역은 globals.Declarations를 보여 준다
 	bool editingGlobals;
 	GlobalVariablesData globals;
@@ -313,7 +319,8 @@ public class BlockEditor : MonoBehaviour
 	GlobalVariablesData listGlobals; // 함수 목록의 오류 검사에 쓰는 전역 변수
 	Coroutine successRoutine;
 	readonly List<GameObject> savedButtons = new List<GameObject>();
-	readonly List<(ListItemView item, string prefix, string guid, string name, string detail, bool dim, bool error)> functionItems = new List<(ListItemView, string, string, string, string, bool, bool)>();
+	// 함수 목록의 줄. 컴파일 오류(빨간 밑줄)는 작업본에 따라 바뀌므로 줄에 두지 않고 Redraw가 계산한다 (#494)
+	readonly List<(ListItemView item, string prefix, string guid, string name, string detail, bool dim)> functionItems = new List<(ListItemView, string, string, string, string, bool)>();
 	List<FunctionData> savedFunctions = new List<FunctionData>();
 
 	void Start()
@@ -458,7 +465,11 @@ public class BlockEditor : MonoBehaviour
 		savePending = false; // 편집 화면을 닫은 동안 답이 오지 못했어도 막힌 채로 남지 않게
 		if (confirmDialog != null) confirmDialog.Hide();
 		ReloadSavedFunctions();
-		if (!editingGlobals && server != null && (Function == null || savedFunctions.All(f => f.Guid != Function.Guid))) OpenFirstSlot();
+		if (!editingGlobals && server != null && (Function == null || savedFunctions.All(f => f.Guid != Function.Guid)))
+		{
+			StashCurrent(); // 저장하지 않은 새 페이지였으면 작업본으로 둔다
+			OpenFirstSlot();
+		}
 	}
 
 	// 실제 계정이면 내 캐릭터의 FunctionExecutorNetwork에 연결한다
@@ -499,6 +510,7 @@ public class BlockEditor : MonoBehaviour
 		{
 			bool saved = result == PlayerDataRequestResult.Saved;
 			if (saved && editingGlobals) dirty = false;
+			if (saved) globalsDraft = null;
 			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
 			if (saved) ReloadSavedFunctions();
 			SetMessage(saved ? "저장됨" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
@@ -506,7 +518,11 @@ public class BlockEditor : MonoBehaviour
 			return;
 		}
 		if (request != PlayerDataRequest.SaveFunction) return;
-		if (result == PlayerDataRequestResult.Saved && !editingGlobals) dirty = false;
+		if (result == PlayerDataRequestResult.Saved && !editingGlobals)
+		{
+			dirty = false;
+			drafts.Remove(Function.Guid); // 답을 기다리는 동안 다른 페이지를 열 수 없으므로 지금 연 함수가 저장한 함수다
+		}
 		SetMessage(result switch
 		{
 			PlayerDataRequestResult.Saved => "저장됨",
@@ -522,41 +538,46 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 저장하지 않은 변경이 있으면 true: 열고 나서 고쳤거나(이름 뒤 *), 「+」로 만든 새 페이지를 아직 저장하지 않았을 때.
-	/// 편집 화면을 처음 열 때 기본으로 열리는 빈 함수는 고치기 전까지 해당하지 않는다.
+	/// 저장하지 않은 변경이 어느 페이지에든 있으면 true: 지금 페이지를 열고 나서 고쳤거나, 「+」로 만든 새 페이지를 아직 저장하지 않았거나,
+	/// 다른 페이지에 저장하지 않은 작업본이 있을 때 (#494). 편집 화면을 처음 열 때 기본으로 열리는 빈 함수는 고치기 전까지 해당하지 않는다.
 	/// </summary>
-	public bool HasUnsavedChanges
-	{
-		get
-		{
-			if (dirty) return true;
-			return unsavedNewPage && !editingGlobals && Function != null && savedFunctions.All(f => f.Guid != Function.Guid);
-		}
-	}
+	public bool HasUnsavedChanges => CurrentUnsaved || drafts.Count > 0 || globalsDraft != null;
+
+	// 지금 연 페이지에 저장하지 않은 변경이 있으면 true (이름 뒤 *)
+	bool CurrentUnsaved =>
+		dirty || (unsavedNewPage && !editingGlobals && Function != null && savedFunctions.All(f => f.Guid != Function.Guid));
 
 	/// <summary>
-	/// 다른 함수를 열기 전에 부른다 (함수 목록의 줄, 「+」, Global Variables). 저장하지 않은 변경이 없으면 바로 open을 하고,
-	/// 있으면 확인창에서 「예」를 눌렀을 때 open을 한다. 서버 저장의 답을 기다리는 중이면 열지 않는다.
+	/// 다른 함수를 열 때 부른다 (함수 목록의 줄, 「+」, Global Variables). 지금 페이지의 고친 내용은 작업본으로 두고 open을 한다 (#494).
+	/// 예전에는 고친 내용을 버릴지 물었지만, 지운 전역 변수를 쓰던 함수를 고치러 가려면 고친 내용을 들고 옮겨야 해서 묻지 않는다.
+	/// 서버 저장의 답을 기다리는 중이면 열지 않는다. 답이 오기 전에 페이지가 바뀌면 어느 페이지를 저장했는지 알 수 없기 때문이다.
 	/// </summary>
-	void RequestOpen(string label, Action open, string verb = "여시겠습니까")
+	void SwitchTo(Action open)
 	{
-		if (!HasUnsavedChanges || confirmDialog == null)
-		{
-			open();
-			return;
-		}
 		if (savePending)
 		{
 			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
 			return;
 		}
-		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
-		confirmDialog.Show($"파일이 저장되지 않았습니다.\n{label}{Eul(label)} {verb}?", open);
+		StashCurrent();
+		open();
+	}
+
+	// 지금 페이지에 저장하지 않은 변경이 있으면 작업본으로 둔다. 다른 페이지를 열거나 편집 영역을 비우기 전에 부른다
+	void StashCurrent()
+	{
+		if (editingGlobals)
+		{
+			if (dirty) globalsDraft = globals;
+			return;
+		}
+		if (Function != null && CurrentUnsaved) drafts[Function.Guid] = Function;
 	}
 
 	/// <summary>
-	/// 편집 화면을 닫기 전에 부른다 (BlockEditorPanel). 저장하지 않은 변경이 없으면 바로 close를 하고, 있으면 확인창에서 「예」를 눌렀을 때
-	/// 저장하지 않은 내용을 버리고 close를 한다. 버리지 않으면 다음에 열 때 고치던 내용이 저장된 것처럼 남기 때문이다.
+	/// 편집 화면을 닫기 전에 부른다 (BlockEditorPanel). 저장하지 않은 변경이 어느 페이지에도 없으면 바로 close를 하고, 있으면 확인창에서
+	/// 「나가기」를 눌렀을 때 모든 페이지의 저장하지 않은 내용을 버리고 close를 한다. 「취소」를 누르면 편집 화면에 남는다.
+	/// 버리지 않으면 다음에 열 때 고치던 내용이 저장된 것처럼 남기 때문이다.
 	/// </summary>
 	public void RequestClose(Action close)
 	{
@@ -570,32 +591,30 @@ public class BlockEditor : MonoBehaviour
 			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
 			return;
 		}
+		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
 		confirmDialog.Show("파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?", () =>
 		{
 			DiscardUnsaved();
 			close();
-		});
+		}, "나가기 (Enter)", "취소 (Esc)");
 	}
 
-	// 저장하지 않은 내용을 버리고 마지막으로 저장한 상태를 다시 연다. 저장한 적 없는 새 페이지는 사라지고 처음 화면으로 돌아간다
+	// 모든 페이지의 저장하지 않은 내용(작업본)을 버리고, 지금 페이지는 마지막으로 저장한 상태를 다시 연다.
+	// 저장한 적 없는 새 페이지는 사라지고 처음 화면으로 돌아간다
 	void DiscardUnsaved()
 	{
-		if (editingGlobals)
-		{
-			OpenGlobals();
-			return;
-		}
+		drafts.Clear();
+		globalsDraft = null;
 
-		FunctionData saved = Function != null ? savedFunctions.FirstOrDefault(f => f.Guid == Function.Guid) : null;
-		if (saved != null)
+		if (editingGlobals) OpenGlobals();
+		else
 		{
-			Open(server != null ? Copy(saved) : FunctionStorage.Load(saved.Guid) ?? saved);
-			return;
+			FunctionData saved = Function != null ? savedFunctions.FirstOrDefault(f => f.Guid == Function.Guid) : null;
+			if (saved != null) Open(server != null ? Copy(saved) : FunctionStorage.Load(saved.Guid) ?? saved);
+			else if (server != null) OpenFirstSlot();
+			else Open(FunctionData.Create(UniqueName("새_함수")));
 		}
-
-		if (server != null) OpenFirstSlot();
-		else Open(FunctionData.Create(UniqueName("새_함수")));
-		ReloadSavedFunctions(); // 사라진 새 페이지 줄을 목록에서 뺀다
+		ReloadSavedFunctions(); // 사라진 새 페이지 줄을 빼고, 작업본의 이름 대신 저장된 이름을 보인다
 	}
 
 	// 「을」 「를」을 받침에 맞게 고른다. 한글이 아닌 글자(guard 등)로 끝나면 둘을 같이 적는다
@@ -619,9 +638,25 @@ public class BlockEditor : MonoBehaviour
 	/// <summary>
 	/// 함수 하나를 편집 영역에 연다. 함수에 블록이 이미 있으면 (불러온 함수) 그대로 화면에 만든다.
 	/// </summary>
-	public void Open(FunctionData function)
+	public void Open(FunctionData function) => OpenFunction(function, false);
+
+	// 함수 목록에서 고른 함수를 연다. 저장하지 않은 작업본이 있으면 그것을, 없으면 loadSaved로 읽은 저장된 함수를 연다 (#494)
+	void OpenPage(string guid, Func<FunctionData> loadSaved)
 	{
-		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수를 고치다 저장하지 않고 왔으면 저장된 것으로 되돌려 둔다 (#474)
+		if (drafts.TryGetValue(guid, out FunctionData draft))
+		{
+			OpenFunction(draft, true);
+			return;
+		}
+		FunctionData saved = loadSaved();
+		if (saved != null) OpenFunction(saved, false);
+	}
+
+	// fromDraft: 저장하지 않은 작업본을 다시 여는지. 그러면 연 뒤에도 「저장하지 않은 변경 있음」으로 둔다
+	void OpenFunction(FunctionData function, bool fromDraft)
+	{
+		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수의 작업본이 있어도 저장된 것을 본다 (#474)
+		// 저장할 때의 검사가 「이 페이지의 새 내용 + 나머지는 저장된 상태」이기 때문이다 (#494)
 		listGlobals = CurrentGlobals();
 		workspace.ClearViews();
 		editingGlobals = false;
@@ -633,20 +668,20 @@ public class BlockEditor : MonoBehaviour
 			functionNameField.Text = DisplayNameOf(function);
 			functionNameField.Interactable = !IsSlotFunction(function); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
 		}
-		dirty = false;
+		dirty = fromDraft;
 		SetMessage("");
 		ResetCompileResult();
 		RemoveStaleUnsavedEntry();
 		Redraw();
 	}
 
-	// 저장하지 않은 새 페이지에서 다른 곳으로 옮겼으면 그 페이지의 「저장 안 함」 줄을 목록에서 지운다.
-	// 저장한 적이 없어서 다시 열 수 없는데도 줄이 남아 있으면 눌러도 아무 일이 없기 때문이다 (#432)
+	// 저장하지 않은 새 페이지를 작업본으로 두지 않고 다른 곳으로 옮겼으면(고치지 않은 기본 빈 함수 등) 그 페이지의 「저장 안 함」 줄을 목록에서 지운다.
+	// 저장한 적이 없어서 다시 열 수 없는데도 줄이 남아 있으면 눌러도 아무 일이 없기 때문이다 (#432). 작업본으로 둔 새 페이지는 줄을 남긴다 (#494)
 	void RemoveStaleUnsavedEntry()
 	{
 		string currentGuid = editingGlobals ? null : Function?.Guid;
 		bool stale = functionItems.Any(e => e.guid != null && e.guid != GlobalsKey
-			&& e.guid != currentGuid && savedFunctions.All(f => f.Guid != e.guid));
+			&& e.guid != currentGuid && !drafts.ContainsKey(e.guid) && savedFunctions.All(f => f.Guid != e.guid));
 		if (stale) ReloadSavedFunctions();
 	}
 
@@ -670,12 +705,13 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 전역 변수 선언을 편집 영역에 연다 (함수 목록의 Global Variables). 실제 계정이면 서버가 보낸 것, 아니면 이 컴퓨터의 파일.
+	/// 전역 변수 선언을 편집 영역에 연다 (함수 목록의 Global Variables). 저장하지 않은 작업본이 있으면 그것을 (#494),
+	/// 없으면 실제 계정은 서버가 보낸 것, 임시 계정은 이 컴퓨터의 파일.
 	/// </summary>
 	public void OpenGlobals()
 	{
-		GlobalVariablesData source = server != null ? server.ReceivedGlobals : GlobalVariablesStorage.Load();
-		globals = CopyGlobals(source);
+		bool fromDraft = globalsDraft != null;
+		globals = fromDraft ? globalsDraft : CopyGlobals(server != null ? server.ReceivedGlobals : GlobalVariablesStorage.Load());
 
 		workspace.ClearViews();
 		editingGlobals = true;
@@ -686,7 +722,7 @@ public class BlockEditor : MonoBehaviour
 			functionNameField.Text = "Global Variables";
 			functionNameField.Interactable = false;
 		}
-		dirty = false;
+		dirty = fromDraft;
 		SetMessage("");
 		ResetCompileResult();
 		RemoveStaleUnsavedEntry();
@@ -724,6 +760,7 @@ public class BlockEditor : MonoBehaviour
 		if (ok)
 		{
 			dirty = false;
+			globalsDraft = null;
 			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
 			ReloadSavedFunctions();
 		}
@@ -787,6 +824,7 @@ public class BlockEditor : MonoBehaviour
 
 		FunctionStorage.Save(Function);
 		dirty = false;
+		drafts.Remove(Function.Guid);
 		SetMessage("저장됨");
 		ReloadSavedFunctions();
 
@@ -816,7 +854,9 @@ public class BlockEditor : MonoBehaviour
 		HideSuccess(); // 저장 버튼의 컴파일이 띄운 「컴파일 성공」을 지운다
 		ShowErrors(errors);
 		ShowTab(RightTab.Errors);
-		SetMessage($"{string.Join(", ", broken.Select(b => LabelOf(b.function)))}에 컴파일 오류가 생겨 저장하지 않았습니다", true);
+		// 오류가 생기는 함수를 작업본에서 이미 고쳤으면, 목록에는 밑줄이 없어도 저장된 내용 기준으로는 오류다. 그 함수를 먼저 저장하라고 알린다 (#494)
+		string hint = broken.Any(b => drafts.ContainsKey(b.function.Guid)) ? ". 고친 함수를 먼저 저장해 주세요" : "";
+		SetMessage($"{string.Join(", ", broken.Select(b => LabelOf(b.function)))}에 컴파일 오류가 생겨 저장하지 않았습니다{hint}", true);
 		Redraw();
 		return true;
 	}
@@ -1396,15 +1436,21 @@ public class BlockEditor : MonoBehaviour
 
 		if (functionFrame != null) UpdateFunctionFrame();
 
-		// 함수 목록: 지금 연 것을 고른 모양으로, 고쳤으면 이름 뒤 *
+		// 함수 목록: 지금 연 것을 고른 모양으로, 저장하지 않은 변경이 있으면 이름 뒤 * (지금 페이지와 작업본이 있는 페이지, #494)
+		// 컴파일 오류가 있으면 이름에 빨간 밑줄. 작업본까지 반영해 고칠 때마다 다시 본다 (#494).
+		// 예: 전역 변수 x를 지우면 저장하기 전에도 x를 쓰는 슬롯 Q에 밑줄이 생겨 어디를 고쳐야 하는지 보인다
 		string openKey = editingGlobals ? GlobalsKey : Function.Guid;
+		List<FunctionData> working = WorkingFunctions();
+		GlobalVariablesData workingGlobals = WorkingGlobals();
 		foreach (var entry in functionItems)
 		{
 			if (entry.item == null) continue;
 			bool open = entry.guid != null && entry.guid == openKey;
-			// 저장한 함수에 컴파일 오류가 있으면 이름에 빨간 밑줄 (견본)
-			bool error = entry.error || (entry.guid != null && entry.guid == compileFailedKey);
-			entry.item.Show(entry.prefix, entry.name + (open && HasUnsavedChanges ?" <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
+			bool unsaved = open ? CurrentUnsaved : entry.guid != null && (drafts.ContainsKey(entry.guid) || (entry.guid == GlobalsKey && globalsDraft != null));
+			FunctionData function = entry.guid != null ? working.FirstOrDefault(f => f.Guid == entry.guid) : null;
+			bool error = (function != null && FunctionChecker.HasErrors(function, workingGlobals, working))
+				|| (entry.guid != null && entry.guid == compileFailedKey);
+			entry.item.Show(entry.prefix, entry.name + (unsaved ? " <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
 		}
 
 		if (messageLabel != null)
@@ -1474,7 +1520,7 @@ public class BlockEditor : MonoBehaviour
 			bool saved = savedFunctions.Any(f => f.Guid == Function.Guid);
 			where = slot >= 0 ? $"슬롯 {KeyOf(slot)}" : saved ? "페이지 함수" : "새 함수";
 		}
-		return HasUnsavedChanges ? $"{where}, 저장하지 않은 변경 있음" : where;
+		return CurrentUnsaved ? $"{where}, 저장하지 않은 변경 있음" : where;
 	}
 
 	// 슬롯 번호(0~7)의 키 글자 Q W E R A S D F
@@ -1791,7 +1837,7 @@ public class BlockEditor : MonoBehaviour
 	bool HasFunctionList => functionList != null && functionItemPrefab != null;
 
 	// 함수 목록에 한 줄을 더한다. 함수 목록 칸이 있으면 그곳에, 없으면 위쪽 줄에 버튼으로 (onClick이 null이면 누를 수 없는 줄)
-	void AddFunctionEntry(string prefix, string guid, string name, string detail, Action onClick, bool dim = false, bool error = false)
+	void AddFunctionEntry(string prefix, string guid, string name, string detail, Action onClick, bool dim = false)
 	{
 		if (HasFunctionList)
 		{
@@ -1800,7 +1846,7 @@ public class BlockEditor : MonoBehaviour
 			if (onClick != null) item.Button.onClick.AddListener(() => onClick());
 			item.Button.interactable = onClick != null;
 			savedButtons.Add(item.gameObject);
-			functionItems.Add((item, prefix, guid, name, detail, dim, error));
+			functionItems.Add((item, prefix, guid, name, detail, dim));
 			return;
 		}
 		if (topBar != null && onClick != null) savedButtons.Add(AddTopButton(name, onClick).gameObject);
@@ -1827,7 +1873,7 @@ public class BlockEditor : MonoBehaviour
 		savedFunctions = FunctionStorage.LoadAll();
 		listGlobals = CurrentGlobals();
 		ClearSavedButtons();
-		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => RequestOpen("Global Variables", OpenGlobals));
+		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => SwitchTo(OpenGlobals));
 
 		// 슬롯 Q~F: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬·빈 슬롯은 누를 수 없음
 		// 실제 계정과 같게 줄에는 슬롯 키만 보인다 (#487, 사용자 결정). 끼운 함수의 이름은 그 줄을 열면 함수 틀에 보인다
@@ -1851,28 +1897,18 @@ public class BlockEditor : MonoBehaviour
 			}
 			equipped.Add(slotFunction.Guid);
 			string slotGuid = slotFunction.Guid;
-			string slotLabel = $"슬롯 {key}";
-			AddFunctionEntry("", slotGuid, key, key, () => RequestOpen(slotLabel, () =>
-			{
-				FunctionData loaded = FunctionStorage.Load(slotGuid);
-				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(slotFunction, listGlobals, savedFunctions));
+			// 작업본이 없으면 누를 때 파일에서 새로 읽어 연다 (오류 밑줄은 Redraw가 작업본으로 계산)
+			AddFunctionEntry("", slotGuid, key, key, () => SwitchTo(() => OpenPage(slotGuid, () => FunctionStorage.Load(slotGuid))));
 		}
 
 		// 페이지: 슬롯에 넣지 않은 저장한 함수. + 로 새 함수
 		List<FunctionData> pages = savedFunctions.Where(f => !equipped.Contains(f.Guid)).ToList();
 		AddFunctionHeader($"페이지 {pages.Count}", NewFunction);
-		AddUnsavedEntry();
+		AddUnsavedEntries();
 		foreach (FunctionData saved in pages)
 		{
 			string guid = saved.Guid;
-			// 누를 때 파일에서 새로 읽어 연다. 저장하지 않고 고친 내용이 섞이지 않게
-			string pageLabel = $"페이지 {saved.Name}";
-			AddFunctionEntry("-", guid, saved.Name, $"코드 {CodeSizeOf(saved)}", () => RequestOpen(pageLabel, () =>
-			{
-				FunctionData loaded = FunctionStorage.Load(guid);
-				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(saved, listGlobals, savedFunctions));
+			AddFunctionEntry("-", guid, WorkingNameOf(saved), $"코드 {CodeSizeOf(saved)}", () => SwitchTo(() => OpenPage(guid, () => FunctionStorage.Load(guid))));
 		}
 		RebuildPalette();
 		Redraw();
@@ -1884,7 +1920,7 @@ public class BlockEditor : MonoBehaviour
 		savedFunctions = server.ReceivedFunctions?.ToList() ?? new List<FunctionData>();
 		listGlobals = CurrentGlobals();
 		ClearSavedButtons();
-		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => RequestOpen("Global Variables", OpenGlobals));
+		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => SwitchTo(OpenGlobals));
 		AddFunctionHeader("슬롯", null);
 		for (int slot = 0; slot < SlotLoadout.SlotCount; slot++)
 		{
@@ -1897,23 +1933,43 @@ public class BlockEditor : MonoBehaviour
 				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
-			string slotLabel = $"슬롯 {key}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
-			AddFunctionEntry("", function.Guid, key, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
+			FunctionData slotFunction = function; // 반복 변수는 누를 때 이미 바뀌어 있으므로 지금 값을 잡아 둔다
+			AddFunctionEntry("", function.Guid, key, key, () => SwitchTo(() => OpenPage(slotFunction.Guid, () => Copy(slotFunction))));
 		}
 		AddFunctionHeader($"페이지 {PageFunctions().Count()} / {ProgressRules.MaxPageFunctions}", NewFunction);
-		AddUnsavedEntry();
+		AddUnsavedEntries();
 		foreach (FunctionData function in PageFunctions())
 		{
 			FunctionData page = function;
-			string pageLabel = $"페이지 {page.Name}";
-			AddFunctionEntry("-", page.Guid, page.Name, $"코드 {CodeSizeOf(page)}", () => RequestOpen(pageLabel, () => Open(Copy(page))), false, FunctionChecker.HasErrors(page, listGlobals, savedFunctions));
+			AddFunctionEntry("-", page.Guid, WorkingNameOf(page), $"코드 {CodeSizeOf(page)}", () => SwitchTo(() => OpenPage(page.Guid, () => Copy(page))));
 		}
 		RebuildPalette();
 		Redraw();
 	}
 
-	// 다른 함수(GUID가 다른)가 이미 이 이름을 쓰면 true
-	bool NameTaken(string name, string guid) => savedFunctions.Any(f => f.Guid != guid && f.Name == name);
+	// 다른 함수(GUID가 다른)가 이미 이 이름을 쓰면 true. 저장하지 않은 작업본의 이름도 본다 (#494, 작업본 두 개가 같은 이름이 되지 않게)
+	bool NameTaken(string name, string guid) => WorkingFunctions().Any(f => f.Guid != guid && f.Name == name);
+
+	// 함수 목록에 보일 페이지 이름. 작업본에서 이름을 바꿨으면 바꾼 이름 (#494)
+	string WorkingNameOf(FunctionData saved) => drafts.TryGetValue(saved.Guid, out FunctionData draft) ? draft.Name : saved.Name;
+
+	// 작업본을 반영한 함수들: 저장된 함수 중 작업본이 있으면 작업본, 지금 연 함수는 지금 내용, 저장하지 않은 새 페이지도 들어 있다 (#494)
+	List<FunctionData> WorkingFunctions()
+	{
+		List<FunctionData> list = savedFunctions.Select(f => drafts.TryGetValue(f.Guid, out FunctionData draft) ? draft : f).ToList();
+		foreach (FunctionData draft in drafts.Values)
+			if (list.All(f => f.Guid != draft.Guid)) list.Add(draft);
+		if (!editingGlobals && Function != null)
+		{
+			int index = list.FindIndex(f => f.Guid == Function.Guid);
+			if (index >= 0) list[index] = Function;
+			else list.Add(Function);
+		}
+		return list;
+	}
+
+	// 작업본을 반영한 전역 변수: 고치는 중이면 지금 내용, 작업본이 있으면 작업본, 없으면 저장된 것 (#494)
+	GlobalVariablesData WorkingGlobals() => editingGlobals ? globals : globalsDraft ?? listGlobals;
 
 	// 겹치지 않는 이름: 새_함수, 새_함수2, 새_함수3 …
 	string UniqueName(string baseName)
@@ -1923,11 +1979,24 @@ public class BlockEditor : MonoBehaviour
 			if (!NameTaken(baseName + n, null)) return baseName + n;
 	}
 
-	// 아직 저장하지 않은 새 함수도 페이지 맨 위에 보인다 (지금 연 함수)
-	void AddUnsavedEntry()
+	// 아직 저장하지 않은 새 함수도 페이지 맨 위에 보인다: 지금 연 새 함수와 작업본으로 둔 새 페이지 (#494). 작업본 줄을 누르면 그 페이지를 다시 연다
+	void AddUnsavedEntries()
 	{
-		if (editingGlobals || Function == null || savedFunctions.Any(f => f.Guid == Function.Guid)) return;
-		AddFunctionEntry("-", Function.Guid, Function.Name, "저장 안 함", () => { });
+		foreach (FunctionData page in NewPages())
+		{
+			string guid = page.Guid;
+			bool current = !editingGlobals && Function != null && guid == Function.Guid;
+			AddFunctionEntry("-", guid, page.Name, "저장 안 함", current ? () => { } : () => SwitchTo(() => OpenPage(guid, () => null)));
+		}
+	}
+
+	// 저장하지 않은 새 페이지들: 작업본 중 저장된 함수에 없는 것, 그리고 지금 연 함수가 저장된 함수에 없으면 그것도
+	List<FunctionData> NewPages()
+	{
+		List<FunctionData> pages = drafts.Values.Where(d => savedFunctions.All(f => f.Guid != d.Guid)).ToList();
+		if (!editingGlobals && Function != null && savedFunctions.All(f => f.Guid != Function.Guid) && pages.All(p => p.Guid != Function.Guid))
+			pages.Add(Function);
+		return pages;
 	}
 
 	void ClearSavedButtons()
@@ -1942,16 +2011,17 @@ public class BlockEditor : MonoBehaviour
 
 	void NewFunction()
 	{
-		if (server != null && PageFunctions().Count() >= ProgressRules.MaxPageFunctions)
+		// 저장하지 않은 새 페이지도 센다. 저장할 때 개수 초과로 거부될 페이지를 미리 만들지 않게 (#494)
+		if (server != null && PageFunctions().Count() + NewPages().Count >= ProgressRules.MaxPageFunctions)
 		{
 			SetMessage($"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음", true);
 			Redraw();
 			return;
 		}
-		RequestOpen("새 페이지", CreateNewPage, "만드시겠습니까");
+		SwitchTo(CreateNewPage);
 	}
 
-	// 새 페이지를 연다. 저장하기 전에도 저장하지 않은 것으로 쳐서, 다른 곳을 열거나 나가려 하면 먼저 묻는다 (사라지기 때문)
+	// 새 페이지를 연다. 저장하기 전에도 저장하지 않은 것으로 쳐서, 다른 곳을 열면 작업본으로 두고 나가려 하면 먼저 묻는다 (사라지기 때문)
 	void CreateNewPage()
 	{
 		SetMessage("");

@@ -8,7 +8,7 @@ using UnityEngine;
 /// <para>
 /// - 그림: Assets/_HW/Lobby/Gates/gate_{hunting, training, raid}.png (28×48픽셀 = 1.75×3칸). 남색 금속 문틀 + 이끼 덩굴 + 위의 작은 모니터, 안쪽은 가는 곳 분위기로 빛나는 화면 (노션 컨셉).
 ///   사냥터 청록 스캔 줄, 연습장 하늘색 격자, 레이드 마젠타 글리치 + 크리스털. 가져오기 설정(16 PPU, Point, 압축 없음, 기준점 아래 가운데)도 여기서 맞춘다.<br/>
-/// - 로비 입구(LobbyEntrance)는 Destination에 맞는 그림, 출구(이우림의 PlaceExit)는 그 장소로 들어온 로비 입구와 같은 그림 (같은 문의 양쪽). 지금 그림의 아래 끝(땅)에 문 아래 끝을 맞춘다.
+/// - 로비 입구(LobbyEntrance)는 Destination에 맞는 그림, 출구(이우림의 PlaceExit)는 로비 귀환 문 그림 gate_lobby (갈색 나무 문틀 + 보라 화면, 노션 11/16). 지금 그림의 아래 끝(땅)에 문 아래 끝을 맞춘다.
 ///   색은 흰색(그림 그대로), 범위(콜라이더)와 ↑ 안내 자리는 문 크기에 맞춘다. 프리팹(Entrance, PlaceExit)은 그대로 두고 씬에 놓인 것만 바꾼다.
 /// </para>
 /// </summary>
@@ -47,13 +47,9 @@ public static class EntranceGateBuilder
 				};
 				if (Apply(entrance.transform, LoadGate(gate))) inScene++;
 			}
-			// 각 장소의 출구(이우림의 PlaceExit, 로비로 돌아감): 로비에서 이 장소로 들어온 문과 같은 색 (같은 문의 양쪽)
-			string exitGate = name switch
-			{
-				"TrainingRoom" => "gate_training",
-				"RaidDungeon" => "gate_raid",
-				_ => "gate_hunting",
-			};
+			// 각 장소의 출구(이우림의 PlaceExit, 로비로 돌아감): 로비 귀환 문 그림 하나로 (노션 11/16: 들어온 문과 같은 색이면 로비로 가는 문인지 몰라서)
+			// 갈색 나무 문틀 + 로비 노을 보라 화면. 입구 문(남색 금속 문틀)과 다르게 보인다
+			string exitGate = "gate_lobby";
 			foreach (PlaceExit exit in Object.FindObjectsByType<PlaceExit>(FindObjectsInactive.Include, FindObjectsSortMode.None))
 				if (Apply(exit.transform, LoadGate(exitGate))) inScene++;
 

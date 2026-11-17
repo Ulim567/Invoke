@@ -6,7 +6,7 @@ using UnityEngine;
 /// [표시] 상태 이상이 걸린 대상의 모습(몸 효과)을 보여 준다 (#353). StatusEffects와 같은 오브젝트(몬스터 프리팹 최상위)에 붙인다.
 /// <para>
 /// - StatusEffects.StatusApplied / StatusRemoved를 받아 그린다. 상태 값은 읽기만 한다 (코드 작성 규칙 1). 이 두 이벤트는 서버·Host·클라이언트 모든 화면에서 불린다 (#325).<br/>
-/// - 색 효과: 실명은 어두운 틴트, 이속 감소는 파란 틴트. 둘 다 걸리면 곱해서 섞는다. 출혈은 데미지가 들어갈 때마다(1초마다) 빨갛게 번쩍인다.<br/>
+/// - 색 효과: 실명은 어두운 틴트, 이속 감소는 파란 틴트. 둘 다 걸리면 곱해서 섞는다. 출혈은 데미지가 들어갈 때마다(1초마다) 빨갛게, 중독은 초록으로 번쩍인다.<br/>
 ///   · 서버·Host는 StatusEffects.BleedTicked(실제 데미지)에 맞춰 번쩍인다. 클라이언트에는 BleedTicked가 없어서, 출혈이 걸린 순간부터 BleedInterval마다 번쩍인다.<br/>
 ///   · 색은 상태가 걸린 동안만 바꾸고, 모두 풀리면 처음 색으로 되돌린다.<br/>
 /// - 그림 효과(핏방울, 표식, 머리 위 별, 검은 연기, 발밑 얼음): 걸린 동안 대상의 자식으로 띄운다. 대상 크기가 1이 아니어도 그림은 원래 비율 (#456). Inspector 칸이 비어 있으면 기본 그림(Resources/StatusEffects/상태 이름, #363)을 쓰고, 그것도 없으면 색 효과만 낸다.<br/>
@@ -29,6 +29,8 @@ public class StatusEffectView : MonoBehaviour
 	[SerializeField] Color bleedFlashColor = new Color(1f, 0.25f, 0.25f, 1f);
 	[Tooltip("출혈: 번쩍이는 시간 (초)")]
 	[SerializeField, Min(0.02f)] float bleedFlashSeconds = 0.15f;
+	[Tooltip("중독: 번쩍일 때 색 (번쩍이는 시간은 출혈과 같다)")]
+	[SerializeField] Color poisonFlashColor = new Color(0.45f, 1f, 0.35f, 1f);
 
 	[Header("그림 효과 (비워 두면 Resources/StatusEffects의 기본 그림, #363)")]
 	[Tooltip("출혈: 몸에서 떨어지는 핏방울 (몸 가운데)")]
@@ -41,6 +43,8 @@ public class StatusEffectView : MonoBehaviour
 	[SerializeField] GameObject blindEffect;
 	[Tooltip("이속 감소: 발밑 기운 (발밑)")]
 	[SerializeField] GameObject slowEffect;
+	[Tooltip("중독: 몸에서 올라오는 독 방울 (몸 가운데)")]
+	[SerializeField] GameObject poisonEffect;
 	[Tooltip("머리 위 효과(별)를 콜라이더 윗면에서 얼마나 올릴지 (유닛). 아이콘(StatusIconView)보다 낮게")]
 	[SerializeField, Min(0f)] float headEffectHeight = 0.2f;
 
@@ -50,6 +54,9 @@ public class StatusEffectView : MonoBehaviour
 	bool tinted;
 	float flashEndTime = -1f;
 	float nextClientBleedFlash;
+	float nextClientPoisonFlash;
+	// 지금 번쩍임이 중독 때문이면 true (색만 다르다)
+	bool flashIsPoison;
 	readonly HashSet<StatusType> shown = new HashSet<StatusType>();
 	readonly Dictionary<StatusType, GameObject> effects = new Dictionary<StatusType, GameObject>();
 
@@ -88,6 +95,7 @@ public class StatusEffectView : MonoBehaviour
 		status.StatusApplied += OnApplied;
 		status.StatusRemoved += OnRemoved;
 		status.BleedTicked += OnBleedTicked;
+		status.PoisonTicked += OnPoisonTicked;
 	}
 
 	void OnDisable()
@@ -95,6 +103,7 @@ public class StatusEffectView : MonoBehaviour
 		status.StatusApplied -= OnApplied;
 		status.StatusRemoved -= OnRemoved;
 		status.BleedTicked -= OnBleedTicked;
+		status.PoisonTicked -= OnPoisonTicked;
 		foreach (StatusType type in new List<StatusType>(effects.Keys)) DespawnEffect(type);
 		shown.Clear();
 		flashEndTime = -1f;
@@ -106,6 +115,7 @@ public class StatusEffectView : MonoBehaviour
 		// 다시 걸면(지속 시간만 새로 시작) 그대로 둔다. 출혈 번쩍임 간격도 서버처럼 그대로
 		if (!shown.Add(type)) return;
 		if (type == StatusType.Bleed) nextClientBleedFlash = Time.time + StatusDefaults.BleedInterval;
+		if (type == StatusType.Poison) nextClientPoisonFlash = Time.time + StatusDefaults.PoisonInterval;
 		SpawnEffect(type);
 	}
 
@@ -117,10 +127,20 @@ public class StatusEffectView : MonoBehaviour
 
 	void OnBleedTicked(int damage) => Flash();
 
+	void OnPoisonTicked(int damage) => FlashPoison();
+
 	void Flash()
 	{
 		flashEndTime = Time.time + bleedFlashSeconds;
+		flashIsPoison = false;
 		BleedFlashCount++;
+	}
+
+	// 중독 번쩍임. 출혈 번쩍임 횟수(BleedFlashCount)에는 세지 않는다
+	void FlashPoison()
+	{
+		flashEndTime = Time.time + bleedFlashSeconds;
+		flashIsPoison = true;
 	}
 
 	void Update()
@@ -130,6 +150,11 @@ public class StatusEffectView : MonoBehaviour
 		{
 			nextClientBleedFlash += StatusDefaults.BleedInterval;
 			Flash();
+		}
+		if (IsClientOnly && shown.Contains(StatusType.Poison) && Time.time >= nextClientPoisonFlash)
+		{
+			nextClientPoisonFlash += StatusDefaults.PoisonInterval;
+			FlashPoison();
 		}
 	}
 
@@ -152,7 +177,8 @@ public class StatusEffectView : MonoBehaviour
 		}
 
 		Color color = baseColor * tint;
-		if (flashing) color = new Color(bleedFlashColor.r, bleedFlashColor.g, bleedFlashColor.b, color.a);
+		Color flashColor = flashIsPoison ? poisonFlashColor : bleedFlashColor;
+		if (flashing) color = new Color(flashColor.r, flashColor.g, flashColor.b, color.a);
 		targetRenderer.color = color;
 		tinted = true;
 	}
@@ -191,6 +217,7 @@ public class StatusEffectView : MonoBehaviour
 			StatusType.Stun => stunEffect,
 			StatusType.Blind => blindEffect,
 			StatusType.Slow => slowEffect,
+			StatusType.Poison => poisonEffect,
 			_ => null,
 		};
 		return assigned != null ? assigned : DefaultPrefab(type);

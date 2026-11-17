@@ -35,6 +35,7 @@
   - 떼면 찍은 대상 모두로 시전을 요청한다 (찍은 순서). **아무도 찍지 않고 떼면 지금 고른 대상 한 명**으로 요청한다.
   - 서버에는 `FunctionExecutorNetwork.RequestCast(슬롯, 대상 배열)`로 보낸다 (#238, #243). 서버가 `RuntimeValue.FromBugs`로 바꿔 스킬의 `targets`에 넣는다. 로그와 `CastRequested`는 다른 시전처럼 `CastAccepted`를 받은 뒤에 한다.
   - 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수. `SummonedSwords.ReadyCount`를 읽는다 (summoned-sword.md). 없으면 `TempSwordState.SummonedSwordCount`, 그것도 없으면 제한 없음.
+  - 파이썬 스킬(`py.*`, #486): 소환검 대신 지금 가진 마나 구슬 수(`ManaOrbs.Count`). 구슬 난사가 구슬 수만큼 찍는다.
   - 고르는 동안 Player 맵이 꺼져 있어 Space가 점프로 들어가지 않는다.
 - 범위
   - 누르는 순간 시전하고, 플레이어 주변 `Area Radius`(스킬 표, 임시 4) 안의 살아 있는 몬스터를 대상으로 알린다. 0명이어도 시전한다.

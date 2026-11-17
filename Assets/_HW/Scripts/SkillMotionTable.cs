@@ -75,6 +75,30 @@ public static class SkillMotionTable
 		new Entry("c.sword_ride", "검 타기", null, 0f),
 		new Entry("common.dash", "대시", null, 0f),
 		new Entry("common.double_jump", "더블 점프", null, 0f),
+
+		// 파이썬 마법사 (박진우). 전용 그림이 생길 때까지 전부 지팡이 시전(Cast, Py_Cast) 모션이다. 파이썬 컨트롤러(Py_Player)에는 Slash·Throw·Summon 상태가 없다
+		// 원소
+		new Entry("py.magic_missile", "매직 미사일", Cast, 0.5f),
+		new Entry("py.fireball", "파이어볼", Cast, 0.5f),
+		new Entry("py.ice_spear", "얼음 창", Cast, 0.5f),
+		new Entry("py.chain_lightning", "체인 라이트닝", Cast, 0.5f),
+		// 범위
+		new Entry("py.meteor", "메테오", Cast, 0.75f),
+		new Entry("py.blizzard", "블리자드", Cast, 0.75f),
+		new Entry("py.venom_mist", "독 안개", Cast, 0.75f),
+		// 구슬
+		new Entry("py.orb_create", "구슬 생성", Cast, 0.5f),
+		new Entry("py.orb_shot", "구슬 발사", Cast, 0.5f),
+		new Entry("py.orb_barrage", "구슬 난사", Cast, 0.75f),
+		new Entry("py.orb_burst", "구슬 폭발", Cast, 0.5f),
+		new Entry("py.orb_shield", "구슬 보호막", Cast, 0.5f),
+		// 보조
+		new Entry("py.hex", "저주", Cast, 0.5f),
+		new Entry("py.snake_bind", "뱀 속박", Cast, 0.5f),
+		new Entry("py.flash", "섬광", Cast, 0.5f),
+		// 이동 (모션 없음)
+		new Entry("py.blink", "블링크", null, 0f),
+		new Entry("py.levitate", "공중 부양", null, 0f),
 	};
 
 	static Dictionary<string, Entry> byId;

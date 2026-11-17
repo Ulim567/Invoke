@@ -3,30 +3,32 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
-/// 참고(Reference) 카드의 자세한 내용 한 항목 (예: 파라미터, 예시). 카드를 펼치면 위에서부터 차례로 보인다.
+/// 참고(Reference) 카드의 자세한 내용 한 항목 (예: 슬롯, 예시). 카드를 펼치면 위에서부터 차례로 보인다.
 /// <para>
-/// 내용은 둘 중 하나다. Items가 있으면 「- 이름: 설명」 줄들(파라미터, 채울 곳, 돌려주는 값), 없으면 Body 글자.
+/// Items가 있으면 「- 이름: 설명」 줄들(슬롯, return 값). 없으면 Body 글자, Code(코드 색), Result(「결과: 」 뒤 글자)를 차례로 보인다. 비어 있는 것은 건너뛴다.
 /// </para>
 /// </summary>
 public class ReferenceSection
 {
-	/// <summary>항목 이름 (예: 채울 곳, 파라미터, 돌려주는 값, 예시, 실행)</summary>
+	/// <summary>항목 이름 (예: 용도, 예시, 슬롯, return 값, 주의할 점, 실행)</summary>
 	public string Title;
 
-	/// <summary>항목 내용. 여러 줄이면 줄바꿈으로 나눈다. Items가 있으면 쓰지 않는다</summary>
+	/// <summary>항목 글. 예시에서는 「예를 들면」으로 시작하는 상황. Items가 있으면 쓰지 않는다</summary>
 	public string Body;
 
-	/// <summary>Body가 코드(예시)이면 true. 카드가 코드 색으로 보인다</summary>
-	public bool IsCode;
+	/// <summary>코드 (예시 코드). 카드가 코드 색으로 보인다</summary>
+	public string Code;
 
-	/// <summary>이름 붙은 줄들. 카드가 이름을 강조색으로 보인다. 예: (target, 몬스터 한 명입니다.)</summary>
+	/// <summary>예시 코드를 실행한 결과. 카드가 「결과: 」를 붙여 보인다</summary>
+	public string Result;
+
+	/// <summary>이름 붙은 줄들. 카드가 이름을 코드 색으로 보인다. 예: (target, 몬스터 한 명입니다.)</summary>
 	public List<(string Name, string Text)> Items;
 
-	public ReferenceSection(string title, string body, bool isCode = false)
+	public ReferenceSection(string title, string body)
 	{
 		Title = title;
 		Body = body;
-		IsCode = isCode;
 	}
 
 	public ReferenceSection(string title, List<(string Name, string Text)> items)
@@ -34,6 +36,10 @@ public class ReferenceSection
 		Title = title;
 		Items = items;
 	}
+
+	/// <summary>예시 항목: 상황, 코드, 결과. 셋 중 빈 것은 보이지 않는다</summary>
+	public static ReferenceSection Example(string situation, string code, string result) =>
+		new ReferenceSection("예시", situation) { Code = code, Result = result };
 }
 
 /// <summary>
@@ -53,10 +59,10 @@ public class BlockReferenceEntry
 	/// <summary>분류 태그의 색을 정할 때 쓰는 견본 블록 (BlockLabels.ColorOf). 편집 영역에 놓지 않는다</summary>
 	public BlockData Sample;
 
-	/// <summary>설명 한 문장 (접힌 카드에 보인다). 스킬이면 앞에 화면 이름 (검 찌르기: ...)</summary>
+	/// <summary>하는 일 한 문장 (펼친 카드의 맨 위). 설명 표(ItemDescriptions)의 Summary</summary>
 	public string Summary;
 
-	/// <summary>형식 (접힌 카드에 코드로 보인다). 문법 블록은 if (조건) { 블록 }, 함수는 원형 void thrust(Target target);</summary>
+	/// <summary>형식 (접힌 카드에 코드로 보인다). 문법 블록은 if (condition) { body }, 함수는 원형 void thrust(Target target);</summary>
 	public string CodeText;
 
 	/// <summary>카드를 펼치면 보이는 자세한 내용. 위에서부터 차례로 보인다</summary>
@@ -70,22 +76,21 @@ public class BlockReferenceEntry
 }
 
 /// <summary>
-/// 참고(Reference) 창에 보여 줄 블록 설명 표와 검색.
+/// 참고(Reference) 창의 카드와 설명창을 설명 표(ItemDescriptions)에서 만든다. 설명 문장은 이 파일에 적지 않는다.
 /// <para>
-/// - 문법 블록(제어, 변수, 값, return)과 malloc·free·wait: 이 파일의 표에 설명을 직접 적는다. 스킬 트리 노드 하나가 블록 여러 개를 함께 열어서
-///   (예: if문 노드가 if, compare를 같이 엶) 노드 설명을 그대로 쓰면 블록과 맞지 않기 때문이다.
+/// - 문법 블록(제어, 변수, 값, return)과 malloc·free·wait: 이 파일의 표에는 이름, 분류, 견본 블록만 적고, 형식과 설명은 ItemDescriptions.Of(견본 블록)에서 읽는다.
 ///   malloc·free·wait 카드는 함수 탭과 같이 함수 카드 모양(소문자 이름, 한글 이름, 원형)으로 보인다 (#489).<br/>
 /// - 분류 태그는 「분류 > 소분류」 두 단계 (제어 > 조건, 함수 > 스킬). 참고 탭은 앞 단계(Group)마다 머리글을 둔다 (#489).<br/>
 /// - 함수 블록(C 스킬, 공통 이동, 입력): 함수 탭에 나오는 사전 정의 함수(c., common., input., game.)마다 한 장.
-///   설명은 스킬 트리 노드 설명(SkillTreeNode.Description)을 그대로 읽고, 호출 모양·파라미터·동작 시간·쿨타임은 사전 정의 함수의 값에서 만든다.
-///   파라미터에 무엇을 넣는지는 코드에서 알 수 없어 이 파일의 표에 적는다.<br/>
-/// - 블록 목록(BlockEditor.PaletteGroups)과 따로 적은 표이므로, 블록 목록에 블록을 더하면 이 표에도 더한다.
+///   설명은 ItemDescriptions.Get(고정 ID)에서 읽고, 원형·파라미터·동작 시간·쿨타임은 사전 정의 함수의 값에서 만든다.<br/>
+/// - 카드를 펼친 내용의 순서는 해금 설명 카드와 같다: 하는 일 → 용도 → 예시 → 슬롯 → (return 값) → 주의할 점 → (실행).<br/>
+/// - 블록 목록(BlockEditor.PaletteGroups)과 따로 적은 표이므로, 블록 목록에 블록을 더하면 이 표와 ItemDescriptions에도 더한다.
 /// </para>
 /// </summary>
 public static class BlockReference
 {
 	// 블록 목록에 나오는 사전 정의 함수의 고정 ID 앞부분 (BlockEditor.PaletteFunctionPrefixes와 같다)
-	static readonly string[] FunctionPrefixes = { "c.", "common.", "input.", "game." };
+	static readonly string[] FunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
 
@@ -126,240 +131,33 @@ public static class BlockReference
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
 
 	// 문법 블록 ---------------------------------------------------------------
-	// (이름, 분류, 견본 블록을 만드는 함수, C 표기 예시, 설명 한 문장)
-	static readonly (string Name, string Category, Func<BlockData> Sample, string Code, string Summary)[] SyntaxRows =
+	// (이름, 분류, 견본 블록을 만드는 함수). 형식·설명은 견본 블록의 key로 ItemDescriptions에서 읽는다
+	static readonly (string Name, string Category, Func<BlockData> Sample)[] SyntaxRows =
 	{
-		("If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.If), "if (hp > 5) { ... }",
-			"조건 칸이 참일 때만 안쪽 블록을 실행합니다."),
-		("Else If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.ElseIf), "else if (hp > 0) { ... }",
-			"앞의 if나 else if가 거짓일 때 이 조건을 검사해 참이면 안쪽을 실행합니다."),
-		("Else", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.Else), "else { ... }",
-			"앞의 조건이 모두 거짓일 때 안쪽 블록을 실행합니다."),
-		("For", Category("제어", "반복"), () => BlockData.For("i", Int("0"), Int("10")), "for (int i = 0; i < 10; i++) { ... }",
-			"시작 값부터 끝 값 직전까지 i를 1씩 늘리며 안쪽 블록을 반복합니다."),
-		("While", Category("제어", "반복"), () => BlockData.While(SlotData.EmptyValue()), "while (hp > 0) { ... }",
-			"조건 칸이 참인 동안 안쪽 블록을 계속 반복합니다."),
-		("Break", Category("제어", "반복"), () => BlockData.Break(), "break;",
-			"가장 안쪽 반복문을 바로 끝냅니다."),
-		("Continue", Category("제어", "반복"), () => BlockData.Continue(), "continue;",
-			"이번 반복을 건너뛰고 다음 반복으로 넘어갑니다."),
+		("If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.If)),
+		("Else If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.ElseIf)),
+		("Else", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.Else)),
+		("For", Category("제어", "반복"), () => BlockData.For("i", Int("0"), Int("10"))),
+		("While", Category("제어", "반복"), () => BlockData.While(SlotData.EmptyValue())),
+		("Break", Category("제어", "반복"), () => BlockData.Break()),
+		("Continue", Category("제어", "반복"), () => BlockData.Continue()),
 
-		("Declare", Category("변수", "변수"), () => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"), "int x = 3;",
-			"타입과 이름을 골라 변수를 만들고, 원하면 처음 값을 넣습니다."),
-		("Assign", Category("변수", "변수"), () => BlockData.Assign("x", SlotData.EmptyValue()), "x = 5;",
-			"이미 만든 변수에 새 값을 담습니다. 왼쪽 칸을 눌러 위에서 선언한 변수를 고릅니다."),
-		("Array", Category("변수", "배열"), () => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")), "int arr[3];",
-			"타입과 칸 수를 정해 같은 타입의 값 여러 개를 담는 배열을 만듭니다."),
-		("Array Get", Category("변수", "배열"), () => BlockData.ArrayGet("arr", SlotData.EmptyValue()), "arr[i]",
-			"배열의 i번째 칸 값을 읽습니다. 값 칸에 끼워 쓰고, 칸 번호는 0부터 셉니다."),
-		("Array Set", Category("변수", "배열"), () => BlockData.ArraySet("arr", SlotData.EmptyValue(), SlotData.EmptyValue()), "arr[i] = 7;",
-			"배열의 i번째 칸에 값을 담습니다. 칸 번호는 0부터 셉니다."),
+		("Declare", Category("변수", "변수"), () => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x")),
+		("Assign", Category("변수", "변수"), () => BlockData.Assign("x", SlotData.EmptyValue())),
+		("Array", Category("변수", "배열"), () => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3"))),
+		("Array Get", Category("변수", "배열"), () => BlockData.ArrayGet("arr", SlotData.EmptyValue())),
+		("Array Set", Category("변수", "배열"), () => BlockData.ArraySet("arr", SlotData.EmptyValue(), SlotData.EmptyValue())),
 
-		("Arithmetic", "값", () => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()), "x + 1",
-			"두 값을 + - * / % 중 하나로 계산합니다. 값 칸에 끼워 씁니다."),
-		("Compare", "값", () => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()), "hp > 5",
-			"두 값을 > < == != >= <= 중 하나로 비교해 참 또는 거짓을 만듭니다. 값 칸에 끼워 씁니다."),
-		("Logic", "값", () => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()), "a && b",
-			"두 조건을 &&(모두 참) 또는 ||(하나라도 참)로 합칩니다. 값 칸에 끼워 씁니다."),
-		("Not", "값", () => BlockData.Not(SlotData.EmptyValue()), "!done",
-			"참과 거짓을 뒤집습니다. 값 칸에 끼워 씁니다."),
+		("Arithmetic", "값", () => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue())),
+		("Compare", "값", () => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue())),
+		("Logic", "값", () => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue())),
+		("Not", "값", () => BlockData.Not(SlotData.EmptyValue())),
 
-		("Malloc", Category("함수", "메모리"), () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)), "malloc(Sword)",
-			"heap에 Sword를 만들고 그 포인터를 돌려줍니다. 소환검은 최대 5개이고, 만들지 못하면 NULL을 돌려줍니다."),
-		("Free", Category("함수", "메모리"), () => BlockData.Free(SlotData.EmptyValue()), "free(s);",
-			"포인터가 가리키는 heap 메모리를 해제합니다."),
+		("Malloc", Category("함수", "메모리"), () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword))),
+		("Free", Category("함수", "메모리"), () => BlockData.Free(SlotData.EmptyValue())),
 
-		("Return", "함수", () => BlockData.Return(), "return n;",
-			"함수를 끝냅니다. 값을 적으면 부른 쪽에 그 값을 돌려줍니다."),
-		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")), "wait(0.5초);",
-			"적은 초만큼 기다린 뒤 다음 블록으로 넘어갑니다."),
-	};
-
-	// 문법 블록의 자세한 내용: 이름 → (형식, 채울 곳 줄들, 동작, 예시, 주의). 주의가 없으면 null
-	static readonly Dictionary<string, (string Format, string[] Fills, string Behavior, string Example, string Note)> SyntaxDetails =
-		new Dictionary<string, (string, string[], string, string, string)>
-	{
-		["If"] = ("if (조건) { 블록 }",
-			new[]
-			{
-				"조건 — 참 또는 거짓이 되는 값입니다. Compare, Logic 블록을 끼우거나 true, false를 적습니다.",
-				"안쪽 블록 — 조건이 참일 때 실행할 블록을 놓는 곳입니다.",
-			},
-			"조건이 참이면 안쪽 블록을 위에서부터 차례로 실행하고, 거짓이면 건너뜁니다. 바로 아래에 Else If나 Else를 붙이면 거짓일 때 다른 길을 고를 수 있습니다.",
-			"if (hp > 5) {\n  thrust(get_bug());\n}",
-			"조건 칸이 비어 있으면 컴파일 오류입니다."),
-		["Else If"] = ("else if (조건) { 블록 }",
-			new[]
-			{
-				"조건 — 참 또는 거짓이 되는 값입니다.",
-				"안쪽 블록 — 조건이 참일 때 실행할 블록을 놓는 곳입니다.",
-			},
-			"바로 위의 if와 else if의 조건이 모두 거짓일 때만 이 조건을 검사하고, 참이면 안쪽을 실행합니다. 앞에서 이미 한 곳을 실행했으면 건너뜁니다.",
-			"if (hp > 5) {\n  thrust(get_bug());\n} else if (hp > 0) {\n  dash();\n}",
-			"if 또는 else if 바로 아래에만 놓을 수 있습니다."),
-		["Else"] = ("else { 블록 }",
-			new[] { "안쪽 블록 — 앞의 조건이 모두 거짓일 때 실행할 블록을 놓는 곳입니다. 조건 칸은 없습니다." },
-			"바로 위의 if와 else if의 조건이 모두 거짓일 때만 안쪽 블록을 실행합니다.",
-			"if (hp > 5) {\n  thrust(get_bug());\n} else {\n  dash();\n}",
-			"if 또는 else if 바로 아래에만 놓을 수 있습니다. else 바로 아래에는 else if, else를 붙일 수 없습니다."),
-		["For"] = ("for (int i = 시작; i < 끝; i++) { 블록 }",
-			new[]
-			{
-				"i — 몇 번째 반복인지 세는 변수의 이름입니다. 이름 칸에서 바꿀 수 있습니다.",
-				"시작 — i의 처음 값입니다.",
-				"끝 — i가 이 값에 닿으면 반복을 끝냅니다. 끝 값은 포함하지 않습니다.",
-				"안쪽 블록 — 반복할 블록을 놓는 곳입니다.",
-			},
-			"i가 시작 값에서 출발해 1씩 늘어나며, i < 끝인 동안 안쪽 블록을 반복합니다. 시작 0, 끝 3이면 i는 0, 1, 2로 세 번 실행합니다.",
-			"for (int i = 0; i < 3; i++) {\n  thrust(get_bug());\n}",
-			"시작 값이 끝 값 이상이면 한 번도 실행하지 않습니다."),
-		["While"] = ("while (조건) { 블록 }",
-			new[]
-			{
-				"조건 — 참 또는 거짓이 되는 값입니다.",
-				"안쪽 블록 — 조건이 참인 동안 반복할 블록을 놓는 곳입니다.",
-			},
-			"조건을 먼저 검사하고, 참이면 안쪽 블록을 실행한 뒤 다시 조건을 검사합니다. 거짓이 되면 반복을 끝냅니다.",
-			"int n = 3;\nwhile (n > 0) {\n  thrust(get_bug());\n  n = n - 1;\n}",
-			"안쪽에서 조건이 거짓이 되게 만들지 않으면 끝나지 않습니다. Break로 빠져나올 수 있습니다."),
-		["Break"] = ("break;",
-			new[] { "채울 곳이 없습니다." },
-			"가장 안쪽의 for 또는 while을 바로 끝내고, 그 반복문 다음 블록으로 넘어갑니다.",
-			"for (int i = 0; i < 10; i++) {\n  if (i == 3) {\n    break;\n  }\n}",
-			"for, while 안쪽에서만 쓸 수 있습니다. 밖에 놓으면 컴파일 오류입니다."),
-		["Continue"] = ("continue;",
-			new[] { "채울 곳이 없습니다." },
-			"이번 반복의 남은 블록을 건너뛰고 다음 반복으로 넘어갑니다. for는 i를 1 늘린 뒤 조건을 다시 검사합니다.",
-			"for (int i = 0; i < 5; i++) {\n  if (i == 2) {\n    continue;\n  }\n  thrust(get_bug());\n}",
-			"for, while 안쪽에서만 쓸 수 있습니다. 밖에 놓으면 컴파일 오류입니다."),
-
-		["Declare"] = ("타입 이름;\n타입 이름 = 처음 값;",
-			new[]
-			{
-				"타입 — int, float, bool, char, string, Sword*, Target 중에서 고릅니다. Sword*에는 summon_sword()가 돌려준 소환검을, Target에는 get_bug()가 돌려준 몬스터를 담습니다.",
-				"이름 — 새 변수의 이름입니다. 영문자, 숫자, 밑줄만 쓰고 숫자로 시작할 수 없습니다.",
-				"처음 값 — 변수에 처음 담을 값입니다. 블록 끝의 > 버튼으로 칸을 펼치고, < 버튼으로 접습니다(넣은 값은 지워집니다). 비워 두면 그 타입의 기본값으로 시작합니다.",
-			},
-			"변수를 만들고 처음 값을 담습니다. 이후 그 이름으로 값을 읽고, Assign으로 값을 바꿉니다.",
-			"int hp = 10;",
-			"같은 이름의 변수를 두 번 선언하면 오류입니다."),
-		["Assign"] = ("변수 = 값;",
-			new[]
-			{
-				"변수 — 눌러서 이 블록보다 위에서 선언한 변수 중에 고릅니다.",
-				"값 — 담을 값입니다. 숫자, 변수, 값 블록을 넣습니다.",
-			},
-			"오른쪽 값을 계산한 뒤 변수에 담아, 이전에 담겨 있던 값을 바꿉니다.",
-			"hp = hp - 1;",
-			"선언하지 않은 변수에 담으면 컴파일 오류입니다."),
-		["Array"] = ("타입 이름[칸 수];",
-			new[]
-			{
-				"타입 — 원소의 타입입니다.",
-				"이름 — 배열의 이름입니다.",
-				"칸 수 — 담을 수 있는 원소의 개수입니다.",
-			},
-			"같은 타입의 값을 칸 수만큼 담을 수 있는 배열을 만듭니다. 원소의 번호는 0부터 칸 수 - 1까지입니다.",
-			"int arr[3];",
-			"범위를 벗어난 번호의 칸은 쓸 수 없습니다."),
-		["Array Get"] = ("배열[번호]",
-			new[]
-			{
-				"배열 — 눌러서 위에서 만든 배열 중에 고릅니다.",
-				"번호 — 읽을 칸의 번호입니다. 0부터 셉니다.",
-			},
-			"배열의 그 번호 칸에 담긴 값을 돌려줍니다. 값 칸에 끼워 씁니다.",
-			"x = arr[1];",
-			"배열을 먼저 Array 블록으로 만들어야 합니다."),
-		["Array Set"] = ("배열[번호] = 값;",
-			new[]
-			{
-				"배열 — 눌러서 위에서 만든 배열 중에 고릅니다.",
-				"번호 — 값을 담을 칸의 번호입니다. 0부터 셉니다.",
-				"값 — 그 칸에 담을 값입니다.",
-			},
-			"배열의 그 번호 칸에 값을 담습니다.",
-			"arr[1] = 7;",
-			"배열을 먼저 Array 블록으로 만들어야 합니다."),
-
-		["Arithmetic"] = ("(왼쪽 연산자 오른쪽)",
-			new[]
-			{
-				"왼쪽, 오른쪽 — 계산할 두 값입니다. 숫자, 변수, 다른 값 블록을 넣습니다.",
-				"연산자 — + - * / % 중에서 고릅니다.",
-			},
-			"두 값을 계산한 결과를 돌려줍니다. %는 나눈 나머지입니다.",
-			"hp = hp - 1;",
-			"값 칸에만 끼울 수 있고, 함수 body에 바로 놓을 수 없습니다."),
-		["Compare"] = ("왼쪽 비교자 오른쪽",
-			new[]
-			{
-				"왼쪽, 오른쪽 — 비교할 두 값입니다.",
-				"비교자 — > < == != >= <= 중에서 고릅니다.",
-			},
-			"두 값을 비교해 맞으면 참(true), 아니면 거짓(false)을 돌려줍니다. if, while의 조건 칸에 끼웁니다.",
-			"if (hp > 5) { ... }",
-			"==는 같은지 비교하는 것이고, 값을 담는 것은 Assign입니다."),
-		["Logic"] = ("왼쪽 && 오른쪽",
-			new[]
-			{
-				"왼쪽, 오른쪽 — 참 또는 거짓이 되는 두 값입니다.",
-				"연산자 — && 또는 || 중에서 고릅니다.",
-			},
-			"&&는 두 값이 모두 참일 때만 참, ||는 하나라도 참이면 참을 돌려줍니다.",
-			"if (hp > 0 && hp < 5) { ... }",
-			null),
-		["Not"] = ("!값",
-			new[] { "값 — 뒤집을 참 또는 거짓입니다." },
-			"참이면 거짓, 거짓이면 참을 돌려줍니다.",
-			"if (!(hp > 5)) { ... }",
-			null),
-
-		["Malloc"] = ("malloc(타입)",
-			new[] { "타입 — 만들 대상입니다. 지금은 Sword만 있습니다." },
-			"heap에 그 타입의 오브젝트를 만들고, 그것을 가리키는 포인터를 돌려줍니다. Sword는 실제 소환검입니다. 소환검은 최대 5개이고, 만들지 못하면 NULL을 돌려줍니다.",
-			"summoned_thrust(get_bug(), malloc(Sword));",
-			"쓰고 나면 Free로 해제해야 합니다. 해제하지 않으면 heap을 계속 차지합니다."),
-		["Free"] = ("free(포인터);",
-			new[] { "포인터 — 해제할 오브젝트를 가리키는 값입니다. malloc이나 summon_sword가 돌려준 값을 넣습니다." },
-			"포인터가 가리키는 heap 오브젝트를 없애고 자리를 돌려줍니다.",
-			"free(summon_sword());",
-			"이미 해제한 포인터는 다시 쓸 수 없습니다."),
-
-		["Return"] = ("return 값;",
-			new[] { "값 — 부른 쪽에 돌려줄 값입니다. 돌려줄 값이 없는 함수는 비워 둡니다." },
-			"함수를 그 자리에서 끝내고 값을 부른 쪽에 돌려줍니다. 아래에 블록이 남아 있어도 실행하지 않습니다.",
-			"return n;",
-			"반환 타입이 void가 아닌 함수는 모든 길이 return으로 끝나야 합니다. 아니면 컴파일 오류입니다."),
-		["Wait"] = ("wait(초);",
-			new[] { "초 — 기다릴 시간입니다. 소수로 적을 수 있습니다." },
-			"적은 초만큼 기다린 뒤 다음 블록을 실행합니다. 기다리는 동안 이 함수는 멈춰 있습니다.",
-			"thrust(get_bug());\nwait(0.5초);\nthrust(get_bug());",
-			null),
-	};
-
-	// 함수 블록 ---------------------------------------------------------------
-	// 스킬 트리 노드에 설명이 없는 함수의 짧은 설명 (input.* 는 스킬 트리에 노드가 없다)
-	static readonly Dictionary<string, string> FunctionSummaries = new Dictionary<string, string>
-	{
-		["input.get_bug"] = "플레이어가 고른 몬스터 한 명을 대상으로 돌려줍니다.",
-		["game.is_valid_target"] = "대상이 스킬에 넘길 수 있는 몬스터인지(있고, 살아 있는지) 알려 줍니다.",
-	};
-
-	// 파라미터 이름 → 무엇을 넣는지 (코드에서 알 수 없는 사용 지식)
-	static readonly Dictionary<string, string> ParameterMeanings = new Dictionary<string, string>
-	{
-		["target"] = "몬스터 한 명입니다. get_bug()를 넣거나, get_bug()를 담아 둔 Target 변수를 넣습니다.",
-		["targets"] = "공격할 몬스터 여러 명입니다. 슬롯에서 시전하면 여러 명을 고르게 해 줍니다.",
-		["sword"] = "쓸 소환검의 포인터입니다. summon_sword()가 돌려준 값을 넣습니다.",
-	};
-
-	// 함수 고정 ID → 돌려주는 값이 무엇인지
-	static readonly Dictionary<string, string> ReturnMeanings = new Dictionary<string, string>
-	{
-		[PredefinedFunctionIds.SummonSword] = "만든 소환검의 포인터입니다. 만들지 못하면 NULL입니다.",
-		[PredefinedFunctionIds.GetBug] = "플레이어가 고른 몬스터입니다. 고를 몬스터가 없으면 \"대상 없음\"입니다.",
-		[PredefinedFunctionIds.IsValidTarget] = "스킬에 넘길 수 있으면 true, \"대상 없음\"이거나 죽었거나 없어진 몬스터면 false입니다.",
+		("Return", "함수", () => BlockData.Return()),
+		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5"))),
 	};
 
 	// 카드 순서: 문법 블록(제어, 변수, 값, return) → 함수 탭과 같은 순서의 함수 카드(스킬, 기본 함수, 메모리) (#489)
@@ -371,30 +169,26 @@ public static class BlockReference
 		var builtinBasics = new List<BlockReferenceEntry>(); // wait: 기본 함수 중 get_bug, is_valid_target 뒤 (함수 탭과 같은 순서)
 		var memory = new List<BlockReferenceEntry>();
 
-		foreach ((string name, string category, Func<BlockData> sample, string code, string summary) in SyntaxRows)
+		foreach ((string name, string category, Func<BlockData> sample) in SyntaxRows)
 		{
 			BlockData block = sample();
-			// 실제 레퍼런스 페이지처럼: 접힌 카드는 형식과 설명 한 문장, 펼치면 채울 곳과 예시만 (#476)
-			// 동작·주의(SyntaxDetails의 Behavior, Note)는 설명 한 문장과 겹치고 길기만 해서 보이지 않는다
-			bool hasDetail = SyntaxDetails.TryGetValue(name, out var detail);
+			// 접힌 카드는 형식, 펼치면 해금 설명 카드와 같은 순서의 칸 (설명 표 ItemDescriptions)
+			ItemDescription description = ItemDescriptions.Of(block);
 			var entry = new BlockReferenceEntry
 			{
 				Name = name,
 				Category = category,
 				Sample = block,
-				Summary = summary,
-				CodeText = hasDetail ? detail.Format : code,
+				Summary = description?.Summary,
+				CodeText = string.IsNullOrEmpty(description?.Format) ? name : description.Format,
 			};
-			if (hasDetail)
-			{
-				List<(string, string)> fills = FillItems(detail.Fills);
-				if (fills.Count > 0) entry.Sections.Add(new ReferenceSection("채울 곳", fills));
-				entry.Sections.Add(new ReferenceSection("예시", detail.Example, true));
-			}
-
+			List<(string, string)> returned = string.IsNullOrEmpty(description?.Returns) ? null
+				: new List<(string, string)> { (description.Returns, "") };
 			// malloc, free, wait는 함수 탭에서 함수처럼 꺼내므로 카드도 함수 카드처럼: 소문자 이름, 한글 이름, 원형 (#489)
-			// 채울 곳·예시는 문법 블록 표(SyntaxDetails)의 것을 그대로 쓴다
+			// 나머지 칸은 문법 블록과 같이 설명 표의 것을 그대로 쓰고, 슬롯 칸 제목만 함수 카드처럼 「파라미터」
 			var builtin = BuiltinOf(block.Kind);
+			AddDescriptionSections(entry, description, builtin != null ? ParameterTitle : SlotTitle, description?.SlotItems(), returned, null);
+
 			if (builtin != null)
 			{
 				entry.Name = builtin.Value.Name;
@@ -413,6 +207,8 @@ public static class BlockReference
 			{
 				string id = function?.Id;
 				if (id == null || !FunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
+				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				BlockReferenceEntry entry = FunctionEntry(function);
 				(IsSkill(id) ? skills : basics).Add(entry);
 			}
@@ -431,9 +227,10 @@ public static class BlockReference
 		return list;
 	}
 
-	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬과 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수 (BlockEditor.RebuildFunctionTab과 같다)
-	static bool IsSkill(string id) =>
-		id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
+	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬, Python 스킬(#486), 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수
+	// BlockEditor.RebuildFunctionTab도 이 함수로 나눈다 (두 곳이 어긋나지 않게)
+	internal static bool IsSkill(string id) =>
+		id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("py.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
 
 	static BlockReferenceEntry FunctionEntry(PredefinedFunction function)
 	{
@@ -442,56 +239,69 @@ public static class BlockReference
 		IReadOnlyList<ParameterData> parameters = function.Parameters ?? (IReadOnlyList<ParameterData>)new List<ParameterData>();
 		bool returnsValue = function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void;
 
-		// 설명 한 문장: 스킬 트리 노드의 한 줄 설명을 그대로 읽는다 (읽기만 한다). 노드가 없으면 이 파일의 짧은 설명
-		string summary = null;
-		if (SkillTree.TryGet(id, out SkillTreeNode node) && node.Description != null) summary = node.Description.Summary;
-		if (string.IsNullOrEmpty(summary)) FunctionSummaries.TryGetValue(id, out summary);
-		// 한글 이름(검 찌르기)은 카드 제목에 보이므로 설명 앞에 붙이지 않는다 (#489)
+		// 설명은 설명 표에서 읽는다. 한글 이름(검 찌르기)은 카드 제목에 보이므로 설명 앞에 붙이지 않는다 (#489)
+		ItemDescription description = ItemDescriptions.Get(id);
 
 		// 견본 블록: 편집 화면의 함수 블록 견본과 같이 파라미터 수만큼 빈 값 칸을 둔다
 		SlotData[] slots = new SlotData[parameters.Count];
 		for (int i = 0; i < slots.Length; i++) slots[i] = SlotData.EmptyValue();
 		BlockData sample = BlockData.CallPredefinedFunction(id, slots);
 
-		// 실제 레퍼런스 페이지처럼: 접힌 카드는 원형과 설명 한 문장, 펼치면 파라미터·돌려주는 값·예시·실행 (#476)
+		// 접힌 카드는 원형, 펼치면 해금 설명 카드와 같은 순서의 칸 뒤에 실행(동작·쿨타임 틱, 코드 크기)
 		var entry = new BlockReferenceEntry
 		{
 			Name = name,
 			Category = Category("함수", IsSkill(id) ? "스킬" : "기본 함수"),
 			Sample = sample,
-			Summary = summary,
+			Summary = description?.Summary,
 			CodeText = Prototype(function.ReturnType, name, parameters),
 			FunctionId = id,
 			KoreanName = KoreanNameOf(id),
 		};
 
-		if (parameters.Count > 0)
-		{
-			entry.Sections.Add(new ReferenceSection("파라미터", parameters.Select(p =>
-				(p.Name, ParameterMeanings.TryGetValue(p.Name, out string meaning) ? meaning : "")).ToList()));
-		}
-		if (returnsValue)
-		{
-			ReturnMeanings.TryGetValue(id, out string returned);
-			entry.Sections.Add(new ReferenceSection("돌려주는 값", new List<(string, string)> { (TypeText(function.ReturnType), returned ?? "") }));
-		}
-		string example = ExampleOf(name, parameters);
-		if (example != null) entry.Sections.Add(new ReferenceSection("예시", example, true));
+		List<(string, string)> returned = returnsValue
+			? new List<(string, string)> { (TypeText(function.ReturnType), description?.Returns ?? "") }
+			: null;
+		AddDescriptionSections(entry, description, ParameterTitle, SlotItemsOf(description, parameters), returned, ExampleOf(name, parameters));
 		entry.Sections.Add(new ReferenceSection("실행", CostOf(function)));
 		return entry;
 	}
 
-	// 채울 곳 줄(「조건 — 참 또는 거짓이 되는 값입니다.」)을 (이름, 설명)으로 나눈다. 「채울 곳이 없습니다.」처럼 이름이 없는 줄은 뺀다
-	static List<(string, string)> FillItems(string[] fills)
+	// 설명 표의 칸을 카드의 자세한 내용으로 넣는다. 순서는 해금 설명 카드와 같다: 용도 → 예시 → 슬롯 → return 값 → 주의할 점.
+	// 하는 일(Summary)은 카드가 맨 위에 따로 보인다. 비어 있는 칸은 넣지 않는다.
+	// autoExample: 설명 표에 예시가 없을 때 대신 보일 호출 한 줄 (스킬 thrust(get_bug());). 박진우가 예시를 채우기 전까지 지금처럼 보이게
+	// slotTitle: 슬롯 칸의 제목. 함수 카드(사전 정의 함수, malloc·free·wait)는 C 용어 그대로 「파라미터」, 문법 블록은 「슬롯」
+	// (If의 condition·body는 C에서 parameter가 아니므로 이름을 나눈다. 11/17 이우림)
+	static void AddDescriptionSections(BlockReferenceEntry entry, ItemDescription description, string slotTitle,
+		List<(string, string)> slots, List<(string, string)> returned, string autoExample)
 	{
-		var items = new List<(string, string)>();
-		foreach (string fill in fills)
-		{
-			int split = fill.IndexOf(" — ", StringComparison.Ordinal);
-			if (split < 0) continue;
-			items.Add((fill.Substring(0, split), fill.Substring(split + 3)));
-		}
-		return items;
+		if (!string.IsNullOrEmpty(description?.Purpose)) entry.Sections.Add(new ReferenceSection("용도", description.Purpose));
+
+		bool hasExample = !string.IsNullOrEmpty(description?.Example) || !string.IsNullOrEmpty(description?.ExampleCode);
+		if (hasExample) entry.Sections.Add(ReferenceSection.Example(description.Example, description.ExampleCode, description.ExampleResult));
+		else if (autoExample != null) entry.Sections.Add(ReferenceSection.Example(null, autoExample, null));
+
+		if (slots != null && slots.Count > 0) entry.Sections.Add(new ReferenceSection(slotTitle, slots));
+		if (returned != null) entry.Sections.Add(new ReferenceSection("return 값", returned));
+		if (!string.IsNullOrEmpty(description?.Caution)) entry.Sections.Add(new ReferenceSection("주의할 점", description.Caution));
+	}
+
+	// 카드의 슬롯 칸 제목 (AddDescriptionSections)
+	const string SlotTitle = "슬롯";
+	const string ParameterTitle = "파라미터";
+
+	// 사전 정의 함수의 슬롯 줄: 설명 표에 적었으면 그것, 비어 있으면 파라미터마다 (이름, 이름의 뜻)
+	static List<(string, string)> SlotItemsOf(ItemDescription description, IReadOnlyList<ParameterData> parameters)
+	{
+		if (description?.Slots != null && description.Slots.Length > 0) return description.SlotItems();
+		return parameters.Select(p => (p.Name, ItemDescriptions.ParameterMeaningOf(p.Name))).ToList();
+	}
+
+	// 값 칸 하나(파라미터 name)에 무엇을 넣는지: 설명 표의 슬롯 줄, 없으면 이름의 뜻
+	static string SlotMeaningOf(ItemDescription description, string name)
+	{
+		string text = description?.SlotTextOf(name);
+		return string.IsNullOrEmpty(text) ? ItemDescriptions.ParameterMeaningOf(name) : text;
 	}
 
 	// 동작 시간, 쿨타임, 코드 크기, 비동기 여부. 사전 정의 함수의 값을 그대로 읽는다 (틱 하나의 시간은 캐릭터마다 달라 틱 수로 적는다)
@@ -522,9 +332,9 @@ public static class BlockReference
 	}
 
 	// 설명창 (#476) ------------------------------------------------------------
-	// 블록·값 칸에 마우스를 올리면 보이는 짧은 설명. 참고 카드와 같은 표(SyntaxDetails, ParameterMeanings 등)를 읽는다
+	// 블록·값 칸에 마우스를 올리면 보이는 짧은 설명. 참고 카드와 같은 설명 표(ItemDescriptions)를 읽는다
 
-	// 설명창 글자 색: 문법 블록 형식(주황, 참고 카드의 형식 줄과 같음), 스킬 이름(참고 탭의 강조색), 돌려주는 값(민트), 줄 이름(어두운 회색 파랑)
+	// 설명창 글자 색: 문법 블록 형식(주황, 참고 카드의 형식 줄과 같음), 스킬 이름(참고 탭의 강조색), return 값(민트), 줄 이름(어두운 회색 파랑)
 	// 함수 원형과 문법 형식은 낱말마다 색을 나눈다 (ColorCode, #489, VS Code Dark+). 파라미터 이름은 원형과 같은 하늘색(ParameterColor)
 	const string TooltipAccent = "#8B9CFF";
 	const string TooltipParameter = "#7ED6C0";
@@ -536,7 +346,7 @@ public static class BlockReference
 	/// <summary>
 	/// 블록에 마우스를 올렸을 때 보일 설명 (리치 텍스트). 없으면 null.
 	/// <para>
-	/// - 사전 정의 함수(C 스킬 등): 함수 원형(void thrust(Target target);), 스킬의 한국어 이름과 설명, 파라미터마다 한 줄, 돌려주는 값<br/>
+	/// - 사전 정의 함수(C 스킬 등): 함수 원형(void thrust(Target target);), 스킬의 한국어 이름과 설명, 파라미터마다 한 줄, return 값<br/>
 	/// - 내가 만든 함수(userFunction): 함수 원형<br/>
 	/// - 문법 블록: 형식, 설명 한 문장. paletteName은 블록 목록의 칩 이름(If, Array Get ...)이고 참고 카드의 이름과 같다
 	/// </para>
@@ -551,14 +361,13 @@ public static class BlockReference
 			return PredefinedTooltip(block.FunctionId);
 		}
 
-		// 문법 블록은 형식과 설명 한 문장만 짧게 보인다. 채울 곳까지 보이면 설명창이 길어져 편집 영역을 가리므로, 자세한 것은 참고 탭에 맡긴다
-		// 대소문자를 가리지 않는다: malloc·free·wait 카드는 함수 카드처럼 소문자 이름인데 칩 이름은 Malloc, Free, Wait이기 때문 (#489)
-		BlockReferenceEntry entry = All.FirstOrDefault(e => e.FunctionId == null && string.Equals(e.Name, paletteName, StringComparison.OrdinalIgnoreCase));
-		if (entry == null) return null;
+		// 문법 블록은 형식과 하는 일 한 문장만 짧게 보인다. 슬롯까지 보이면 설명창이 길어져 편집 영역을 가리므로, 자세한 것은 참고 탭에 맡긴다
+		ItemDescription description = ItemDescriptions.Of(block);
+		if (description == null) return null;
 		var lines = new List<string>();
-		// 형식(if (조건) { 블록 })과 malloc·free·wait의 원형은 VS Code처럼 낱말마다 색을 나눈다 (#489)
-		lines.Add(ColorCode(SyntaxDetails.TryGetValue(entry.Name, out var detail) ? detail.Format : entry.CodeText));
-		if (!string.IsNullOrEmpty(entry.Summary)) lines.Add(entry.Summary);
+		// 형식(if (condition) { body }, malloc(type))은 VS Code처럼 낱말마다 색을 나눈다 (#489). 형식이 없으면 칩 이름
+		lines.Add(ColorCode(string.IsNullOrEmpty(description.Format) ? paletteName : description.Format));
+		if (!string.IsNullOrEmpty(description.Summary)) lines.Add($"<noparse>{description.Summary}</noparse>");
 		return string.Join("\n", lines);
 	}
 
@@ -572,25 +381,30 @@ public static class BlockReference
 		if (owner != null && owner.Kind == BlockKind.Function)
 		{
 			ParameterData parameter = null;
+			ItemDescription description = null; // 사전 정의 함수의 설명 (슬롯 줄). 내가 만든 함수는 설명이 없다
 			if (owner.IsUserFunction)
 			{
 				List<ParameterData> parameters = userFunction?.Parameters;
 				if (parameters != null && index < parameters.Count) parameter = parameters[index];
 			}
 			else if (PredefinedFunctionRegistry.TryGet(owner.FunctionId, out PredefinedFunction function) && function.Parameters != null && index < function.Parameters.Count)
+			{
 				parameter = function.Parameters[index];
+				description = ItemDescriptions.Get(owner.FunctionId);
+			}
 
 			if (parameter != null)
 			{
 				lines.Add(ColorCode($"{TypeText(parameter.Type)} {parameter.Name}")); // 원형과 같은 색 (#489)
-				if (ParameterMeanings.TryGetValue(parameter.Name, out string meaning)) lines.Add(meaning);
+				string meaning = SlotMeaningOf(description, parameter.Name);
+				if (!string.IsNullOrEmpty(meaning)) lines.Add($"<noparse>{meaning}</noparse>");
 			}
 		}
 		lines.Add($"<color={TooltipLabel}>넣을 수 있는 것</color>  <noparse>{accepts}</noparse>");
 		return string.Join("\n", lines);
 	}
 
-	// 사전 정의 함수의 설명창: 원형, 스킬 이름·설명, 파라미터, 돌려주는 값
+	// 사전 정의 함수의 설명창: 원형, 스킬 이름·설명, 파라미터, return 값
 	// 줄 앞 표시는 「-」: Galmuri11 글꼴(정적 아틀라스)에 「·」「•」「—」가 없어 빈칸으로 보이기 때문
 	static string PredefinedTooltip(string id)
 	{
@@ -603,20 +417,15 @@ public static class BlockReference
 		string koreanName = KoreanNameOf(id);
 		if (!string.IsNullOrEmpty(koreanName)) lines.Add($"<color={TooltipAccent}>{koreanName}</color>");
 
-		// 설명: 스킬 트리 노드의 설명, 노드가 없으면 이 파일의 짧은 설명 (참고 카드와 같다)
-		string summary = null;
-		if (SkillTree.TryGet(id, out SkillTreeNode node) && node.Description != null) summary = node.Description.Summary;
-		if (string.IsNullOrEmpty(summary)) FunctionSummaries.TryGetValue(id, out summary);
-		if (!string.IsNullOrEmpty(summary)) lines.Add(summary);
+		// 하는 일: 설명 표에서 읽는다 (참고 카드와 같다)
+		ItemDescription description = ItemDescriptions.Get(id);
+		if (!string.IsNullOrEmpty(description?.Summary)) lines.Add($"<noparse>{description.Summary}</noparse>");
 
 		var details = new List<string>();
 		foreach (ParameterData parameter in parameters)
-		{
-			string meaning = ParameterMeanings.TryGetValue(parameter.Name, out string found) ? found : "";
-			details.Add($"- {Paint(parameter.Name, ParameterColor)}  <noparse>{meaning}</noparse>");
-		}
-		if (function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void && ReturnMeanings.TryGetValue(id, out string returned))
-			details.Add($"- <color={TooltipParameter}>돌려주는 값</color>  <noparse>{returned}</noparse>");
+			details.Add($"- {Paint(parameter.Name, ParameterColor)}  <noparse>{SlotMeaningOf(description, parameter.Name)}</noparse>");
+		if (function.ReturnType != null && function.ReturnType.Kind != VariableTypeKind.Void && !string.IsNullOrEmpty(description?.Returns))
+			details.Add($"- <color={TooltipParameter}>return 값</color>  <noparse>{description.Returns}</noparse>");
 		if (details.Count > 0)
 		{
 			lines.Add(TooltipGap);
@@ -669,8 +478,9 @@ public static class BlockReference
 	public static (string Name, string KoreanName, string Prototype)? BuiltinOf(BlockKind kind) => kind switch
 	{
 		BlockKind.Malloc => ("malloc", "메모리 할당", "Sword* malloc(Sword);"),
-		BlockKind.Free => ("free", "메모리 해제", "void free(Sword* p);"),
-		BlockKind.Wait => ("wait", "기다리기", "void wait(float sec);"),
+		// 파라미터 이름은 설명 표의 슬롯 이름(pointer, seconds)과 같게 둔다. 카드의 원형과 슬롯 줄이 같은 이름을 가리키게
+		BlockKind.Free => ("free", "메모리 해제", "void free(Sword* pointer);"),
+		BlockKind.Wait => ("wait", "기다리기", "void wait(float seconds);"),
 		_ => null,
 	};
 

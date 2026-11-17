@@ -23,12 +23,12 @@
 | 새 캐릭터 처음 값 | 레벨 1, 경험치 0, 돈 0, 재료·페이지 함수·전역 변수 없음 |
 | 새 캐릭터 처음 해금 | `SkillTree.StartingNodes()` + `SkillTree.AutoUnlockedBy` |
 | 블록·함수 개수 (#500) | 가진 개수만큼만 함수에 놓을 수 있음. DB는 가진 개수만 저장. 블록을 놓거나 지워도 가진 개수는 그대로이고, 남은 개수 = 가진 개수 − 함수에서 센 개수(`BlockUsageCounter`, `function-data.md` 「개수 세기 규칙」). 항목 하나당 최대 `ItemCountRules.MaxCount`(99) |
-| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수와 같음 (`ItemCountRules.Initial`): thrust 1, sword_throw 1, get_bug 2. 처음 남은 개수는 모두 0 (기획의 「튜토리얼을 마친 상태」) |
+| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수와 같음 (`ItemCountRules.Initial(언어)`). C: thrust 1, sword_throw 1, get_bug 2. Python(#486): py.orb_create 1, py.orb_shot 1, get_bug 1. 처음 남은 개수는 모두 0 (기획의 「튜토리얼을 마친 상태」) |
 | 해금할 때 지급 | 연 노드(같이 열린 노드 포함)마다 그 노드가 여는 블록·함수 1개씩 (`ItemCountRules.KeysUnlockedBy`) |
 | 임시 계정의 개수 | 개수를 쓰지 않음. 무엇이든 놓을 수 있고 「남은/가진」을 표시하지 않음 |
 | 슬롯 | 슬롯 8개는 언제나 그 슬롯의 슬롯 함수 하나. 빈 슬롯 없음, 장착(다른 함수·C 스킬을 슬롯에 넣기) 없음. C 스킬은 슬롯 함수 function body 안의 블록 |
 | 슬롯 함수 | 캐릭터를 만들 때 서버가 8개를 만듦. 이름 `slot1`~`slot8` 고정, 파라미터 없음, 반환 타입 `Void`, 비동기 아님. 이름·파라미터·반환 타입·비동기 여부 변경 불가. function body만 바꿈(빈 본문 가능) |
-| 새 캐릭터 처음 슬롯 함수 | `slot1` = `thrust(GetBug());`, `slot2` = `sword_throw(GetBug());`, `slot3`~`slot8` = 빈 본문 (`CharacterProgressData.NewSlotFunction`) |
+| 새 캐릭터 처음 슬롯 함수 | 캐릭터 언어마다 다름 (`CharacterProgressData.NewSlotFunction(슬롯 번호, 언어)`). C: `slot1` = `thrust(GetBug());`, `slot2` = `sword_throw(GetBug());`. Python(#486): `slot1` = `orb_create();`, `slot2` = `orb_shot(GetBug());`. `slot3`~`slot8` = 빈 본문. 언어는 `ProgressStore`가 캐릭터 테이블에서 읽음(캐릭터 row가 없으면 C) |
 | 페이지 함수 | 슬롯에 걸리지 않은 함수. 편집 화면의 +로 추가, 최대 `ProgressRules.MaxPageFunctions`개(임시 5). 이름·파라미터 변경 가능 |
 | 빈 본문 슬롯 시전 | 그대로 시전됨 (stack 1칸). 서버가 빈 본문을 따로 검사하지 않음 |
 | 저장 시점 | 값이 바뀔 때마다 서버가 바로 DB에 씀 |
@@ -167,7 +167,7 @@
 | `Slots` | `SlotLoadout.Entry[8]` | 슬롯 0~7. 각 슬롯의 슬롯 함수 GUID |
 | `Functions` | `List<FunctionData>` | 읽기에 성공한 함수 (슬롯 함수 + 페이지 함수) |
 
-- 함께 쓰는 함수: `NewSlotFunction(슬롯 번호)` (처음 슬롯 함수 하나), `FillInitialSlotFunctions()` (처음 슬롯 함수 8개를 `Functions`·`Slots`에 넣음)
+- 함께 쓰는 함수: `NewSlotFunction(슬롯 번호, 언어)` (처음 슬롯 함수 하나. 언어를 빼면 C), `FillInitialSlotFunctions(언어)` (처음 슬롯 함수 8개를 `Functions`·`Slots`에 넣음. 언어를 빼면 C)
 | `Globals` | `GlobalVariablesData` | 전역 변수 선언 |
 
 - 진행도 row가 없는 캐릭터(이 이슈 전에 만든 캐릭터): `Load`가 새 캐릭터와 같은 처음 row를 넣은 뒤 돌려줌
@@ -331,4 +331,4 @@
   - `FunctionStorage`가 PC 파일 대신 서버로 함수를 보내도록 바뀜
 - 박진우와 확인할 것
   - 실제 계정은 장착 없음. 서버가 보낸 슬롯 함수 8개를 `SlotLoadout.SetEntries`로 받음 (PR #226 코멘트로 요청)
-  - 실제 캐릭터의 처음 슬롯 함수는 서버가 정함 (`slot1` 검 찌르기, `slot2` 검 던지기)
+  - 실제 캐릭터의 처음 슬롯 함수는 서버가 정함 (C: `slot1` 검 찌르기, `slot2` 검 던지기. Python: `slot1` 구슬 생성, `slot2` 구슬 발사, #486)

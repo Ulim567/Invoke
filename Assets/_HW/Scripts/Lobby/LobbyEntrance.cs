@@ -2,7 +2,8 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 로비의 입구 (사냥터, 연습장, 레이드 던전). 가까이 가서 ↑를 누르면 사냥터·연습장은 입구 창을 열고, 「들어가기」를 누르면 이동 요청을 알린다.
+/// 로비의 입구 (사냥터, 연습장, 레이드 던전). 가까이 가서 ↑를 누르면 사냥터·연습장은 바로 이동 요청을 알린다 (노션 11/16, 시안 17-5~17-7: 확인 창 없음).
+/// Use Entrance Window를 켜면 예전처럼 입구 창을 열고 「들어가기」에서 알린다.
 /// <para>
 /// - 이동 자체, 서버에 요청 보내기, 파티 모으기는 하지 않는다. 이우림(「장소 사이 이동하기」, 레이드 파티)이 아래 이벤트를 받아서 한다.<br/>
 /// - 사냥터·연습장: <see cref="TravelRequested"/>에 갈 씬 이름(PlaceScenes)을 넘긴다.<br/>
@@ -31,8 +32,11 @@ public class LobbyEntrance : PlaceInteractable
 	[SerializeField, Tooltip("창 제목. 비워 두면 기본 이름 (사냥터, 연습장, 레이드 던전)")]
 	string displayName;
 
-	[SerializeField, Tooltip("Lobby 씬에 하나 놓은 입구 창")]
+	[SerializeField, Tooltip("Lobby 씬에 하나 놓은 입구 창 (Use Entrance Window를 켰을 때만 씀)")]
 	LobbyEntrancePanel panel;
+
+	[SerializeField, Tooltip("켜면 ↑에 입구 창(들어가기 / 닫기)을 연다. 끄면(기본) 확인 창 없이 바로 이동")]
+	bool useEntranceWindow;
 
 	/// <summary>이 입구가 어디로 가는지 (튜토리얼이 가야 할 문을 찾을 때 읽는다)</summary>
 	public Destination Target => destination;
@@ -50,6 +54,12 @@ public class LobbyEntrance : PlaceInteractable
 		{
 			Debug.Log("[LobbyEntrance] 레이드 던전으로 가려고 함");
 			RaidEntryRequested?.Invoke(player);
+			return;
+		}
+
+		if (!useEntranceWindow)
+		{
+			RequestEnter();
 			return;
 		}
 

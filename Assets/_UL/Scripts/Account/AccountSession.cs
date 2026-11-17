@@ -23,6 +23,9 @@ public class AccountSession
 	/// <summary>들어간 캐릭터의 key. 「들어가기」 전에는 null. 진행도(ProgressStore)는 이 값으로 저장한다.</summary>
 	public string CharacterKey { get; private set; }
 
+	/// <summary>들어간 캐릭터의 언어(CharacterLanguages). 「들어가기」 전에는 null. 서버가 이 값으로 플레이어 프리팹을 고른다.</summary>
+	public string Language { get; private set; }
+
 	/// <summary>
 	/// 「들어가기」 때 DB에서 불러온 진행도. 플레이어를 만든 직후 AccountServer가 플레이어의 컴포넌트에 넣고 비운다.<br/>
 	/// 임시 계정이나 이미 넣은 뒤면 null.
@@ -45,9 +48,10 @@ public class AccountSession
 	}
 
 	/// <summary>「들어가기」에 성공했을 때 AccountServer가 부른다. 임시 계정은 progress가 null이다.</summary>
-	public void Enter(string characterKey, CharacterProgressData progress = null)
+	public void Enter(string characterKey, CharacterProgressData progress = null, string language = CharacterLanguages.C)
 	{
 		CharacterKey = characterKey;
+		Language = language;
 		LoadedProgress = progress;
 	}
 

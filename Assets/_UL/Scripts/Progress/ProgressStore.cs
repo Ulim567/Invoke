@@ -132,6 +132,8 @@ public class ProgressStore
 	// 있는 row에 다시 넣으면 unique index 때문에 예외가 나고, 「들어가기」 요청을 처리하던 서버가 그 연결을 끊는다
 	public void CreateInitial(string characterKey)
 	{
+		// 처음 슬롯 함수와 처음 개수는 캐릭터 언어마다 다르다 (#486)
+		string language = LanguageOf(characterKey);
 		List<string> unlocked = SkillTree.StartingNodes();
 		unlocked.AddRange(SkillTree.AutoUnlockedBy(unlocked));
 
@@ -152,7 +154,7 @@ public class ProgressStore
 			for (int i = 0; i < SlotLoadout.SlotCount; i++)
 			{
 				if (existingSlots.Contains(i)) continue;
-				InsertSlotFunction(characterKey, i, CharacterProgressData.NewSlotFunction(i));
+				InsertSlotFunction(characterKey, i, CharacterProgressData.NewSlotFunction(i, language));
 			}
 
 			if (db.Find<GlobalsRow>(characterKey) == null)
@@ -167,8 +169,12 @@ public class ProgressStore
 	void InsertInitialItemCountsIfNone(string characterKey)
 	{
 		if (db.Table<ItemCountRow>().Where(r => r.CharacterKey == characterKey).Count() > 0) return;
-		foreach (KeyValuePair<string, int> pair in ItemCountRules.Initial()) WriteItemCount(characterKey, pair.Key, pair.Value);
+		foreach (KeyValuePair<string, int> pair in ItemCountRules.Initial(LanguageOf(characterKey))) WriteItemCount(characterKey, pair.Key, pair.Value);
 	}
+
+	// 캐릭터의 언어 (#486). 캐릭터 테이블(AccountStore와 같은 DB)에서 읽는다. 캐릭터 row가 없으면(테스트 등) C
+	// 진행도 함수의 매개변수로 받지 않는 이유: 처음 값을 넣는 곳(CreateInitial, Load, ReplaceAll)이 여럿이라 모두 같은 언어를 쓰게 하기 위함
+	string LanguageOf(string characterKey) => db.Find<CharacterRecord>(characterKey)?.Language ?? CharacterLanguages.C;
 
 	/// <summary>
 	/// 캐릭터의 진행도를 테이블 7개에서 읽어 돌려준다. 「들어가기」 때 서버가 부른다.<br/>
@@ -291,7 +297,7 @@ public class ProgressStore
 				if (entry.Kind == SlotLoadout.EntryKind.UserFunction && functionsByGuid.TryGetValue(entry.Id ?? "", out FunctionData function) && slotGuids.Add(function.Guid))
 					InsertSlotFunction(characterKey, i, function);
 				else
-					InsertSlotFunction(characterKey, i, CharacterProgressData.NewSlotFunction(i));
+					InsertSlotFunction(characterKey, i, CharacterProgressData.NewSlotFunction(i, LanguageOf(characterKey)));
 			}
 
 			// 슬롯에 걸리지 않은 함수는 페이지 함수다. ProgressRules.MaxPageFunctions개까지만 넣는다

@@ -55,8 +55,9 @@ public class ProgressTestData : MonoBehaviour
 	void FillWithEmptyProgress()
 	{
 		var data = new CharacterProgressData();
-		data.FillInitialSlotFunctions();
-		data.ItemCounts = ItemCountRules.Initial();
+		// 캐릭터 언어마다 처음 슬롯 함수와 처음 개수가 다르다 (#486)
+		data.FillInitialSlotFunctions(language);
+		data.ItemCounts = ItemCountRules.Initial(language);
 		json = FunctionDataJson.ToJson(data);
 	}
 

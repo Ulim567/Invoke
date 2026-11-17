@@ -166,7 +166,8 @@ public class SlotEquipPanel : InputBlockingPanel
 			foreach (PredefinedFunction skill in PredefinedFunctionRegistry.All)
 			{
 				string id = skill.Id;
-				if (!(id.StartsWith("c.") || id.StartsWith("common.")) || !SlotLoadout.IsEquippableSkill(id)) continue;
+				// 내 캐릭터 언어의 스킬(C는 c.*, 파이썬은 py.*)과 공통 이동만
+				if (!(id.StartsWith(PlayerCharacter.SkillPrefixOf(PlayerCharacter.LocalLanguage)) || id.StartsWith("common.")) || !SlotLoadout.IsEquippableSkill(id)) continue;
 				string name = SkillName(id);
 				Color tag = id.StartsWith("common.") ? commonTagColor : skillTagColor;
 				CreateItem(skillList, name, "", tag, () => Equip(loadout.EquipSkill(selectedSlot, id), name));

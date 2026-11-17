@@ -274,7 +274,7 @@ public class BlockEditor : MonoBehaviour
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
-	static readonly string[] PaletteFunctionPrefixes = { "c.", "common.", "input.", "game." };
+	static readonly string[] PaletteFunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static SlotData Int(string value) => SlotData.FromLiteral(new VariableType(VariableTypeKind.Int), value);
 
@@ -2310,12 +2310,14 @@ public class BlockEditor : MonoBehaviour
 			{
 				string id = function?.Id;
 				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
+				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
 				int parameterCount = function.Parameters?.Count ?? 0;
 				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
 					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
-				// C 스킬과 공통 이동(dash 등)은 스킬, 나머지(get_bug, is_valid_target)는 기본 함수
-				bool skill = id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
+				// C·Python 스킬과 공통 이동(dash 등)은 스킬, 나머지(get_bug, is_valid_target)는 기본 함수
+				bool skill = BlockReference.IsSkill(id);
 				(skill ? skills : basics).Add(item);
 			}
 		}

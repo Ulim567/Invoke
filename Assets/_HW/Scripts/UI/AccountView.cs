@@ -338,6 +338,7 @@ public class AccountView : MonoBehaviour
 	static string IntroOf(string language) => language switch
 	{
 		CharacterLanguages.C => "레이피어 한 자루로 버그를 찌르는 검사.\n포인터로 소환검을 부린다.",
+		CharacterLanguages.Python => "뱀 지팡이로 버그를 태우는 마법사.\n마나 구슬을 모아 더 센 마법을 쓴다.",
 		_ => "",
 	};
 }

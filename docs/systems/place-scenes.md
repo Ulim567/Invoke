@@ -33,13 +33,13 @@
 
 ### 씬 구성
 - 기준 씬 `Base`: `NetworkManager`(`InvokeNetworkManager`, 로그인·암호화 컴포넌트는 `account.md`), `Camera`, `EventSystem`, `PlaceTravel`(`PlaceTravelClient` + 로딩 화면 Canvas). 씬 목록 0번 (Windows·Linux Server 빌드 프로필 모두 전역 씬 목록). 서버·클라이언트 모두 계속 열려 있음
-- 내용 씬 `Lobby`, `HuntingGround`, `TrainingRoom`, `RaidDungeon`: `Grid`(Ground·Platform 타일맵), `PlayerStartPosition`(`NetworkStartPosition`)
+- 내용 씬 `Lobby`, `HuntingGround`, `HuntingGround2`, `HuntingGround3`(#518), `TrainingRoom`, `RaidDungeon`: `Grid`(Ground·Platform 타일맵), `PlayerStartPosition`(`NetworkStartPosition`)
   - 카메라, NetworkManager, EventSystem, 빛 없음 (기준 씬 위에 겹쳐 불러오므로 넣으면 여러 개가 됨)
   - `Lobby`: `ArrivalPoint` 3개 (`Arrival_HuntingGround`, `Arrival_TrainingRoom`, `Arrival_RaidDungeon`, 각 입구 앞)
   - `HuntingGround`, `TrainingRoom`: `PlaceExit` 1개 (맵 왼쪽, `PlayerStartPosition`과 겹치지 않는 위치)
   - `RaidDungeon`: 출구 없음 (#300). 레이드는 클리어·실패로만 끝남
 - 서버
-  - 시작 시 로비·사냥터를 한 번씩 불러옴 (Additive, `LocalPhysicsMode.Physics2D`)
+  - 시작 시 로비·사냥터 1~3(#518)을 한 번씩 불러옴 (Additive, `LocalPhysicsMode.Physics2D`)
   - 연습장은 플레이어가 이동을 요청할 때마다 같은 씬을 한 번 더 불러옴 (아래 「연습장」)
   - 레이드 던전은 시작한 파티마다 같은 씬을 한 번 더 불러옴
   - 따로 불러온 씬은 이름이 모두 같으므로 `Scene` 값으로 구분
@@ -48,7 +48,8 @@
   - 물리 분리 없이 기본 물리 세계에 불러옴
 
 ### 장소 사이 이동 (#134)
-- 요청: 로컬 플레이어의 클라이언트 → 서버 `TravelRequestMessage { destination }` (갈 씬 이름)
+- 요청: 로컬 플레이어의 클라이언트 → 서버 `TravelRequestMessage { destination, arrival }` (갈 씬 이름, 도착 자리 이름. 도착 자리는 비워도 됨)
+  - 사냥터 사이 포탈 (#518, 임혜원, 이우림 허락): `PlacePortal` 앞에서 ↑ → `PlaceTravelClient.RequestTravel(갈 사냥터, 도착 자리 Id)` ([lobby-places.md](lobby-places.md) 「사냥터 사이 포탈」)
   - 로비 입구: `LobbyEntrance.TravelRequested` → `PlaceTravelClient.RequestTravel`
   - 레이드 입구(`RaidEntryRequested`)는 이동 요청이 아님. `RaidLobbyOpener`가 레이드 방 화면을 엶 (#242, [raid.md](raid.md))
   - 출구: `PlaceExit` 앞에서 ↑ → `PlaceTravelClient.RequestTravel(PlaceScenes.Lobby)`
@@ -88,6 +89,8 @@
   - 순서 보장: 씬 로드·언로드 중에는 Mirror가 다음 메시지 처리를 미룸(`NetworkClient.isLoadingScene`)
 - 다른 플레이어 보이기: 플레이어의 씬이 바뀌면 `SceneInterestManagement`가 observer 목록을 다시 만듦 → 같은 씬의 플레이어만 보임
 - 도착 위치
+  - 이동 요청에 도착 자리 이름(`arrival`)이 있으면 도착하는 씬에서 `Id`가 같은 `ArrivalPoint` (#518) → 없으면 경고 로그 후 아래
+    - 이유: 사냥터2 ↔ 사냥터3은 포탈이 두 쌍이라 떠나온 장소만으로는 어느 포탈 앞에 도착할지 정할 수 없음
   - 도착하는 씬에서 `fromPlace`가 떠나온 씬 이름과 같은 `ArrivalPoint` → 없으면 `PlayerStartPosition`
   - 높이: 서버가 표시 아래 10 안의 땅(Ground·Platform 레이어, 트리거 제외)을 찾아 플레이어 콜라이더의 아래쪽을 땅 윗면에 맞춤 (`PlaceOnGround`, #216)
     - 로그인 직후 로비 `PlayerStartPosition`에 생성할 때도 같음
@@ -229,7 +232,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | 이름 | 값 | 설명 |
 | --- | --- | --- |
 | `Lobby`, `HuntingGround`, `TrainingRoom`, `RaidDungeon` | `string` | 각 장소의 씬 이름 |
-| `FixedPlaces` | `string[]` | 서버가 시작할 때 한 번씩 불러오는 장소 (로비, 사냥터). 연습장·레이드 던전은 입장마다 따로 불러오므로 넣지 않음 |
+| `FixedPlaces` | `string[]` | 서버가 시작할 때 한 번씩 불러오는 장소 (로비, 사냥터 1~3). 연습장·레이드 던전은 입장마다 따로 불러오므로 넣지 않음 |
 | `NoCastPlaces` | `string[]` | 공격할 수 없는 장소 (지금은 로비). 장소를 더하거나 빼려면 여기만 고침 (#313) |
 | `IsNoCastPlace(string sceneName)` | 씬 이름 | `bool` | 그 씬 이름이 `NoCastPlaces`에 있으면 true |
 | `IsPlayerInNoCastPlace(GameObject player)` | 플레이어 오브젝트 | `bool` | 그 플레이어가 지금 공격할 수 없는 장소에 있으면 true. 서버·호스트·클라이언트 어디서든 부를 수 있음. 슬롯 HUD를 회색으로 표시할 때 클라이언트에서 부름 |
@@ -240,7 +243,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)` | 플레이어의 연결, 플레이어 오브젝트, 갈 씬 | - | 플레이어를 다른 장소로 이동 (실행 중인 함수 중단(로비로 오면 프로세스 재시작 + 체력 회복, #435), 이전 씬 언로드 알림, 씬 이동, 도착 위치로 teleport, `TravelEndedMessage`). 레이드 시작·끝에는 `RaidParties`가 파티원마다 부름 |
+| `TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target, string arrival = null)` | 플레이어의 연결, 플레이어 오브젝트, 갈 씬, 도착 자리 이름(#518, 비우면 떠나온 장소로) | - | 플레이어를 다른 장소로 이동 (실행 중인 함수 중단(로비로 오면 프로세스 재시작 + 체력 회복, #435), 이전 씬 언로드 알림, 씬 이동, 도착 위치로 teleport, `TravelEndedMessage`). 레이드 시작·끝에는 `RaidParties`가 파티원마다 부름 |
 | `DespawnPlayer(NetworkConnectionToClient conn)` | 플레이어의 연결 | - | 접속은 둔 채 그 연결의 플레이어를 없앰 (서버·모든 클라이언트). 연습장에 있었으면 그 연습장을 내림. 레이드 파티원이었으면 파티원 이탈. 같은 계정 중복 로그인으로 쫓겨난 연결에 `InvokeAuthenticator`가 부름 |
 | `PutPlayerInScene(NetworkConnectionToClient conn, GameObject player, Scene scene)` | 플레이어의 연결, 플레이어 오브젝트, 넣을 씬 | - | 서버: 플레이어를 그 씬으로 이동. 클라이언트: 그 씬을 불러오라고 알림. 위치 변경, 이전 씬 내리기는 하지 않음 (장소 사이 이동은 `TravelPlayer`) |
 | `LoadRaidDungeon(Action<Scene> onLoaded)` | 다 불러온 뒤 부를 함수 | - | 레이드 던전 씬을 한 번 더 불러옴 (`InstanceScenes.Load`). 다 불러오면 `onLoaded`에 그 `Scene` 값을 넘김. 요청은 한 번에 하나씩 처리 |
@@ -253,7 +256,7 @@ static 클래스. `NetworkSpawner.Spawn(...)`처럼 바로 부른다.
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `Instance` | - | `PlaceTravelClient` | `Base` 씬의 `PlaceTravelClient`. 장소 씬의 오브젝트는 Inspector로 다른 씬의 오브젝트를 연결할 수 없으므로 이것으로 찾음 |
-| `RequestTravel(string destination)` | 갈 씬 이름 (`PlaceScenes`) | - | 서버에 이동 요청. 접속 안 함, 로컬 플레이어 없음, 이전 요청의 답을 기다리는 중이면 무시. 답(`TravelEndedMessage`)이 올 때까지 로컬 플레이어의 Player·Attack 액션 맵 비활성화, 움직임 잠금. 레이드 던전(`PlaceScenes.RaidDungeon`)은 서버가 거절 |
+| `RequestTravel(string destination)`, `RequestTravel(string destination, string arrival)` | 갈 씬 이름 (`PlaceScenes`), 도착할 `ArrivalPoint`의 `Id` (#518, 비우면 떠나온 장소로) | - | 서버에 이동 요청. 접속 안 함, 로컬 플레이어 없음, 이전 요청의 답을 기다리는 중이면 무시. 답(`TravelEndedMessage`)이 올 때까지 로컬 플레이어의 Player·Attack 액션 맵 비활성화, 움직임 잠금. 레이드 던전(`PlaceScenes.RaidDungeon`)은 서버가 거절 |
 
 - 레이드 시작·끝의 이동은 서버가 시작함 (`TravelStartedMessage`, 위 「파티 레이드」). 다른 스크립트가 부를 함수는 없음
 
@@ -316,7 +319,7 @@ static 클래스. 이 화면(이 컴퓨터)에 있는 플레이어 목록. 파�
 
 | 이름 | 붙이는 곳 | 꼭 필요한 설정 | 자유롭게 바꿔도 되는 것 | 설명 |
 | --- | --- | --- | --- | --- |
-| `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). 높이: 땅 위 10 안 (서버가 땅에 맞춰 세움) | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
+| `ArrivalPoint` | 장소 씬의 빈 GameObject | `fromPlace`: 떠나온 장소의 씬 이름 (`PlaceScenes`, 대소문자까지 같게). `id`(#518): 도착 자리 이름, 이동 요청의 `arrival`과 같으면 여기 (비우면 이름으로 안 찾음). 높이: 땅 위 10 안 (서버가 땅에 맞춰 세움) | - | 그 장소에서 온 플레이어가 도착할 위치 (`transform.position`) |
 | `PlaceExit` | 출구 프리팹의 root | Is Trigger를 체크한 `Collider 2D`. `prompt`: ↑ 안내 오브젝트 (비우면 안내 없음). 사냥터·연습장에 하나씩, `PlayerStartPosition`과 겹치지 않게. 레이드 던전에는 두지 않음 (#300) | 스프라이트, 색, Collider 크기, 안내의 모양·위치 | 로컬 플레이어가 범위 안에서 ↑(`InteractPressed`)를 누르면 로비로 이동 요청. 검 타기 중(`PlayerMovement.IsRiding`)이거나 죽었거나 경직 중(`PlayerHealth.CanAct` false)이면 무시 (#285, #310). `PlaceInteractable`(`Assets/_HW/Scripts/Lobby`)을 물려받음 |
 | `LoadingScreen` | 로딩 화면 Canvas | `panelRoot`: 화면을 덮는 UI의 부모. `canvasGroup`: `panelRoot`에 붙인 `Canvas Group`. 배경 Image의 Raycast Target 체크. Canvas Sort Order는 로비 UI(0)보다 크게. `Base`에 놓고 `PlaceTravel`의 `loadingScreen` 칸에 연결 | 배경, 글자, 글꼴, 애니메이션, `fadeSeconds`(페이드 시간, 기본 0.25초) | `PlaceTravelClient`만 `Show`·`ShowImmediate`·`Hide`를 부름. 이동하는 동안과 접속 직후에 화면을 덮음 |
 

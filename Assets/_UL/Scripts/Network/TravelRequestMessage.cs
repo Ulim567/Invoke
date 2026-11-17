@@ -15,6 +15,12 @@ public struct TravelRequestMessage : NetworkMessage
 	/// 갈 씬 이름 (PlaceScenes의 Lobby, HuntingGround, TrainingRoom, RaidDungeon).
 	/// </summary>
 	public string destination;
+
+	/// <summary>
+	/// 도착할 ArrivalPoint의 Id (#518, 사냥터 사이 포탈). 비우면 떠나온 장소(FromPlace)로 찾는다.
+	/// 같은 두 장소 사이에 문이 여러 쌍이면(사냥터2 ↔ 사냥터3) 떠나온 장소만으로는 어느 문 앞에 도착할지 정할 수 없어서 쓴다.
+	/// </summary>
+	public string arrival;
 }
 
 /// <summary>

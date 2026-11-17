@@ -18,7 +18,7 @@ public static class EntranceGateBuilder
 	const float PixelsPerUnit = 16f;
 	const float GateHeight = 48f / PixelsPerUnit; // 3칸
 
-	static readonly string[] Scenes = { "Lobby", "HuntingGround", "TrainingRoom", "RaidDungeon" };
+	static readonly string[] Scenes = { "Lobby", "HuntingGround", "HuntingGround2", "HuntingGround3", "TrainingRoom", "RaidDungeon" };
 
 	[MenuItem("Invoke/맵/입구·출구 문 그림 바꾸기")]
 	static void Build()

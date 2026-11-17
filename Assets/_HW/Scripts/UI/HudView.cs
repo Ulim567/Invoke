@@ -486,7 +486,9 @@ public class HudView : MonoBehaviour
 	public static string PlaceName(string sceneName) => sceneName switch
 	{
 		PlaceScenes.Lobby => "로비",
-		PlaceScenes.HuntingGround => "사냥터",
+		PlaceScenes.HuntingGround => "사냥터 1",
+		PlaceScenes.HuntingGround2 => "사냥터 2",
+		PlaceScenes.HuntingGround3 => "사냥터 3",
 		PlaceScenes.TrainingRoom => "연습장",
 		PlaceScenes.RaidDungeon => "레이드 던전",
 		_ => sceneName,

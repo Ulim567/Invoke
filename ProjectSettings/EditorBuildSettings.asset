@@ -15,6 +15,12 @@ EditorBuildSettings:
     path: Assets/Scenes/HuntingGround.unity
     guid: 72c57c05d6d36344493463554b7d3e3c
   - enabled: 1
+    path: Assets/Scenes/HuntingGround2.unity
+    guid: 70902a531355c4541b5cadfefd7ee14a
+  - enabled: 1
+    path: Assets/Scenes/HuntingGround3.unity
+    guid: a2d47304b64e14c7b9fdb8b8e3e2f5f1
+  - enabled: 1
     path: Assets/Scenes/TrainingRoom.unity
     guid: 3089b3b815666ae4b952524e6f18e548
   - enabled: 1

@@ -146,11 +146,71 @@ public static class MapDecorator
 		ambient = new Rect(-36, -4, 72, 16),
 	};
 
+	// 사냥터2 (#518, 맑은 낮 하늘, Sky Clouds 1). 가로 60칸(X -30~29), 세로로 긴 맵. 바닥 윗면 Y -4. 바닥 가운데(X -1~1)는 포탈 자리라 비운다.
+	// 발판 1층(윗면 -1, 칸 Y -2): X -24~-11, 10~23 → 키 큰 소품(Lamp 3칸)은 그 아래에 두지 않는다. 떠다니는 꽃은 위층 사이에 (구름 위로 올라가는 느낌)
+	const string Clear = "D2E2EC";
+	static Decoration HuntingGround2() => new Decoration
+	{
+		props = new[]
+		{
+			new Prop("Grass", -17, -4, Clear),
+			new Prop("Flowers_Assorted", -6, -4, Clear),
+			new Prop("Grass_WTrash", 12, -4, Clear),
+			new Prop("Foxtail_Blue", 21, -4, Clear),
+			new Prop("FloatingFlower_Blue", -20, 9.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 1, 12.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 20, 15.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", -10, 19.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 10, 21f, null, "Props", 5),
+		},
+		stamps = new[]
+		{
+			RockBig(-27, -4), Bush(-21, -4), TreeDead(-12, -4), Grave(-9, -4),
+			Lamp(6, -4), Mound(15, -4), Thorns(19, -4), RockTall(25, -4),
+		},
+		ambient = new Rect(-28, -4, 56, 26),
+	};
+
+	// 사냥터3 (#518, 보라 밤, Sky background 3 + 불 켜진 창문 폐허). 가로 120칸(X -60~59), 바닥 윗면 Y -4. 양 끝(X -57~-55, 54~56)은 포탈 자리라 비운다.
+	// 언덕 X -34~-28(윗면 -3), 18~21(-3), 22~25(-2), 구덩이 X -8~-4·44~48(바닥 -6) → 소품은 그 높이에 세운다
+	// 발판 1층(윗면 -1, 칸 Y -2): X -48~-37, -22~-11, 4~15, 30~41 → 키 큰 소품(Lamp)은 그 아래에 두지 않는다
+	const string Night3 = "7A6CB0";
+	static Decoration HuntingGround3() => new Decoration
+	{
+		props = new[]
+		{
+			new Prop("Grass", -48, -4, Night3),
+			new Prop("StopSign_Flowers_Moss", -36, -4, Night3),
+			new Prop("Map_Moss", -24, -4, Night3),
+			new Prop("Grass", -12, -4, Night3),
+			new Prop("Bollard_Moss", -2, -4, Night3),
+			new Prop("Bollard_Moss", -1.3f, -4, Night3),
+			new Prop("Grass_WTrash", 14, -4, Night3),
+			new Prop("Foxtail_Pink", 20, -3, Night3),
+			new Prop("Flowers_Assorted", 32, -4, Night3),
+			new Prop("Foxtail_Pink", 50, -4, Night3),
+			new Prop("FloatingFlower_Blue", -27, 8, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", -6, 3, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 0, 8, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 26, 8, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 46, 2, null, "Props", 5),
+		},
+		stamps = new[]
+		{
+			RockBig(-52, -4), Bush(-45, -4), TreeDead(-31, -3), Lamp(-29, -3), Grave(-26, -4),
+			TreeRound(-11, -4), Thorns(-6, -6), RockTall(0, -4), Mound(10, -4), Fence(18, -3), Lamp(24, -2),
+			Thorns(36, -4), TreeDead(42, -4), Grave(46, -6), RockBig(51, -4),
+		},
+		ambient = new Rect(-60, -6, 120, 18),
+	};
+
 	static Decoration Find(string sceneName)
 	{
 		switch (sceneName)
 		{
 			case PlaceScenes.HuntingGround: return HuntingGround();
+			case PlaceScenes.HuntingGround2: return HuntingGround2();
+			case PlaceScenes.HuntingGround3: return HuntingGround3();
 			case PlaceScenes.RaidDungeon: return RaidDungeon();
 			case PlaceScenes.TrainingRoom: return TrainingRoom();
 			case PlaceScenes.Lobby: return Lobby();
@@ -161,19 +221,25 @@ public static class MapDecorator
 	[MenuItem("Invoke/맵/지금 씬 소품 놓기")]
 	static void DecorateCurrentScene()
 	{
+		if (!DecorateActiveScene())
+			EditorUtility.DisplayDialog("소품 놓기", $"'{EditorSceneManager.GetActiveScene().name}' 씬의 소품 배치표가 없어요. (로비·사냥터 1~3·레이드 던전·연습장만 있음)", "확인");
+	}
+
+	/// <summary>
+	/// 열려 있는 씬에 배치표대로 소품을 놓는다. 다른 에디터 도구(HuntingGroundBuilder)도 부른다. 저장은 하지 않는다. 배치표가 없으면 false
+	/// </summary>
+	internal static bool DecorateActiveScene()
+	{
 		var scene = EditorSceneManager.GetActiveScene();
 		Decoration deco = Find(scene.name);
-		if (deco == null)
-		{
-			EditorUtility.DisplayDialog("소품 놓기", $"'{scene.name}' 씬의 소품 배치표가 없어요. (로비·사냥터·레이드 던전·연습장만 있음)", "확인");
-			return;
-		}
+		if (deco == null) return false;
 
 		int props = PlaceProps(scene, deco.props);
 		int tiles = StampDecor(deco.stamps) + FillBackWall(deco.backWall);
 		PlaceAmbient(scene, deco.ambient);
 		EditorSceneManager.MarkSceneDirty(scene);
 		Debug.Log($"[MapDecorator] {scene.name}: 스프라이트 소품 {props}개, 타일 소품 {tiles}칸. 확인하고 Ctrl/Cmd+S로 저장한다");
+		return true;
 	}
 
 	// 떠다니는 데이터 조각 -----------------------------------------------------

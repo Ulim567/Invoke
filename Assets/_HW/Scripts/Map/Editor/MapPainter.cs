@@ -20,6 +20,13 @@ using UnityEngine.Tilemaps;
 /// <para>
 /// 점프 높이가 4칸이라, 발판·단은 바로 아래 땅보다 3칸 이하로 높게 둔다.
 /// </para>
+/// <para>
+/// 발판 나누기 (노션 11/16 겹친 발판 점프 불가): 발판을 다 칠한 뒤 발판 하나(가로로 이어진 칸)마다 Platform을 복제한 오브젝트(Platform_1, 2, …)로 옮긴다.
+/// 원래 Platform 타일맵은 비워 두고 설정(레이어, Platform Effector, 콜라이더) 원본으로만 쓴다.<br/>
+/// 이유: 발판이 콜라이더 하나로 합쳐져 있으면, 박진우의 PlayerMovement가 아래에서 뚫고 오를 때 끈 충돌이 「몸이 그 콜라이더에서 빠져나올 때」 다시 켜지는데,
+/// 위아래로 겹친 발판(층 사이 3칸, 캐릭터 3.75칸)에서는 아래 발판에 서 있어도 몸이 위 발판에 걸쳐 있어 계속 「발판 안」으로 쳐서 점프가 안 됐다.<br/>
+/// 발판 그림 (노션 11/16): 바깥 장소의 발판은 단단한 부분을 2픽셀 → 5픽셀로 두껍게 그린 platform_thick_left / mid / right (Assets/_HW/Map/Tiles)를 쓴다. 타일 에셋은 처음 칠할 때 Palettes/PlatformThick에 만든다.
+/// </para>
 /// </summary>
 public static class MapPainter
 {
@@ -357,16 +364,90 @@ public static class MapPainter
 		}
 
 		Dictionary<char, TileBase> tiles = LoadTiles(layout.tiles);
+		if (layout.tiles == NoMansLand) UseThickPlatformTiles(tiles);
 
 		Undo.RegisterCompleteObjectUndo(new Object[] { ground, platform }, "Paint Map");
 		ground.ClearAllTiles();
 		platform.ClearAllTiles();
 		int count = Paint(ground, layout.ground, layout, tiles) + Paint(platform, layout.platform, layout, tiles);
 		ground.CompressBounds();
-		platform.CompressBounds();
+		int pieces = SplitPlatforms(platform);
 
 		EditorSceneManager.MarkSceneDirty(scene);
-		Debug.Log($"[MapPainter] {scene.name}: 타일 {count}칸을 칠함. 확인하고 Ctrl/Cmd+S로 저장한다");
+		Debug.Log($"[MapPainter] {scene.name}: 타일 {count}칸을 칠함, 발판 {pieces}개로 나눔. 확인하고 Ctrl/Cmd+S로 저장한다");
+	}
+
+	// 발판 하나(같은 줄에서 가로로 이어진 칸)마다 Platform을 복제한 오브젝트로 옮긴다. 예전에 나눈 Platform_* 는 먼저 지운다
+	static int SplitPlatforms(Tilemap platform)
+	{
+		Transform parent = platform.transform.parent;
+		if (parent != null)
+		{
+			var old = new List<GameObject>();
+			foreach (Transform child in parent)
+				if (child.name.StartsWith("Platform_")) old.Add(child.gameObject);
+			foreach (GameObject go in old) Undo.DestroyObjectImmediate(go);
+		}
+
+		platform.CompressBounds();
+		BoundsInt bounds = platform.cellBounds;
+		var pieces = new List<List<(Vector3Int cell, TileBase tile)>>();
+		for (int y = bounds.yMin; y < bounds.yMax; y++)
+		{
+			List<(Vector3Int, TileBase)> run = null;
+			for (int x = bounds.xMin; x <= bounds.xMax; x++)
+			{
+				var cell = new Vector3Int(x, y, 0);
+				TileBase tile = x < bounds.xMax ? platform.GetTile(cell) : null;
+				if (tile == null) { run = null; continue; }
+				if (run == null) { run = new List<(Vector3Int, TileBase)>(); pieces.Add(run); }
+				run.Add((cell, tile));
+			}
+		}
+
+		for (int i = 0; i < pieces.Count; i++)
+		{
+			GameObject copy = Object.Instantiate(platform.gameObject, parent);
+			copy.name = $"Platform_{i + 1}";
+			Undo.RegisterCreatedObjectUndo(copy, "Paint Map");
+			Tilemap map = copy.GetComponent<Tilemap>();
+			map.ClearAllTiles();
+			foreach (var (cell, tile) in pieces[i]) map.SetTile(cell, tile);
+			map.CompressBounds();
+		}
+
+		// 원본은 비워 두고 설정 원본으로만 쓴다
+		platform.ClearAllTiles();
+		platform.CompressBounds();
+		return pieces.Count;
+	}
+
+	// 바깥 장소의 발판 칸(< = >)을 두꺼운 발판 그림으로. 타일 에셋이 없으면 만든다
+	const string ThickTileFolder = "Assets/_HW/Map/Palettes/PlatformThick";
+	static void UseThickPlatformTiles(Dictionary<char, TileBase> tiles)
+	{
+		(char ch, string name)[] parts = { ('<', "platform_thick_left"), ('=', "platform_thick_mid"), ('>', "platform_thick_right") };
+		if (!AssetDatabase.IsValidFolder(ThickTileFolder)) AssetDatabase.CreateFolder("Assets/_HW/Map/Palettes", "PlatformThick");
+		foreach (var (ch, name) in parts)
+		{
+			string tilePath = $"{ThickTileFolder}/{name}.asset";
+			var tile = AssetDatabase.LoadAssetAtPath<Tile>(tilePath);
+			if (tile == null)
+			{
+				Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/_HW/Map/Tiles/{name}.png");
+				if (sprite == null)
+				{
+					Debug.LogWarning($"[MapPainter] Assets/_HW/Map/Tiles/{name}.png를 못 찾아 예전 발판 그림을 씀");
+					continue;
+				}
+				tile = ScriptableObject.CreateInstance<Tile>();
+				tile.sprite = sprite;
+				tile.colliderType = Tile.ColliderType.Sprite;
+				AssetDatabase.CreateAsset(tile, tilePath);
+			}
+			tiles[ch] = tile;
+		}
+		AssetDatabase.SaveAssets();
 	}
 
 	static Tilemap FindTilemap(string name)

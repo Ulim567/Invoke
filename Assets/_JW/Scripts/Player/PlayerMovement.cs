@@ -446,11 +446,22 @@ public class PlayerMovement : NetworkBehaviour
 			// 올라가는 중에는 발판 안을 지나가도 바닥으로 치지 않는다 (공중 재점프 방지)
 			if (body.linearVelocity.y > 0.01f) return false;
 			GetGroundCheckBox(out Vector2 center, out Vector2 size);
-			// 내려가는 중에는 발판을 바닥으로 치지 않는다 (발판 안을 지나가는 동안 다시 착지한 것으로 보지 않게)
-			LayerMask mask = IsDropping ? (groundLayers & ~platformLayers) : groundLayers;
-			return ScenePhysics().OverlapBox(center, size, 0f, mask) != null;
+			if (!IsDropping) return ScenePhysics().OverlapBox(center, size, 0f, groundLayers) != null;
+			// 지나가는 중인 발판(droppedPlatforms)만 바닥으로 치지 않는다 (그 발판 안을 지나가는 동안 다시 착지한 것으로 보지 않게).
+			// 예전에는 Platform 레이어 전체를 뺐는데, 위아래로 겹친 발판(층 사이 3칸, 캐릭터 3.75칸)에서는 아래 발판에 서 있어도
+			// 머리가 위 발판에 걸쳐 IsDropping이 풀리지 않아 아래 발판까지 바닥이 아니게 되어 점프가 안 됐다 (임혜원 #515, 발판은 맵에서 하나씩 나눔)
+			ContactFilter2D filter = new ContactFilter2D();
+			filter.SetLayerMask(groundLayers);
+			filter.useTriggers = Physics2D.queriesHitTriggers;
+			groundCheck.Clear();
+			ScenePhysics().OverlapBox(center, size, 0f, filter, groundCheck);
+			foreach (Collider2D hit in groundCheck)
+				if (!droppedPlatforms.Contains(hit)) return true;
+			return false;
 		}
 	}
+
+	readonly List<Collider2D> groundCheck = new List<Collider2D>();
 
 	// 컴포넌트를 처음 붙이거나 Reset을 누르면 연결과 기본 레이어를 자동으로 채운다
 	void Reset()

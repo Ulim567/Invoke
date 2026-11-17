@@ -297,7 +297,7 @@ public class SkillTreeView : MonoBehaviour
 		{
 			foreach (Placed p in placed.Values)
 			{
-				string summary = p.Node.Description?.Summary;
+				string summary = ItemDescriptions.Get(p.Node.Id)?.Summary; // 설명 표 (노드 ID가 key)
 				if (string.IsNullOrEmpty(summary)) continue;
 				// 글자 프리팹은 계열 이름과 같은 것을 쓰고 모양만 바꾼다 (새 프리팹 없이)
 				TMP_Text label = Spawn(laneLabelPrefab);
@@ -481,8 +481,11 @@ public class SkillTreeView : MonoBehaviour
 		lines.Add(Row("같이 열리는 노드", together.Count > 0 ? string.Join(", ", together) : "없음"));
 		if (node.UnlocksBlocks.Count > 0) lines.Add(Row("여는 블록", string.Join(", ", node.UnlocksBlocks.Select(BlockName))));
 		if (failedId == node.Id && !isUnlocked) lines.Add($"<color={Bad}>해금하지 못했어요. {FailText(failedResult)}</color>");
-		// 자세한 설명은 이름 바로 아래 (캔버스 9-1). noparse: 설명의 < > 를 태그로 읽지 않게
-		string detail = node.Description?.Detail;
+		// 설명은 이름 바로 아래 (캔버스 9-1). 설명 표(ItemDescriptions)의 하는 일·용도·주의할 점 가운데 적힌 것. noparse: 설명의 < > 를 태그로 읽지 않게
+		// 해금 설명 카드(다음 이슈)가 생기기 전까지 쓰는 칸이다. 스킬의 용도·주의할 점은 박진우가 채우면 보인다
+		ItemDescription description = ItemDescriptions.Get(node.Id);
+		string[] parts = { description?.Summary, description?.Purpose, description?.Caution };
+		string detail = string.Join(" ", parts.Where(part => !string.IsNullOrEmpty(part)));
 		if (!string.IsNullOrEmpty(detail)) lines.InsertRange(0, new[] { $"<color={DescriptionText}><noparse>{detail}</noparse></color>", "" });
 		detailBody.text = string.Join("\n", lines);
 

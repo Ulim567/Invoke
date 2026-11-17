@@ -108,6 +108,8 @@ public class PlayerMovement : NetworkBehaviour
 	float dashEndTime;
 	bool riding;
 	float rideEndTime;
+	// 지금 떠 있는 시간 전체 (검 타기는 rideSeconds, 공중 부양은 스킬이 준 값)
+	float floatDuration;
 	// 공중 점프(더블점프)를 이번 공중에서 이미 썼는지. 땅에 닿으면 다시 쓸 수 있다
 	bool airJumpUsed;
 	PlayerProgress progress;
@@ -227,7 +229,10 @@ public class PlayerMovement : NetworkBehaviour
 	/// <summary>검을 타고 나는 시간 (초, Inspector Ride Seconds). 검 타기 스킬이 소환검을 붙여 둘 시간으로도 쓴다 (#256)</summary>
 	public float RideSeconds => rideSeconds;
 
-	/// <summary>검 타기 남은 시간 (초). 타는 중이 아니면 0. 타이머 표시(SwordRideTimerView)가 읽는다 (#256)</summary>
+	/// <summary>지금 떠 있는 시간 전체 (초). 검 타기는 RideSeconds, 공중 부양은 스킬이 준 시간. 타이머 비율(SwordRideTimerView)이 쓴다</summary>
+	public float RideDuration => floatDuration;
+
+	/// <summary>검 타기·공중 부양 남은 시간 (초). 떠 있지 않으면 0. 타이머 표시(SwordRideTimerView)가 읽는다 (#256)</summary>
 	public float RideRemaining => riding ? Mathf.Max(0f, rideEndTime - Time.time) : 0f;
 
 	/// <summary>
@@ -294,21 +299,68 @@ public class PlayerMovement : NetworkBehaviour
 	/// ↑↓를 떼면 그 높이에 멈춘다. 아래 바닥(땅·발판)과는 Ride Clearance만큼 띄워 두어 ↓로도 바닥에 닿지 않는다 (#351).
 	/// 발판 아래로 내려가려면 평소처럼 ↓ + Space를 누른다(발판만, 땅은 못 뚫음). 시간이 다 되거나 StopRide를 부르면 내려온다. 검 타기 스킬이 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
 	/// </summary>
-	public void StartRide()
+	public void StartRide() => StartFloat(rideSeconds);
+
+	/// <summary>
+	/// 공중 부양 (파이썬 마법사의 py.levitate): 검 타기와 같은 방식으로 seconds초 동안 중력 없이 ←→↑↓로 난다. 소환검은 쓰지 않는다.<br/>
+	/// 시간이 다 되거나 StopRide를 부르면 내려온다. 남은 시간은 RideRemaining으로 읽는다. 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다.
+	/// </summary>
+	public void StartLevitate(float seconds) => StartFloat(Mathf.Max(0.1f, seconds));
+
+	// 검 타기·공중 부양이 함께 쓰는 「떠서 날기」 시작. 나는 시간만 다르다
+	void StartFloat(float seconds)
 	{
 		if (OwnedByRemoteClient)
 		{
-			TargetStartRide();
+			TargetStartFloat(seconds);
 			return;
 		}
 		if (movementLocked || riding) return;
 		lunging = false;
 		EndDashLocal();
 		riding = true;
-		rideEndTime = Time.time + rideSeconds;
+		rideEndTime = Time.time + seconds;
+		floatDuration = seconds;
 		SuspendGravity();
 		body.linearVelocity = Vector2.zero;
 	}
+
+	/// <summary>
+	/// 순간이동 (파이썬 마법사의 py.blink): direction(1 오른쪽, -1 왼쪽) 쪽으로 distance(유닛)만큼 바로 옮긴다. 그쪽을 바라본다.<br/>
+	/// 가는 길에 벽(Ground)이 있으면 벽 앞에서 멈춘다. 발판(Platform)은 지나간다. 공중에서도 되고, 세로 속도는 0이 된다.<br/>
+	/// 서버에서 다른 컴퓨터의 플레이어에 부르면 소유 클라이언트에서 한다. 잠겨 있거나 경직·사망 중이면 하지 않는다.
+	/// </summary>
+	public void Blink(int direction, float distance)
+	{
+		int dir = direction >= 0 ? 1 : -1;
+		if (OwnedByRemoteClient)
+		{
+			facing = dir;
+			TargetBlink(dir, distance);
+			return;
+		}
+		if (movementLocked || distance <= 0f || (health != null && !health.CanAct)) return;
+		lunging = false;
+		EndDashLocal();
+		facing = dir;
+
+		// 몸 모양 그대로 밀어 보아 벽에 닿기 전까지의 거리만 간다
+		ContactFilter2D filter = new ContactFilter2D();
+		filter.SetLayerMask(groundLayers & ~platformLayers);
+		filter.useTriggers = false;
+		float move = distance;
+		int count = body.Cast(new Vector2(dir, 0f), filter, blinkHits, distance);
+		for (int i = 0; i < count; i++)
+		{
+			// 밟고 있는 바닥처럼 옆을 막지 않는 면(위·아래를 보는 면)은 벽이 아니다
+			if (Mathf.Abs(blinkHits[i].normal.x) < 0.5f) continue;
+			move = Mathf.Min(move, Mathf.Max(0f, blinkHits[i].distance - 0.02f));
+		}
+		body.position += new Vector2(dir * move, 0f);
+		body.linearVelocity = new Vector2(0f, 0f);
+	}
+
+	readonly RaycastHit2D[] blinkHits = new RaycastHit2D[8];
 
 	/// <summary>검 타기를 끝낸다 (#256). 중력이 돌아와 떨어진다. 검 타기 스킬이 끝나거나 끊길 때 부른다.</summary>
 	public void StopRide()
@@ -329,7 +381,10 @@ public class PlayerMovement : NetworkBehaviour
 	void TargetAirJump() => TryAirJump();
 
 	[TargetRpc]
-	void TargetStartRide() => StartRide();
+	void TargetStartFloat(float seconds) => StartFloat(seconds);
+
+	[TargetRpc]
+	void TargetBlink(int direction, float distance) => Blink(direction, distance);
 
 	[TargetRpc]
 	void TargetStopRide() => StopRide();

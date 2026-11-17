@@ -3,8 +3,8 @@
 - 담당자: 박진우
 
 ## 하는 일
-- 대상(몬스터)에 걸린 상태 이상 5종(출혈, 표식, 기절, 실명, 이속 감소)의 걸기, 지속 시간, 풀림을 맡는다.
-- 출혈의 지속 데미지를 준다.
+- 대상(몬스터)에 걸린 상태 이상 6종(출혈, 표식, 기절, 실명, 이속 감소, 중독)의 걸기, 지속 시간, 풀림을 맡는다.
+- 출혈·중독의 지속 데미지를 준다.
 - 표식은 `DamageCalculator`가 읽어 데미지 +100%를 붙인다 (damage-calculation.md).
 - 다른 시스템이 대상이 어떤 상태인지 읽을 수 있게 한다.
 - 상태 이상 아이콘을 대상 머리 위에 띄운다 (`StatusIconView`, 아래).
@@ -26,6 +26,10 @@
     - 건 사람 없이 걸면(`Apply(type)`, `TryApply(target, type)`): 이미 기억한 플레이어를 그대로 둔다. 처음 거는 출혈이면 건 사람 없음 → 피해 기록에 남지 않음
     - 출혈이 풀리면(시간·`Clear`·죽음) 잊는다
   - 출혈은 스킬 공격이 아니라서 **표식 2배와 처형을 받지 않는다** (대상 정보 없이 계산). 기획 확인 필요.
+- 중독 (#486, 파이썬 마법사의 독 안개)
+  - 처음 건 뒤 `PoisonInterval`(1초)마다 `PoisonDamage`(3) × 겹친 수를 준다.
+  - 걸린 채 다시 걸면 지속 시간이 새로 시작하고 한 겹 더 쌓인다 (최대 `PoisonMaxStacks` 3겹). 다른 상태와 달리 겹친다. 풀리면 겹친 수는 0.
+  - 데미지 주는 방식, 건 플레이어 기억(`source`), 표식 2배·처형을 받지 않는 것은 출혈과 같다.
 - 표식: 걸려 있는 동안 `DamageTarget.FromMonster`가 `IsMarked = true`로 만들어 계산기가 +100%를 붙인다.
 - 상태 값은 이 컴포넌트만 바꾼다 (코드 작성 규칙 2).
 
@@ -38,6 +42,7 @@
 | 기절 `Stun` | 행동 불가 | 1초 | - | 표식 남기기 |
 | 실명 `Blind` | 이 대상의 공격이 빗나감 | 3초 | - | 급소공략 (눈, #161) |
 | 이속 감소 `Slow` | 이동 속도 감소 | 3초 | ×0.5 | 급소공략 (발목, #161) |
+| 중독 `Poison` | 도트 데미지, 겹침 | 6초 | 1초마다 3 × 겹친 수(최대 3) | 독 안개 (파이썬, #486) |
 
 ## 다른 시스템이 쓰는 것
 
@@ -63,6 +68,8 @@
 | `AmplifyBleed(float bonusRate)` | 추가분 | - | (#172) 출혈 중이면 그 출혈이 끝날 때까지 틱 데미지 추가분. 상처 가르기가 부른다 |
 | `BleedBonusRate` | - | `float` | (#172) 지금 출혈 틱 데미지 추가분. 0이면 기본 |
 | `BleedTicked` (event) | `int` 데미지 | - | [로직] 출혈 데미지를 줬을 때 |
+| `PoisonStacks` | - | `int` | (#486) 중독이 겹친 수. 중독이 아니면 0. 서버(Host)에서만 맞는 값 |
+| `PoisonTicked` (event) | `int` 데미지 | - | (#486) [로직] 중독 데미지를 줬을 때 |
 
 ### 네트워크 (#325)
 
@@ -85,6 +92,7 @@
 - 같은 상태를 다시 걸어도 아이콘은 늘지 않는다. 풀리면 그 아이콘만 사라지고 남은 것이 다시 가운데 정렬된다.
 - 아이콘 프리팹: `Assets/_JW/Resources/StatusIcon.prefab` (SpriteRenderer, Sorting Layer `WorldUI`). 인스펙터 `iconPrefab`이 비어 있으면 이걸 불러온다.
 - 그림: 임혜원 #114 `StatusIcons_0..4`를 `StatusType` 순서(출혈, 표식, 기절, 실명, 이속 감소)로 쓴다. 그림을 바꾸려면 StatusIcon 프리팹의 `sprites`만 바꾸면 된다.
+  - `sprites`에 없는 상태(중독 등, #486): `Assets/_JW/Resources/StatusIcons/{상태 이름}.png`(16×16)를 쓴다. 가져오기 설정은 `SkillIconImporter`가 자동으로 한다
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
@@ -100,6 +108,7 @@
   - 실명: SpriteRenderer 색에 `Blind Tint`(어두운 회색)를 곱한다
   - 이속 감소: `Slow Tint`(파란색)를 곱한다. 실명과 같이 걸리면 둘 다 곱한다
   - 출혈: 데미지가 들어갈 때마다 `Bleed Flash Seconds`(0.15초) 동안 `Bleed Flash Color`(빨강)로 번쩍인다. 서버·Host는 `BleedTicked`(실제 데미지)에 맞추고, 클라이언트는 걸린 순간부터 `BleedInterval`(1초)마다 번쩍인다
+  - 중독 (#486): 출혈처럼 데미지가 들어갈 때마다 `Poison Flash Color`(초록)로 번쩍인다. 서버·Host는 `PoisonTicked`, 클라이언트는 `PoisonInterval`마다. 출혈 번쩍임 횟수(`BleedFlashCount`)에는 세지 않는다
   - 색은 상태가 걸린 동안만 `LateUpdate`에서 칠하고, 모두 풀리면 처음 색(`Awake` 때 색)으로 한 번 되돌린다. 그 뒤로는 색을 건드리지 않는다
 - 그림 효과: 걸린 동안 대상의 자식으로 띄우고, 풀리면 없앤다. 대상 크기가 1이 아니어도(Leak 1.5×1) 그림은 원래 비율로 보이게 크기를 되돌린다 (#456, `StatusEffectView.InverseScale`). Inspector 칸이 비어 있으면 기본 그림 `Assets/_JW/Resources/StatusEffects/{상태 이름}.prefab`(Bleed, Mark, Stun, Blind, Slow, #363)을 쓴다. 그래서 몬스터 프리팹마다 칸을 채우지 않아도 된다. 기본 그림도 없으면 색 효과만 낸다
   | 칸 | 상태 | 자리 |
@@ -109,6 +118,7 @@
   | `Stun Effect` | 기절 (머리 위 도는 별) | 콜라이더 윗면 + `Head Effect Height`(0.2). 아이콘보다 낮게 |
   | `Blind Effect` | 실명 (검은 연기) | 머리 쪽 (윗면에서 몸 높이의 20% 아래) |
   | `Slow Effect` | 이속 감소 (발밑에서 자라나는 얼음) | 발밑 |
+  | `Poison Effect` | 중독 (올라오는 독 방울, #486) | 몸 가운데 |
   - 기본 그림 (#363, PixelLab, 16 PPU): 스프라이트 시트 `Assets/_JW/Effects/Status/status_*.png`를 잘라, 프리팹(SpriteRenderer Sorting Layer `Effect` + `SpriteFrameLoop`)으로 만들었다
     | 프리팹 | 시트 | 프레임 | 재생 |
     | --- | --- | --- | --- |

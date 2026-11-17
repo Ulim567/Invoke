@@ -13,18 +13,20 @@ public static class ItemCountRules
 	public const int MaxCount = 99;
 
 	/// <summary>
-	/// 새 캐릭터의 처음 개수 (항목 ID → 개수). 지금은 thrust 1, sword_throw 1, get_bug 2.<br/>
+	/// 새 캐릭터의 처음 개수 (항목 ID → 개수). 캐릭터 언어(language)마다 다르다. 모르는 언어는 C.<br/>
+	/// - C: thrust 1, sword_throw 1, get_bug 2<br/>
+	/// - Python (#486): py.orb_create 1, py.orb_shot 1, get_bug 1<br/>
 	/// 처음 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)가 쓰는 개수와 같아서, 처음 남은 개수는 모두 0이다.
 	/// </summary>
 	// 숫자를 직접 적지 않고 처음 슬롯 함수를 세어 만드는 이유: 처음 슬롯 함수를 바꿔도 처음 개수가 저절로 맞아,
 	// 슬롯 함수가 가진 것보다 많이 쓰는 캐릭터가 생기지 않게 하기 위함 (기획: 튜토리얼을 마치면 남는 개수 0)
-	public static Dictionary<string, int> Initial()
+	public static Dictionary<string, int> Initial(string language = CharacterLanguages.C)
 	{
 		var slots = new List<FunctionData>();
 		var guids = new List<string>();
 		for (int i = 0; i < SlotLoadout.SlotCount; i++)
 		{
-			FunctionData slot = CharacterProgressData.NewSlotFunction(i);
+			FunctionData slot = CharacterProgressData.NewSlotFunction(i, language);
 			slots.Add(slot);
 			guids.Add(slot.Guid);
 		}

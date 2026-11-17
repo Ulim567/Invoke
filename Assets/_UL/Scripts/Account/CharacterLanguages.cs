@@ -14,7 +14,7 @@ public static class CharacterLanguages
 	public const string Python = "Python";
 
 	/// <summary>지금 만들 수 있는 모든 언어. 서버는 이 목록에 없는 언어의 캐릭터를 만들지 않는다.</summary>
-	public static readonly string[] All = { C };
+	public static readonly string[] All = { C, Python };
 
 	/// <summary>캐릭터 화면에 보여 줄 언어. 화면이 이 순서대로 카드를 그린다. All에 없는 언어는 잠긴 언어(준비 중).</summary>
 	public static readonly string[] Shown = { C, Java, Python };

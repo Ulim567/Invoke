@@ -99,7 +99,8 @@ public class AccountServer : IDisposable
 		if (session.IsTemporary)
 		{
 			// 임시 계정은 DB에 캐릭터가 없으므로, 언어와 상관없이 계정 key를 캐릭터 key로 삼아 들어간다
-			session.Enter(session.AccountKey);
+			// 임시 계정도 고른 언어의 캐릭터로 들어간다 (아는 언어가 아니면 C)
+			session.Enter(session.AccountKey, null, CharacterLanguages.IsKnown(request.language) ? request.language : CharacterLanguages.C);
 		}
 		else
 		{
@@ -109,7 +110,7 @@ public class AccountServer : IDisposable
 				conn.Send(new EnterGameResultMessage { failure = AccountFailure.CharacterNotFound });
 				return false;
 			}
-			session.Enter(character.Key, store.Progress.Load(character.Key));
+			session.Enter(character.Key, store.Progress.Load(character.Key), character.Language);
 		}
 
 		conn.Send(new EnterGameResultMessage { failure = AccountFailure.None });
@@ -177,11 +178,11 @@ public class AccountServer : IDisposable
 	/// [에디터 전용] 「로그인 건너뛰기」: DB를 쓰지 않는 임시 계정으로 로그인시키고 결과를 보낸다.
 	/// 부르는 쪽은 그다음 인증을 끝낸다(ServerAccept). 빌드한 서버에는 이 함수가 없다.
 	/// </summary>
-	public void AcceptTemporary(NetworkConnectionToClient conn)
+	public void AcceptTemporary(NetworkConnectionToClient conn, string language = CharacterLanguages.C)
 	{
 		string nickname = TemporaryNickname(conn);
 		conn.authenticationData = new AccountSession($"editor-{conn.connectionId}", "(로그인 건너뛰기)", nickname, isTemporary: true);
-		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = TemporaryCharacters() });
+		conn.Send(new AccountAuthResult { failure = AccountFailure.None, nickname = nickname, characters = TemporaryCharacters(language) });
 		Debug.Log($"[AccountServer] 로그인 건너뛰기: 임시 계정 (connId={conn.connectionId})");
 	}
 #endif
@@ -263,7 +264,9 @@ public class AccountServer : IDisposable
 	static string TemporaryNickname(NetworkConnectionToClient conn) => $"Editor{conn.connectionId}";
 
 	// 임시 계정은 DB에 캐릭터가 없으므로 C 캐릭터 하나가 있는 것으로 보여 준다
-	static CharacterSummary[] TemporaryCharacters() => new[] { new CharacterSummary { language = CharacterLanguages.C } };
+	// 임시 계정의 캐릭터 하나. 언어는 에디터 설정(InvokeAuthenticator.skipLoginLanguage)을 따르고, 모르는 언어면 C
+	static CharacterSummary[] TemporaryCharacters(string language = CharacterLanguages.C) =>
+		new[] { new CharacterSummary { language = CharacterLanguages.IsKnown(language) ? language : CharacterLanguages.C } };
 
 	CharacterSummary[] GetSummaries(string accountKey)
 	{

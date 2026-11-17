@@ -2,7 +2,7 @@
 /// 모든 사전 정의 함수의 고정 ID. 스킬의 Id는 글자를 직접 적지 않고 여기의 상수를 쓴다.
 /// <para>
 /// 규칙 (docs/systems/predefined-function.md 「고정 ID」)<br/>
-/// - 형식: 분류.영어_이름 (소문자, 밑줄). 분류는 c, common, input, game, test<br/>
+/// - 형식: 분류.영어_이름 (소문자, 밑줄). 분류는 c, py, common, input, game, test<br/>
 /// - 한 번 정한 ID는 바꾸거나 지우지 않는다. 예전에 저장한 함수 데이터가 그 함수를 찾지 못하게 되기 때문이다.
 /// </para>
 /// <para>
@@ -39,6 +39,30 @@ public static class PredefinedFunctionIds
 	public const string SwordDance = "c.sword_dance";
 	// 이동
 	public const string SwordRide = "c.sword_ride";
+
+	// Python 스킬 (박진우, 파이썬 마법사). 수치는 Assets/_JW/Resources/SkillTable.asset
+	// 원소
+	public const string PyMagicMissile = "py.magic_missile";
+	public const string PyFireball = "py.fireball";
+	public const string PyIceSpear = "py.ice_spear";
+	public const string PyChainLightning = "py.chain_lightning";
+	// 범위
+	public const string PyMeteor = "py.meteor";
+	public const string PyBlizzard = "py.blizzard";
+	public const string PyVenomMist = "py.venom_mist";
+	// 구슬
+	public const string PyOrbCreate = "py.orb_create";
+	public const string PyOrbShot = "py.orb_shot";
+	public const string PyOrbBarrage = "py.orb_barrage";
+	public const string PyOrbBurst = "py.orb_burst";
+	public const string PyOrbShield = "py.orb_shield";
+	// 보조
+	public const string PyHex = "py.hex";
+	public const string PySnakeBind = "py.snake_bind";
+	public const string PyFlash = "py.flash";
+	// 이동
+	public const string PyBlink = "py.blink";
+	public const string PyLevitate = "py.levitate";
 
 	// 세 캐릭터 공통 (특수 이동 함수)
 	public const string Dash = "common.dash";

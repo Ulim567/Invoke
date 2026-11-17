@@ -160,6 +160,10 @@ public class LanguageRuleData : ScriptableObject
 	[SerializeField, Tooltip("{ } 안에서 바깥과 같은 이름의 변수를 선언할 수 있는지. C는 할 수 있다. 할 수 없으면 DuplicateVariable")]
 	bool allowShadowing = true;
 
+	[Header("heap")]
+	[SerializeField, Tooltip("도달할 수 없게 된 heap 객체를 누수로 남기지 않고 바로 해제하는지(가비지 컬렉션). C는 하지 않는다. Python은 한다")]
+	bool garbageCollected = false;
+
 	/// <summary>
 	/// 숫자 타입이 섞일 때 값을 바꾸는 규칙. 연산 블록, 선언 블록, 대입 블록이 따른다.
 	/// </summary>
@@ -184,6 +188,11 @@ public class LanguageRuleData : ScriptableObject
 	/// true이면 { } 안에서 바깥과 같은 이름의 변수를 선언할 수 있다(C). false이면 선언 블록이 DuplicateVariable로 실패한다(Java, C#).
 	/// </summary>
 	public bool AllowShadowing => allowShadowing;
+
+	/// <summary>
+	/// 도달할 수 없게 된 heap 객체를 누수로 남기지 않고 바로 해제하면 true(가비지 컬렉션). C는 false, Python은 true.
+	/// </summary>
+	public bool GarbageCollected => garbageCollected;
 
 	/// <summary>
 	/// failure의 처리를 찾는다. 표에 없으면 false를 돌려준다.

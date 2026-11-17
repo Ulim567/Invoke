@@ -5,6 +5,7 @@
 ## 하는 일
 - C 스킬·공통 이동 스킬 24개의 픽셀 아이콘(24×24)을 스킬 ID로 찾아 준다 (#444). 보여 주는 곳은 HUD 슬롯(hud.md)과 스킬 트리 노드(skill-tree.md, 둘 다 임혜원).
 - 계열마다 판 색: 찌르기 청록, 던지기 주황, 휘두르기 빨강, 소환 보라, 이동 초록. 소환검이 들어간 스킬은 시안 칼날, 맨손 검 스킬은 은색 칼날.
+- 파이썬 마법사 스킬 17개(`py.*`, #486)도 같은 크기·규칙으로 있다. 목록은 [python-skills.md](python-skills.md).
 - 그림은 PixelLab으로 만들었다. 문법 노드, 테스트 함수 등 아이콘이 없는 ID는 `null`.
 
 ## 다른 시스템이 쓰는 것
@@ -14,7 +15,7 @@
 | `SkillIcons.Get(string skillId)` | 스킬 ID (`c.thrust` 등) | `Sprite` (없으면 `null`) | 아이콘. `Resources/SkillIcons/{스킬 ID}`에서 불러오고 한 번 찾은 것은 기억한다 |
 | `SkillIcons.Has(string skillId)` | 스킬 ID | `bool` | 아이콘이 있으면 `true` |
 
-- 그림: `Assets/_JW/Resources/SkillIcons/{스킬 ID}.png` (24×24, 그림은 가운데 20×20 꽉 찬 네모). HUD 슬롯 테두리(22×22) 안쪽에 딱 맞도록 아이콘 자체 테두리·둥근 모서리는 없다 (#467). 남는 자리는 계열 배경색. 넣기만 하면 `SkillIconImporter`(에디터 전용)가 가져오기 설정(Sprite Single, 16 PPU, Point, 압축 없음)을 자동으로 한다.
+- 그림: `Assets/_JW/Resources/SkillIcons/{스킬 ID}.png` (24×24, 그림은 가운데 20×20 꽉 찬 네모). HUD 슬롯 테두리(22×22) 안쪽에 딱 맞도록 아이콘 자체 테두리·둥근 모서리는 없다 (#467). 남는 자리는 계열 배경색. 넣기만 하면 `SkillIconImporter`(에디터 전용)가 가져오기 설정(Sprite Single, 16 PPU, Point, 압축 없음)을 자동으로 한다. 상태 이상 아이콘 폴더(`Resources/StatusIcons`, #486)도 같은 설정으로 가져온다.
 - 새 스킬: 같은 스타일로 24×24 아이콘을 만들어 스킬 ID 이름으로 넣는다.
 - 테스트: `SkillIconsSimTest` (아무 씬, Play, Host 필요 없음, 「[SkillIconTest] 전체 통과」). 스킬 트리의 스킬 노드마다 아이콘이 있는지, 24×24·Point인지, 문법 노드·없는 ID는 `null`인지 본다.
 

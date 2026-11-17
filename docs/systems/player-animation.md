@@ -49,6 +49,7 @@
   - 보여 주는 시간이나 임시 모션을 바꾸려면: `SkillMotionTable`의 그 줄만 고친다. 이미 만든 상태의 임시 클립을 바꾸려면 상태의 Motion을 비우고 메뉴를 다시 누른다.
   - 새 스킬: `SkillMotionTable`에 한 줄 더하고 메뉴를 누른다. 표에 없는 스킬은 스킬 계열(`SkillTable` Family)로 임시 모션을 고른다.
 - 스킬 상태가 컨트롤러에 없으면 임시 모션 상태(Cast 등)를 그대로 튼다.
+- 파이썬 마법사 (#486, 박진우): 컨트롤러 `Py_Player`(박진우의 마법사 만들기 메뉴가 만듦)는 Idle·Run·Jump·Hit·Death·Cast만 있다. `SkillMotionTable`의 `py.*` 줄은 모두 Cast(지팡이 시전), 이동(블링크, 공중 부양)은 모션 없음. Slash·Throw·Summon 상태가 없어서 C 스킬 모션은 나오지 않는다.
 - 돌진 (#373, 박진우 #289 의견): Lunge(뛰어들며 찌르기, 0.75초)는 스킬에 고정하지 않는다. 찌르기 스킬이 대상 앞까지 돌진하기 시작하면(`PlayerMovement.IsLunging`이 true가 된 프레임) Lunge를 처음부터 끝까지 튼다. 대상이 가까워 돌진하지 않으면 그 스킬의 찌르기 모션만 나온다.
   - 다른 플레이어의 캐릭터는 돌진을 소유 클라이언트에서 해서 그 화면의 `IsLunging`이 늘 false다 ([player-movement.md](player-movement.md)). 그래서 찌르기 계열 시전 중에 가로 속도가 `remoteLungeSpeed`(12)보다 빠르면 돌진으로 본다.
   - 표에서 임시 모션을 바꾸면 메뉴 Invoke → 플레이어 → 스킬 모션 붙이기를 다시 누른다. 다른 임시 모션 클립이 들어 있는 스킬 상태는 새 임시 모션으로 바뀌고, 전용 클립은 그대로다.

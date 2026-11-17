@@ -19,7 +19,7 @@
 
 ### 고정 ID
 - 형식: `분류.영어_이름` (소문자, 밑줄)
-  - 분류: `c`(C 스킬), `common`(세 캐릭터 공통 function), `input`(입력 function), `game`(게임 상태를 묻는 function, #474), `test`(테스트용 function)
+  - 분류: `c`(C 스킬), `py`(Python 스킬, 파이썬 마법사, #486), `common`(세 캐릭터 공통 function), `input`(입력 function), `game`(게임 상태를 묻는 function, #474), `test`(테스트용 function)
   - 예: `c.thrust`, `common.dash`, `input.get_position`, `test.function_a`
 - 한 번 정한 ID: 바꾸기, 지우기 금지 (예전에 저장한 함수 데이터가 그 function을 찾지 못함)
 - 같은 ID 두 개: 금지
@@ -234,6 +234,8 @@ protected override void OnEnd(FunctionContext context)
     - `FreedPointerError` (`InvalidPointerError` 상속, #504): 스킬에 이미 해제한 포인터를 넘김(`HeapStorage.WasFreed`). `Message` 「스킬에 이미 free한 포인터 전달」
     - 포인터 에러인지 확인: `is InvalidPointerError`. 두 하위 클래스도 걸림
     - 하위 클래스로 나눈 이유: 포인터 에러를 한꺼번에 확인하던 코드(박진우 `SwordPointerSimTest` 등)를 고치지 않기 위함
+  - `Assets/_JW/Scripts/Python/ManaOrbs.cs` (#486)
+    - `NoManaOrbError`: 쓸 수 있는 마나 구슬 없음. 구슬 스킬(발사, 난사, 폭발, 보호막)이 냄
 
 ### `InputFunction` (입력 함수 만들기, #131)
 

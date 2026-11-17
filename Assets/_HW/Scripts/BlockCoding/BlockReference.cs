@@ -90,7 +90,7 @@ public class BlockReferenceEntry
 public static class BlockReference
 {
 	// 블록 목록에 나오는 사전 정의 함수의 고정 ID 앞부분 (BlockEditor.PaletteFunctionPrefixes와 같다)
-	static readonly string[] FunctionPrefixes = { "c.", "common.", "input.", "game." };
+	static readonly string[] FunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
 
@@ -207,6 +207,8 @@ public static class BlockReference
 			{
 				string id = function?.Id;
 				if (id == null || !FunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
+				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				BlockReferenceEntry entry = FunctionEntry(function);
 				(IsSkill(id) ? skills : basics).Add(entry);
 			}
@@ -225,9 +227,10 @@ public static class BlockReference
 		return list;
 	}
 
-	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬과 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수 (BlockEditor.RebuildFunctionTab과 같다)
-	static bool IsSkill(string id) =>
-		id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
+	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬, Python 스킬(#486), 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수
+	// BlockEditor.RebuildFunctionTab도 이 함수로 나눈다 (두 곳이 어긋나지 않게)
+	internal static bool IsSkill(string id) =>
+		id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("py.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
 
 	static BlockReferenceEntry FunctionEntry(PredefinedFunction function)
 	{

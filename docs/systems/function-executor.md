@@ -289,6 +289,7 @@
   - 다른 작업이 malloc한 객체를 지역 변수에만 쥐고 있는 동안(예: `Sword* s = g; g = NULL;`): 다른 작업이 끝나도 누수가 아님 (#141 검토)
   - 사용자 정의 함수가 malloc해서 지역 변수에만 담은 객체: 함수가 끝나면 누수 (C와 같음)
   - malloc하지 않은 작업도 누수를 판단함. 전역 변수의 포인터를 바꿔(`g = NULL`) 예전 객체를 놓쳤을 수 있기 때문
+  - 가비지 컬렉션 언어(Python, 언어 규칙 `garbageCollected`): 누수로 남기지 않고 그 자리에서 해제함. heap 칸 반환, `ObjectFreed`를 부름(`ObjectLeaked`는 부르지 않음). 그래서 Python 캐릭터에는 누수 객체가 생기지 않음 (#486)
 - 누수 객체
   - heap 칸: 계속 차지
   - 객체 수(`CountObjects`): 포함. 소환검 최대 개수에 들어감
@@ -533,10 +534,12 @@
 - 기본값: 초기값을 비운 변수의 값. `int`, `float`, `bool`, `char`(글자 번호), `string` 칸. 포인터는 언제나 `NullPointer` (#90)
 - 숫자 타입 변환: `ImplicitAll`, `Strict`, `WideningOnly` 중 하나(「함수 데이터 실행」의 표) (#90)
 - `float %` 허용 여부 (#90)
+- 가비지 컬렉션 (#486): `garbageCollected`. 켜면 작업이 끝날 때 도달할 수 없는 heap 객체를 누수로 남기지 않고 바로 해제(「heap」). C는 끔, Python은 켬. 실행기가 시작할 때 `HeapStorage.CollectsGarbage`에 넣음
 - `NULL`과 비교 (#120): `zeroIsNull`(직접 입력한 0을 `NULL`로 볼지, C는 켬), `stringEquality`(string 비교 방법 `Disallowed`·`ByContent`, C는 `Disallowed`)
 - 변수 범위 (#120): `allowShadowing`(`{ }` 안에서 바깥과 같은 이름을 선언할 수 있는지, C는 켬)
 - 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값, 숫자 타입 변환, `NULL`과 비교는 처음 값(C 규칙)
 - C 파일(`Assets/_UL/Data/LanguageRule_C`)
+- Python 파일(`Assets/_JW/Python/LanguageRule_Python`, #486): C 파일을 바탕으로 가비지 컬렉션 켬, `zeroIsNull` 끔, `stringEquality` `ByContent`, `float %` 허용, 숫자 타입 변환 `WideningOnly`, `UndeclaredVariable`·`TypeMismatch` 분류는 `RuntimeError`(동적 타입). 박진우의 마법사 만들기 메뉴가 만듦
 
 | 실패 종류 | 처리 | 분류 |
 | --- | --- | --- |
@@ -586,11 +589,12 @@
 | `TryGet<T>(int pointer, out T obj)` | 포인터 | `bool` | 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터, 타입이 다른 객체, `Destroy`된 Unity 오브젝트이면 `false` |
 | `GetGlobalPointers<T>()` | - | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. malloc한 순서. 이름은 다른 시스템이 쓰고 있어 그대로 둠 |
 | `CountObjects<T>()` | - | `int` | heap의 `T` 객체 수. 누수 객체 포함 |
+| `CollectsGarbage` | - | `bool` | 가비지 컬렉션을 하면 `true`(Python). 언어 규칙의 `garbageCollected`를 실행기가 넣음. 처음 값 `false`(C) (#486) |
 | `GetUsageByOwner()` | - | `HeapUsage` | 주인별 heap 칸 수(`PlayerGlobals`, `SystemGlobals`, `TaskLocals`, `Leaked`). 합은 `HeapUsed`. memory 화면에서 읽는다 (#139) |
 | `Clear()` | - | - | 영역 비우기. heap 전부 비우고 `HeapUsed`를 0으로 |
 | `ObjectLeaked` (event) | `object` | - | 객체가 누수될 때. 누수된 소환검을 멈추고 흐리게 그리는 일은 받은 쪽 |
 | `ObjectCleared` (event) | `object` | - | `Clear`로 객체를 지울 때 객체마다. 소환검 오브젝트 삭제는 받은 쪽 |
-| `ObjectFreed` (event) | `object` | - | `Free`로 객체를 해제했을 때. 플레이어의 `free` 블록, 스킬의 `PredefinedFunction.Free` 모두. 소환검 오브젝트 삭제는 받은 쪽 (#191) |
+| `ObjectFreed` (event) | `object` | - | `Free`로 객체를 해제했을 때. 플레이어의 `free` 블록, 스킬의 `PredefinedFunction.Free` 모두. 가비지 컬렉션이 해제할 때도 부름(#486). 소환검 오브젝트 삭제는 받은 쪽 (#191) |
 
 ### `StructObjectRegistry` (struct 객체 등록 자리, #191)
 

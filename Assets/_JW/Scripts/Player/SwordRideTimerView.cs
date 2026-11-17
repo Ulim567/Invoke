@@ -5,7 +5,7 @@ using UnityEngine;
 /// [임시 표시] 검 타기 남은 시간을 내 캐릭터 머리 위에 작은 가로 바로 그린다 (#256). 플레이어 프리팹에 PlayerMovement와 함께 붙인다.
 /// <para>
 /// - 바는 왼쪽 끝을 고정하고, 남은 시간이 줄수록 오른쪽 끝이 왼쪽으로 줄어든다.<br/>
-/// - 값(PlayerMovement.RideRemaining, RideSeconds)은 읽기만 한다. 내 캐릭터에서만 그린다.<br/>
+/// - 값(PlayerMovement.RideRemaining, RideDuration)은 읽기만 한다. 내 캐릭터에서만 그린다.<br/>
 /// - 실제 그림은 임혜원 이슈에서 이 값을 읽어 바꾼다.
 /// </para>
 /// </summary>
@@ -35,7 +35,7 @@ public class SwordRideTimerView : NetworkBehaviour
 
 	void OnGUI()
 	{
-		if (!isLocalPlayer || movement == null || !movement.IsRiding || movement.RideSeconds <= 0f) return;
+		if (!isLocalPlayer || movement == null || !movement.IsRiding || movement.RideDuration <= 0f) return;
 		Camera cam = Camera.main;
 		if (cam == null) return;
 
@@ -46,7 +46,7 @@ public class SwordRideTimerView : NetworkBehaviour
 		float h = Mathf.Max(2f, barSize.y * scale);
 		// GUI는 위쪽이 0이라 y를 뒤집는다. 바의 아래쪽 끝이 그 지점에 오게 한다
 		Rect back = new Rect(screen.x - w / 2f, Screen.height - screen.y - h, w, h);
-		float ratio = Mathf.Clamp01(movement.RideRemaining / movement.RideSeconds);
+		float ratio = Mathf.Clamp01(movement.RideRemaining / movement.RideDuration);
 		Rect fill = new Rect(back.x, back.y, w * ratio, h);
 
 		if (white == null) white = Texture2D.whiteTexture;

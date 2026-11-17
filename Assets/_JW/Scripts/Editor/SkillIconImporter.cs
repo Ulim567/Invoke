@@ -9,7 +9,9 @@ public class SkillIconImporter : AssetPostprocessor
 {
 	void OnPreprocessTexture()
 	{
-		if (!assetPath.Replace('\\', '/').Contains("/Resources/SkillIcons/")) return;
+		string path = assetPath.Replace('\\', '/');
+		// 상태 이상 아이콘(Resources/StatusIcons, 중독 등)도 같은 설정으로 가져온다
+		if (!path.Contains("/Resources/SkillIcons/") && !path.Contains("/Resources/StatusIcons/")) return;
 		var importer = (TextureImporter)assetImporter;
 		importer.textureType = TextureImporterType.Sprite;
 		importer.spriteImportMode = SpriteImportMode.Single;

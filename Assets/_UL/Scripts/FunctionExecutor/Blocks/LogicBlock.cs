@@ -64,6 +64,8 @@ public class LogicBlock : ValueBlock
 	// 조건으로 바꾸지 못하면 TypeMismatch를 기록한다
 	internal static bool TryGetCondition(FunctionContext context, RuntimeValue value, out bool condition)
 	{
+		// Python(#532)은 어떤 값이든 조건으로 쓴다. 0, 0.0, "", 빈 리스트, None이 거짓이다
+		if (context.Family == LanguageFamily.Python) return PythonRules.TryGetTruth(value, context.Memory != null ? context.Memory.Heap : null, out condition);
 		if (NumericRules.TryConvertToCondition(value, context.Rule, out condition)) return true;
 
 		context.RecordFailure(FunctionFailure.TypeMismatch);

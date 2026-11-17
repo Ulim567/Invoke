@@ -19,11 +19,11 @@
 | --- | --- | --- |
 | `Core` | `FunctionExecutor`, `FunctionTask`, `FunctionContext`, `CooldownTracker`, `FunctionExecutorLogger`, `TaskEndInfo` | 시전, tick 진행, 작업 상태, 실행 문맥, 쿨타임, 화면에 알릴 끝난 이유 |
 | `Conditions` | `CastCondition`, `CooldownCondition`, `MemoryCondition` | 시전 전 검사 |
-| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock`, `WaitBlock` | 블록 코딩의 블록 |
+| `Blocks` | `Block`, `FunctionBlock`, `UserFunction`, `ValueBlock`, `ValueSlots`, `Statements`, `CallBlock`, `LiteralValue`, `VariableValue`, `ArithmeticBlock`, `CompareBlock`, `LogicBlock`, `NotBlock`, `ConditionalBlock`, `LoopBlock`, `ForBlock`, `WhileBlock`, `AssignBlock`, `DeclareBlock`, `MallocBlock`, `FreeBlock`, `ArrayDeclareBlock`, `ArrayGetBlock`, `ArraySetBlock`, `WaitBlock`, Python(#532): `PythonVariableBlocks`(`GlobalBlock`, `DelBlock`, `PythonNames`), `ListBlocks`(`ListNewBlock`, `ListAppendBlock`, `ListPopBlock`, `ListLenBlock`) | 블록 코딩의 블록 |
 | `Predefined` | `PredefinedFunction`, `InputFunction`, `PredefinedFunctionIds`, `PredefinedFunctionRegistry`, `SkillError`, `SwordErrors`, `PointerErrors`, `Input/GetBug` | 스킬 작성자가 쓰는 것, 입력 함수 |
-| `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules`, `FailureNotice` | 언어 규칙, 실패 알림 문장 |
+| `Language` | `LanguageRule`, `LanguageRuleData`, `NumericRules`, `FailureNotice`, `LanguageFamily`(#532), `PythonRules`(#532) | 언어 규칙, 실패 알림 문장, 언어 방식, Python 연산 규칙 |
 | `Memory` | `ProcessMemory`, `HeapStorage`, `StructInstance`, `StructObjectRegistry` | stack, heap, malloc할 struct 객체 등록 |
-| `Values` | `RuntimeValue`, `VariableStore`, `ArrayStorage` | 실행 중의 값, 지역 변수, array 원소 |
+| `Values` | `RuntimeValue`, `VariableStore`, `ArrayStorage`, `ListStorage`(#532) | 실행 중의 값, 지역 변수, array 원소, Python 리스트 |
 | `Conversion` | `FunctionDataConverter` | 함수 데이터 → `UserFunction` |
 | `Test` | 테스트 컴포넌트, 테스트용 함수·블록 | 테스트 |
 
@@ -224,6 +224,45 @@
   - 예: 지원하지 않는 블록·타입, 목록에 없는 struct, 없는 고정 ID, 없는 GUID(지운 함수), 비운 value slot(사전 정의 함수의 argument는 비워도 됨)
   - 플레이어 코드의 잘못(없는 변수, 같은 이름 두 번 선언 등): 거부하지 않음. 실행 중 실패로 처리
 
+### Python 규칙 (#532)
+- 언어 방식(`LanguageFamily`: C, Python): 캐릭터 언어(`PlayerCharacter`의 언어)에서 정함(`LanguageFamilies.Of`). 언어 규칙 파일에는 없음
+  - 실행기: `LanguageRule.Family` → 작업마다 `FunctionContext.Family`
+  - 함수 데이터 변환: `FunctionDataConverter.TryConvert(…, LanguageFamily, …)`. 부르는 곳(`FunctionExecutorNetwork.BuildOriginal`, `SlotLoadout`)이 캐릭터의 값을 넘김
+  - 모르는 언어(Java 등): C
+- 변수
+  - 대입이 곧 변수 만들기. 타입은 값이 가짐(`x = 3` 뒤 `x = "a"` 가능)
+  - 범위: 함수 하나. `{ }` 범위 없음. if·반복문 안에서 만든 변수도 함수 끝까지
+  - 지역 이름(`FunctionData.PythonLocalNames`): 파라미터, 대입·리스트 만들기·for·del의 이름 가운데 `global`로 적지 않은 것. 블록 위치와 상관없이 함수 전체에서 모음
+  - 지역 이름 읽기: 지역 변수에서만. 대입 전이면 `UndeclaredVariable`(NameError). 예: `count = count + 1`(global 없음) → NameError
+  - 지역 이름이 아닌 이름 읽기: 전역 변수
+  - `global x` 블록: 이 함수에서 x에 대입·del·리스트 만들기를 하면 전역 변수를 바꿈. Global Variables 파일에 없는 이름이면 `UndeclaredVariable`(이우림 결정 11/18 (가)). 1틱, 위치 상관없음
+  - `del x` 블록: 이름 지우기. 없는 이름이면 `UndeclaredVariable`. 지운 뒤 읽기도 `UndeclaredVariable`. 1틱
+  - 프레임 크기: 1 + 지역 이름 수
+  - 파라미터·반환 타입: 없음(`Any`). 슬롯에서 바로 시전한 파라미터는 None
+  - return 없이 끝남, `return`(값 없음): None. `MissingReturn` 없음
+  - 모든 함수 호출을 expression으로 쓸 수 있음. 값을 돌려주지 않는 스킬(void)은 None
+- for: `for i in range(start, end)`. start·end는 처음 한 번 계산. 정수(bool 포함)가 아니면 `TypeMismatch`. 바퀴마다 i에 range의 다음 값을 대입({ }가 i를 바꿔도 다음 바퀴는 range 값). 끝나도 i가 남음
+- 연산(`PythonRules`)
+  - int: 넘치지 않음(큰 정수). 스킬의 int 파라미터에 int 범위를 넘는 값을 넘기면 `TypeMismatch`
+  - `/`: 언제나 float. `//`(`ArithmeticOperator.FloorDivide`), `%`: 아래로 내림(`-7 // 2` = -4, `-7 % 2` = 1)
+  - 0으로 나누기(`/`, `//`, `%`): `DivideByZero`(ZeroDivisionError)
+  - bool은 int처럼 계산(`True + 1` = 2). 문자열은 문자열끼리 `+`만
+  - 비교: `==`, `!=`는 어떤 두 값이든(타입이 다르면 다름, None은 None끼리만 같음, 리스트·구슬은 같은 객체인지). 크기 비교는 숫자끼리, 문자열끼리만. 그 밖은 `TypeMismatch`
+  - 조건(if, while, and, or, not): `0`, `0.0`, `""`, 빈 리스트, None은 거짓, 나머지는 참. `and`·`or`는 True·False를 돌려줌(피연산자 값이 아님)
+  - 값 넘기기(파라미터): 바꾸지 않고 그대로. float 파라미터에 int·bool, int 파라미터에 bool만 바꿈. 리스트 파라미터는 리스트와 대상 array를 받음
+- None: 직접 입력(`SlotData.FromNone`, Literal `None`), 타입 `None`
+- 리스트
+  - heap 객체(`ListStorage`). 리스트 값은 그 객체를 가리킴(`b = a`는 같은 리스트)
+  - heap 칸 = 원소 수. 빈 리스트 0칸. append 1칸 늘고 pop 1칸 줄어듦. 늘릴 칸이 없으면 `OutOfMemory`(MemoryError)
+  - 블록: 리스트 만들기 `name = []`(statement), `name.append(v)`, `name.pop(i)`(index를 비우면 맨 끝, 값으로도 statement로도), `len(v)`, `name[i]` 읽기·쓰기(C의 원소 읽기·쓰기 블록을 같이 씀)
+  - index: 정수(bool 포함). 음수는 뒤에서부터. 범위 밖·빈 리스트의 pop: `IndexOutOfRange`(IndexError). 리스트가 아닌 이름: `TypeMismatch`
+  - 원소 타입 없음(섞어 담음)
+- 가비지 컬렉션 시점(Python): statement 하나가 끝날 때마다(`Statements`). 그 statement가 쥔 임시 객체(그 안에서 malloc한 객체, 리스트에서 꺼내 아직 담지 않은 값)를 놓고 `HeapStorage`가 도달할 수 없는 객체를 해제
+  - return으로 끝난 statement는 놓지 않음. 돌려준 값을 부른 쪽이 담기 전에 해제하지 않기 위함
+  - 루트: 변수(지역·전역)에 담긴 리스트·구슬, 그 리스트의 원소(리스트 안의 리스트까지)
+- Global Variables 파일(Python): 대입 블록(`x = 0`, 직접 적은 값·None)과 리스트 만들기 블록(`orbs = []`)만. 같은 이름 두 번은 오류. 전역 변수 하나 = 데이터 영역 1칸(리스트 원소는 heap). 초기화 때 빈 리스트를 새로 올림
+- C 캐릭터: 바뀐 것 없음. Python 블록(global, del, 리스트 블록)이 든 C 함수는 변환 거부
+
 ### 전역 변수 (#139)
 - 선언: 캐릭터마다 전역 변수 파일 1개(`GlobalVariablesData`, [function-data.md](function-data.md)). 함수 안의 선언은 언제나 지역 변수
 - 쓰기: 모든 사용자 정의 함수가 함께 읽고 대입
@@ -283,6 +322,7 @@
 | 플레이어의 전역 변수 | 전역 변수·전역 array 원소(#478)에 담긴 포인터 값 | 전역 포인터 |
 
 - 사전 정의 함수가 정상으로 끝날 때: 그 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮김
+  - 예외 (#532): `MovesMallocedToSystemGlobals`가 false인 함수(Python 구슬 생성). 만든 객체를 돌려주고, 플레이어가 담지 않으면 가비지 컬렉션이 해제
   - 작업이 아니라 그 함수가 끝나는 순간. 사용자 정의 함수 안에서 불린 검 소환도, 그 함수가 나중에 실패해도 소환검이 남음
   - 실행 중단·실패로 끝난 사전 정의 함수: 옮기지 않음 (정리 블록이 실행되지 못함)
 - 작업이 끝날 때(끝난 이유와 상관없이): 그 작업의 지역 루트가 사라짐 → 루트 집합 어디에도 포인터가 없는 객체는 누수
@@ -341,6 +381,7 @@
 | `IndexOutOfRange` | array의 범위 밖 원소를 읽거나 씀(음수 포함) (#132) |
 | `NoTarget` | 스킬에 넘긴 대상이 「대상 없음」. 예: `get_bug`가 몬스터를 찾지 못함, 처음 값을 비운 `Target` 변수 (#504) |
 | `DoubleFree` | `free` 블록에 이미 해제한 포인터를 넣음 (C의 double free, #504) |
+| `OutOfMemory` | heap이 모자라 객체를 만들거나 늘리지 못함 (Python의 MemoryError: 리스트 append, 구슬 생성, #532). C의 malloc은 실패해도 NULL이라 나지 않음 |
 
 - 실패 종류마다 할 처리와 분류: 캐릭터의 `LanguageRule` 컴포넌트에 연결한 언어 규칙 파일(`LanguageRuleData`)이 정함
 - 분류(`FailureCategory`): 화면이 compile error와 runtime error를 나누어 보여 줄 때 씀
@@ -481,6 +522,7 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
+| `Family` | - | `LanguageFamily` | 이 캐릭터의 언어 방식(C, Python). 같은 오브젝트의 `PlayerCharacter` 언어에서 정함(없으면 C). 실행기, 서버의 컴파일·저장 검사, HUD가 언어별 갈래를 고를 때 쓴다 (#532) |
 | `GetFailureCategory(FunctionFailure failure)` | 실패 종류 | `FailureCategory` | 이 캐릭터 언어에서 그 실패가 `CompileError`인지 `RuntimeError`인지. `TaskEnded`에서 `Failed`로 끝난 `task.Failure`를 화면에 보여 줄 때 쓴다. `Failed`로 끝난 작업은 언제나 표에 줄이 있음. 줄이 없는 실패 종류를 넘기면 `RuntimeError` (#90) |
 
 ### `TaskEndInfo` (화면에 알릴 끝난 이유, #480)
@@ -494,6 +536,8 @@
 | `Category` | `FailureCategory` | 시전자 언어에서의 분류(`LanguageRule.GetFailureCategory`). `Failed`일 때만 |
 | `ErrorName`, `ErrorMessage` | `string` | 스킬 에러 클래스 이름(예: `UnarmedError`)과 `SkillError.Message`. `SkillFailed`일 때만, 그 밖에는 빈 글자열 |
 | `InterruptCause` | `InterruptCause` | 끊은 원인(`MonsterAttack`, `System`). `EndReason`이 `Interrupted`일 때만 뜻이 있음 (#504) |
+| `Family` | `LanguageFamily` | 시전자 캐릭터의 언어 방식. HUD가 실패 이름을 그 언어의 이름으로 보임 (#532) |
+| `RecursiveOverflow` | `bool` | `Overflow`가 재귀 호출(이미 호출 중인 함수를 다시 부름)에서 났으면 true (`FunctionTask.OverflowWasRecursive`, #532) |
 | `From(FunctionTask task, LanguageRule language)` (static) | `TaskEndInfo` | 끝난 작업에서 값을 모음. `language`가 없으면 분류는 `RuntimeError` |
 
 ### `FailureNotice` (실패 알림 문장, #480)
@@ -503,6 +547,7 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `ForRejection(CastRejection rejection)` (static) | 시전 거부 이유 | `string` | `NotEnoughMemory`, `CompileError`(#506)만 문장(아래 표). 그 밖의 거부는 `null`(슬롯 덮개, 빨간 테두리, 무채색이 이미 보여 줌) |
+| `ForRejection(CastRejection rejection, LanguageFamily family)` (static) | 시전 거부 이유, 내 캐릭터의 언어 방식 | `string` | 위와 같고, `CompileError`를 그 언어의 이름으로 (Python: SyntaxError, #532) |
 | `ForTaskEnd(TaskEndInfo info)` (static) | 끝난 이유 | `string` | 원인이 `MonsterAttack`인 `Interrupted`, runtime error로 분류된 `Failed`만. 원인이 `System`인 `Interrupted`(사망, 장소 이동, 재시작), 정상 종료, `Cancelled`, `InternalError`, compile error는 `null` (#504) |
 
 - 문장 표
@@ -523,6 +568,21 @@
 
 - 스킬 에러의 설명은 이 표에 두지 않음. 새 스킬 에러는 `Message`만 덮어쓰면 됨([predefined-function.md](predefined-function.md)). `Message`는 현상만 짧게(예: 「손에 검이 없음」)
 - 표에 설명이 없는 runtime error(다른 언어에서 runtime error가 되는 실패)는 첫 줄만
+- Python 캐릭터 (#532, `TaskEndInfo.Family`가 Python): 이름과 설명을 Python 것으로
+
+| 실패 종류 | 첫 줄 이름 | 둘째 줄 |
+| --- | --- | --- |
+| `UndeclaredVariable` | NameError | 정의되지 않은 이름 |
+| `TypeMismatch` | TypeError | 값의 타입이 맞지 않음 |
+| `DivideByZero` | ZeroDivisionError | 0으로 나눔 |
+| `IndexOutOfRange` | IndexError | 리스트 범위 밖 index |
+| `OutOfMemory` | MemoryError | heap 메모리 부족 |
+| `Overflow` (재귀 호출에서 남, `TaskEndInfo.RecursiveOverflow`) | RecursionError | 재귀 호출로 stack이 가득 참 |
+| `Overflow` (재귀가 아님: heap 등이 메모리를 채워 함수를 부르지 못함) | MemoryError | 남은 메모리가 없어 함수를 부르지 못함 |
+| `NotInLoop`, `InvalidLiteral`, `DuplicateVariable`, `MissingReturn` | SyntaxError | (없음) |
+| `NoTarget`, `InvalidTarget` | 그대로 | C와 같음 |
+
+  - 시전 거부 `CompileError`: `[Cast Rejected] SyntaxError` / 문법 오류가 있는 함수 (`ForRejection(rejection, family)`)
 - 실행 중에 난 compile error를 알리지 않는 이유: 시전하기 전에 서버가 빌드로 잡아 `CompileError` 거부로 알리고(#506), 실행 중에는 runtime error만 나야 함(이우림 결정 11/1, 11/9). 실행 중에 나면 빌드 검사가 놓친 것. 저장 검사가 놓치던 `DuplicateVariable`, C의 `float %`(`TypeMismatch`)는 #504에서 저장 검사에 더함. `InvalidLiteral`은 편집 화면의 칸이 적은 글자로 타입을 정하므로 나지 않음
 
 ### `LanguageRuleData` (언어 규칙 파일)
@@ -540,6 +600,7 @@
 - 연결하지 않음: 콘솔 오류. 플레이어 함수가 실패하면 `InternalError`, 기본값, 숫자 타입 변환, `NULL`과 비교는 처음 값(C 규칙)
 - C 파일(`Assets/_UL/Data/LanguageRule_C`)
 - Python 파일(`Assets/_JW/Python/LanguageRule_Python`, #486): C 파일을 바탕으로 가비지 컬렉션 켬, `zeroIsNull` 끔, `stringEquality` `ByContent`, `float %` 허용, 숫자 타입 변환 `WideningOnly`, `UndeclaredVariable`·`TypeMismatch` 분류는 `RuntimeError`(동적 타입). 박진우의 마법사 만들기 메뉴가 만듦
+  - #532: `Overflow`는 `EndTask`(RecursionError로 그 작업만), `OutOfMemory` 줄 더함 (사용자가 Inspector에서). Python 규칙(변수·연산·조건)은 이 파일이 아니라 캐릭터 언어(`LanguageRule.Family`)가 고름. 숫자 타입 변환·`float %`·`stringEquality` 칸은 Python 캐릭터에게 쓰이지 않음(`PythonRules`)
 
 | 실패 종류 | 처리 | 분류 |
 | --- | --- | --- |
@@ -557,6 +618,7 @@
 | `IndexOutOfRange` | `EndTask` | `RuntimeError` |
 | `NoTarget` | `EndTask` | `RuntimeError` |
 | `DoubleFree` | `EndTask` | `RuntimeError` |
+| `OutOfMemory` | `EndTask` | `RuntimeError` (#532, 사용자가 Inspector에서 줄을 더함) |
 
 - C 파일의 그 밖의 값: 기본값 0, 0, `false`, 글자 번호 0, 빈 글자열. 숫자 타입 변환 `ImplicitAll`, `float %` 허용하지 않음
 
@@ -640,6 +702,7 @@ executor.Cast(dashThrust);
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
+| `TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family, out UserFunction function)` | 함수 데이터, 캐릭터가 가진 모든 함수, 캐릭터의 언어 방식 | `bool` | 언어 방식의 규칙으로 바꾼다(Python: 위 「Python 규칙」). C이면 아래와 같다 (#532) |
 | `TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, out UserFunction function)` | 함수 데이터, 캐릭터가 가진 모든 함수 | `bool` | 바꾼 `UserFunction`(원본)을 `function`에 담는다. 프레임 크기도 계산해 넣는다. 지금 실행할 수 없는 함수이면 콘솔 오류를 내고 `false` (#132에서 `ownedFunctions` 추가) |
 
 - `ownedFunctions`: 함수 블록이 부르는 사용자 정의 함수를 GUID로 찾는 곳. 다른 사용자 정의 함수를 부르지 않으면 빈 목록. `CodeSizeCalculator.Calculate`의 `ownedFunctions`와 같은 목록 (#132)
@@ -656,7 +719,7 @@ if (FunctionDataConverter.TryConvert(functionData, ownedFunctions, out UserFunct
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TryConvert(GlobalVariablesData data, LanguageRuleData rule, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables)` | 전역 변수 파일, 캐릭터의 언어 규칙 파일, memory 전체 칸 수 | `bool` | 검사하고 선언할 목록(이름, 타입, 초기값)을 돌려준다. 전역 array의 초기값은 원소를 기본값으로 채운 새 array. 걸리면 콘솔 오류를 내고 `false` |
+| `TryConvert(GlobalVariablesData data, LanguageRuleData rule, LanguageFamily family, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables)` | 전역 변수 파일, 캐릭터의 언어 규칙 파일, 언어 방식(#532), memory 전체 칸 수 | `bool` | 검사하고 선언할 목록(이름, 타입, 초기값)을 돌려준다. 전역 array의 초기값은 원소를 기본값으로 채운 새 array. 걸리면 콘솔 오류를 내고 `false` |
 | `CountCells(GlobalVariablesData data)` | 전역 변수 파일 | `int` | 데이터 영역에서 쓸 칸 수. 선언 블록 1칸, 배열 만들기 블록은 길이만큼(길이를 읽을 수 없으면 1칸). 검사하지 않음. 전역 변수 편집 화면의 칸 수 표시가 씀 (#478) |
 
 - 보통은 직접 부르지 않고 `FunctionExecutor.TrySaveGlobalVariables`를 부른다

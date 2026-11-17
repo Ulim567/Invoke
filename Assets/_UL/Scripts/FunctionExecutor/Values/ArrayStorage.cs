@@ -70,7 +70,8 @@ internal class ArrayStorage
 		switch (index.Type?.Kind)
 		{
 			case VariableTypeKind.Int:
-				number = index.AsInt();
+				// Python의 큰 정수(#532)는 어떤 원소 번호에도 닿지 않으므로 범위 밖 값으로 바꾼다(IndexError)
+				number = index.IsBigInteger ? int.MaxValue : index.AsInt();
 				return true;
 			case VariableTypeKind.Char:
 				number = index.AsChar();

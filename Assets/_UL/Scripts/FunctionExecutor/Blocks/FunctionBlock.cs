@@ -68,6 +68,8 @@ public abstract class FunctionBlock : Block
 			if (!TryAllocateFrame(context))
 			{
 				context.RecordFailure(FunctionFailure.Overflow);
+				// 이 함수가 이미 호출 중이면 재귀로 stack이 찬 것이다 (#532). Python은 재귀이면 RecursionError, 아니면 MemoryError로 보인다
+				context.RecordOverflowCause(RecursionKey != null && context.IsRunningFunction(RecursionKey));
 				return BlockResult.Failed;
 			}
 			AfterFrameAllocated(context);
@@ -86,6 +88,9 @@ public abstract class FunctionBlock : Block
 		base.Cancel(context);
 		ReleaseFrame(context);
 	}
+
+	// 같은 함수인지 가리는 값 (#532). 사용자 정의 함수는 복사본끼리 같은 값을 돌려준다. 재귀 호출을 찾을 때 쓴다. 사전 정의 함수는 null(재귀 없음)
+	internal virtual object RecursionKey => null;
 
 	// 시작하기 전, 틱마다 불린다. false이면 이번 틱에는 시작하지 않고 기다린다
 	// 기다리는 동안 끊기면 시작하지 않은 것이므로 정리할 것이 없다

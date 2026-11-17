@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LanguageRule
   rules:
   - failure: 0
-    handling: 2
+    handling: 0
     category: 1
   - failure: 1
     handling: 0
@@ -53,6 +53,9 @@ MonoBehaviour:
     handling: 0
     category: 1
   - failure: 13
+    handling: 0
+    category: 1
+  - failure: 14
     handling: 0
     category: 1
   defaultInt: 0

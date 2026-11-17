@@ -40,14 +40,14 @@
 | 순서 | ID | 이름 | 여는 블록 | 재료 (임시) |
 | --- | --- | --- | --- | --- |
 | 1 | `syntax.sequence` | 순차 실행 | 함수 블록(C 스킬), 기다리기 | 처음부터 |
-| 2 | `syntax.variable` | 변수 | 선언, 대입 | 조각 2 |
+| 2 | `syntax.variable` | 변수 | 선언, 대입, global·del(Python, #532 임시) | 조각 2 |
 | 3 | `syntax.arithmetic` | 연산 | 연산 | 조각 3 |
 | 4 | `syntax.if` | if문 | 조건문, 비교 | 조각 4 |
 | 5 | `syntax.logic` | 논리 연산 | 논리, Not | 조각 5 |
 | 6 | `syntax.for` | for문 | for, break, continue | 조각 6 |
 | 7 | `syntax.while` | while문 | while | 조각 7 |
 | 8 | `syntax.function` | 함수 | return (사용자 함수 만들기) | 조각 8 |
-| 9 | `syntax.list` | list | 배열 만들기·읽기·바꾸기 (Array, Array Get, Array Set) | 조각 10 |
+| 9 | `syntax.list` | list | 배열 만들기·읽기·바꾸기 (Array, Array Get, Array Set), 리스트 블록(List, Append, Pop, Len, Python, #532 임시) | 조각 10 |
 | 10 | `syntax.type` | Type 정의 | (블록 아직 없음) | 조각 12 |
 
 ### 스킬 노드 (C 캐릭터 - 1차 2, 3)
@@ -92,19 +92,19 @@
 
 | 계열 | 노드 | 선행 | 재료 (임시) |
 | --- | --- | --- | --- |
-| 구슬 | 구슬 생성 | - | 처음부터 |
-| | 구슬 발사 | - | 처음부터 |
+| 구슬 | 구슬 생성 | 변수(`syntax.variable`) | 조각 2 (#532 임시) |
+| | 구슬 발사 | 구슬 생성 | 조각 3 (#532 임시) |
 | | 구슬 보호막 | 구슬 생성 | 조각 4 |
-| | 구슬 난사 | 구슬 발사 | 조각 6 |
+| | 구슬 난사 | 구슬 발사, list(`syntax.list`) | 조각 6 (#532 임시) |
 | | 구슬 폭발 | 구슬 난사 | 조각 10, 코어 1 |
-| 원소 | 매직 미사일 | - | 조각 2 |
+| 원소 | 매직 미사일 | - | 처음부터 (#532 임시) |
 | | 파이어볼 | 매직 미사일 | 조각 4 |
 | | 얼음 창 | 매직 미사일 | 조각 4 |
 | | 체인 라이트닝 | 파이어볼, 얼음 창 | 조각 8 |
 | 범위 | 메테오 | 파이어볼 | 조각 10, 코어 1 |
 | | 블리자드 | 얼음 창 | 조각 8 |
 | | 독 안개 | 저주 | 조각 6 |
-| 보조 | 저주 | - | 조각 3 |
+| 보조 | 저주 | - | 처음부터 (#532 임시) |
 | | 뱀 속박 | 저주 | 조각 5 |
 | | 섬광 | 저주 | 조각 5 |
 | 이동 | 대시 | - | 조각 2 (C와 같은 공통 노드) |
@@ -112,7 +112,9 @@
 | | 블링크 | 더블점프 | 조각 6 |
 | | 공중 부양 | 블링크 | 조각 8 |
 
-- 처음 슬롯 함수(`orb_create();`, `orb_shot(GetBug());`, progress-store.md)와 처음부터 열린 노드가 같다
+- 처음 슬롯 함수(`magic_missile(get_bug())`, `hex(get_bug())`, progress-store.md)와 처음부터 열린 노드가 같다
+- #532(이우림, Python 문법 맞추기)에서 임시로 바꿈: 구슬을 변수·리스트에 담아 넘기게 되어, 처음 노드를 구슬 없는 매직 미사일·저주로, 구슬 생성은 변수 뒤, 구슬 난사는 list 뒤. 재료는 매직 미사일·저주의 것을 구슬 생성·발사로 옮김. 스킬 트리 이슈에서 다시 정함
+- `py.is_valid_orb`(구슬 확인)는 노드가 없다. Python 캐릭터에게 처음부터 보인다
 - 파이썬에는 malloc·free 블록을 여는 노드가 없다 (C는 검 소환이 엶). 가비지 컬렉션 언어라 free가 필요 없고, malloc을 열지는 정하지 않음
 
 ### 스킬 트리 화면 (#184)
@@ -148,7 +150,7 @@
 | --- | --- | --- | --- |
 | `SkillTree.Instance.Nodes` | - | `IReadOnlyList<SkillTreeNode>` | 모든 노드. 스킬 트리 화면에서 쓴다 |
 | `SkillTree.TryGet(id, out node)` | 노드 ID | `bool` | 없으면 false |
-| `SkillTree.StartingNodes(language = C)` | 캐릭터 언어 | `List<string>` | 처음부터 해금된 노드 가운데 그 언어의 것 (C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 구슬 생성, 구슬 발사). 새 캐릭터의 해금 목록 |
+| `SkillTree.StartingNodes(language = C)` | 캐릭터 언어 | `List<string>` | 처음부터 해금된 노드 가운데 그 언어의 것 (C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 매직 미사일, 저주 — #532 임시). 새 캐릭터의 해금 목록 |
 | `SkillTree.CanUnlock(id, unlocked)` | 노드 ID, 해금 목록 | `bool` | 선행을 모두 해금했고 아직 해금하지 않았으면 true. 재료는 보지 않는다 |
 | `SkillTree.AutoUnlockedBy(unlocked, language = C)` | 해금 목록, 캐릭터 언어 | `List<string>` | 해금한 뒤 부른다. 같이 열리는 노드들 (예: 검 소환 → 해제). 이것도 해금 목록에 넣는다 |
 | `SkillTree.LanguageOfNode(id)` | 노드 ID | `string` | (#523) 노드의 언어. `c.` → C, `py.` → Python, 모든 언어가 쓰는 노드는 null |

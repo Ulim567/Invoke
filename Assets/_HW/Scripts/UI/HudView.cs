@@ -12,7 +12,7 @@ using UnityEngine.UI;
 /// - 왼쪽 위: 설정(Esc) · Lv · 버그 조각 · 보스 코어 (PlayerProgress, 재료 그림은 박진우의 드롭 그림 첫 장). 그 아래 지금 장소 이름 (내 캐릭터가 있는 씬).<br/>
 /// - 아래 가운데: HP(PlayerHealth, 닳은 부분이 흰 잔상으로 잠시 남았다가 줄어듦 #431), Memory(ProcessMemory: 왼쪽부터 Data·Heap, 오른쪽부터 Stack), 슬롯 8칸(Q W E R A S D F).<br/>
 /// - 소환검 (#365): 아래 띠 왼쪽에 「소환검 n/5」와 5칸. SummonedSwords.Swords(박진우)를 읽기만 한다. 사용 가능 청록, 쓰는 중 어둡게, 누수 빨강.<br/>
-///   파이썬 마법사(ManaOrbs가 있는 캐릭터, #527)는 같은 자리에 「마나 구슬 n/5」와 5칸. 있는 구슬 칸만 밝게.<br/>
+///   파이썬 마법사(ManaOrbs가 있는 캐릭터, #527)는 같은 자리에 「마나 구슬 n/5」와 5칸. n은 다 쓴 구슬도 센 수. 쓸 수 있음 청록, 다 씀 빨강(#532).<br/>
 /// - 레이드 던전 (시안 8-3): 왼쪽 위는 설정만, 바로가기 숨김. 파티원 목록(RaidPartyView)과 보스 체력 바(김도훈의 BossHealthBar + BossBarPercent)가 같은 프리팹에 있다.<br/>
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 걷히고 「x.x sec」) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
@@ -229,7 +229,8 @@ public class HudView : MonoBehaviour
 	{
 		// 쿨타임 중에 누른 것은 덮개가 이미 보여 주므로 빨간 테두리를 띄우지 않는다
 		if (slot >= 0 && slot < SlotCount && reason != CastRejection.OnCooldown) rejectedUntil[slot] = Time.time + rejectFlashTime;
-		ShowNotice(FailureNotice.ForRejection(reason));
+		// 컴파일 오류 거부를 내 캐릭터 언어의 이름으로 보인다(Python은 SyntaxError, #532, 이우림)
+		ShowNotice(FailureNotice.ForRejection(reason, LanguageFamilies.Of(PlayerCharacter.LocalLanguage)));
 	}
 
 	// [내 화면] 내 작업이 끝남. 실행 중단, runtime error면 이유를 알린다 (#480)
@@ -313,16 +314,17 @@ public class HudView : MonoBehaviour
 		}
 	}
 
-	// 마나 구슬 (#527): 소환검 자리에 「마나 구슬 n/5」. 구슬은 상태가 없어서 있는 칸만 밝게(사용 가능 색) 칠한다
+	// 마나 구슬 (#527): 소환검 자리에 「마나 구슬 n/5」. n은 다 쓴 구슬도 센 수(최대 5개 제한과 같은 기준, #532)
+	// 칸은 쓸 수 있는 구슬 청록, 다 쓴 구슬 빨강(누수 소환검과 같은 색: 자리를 차지하지만 쓸 수 없음), 없음
 	void RefreshOrbs()
 	{
-		int count = Mathf.Clamp(orbs.Count, 0, ManaOrbs.MaxCount);
+		int count = Mathf.Clamp(orbs.TotalCount, 0, ManaOrbs.MaxCount);
 		SetText(swordText, $"마나 구슬 {count}/{ManaOrbs.MaxCount}");
 		if (swordPips == null) return;
 		for (int i = 0; i < swordPips.Length; i++)
 		{
 			if (swordPips[i] == null) continue;
-			swordPips[i].color = i < count ? swordReadyColor : swordEmptyColor;
+			swordPips[i].color = i >= count ? swordEmptyColor : orbs.IsSpentAt(i) ? swordLeakedColor : swordReadyColor;
 		}
 	}
 

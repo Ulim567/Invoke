@@ -31,6 +31,18 @@ public class AssignBlock : Block
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
+		// Python(#532): 대입이 곧 변수 만들기. 타입은 넣은 값의 타입으로 바뀐다. global로 적었는데 전역 변수 파일에 없는 이름이면 NameError
+		if (context.CurrentNames != null)
+		{
+			if (!context.TryGetPythonAssignTarget(variableName, out VariableStore target))
+			{
+				context.RecordFailure(FunctionFailure.UndeclaredVariable);
+				return BlockResult.Failed;
+			}
+			target.SetDynamic(variableName, slots[0]);
+			return BlockResult.Done;
+		}
+
 		VariableStore variables = context.FindVariables(variableName);
 		if (variables == null || !variables.TryGetType(variableName, out VariableType type))
 		{
@@ -39,7 +51,7 @@ public class AssignBlock : Block
 		}
 		// array는 같은 타입끼리 TryConvertForStore를 통과하므로 따로 막는다. 막지 않으면 두 변수가 같은 원소를 보게 되기 때문
 		if (type.Kind == VariableTypeKind.Array
-			|| !NumericRules.TryConvertForStore(valueOriginal, slots[0], type, context.Rule, out RuntimeValue value)
+			|| !NumericRules.TryConvertForStore(valueOriginal, slots[0], type, context.Rule, context.Family, out RuntimeValue value)
 			|| !variables.TrySet(variableName, value))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);

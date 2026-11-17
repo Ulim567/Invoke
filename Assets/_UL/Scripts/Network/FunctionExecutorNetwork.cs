@@ -602,7 +602,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			if (slot >= 0 && !KeepsSlotFrame(function, slot)) return PlayerDataRequestResult.SlotFunctionLocked;
 
 			// 코드 영역 크기는 저장한 뒤의 함수 목록으로 센다. 함께 저장하는 다른 함수의 새 내용도 넣기 위함
-			PlayerDataRequestResult content = CheckFunctionContent(function, after, slotGuids, unlocked);
+			PlayerDataRequestResult content = CheckFunctionContent(function, after, slotGuids, unlocked, language != null ? language.Family : LanguageFamily.C);
 			if (content != PlayerDataRequestResult.Saved) return content;
 		}
 		// 블록·함수 개수 (#500): 저장한 뒤의 함수와 전역 변수로 센 개수가 가진 개수를 넘으면 거부한다
@@ -621,7 +621,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	/// <summary>
 	/// 저장하려는 함수의 내용을 검사한다. 통과하면 Saved, 아니면 거부 이유를 돌려준다. 네트워크와 상관없어서 서버 없이 부를 수 있다.<br/>
-	/// - BlockLocked: 해금하지 않은 문법의 블록(SkillTree.IsBlockUnlocked)을 씀. <br/>
+	/// - BlockLocked: 해금하지 않은 문법의 블록(SkillTree.IsBlockUnlocked)을 씀. 캐릭터 언어에 없는 블록(BlockData.IsUsableIn, 예: Python 함수의 선언 블록)도 같다 (#532)<br/>
 	/// - SkillLocked: 해금하지 않은 C 스킬을 부름. 스킬 트리에 노드가 있는 사전 정의 함수만 본다(입력 함수 input.*, 테스트 함수 test.*는 노드가 없어 통과)<br/>
 	/// - CodeSizeExceeded: function을 반영한 함수 목록으로 센 슬롯의 코드 영역 크기가 ProgressRules.MaxCodeSize보다 큼.
 	///   슬롯과 이어지지 않은 함수는 크기에 들어가지 않으므로, 그런 함수 자체가 커도 거부하지 않는다
@@ -630,11 +630,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// <param name="ownedFunctions">서버가 가진 캐릭터의 모든 함수. function은 아직 반영되지 않은 상태여도 된다</param>
 	/// <param name="slotFunctionGuids">슬롯에 걸린 사용자 정의 함수(슬롯 함수)들의 GUID. 코드 영역 크기를 세는 출발점이다</param>
 	/// <param name="unlocked">해금한 스킬 트리 노드 ID</param>
+	/// <param name="family">캐릭터의 언어 방식 (#532)</param>
 	public static PlayerDataRequestResult CheckFunctionContent(FunctionData function, IEnumerable<FunctionData> ownedFunctions,
-		IEnumerable<string> slotFunctionGuids, ICollection<string> unlocked)
+		IEnumerable<string> slotFunctionGuids, ICollection<string> unlocked, LanguageFamily family = LanguageFamily.C)
 	{
 		foreach (BlockData block in function.AllBlocks())
 		{
+			if (!BlockData.IsUsableIn(block.Kind, family)) return PlayerDataRequestResult.BlockLocked;
 			if (!SkillTree.IsBlockUnlocked(block.Kind, unlocked)) return PlayerDataRequestResult.BlockLocked;
 
 			// 함수 블록은 블록 종류(순차 실행 노드)와 별개로, 부르는 C 스킬 자체의 해금을 따로 본다
@@ -885,7 +887,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return null;
 		}
 
-		if (!FunctionDataConverter.TryConvert(data, functions, out UserFunction converted)) return null;
+		// 캐릭터 언어의 규칙으로 바꾼다(#532). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
+		if (!FunctionDataConverter.TryConvert(data, functions, language != null ? language.Family : LanguageFamily.C, out UserFunction converted)) return null;
 		userFunctionOriginals[entry.Id] = converted;
 		return converted;
 	}
@@ -907,7 +910,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			if (slotOriginals[i] == null) return false;
 			slotGuids.Add(entry.Id);
 		}
-		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals);
+		// 캐릭터 언어의 규칙으로 컴파일한다 (#532). Python은 문법 오류만 찾는다
+		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals, language != null ? language.Family : LanguageFamily.C);
 	}
 
 	void OnBuildSucceededChanged(bool oldValue, bool newValue) => BuildResultChanged?.Invoke();
@@ -1074,9 +1078,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		function is PredefinedFunction skill && skill.Parameters.Count > 0 && skill.Parameters[0].Type?.Kind == VariableTypeKind.Target;
 
 	// 첫 파라미터가 대상 array(Target array)인 스킬인지. 그때만 고른 몬스터들을 argument로 넘긴다 (전장 휩쓸기)
+	// Python 스킬(구슬 난사)의 대상 리스트(Target list)도 같다(#532). 스킬이 대상 array와 리스트를 함께 읽는다
 	static bool TakesTargetArray(FunctionBlock function) =>
 		function is PredefinedFunction skill && skill.Parameters.Count > 0
-		&& skill.Parameters[0].Type?.Kind == VariableTypeKind.Array
+		&& (skill.Parameters[0].Type?.Kind == VariableTypeKind.Array || skill.Parameters[0].Type?.Kind == VariableTypeKind.List)
 		&& skill.Parameters[0].Type.ElementType?.Kind == VariableTypeKind.Target;
 
 	// 받은 오브젝트들을 순서 그대로 몬스터로 바꾼다. 서버에서 찾지 못한 오브젝트(null)나 몬스터가 아닌 오브젝트는 null(대상 없음)로 둔다

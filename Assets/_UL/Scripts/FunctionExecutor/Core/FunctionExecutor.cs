@@ -139,7 +139,7 @@ public class FunctionExecutor : MonoBehaviour
 		RuntimeValue?[] converted = new RuntimeValue?[parameters.Count];
 		for (int i = 0; i < arguments.Length; i++)
 		{
-			if (!NumericRules.TryConvertForStore(arguments[i], parameters[i].Type, language.Rule, out RuntimeValue value))
+			if (!NumericRules.TryConvertForStore(arguments[i], parameters[i].Type, language.Rule, language.Family, out RuntimeValue value))
 				throw new ArgumentException($"{function.Name}의 파라미터 {parameters[i].Name}({parameters[i].Type.Kind})에 {arguments[i].Type?.Kind} 값을 넘겼습니다.", nameof(arguments));
 			converted[i] = value;
 		}
@@ -317,7 +317,7 @@ public class FunctionExecutor : MonoBehaviour
 	void LoadGlobalVariables()
 	{
 		GlobalVariablesData file = globalVariablesFile ?? GlobalVariablesStorage.Load();
-		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, int.MaxValue, out var variables))
+		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, language.Family, int.MaxValue, out var variables))
 			variables = new List<(string, VariableType, RuntimeValue)>();
 		memory.ResetGlobals(variables);
 	}
@@ -367,7 +367,7 @@ public class FunctionExecutor : MonoBehaviour
 	public bool CanUseGlobalVariables(GlobalVariablesData file, out List<GlobalVariablesConverter.Failure> failures)
 	{
 		if (file == null) throw new ArgumentNullException(nameof(file));
-		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _, out failures);
+		return GlobalVariablesConverter.TryConvert(file, language.Rule, language.Family, memory.Capacity, out _, out failures);
 	}
 
 	void Awake()

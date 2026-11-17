@@ -31,7 +31,15 @@ public static class FunctionChecker
 	/// 오류 목록. globals는 전역 변수 선언 (null이면 전역 변수가 없는 것으로 본다).
 	/// ownedFunctions는 캐릭터가 가진 함수들로, 사용자 정의 함수 블록의 파라미터·반환 타입을 찾을 때 쓴다 (null이면 그 칸은 타입을 검사하지 않음).
 	/// </summary>
-	public static List<Error> Find(FunctionData function, GlobalVariablesData globals = null, IEnumerable<FunctionData> ownedFunctions = null)
+	public static List<Error> Find(FunctionData function, GlobalVariablesData globals = null, IEnumerable<FunctionData> ownedFunctions = null) =>
+		Find(function, globals, ownedFunctions, LanguageFamily.C);
+
+	/// <summary>
+	/// 캐릭터의 언어 방식 family에 맞춰 검사한다 (#532). C이면 위의 Find와 같다.<br/>
+	/// Python은 실행 전에 찾는 잘못이 문법 오류뿐이다: 비어 있는 값 칸, 반복문 밖의 break·continue, 이름 없는 global, 지운 함수 호출.
+	/// 없는 변수·타입이 맞지 않는 값은 실행 중에 NameError·TypeError로 난다(runtime error). 문장 앞에 Python 오류 이름을 붙인다(SyntaxError: …).
+	/// </summary>
+	public static List<Error> Find(FunctionData function, GlobalVariablesData globals, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family)
 	{
 		var errors = new List<Error>();
 		if (function == null || function.Blocks == null) return errors;
@@ -41,6 +49,14 @@ public static class FunctionChecker
 		FunctionData FindUserFunction(string guid) =>
 			function.Guid == guid ? function : owned?.FirstOrDefault(f => f != null && f.Guid == guid);
 		var context = new SlotContext { ReturnType = function.ReturnType, FindUserFunction = owned != null ? (System.Func<string, FunctionData>)FindUserFunction : null };
+
+		// 언어마다 검사가 다르다. 갈래가 없는 언어는 C 검사를 따른다
+		switch (family)
+		{
+			case LanguageFamily.Python:
+				WalkPython(function.Blocks, 0, context, errors);
+				return errors;
+		}
 
 		// 쓸 수 있는 변수: C처럼 위에서 선언했고 그 자리에서 보이는 것만 (전역 변수, 파라미터, 바깥·같은 { }의 선언, for의 i) (#474 5단계)
 		// 실행기도 { } 범위를 지키므로, 순서나 범위를 어긴 변수는 실행 중에 「선언하지 않은 변수」로 실패하기 때문
@@ -59,6 +75,63 @@ public static class FunctionChecker
 	/// <summary>오류가 하나라도 있으면 true. ownedFunctions는 Find와 같다</summary>
 	public static bool HasErrors(FunctionData function, GlobalVariablesData globals = null, IEnumerable<FunctionData> ownedFunctions = null) =>
 		Find(function, globals, ownedFunctions).Count > 0;
+
+	/// <summary>오류가 하나라도 있으면 true. 캐릭터 언어에 맞춰 검사한다 (#532)</summary>
+	public static bool HasErrors(FunctionData function, GlobalVariablesData globals, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family) =>
+		Find(function, globals, ownedFunctions, family).Count > 0;
+
+	// Python 오류 문장 앞에 붙이는 이름 (#532, 이우림 결정 11/18: 「SyntaxError: 명사형 문장」)
+	const string SyntaxErrorPrefix = "SyntaxError: ";
+
+	// Python 함수의 문법 오류를 모은다 (#532). Python에는 { } 범위·선언·타입 검사가 없으므로 C의 Walk와 따로 둔다
+	static void WalkPython(IEnumerable<BlockData> blocks, int loopDepth, SlotContext context, List<Error> errors)
+	{
+		foreach (BlockData block in blocks)
+		{
+			if (block == null) continue;
+			if (block.Kind == BlockKind.Break && loopDepth == 0) Add(errors, block, SyntaxErrorPrefix + "break는 반복문 밖에서 사용할 수 없음");
+			if (block.Kind == BlockKind.Continue && loopDepth == 0) Add(errors, block, SyntaxErrorPrefix + "continue는 반복문 밖에서 사용할 수 없음");
+			if (block.Kind == BlockKind.Global && (block.Slots.Count < 1 || string.IsNullOrEmpty(block.Slots[0]?.Name)))
+				Add(errors, block, SyntaxErrorPrefix + "global 뒤에 이름이 없음");
+			if (CallsMissingFunction(block, context)) Add(errors, block, "NameError: " + MissingFunctionMessage);
+
+			var empty = new List<(BlockData, int)>();
+			var missing = new List<(BlockData, int)>();
+			CheckPythonSlots(block, context, empty, missing);
+			foreach ((BlockData, int) slot in empty) Add(errors, block, SyntaxErrorPrefix + "expression이 비어 있음", new[] { slot });
+			if (missing.Count > 0) Add(errors, block, "NameError: " + MissingFunctionMessage, missing);
+
+			if (block.InnerBlocks != null)
+			{
+				bool loop = block.Kind == BlockKind.For || block.Kind == BlockKind.While;
+				WalkPython(block.InnerBlocks, loopDepth + (loop ? 1 : 0), context, errors);
+			}
+		}
+	}
+
+	// Python 블록의 칸(끼운 값 블록 안까지)에서 빈 칸과 지운 함수 호출을 찾는다. return의 값, pop의 index는 비워도 된다
+	static void CheckPythonSlots(BlockData block, SlotContext context, List<(BlockData, int)> empty, List<(BlockData, int)> missing)
+	{
+		for (int i = 0; i < block.Slots.Count; i++)
+		{
+			SlotData slot = block.Slots[i];
+			if (slot == null) continue;
+			if (slot.Block != null)
+			{
+				if (CallsMissingFunction(slot.Block, context)) missing.Add((block, i));
+				CheckPythonSlots(slot.Block, context, empty, missing);
+				continue;
+			}
+			if (!string.IsNullOrEmpty(slot.VariableName)) continue;
+			if (slot.Kind == SlotKind.Variable)
+			{
+				empty.Add((block, i));
+				continue;
+			}
+			bool optional = block.Kind == BlockKind.Return || (block.Kind == BlockKind.ListPop && i == 1);
+			if (slot.Kind == SlotKind.Value && !optional && string.IsNullOrEmpty(slot.Literal)) empty.Add((block, i));
+		}
+	}
 
 	// 칸 규칙을 정할 때 함께 넘기는 것
 	class SlotContext

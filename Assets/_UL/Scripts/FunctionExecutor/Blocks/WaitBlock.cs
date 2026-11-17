@@ -43,7 +43,7 @@ public class WaitBlock : Block
 			BlockResult result = slots.Step(context);
 			if (result != BlockResult.Done) return result;
 
-			if (!NumericRules.TryConvertForStore(secondsOriginal, slots[0], Float, context.Rule, out RuntimeValue seconds))
+			if (!NumericRules.TryConvertForStore(secondsOriginal, slots[0], Float, context.Rule, context.Family, out RuntimeValue seconds))
 			{
 				context.RecordFailure(FunctionFailure.TypeMismatch);
 				return BlockResult.Failed;

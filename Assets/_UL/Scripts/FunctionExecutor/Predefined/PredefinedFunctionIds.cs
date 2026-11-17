@@ -56,6 +56,8 @@ public static class PredefinedFunctionIds
 	public const string PyOrbBarrage = "py.orb_barrage";
 	public const string PyOrbBurst = "py.orb_burst";
 	public const string PyOrbShield = "py.orb_shield";
+	// 구슬 확인 함수 is_valid_orb(orb) (#532). 스킬이 아니고 스킬 트리 노드도 없다. py.로 시작해 Python 캐릭터에게만 보인다
+	public const string PyIsValidOrb = "py.is_valid_orb";
 	// 보조
 	public const string PyHex = "py.hex";
 	public const string PySnakeBind = "py.snake_bind";

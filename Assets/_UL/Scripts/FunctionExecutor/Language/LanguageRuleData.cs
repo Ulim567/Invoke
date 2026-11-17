@@ -44,6 +44,9 @@ public enum FunctionFailure
 	NoTarget,
 	// free 블록에 이미 free한 포인터를 넣었다 (C의 double free) (#504)
 	DoubleFree,
+	// heap이 모자라 객체를 만들거나 늘리지 못했다 (Python의 MemoryError: 리스트 append, 구슬 생성, #532)
+	// C의 malloc은 실패해도 NULL을 돌려줄 뿐이라 이 실패가 나지 않는다
+	OutOfMemory,
 }
 
 /// <summary>
@@ -265,10 +268,27 @@ public class LanguageRuleData : ScriptableObject
 	}
 
 	// 테스트 코드가 C가 아닌 언어 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
+	// 테스트용 Python 규칙 파일 (#532). 사용자가 Inspector에서 고칠 LanguageRule_Python.asset과 같은 값으로 만든다:
+	// 가비지 컬렉션, 모든 실패 EndTask(Overflow도 RecursionError로 그 작업만), 문법 오류만 CompileError
+	// 언어 방식(Python)은 규칙 파일이 아니라 캐릭터 언어가 정한다. 시험은 LanguageRule.SetFamilyForTest로 정한다
+	internal static LanguageRuleData CreatePythonForTest()
+	{
+		LanguageRuleData rule = CreateForTest(NumericConversion.WideningOnly, true, false, StringEquality.ByContent, true, true);
+		foreach (FunctionFailure failure in Enum.GetValues(typeof(FunctionFailure)))
+		{
+			bool compile = failure == FunctionFailure.InvalidLiteral || failure == FunctionFailure.NotInLoop
+				|| failure == FunctionFailure.DuplicateVariable || failure == FunctionFailure.MissingReturn;
+			rule.rules.Add(new Rule { failure = failure, handling = FailureHandling.EndTask, category = compile ? FailureCategory.CompileError : FailureCategory.RuntimeError });
+		}
+		return rule;
+	}
+
 	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo,
-		bool zeroIsNull = true, StringEquality stringEquality = StringEquality.Disallowed, bool allowShadowing = true)
+		bool zeroIsNull = true, StringEquality stringEquality = StringEquality.Disallowed, bool allowShadowing = true,
+		bool garbageCollected = false)
 	{
 		LanguageRuleData rule = CreateInstance<LanguageRuleData>();
+		rule.garbageCollected = garbageCollected;
 		rule.numericConversion = conversion;
 		rule.allowFloatModulo = allowFloatModulo;
 		rule.zeroIsNull = zeroIsNull;

@@ -1,13 +1,24 @@
+using System;
 using UnityEngine;
 
 /// <summary>
 /// 블록 데이터(BlockData)를 화면에 보여 줄 글자와 색으로 바꾼다. 보여 주기만 하고 데이터는 바꾸지 않는다.
 /// <para>
-/// 지금은 C 언어 모양으로만 보여 준다. 다른 언어가 생기면 언어별로 글자를 나눈다 (function-data.md 「언어별 표시」).
+/// 내 캐릭터의 언어 방식(Family)에 따라 C 모양 또는 Python 모양으로 보여 준다 (#532, function-data.md 「언어별 표시」).
+/// Python은 ;가 없고 { } 대신 :, elif, and·or·not, True·False·None, for i in range(a, b):로 보인다.
 /// </para>
 /// </summary>
 public static class BlockLabels
 {
+	/// <summary>
+	/// 내 캐릭터의 언어 방식 (#532, 이우림). 편집 화면의 블록 글자, 칸 규칙, 블록 목록, 참고 카드가 이 값으로 언어별 모양을 고른다.
+	/// 캐릭터 언어(PlayerCharacter.LocalLanguage)에서 정한다. 실행기(LanguageRule.Family)와 같은 기준이다. 내 캐릭터가 없으면(서버, 시험) C.
+	/// </summary>
+	public static LanguageFamily Family => LanguageFamilies.Of(PlayerCharacter.LocalLanguage);
+
+	// 지금 언어 방식이 Python이면 true. Python 갈래만 있는 곳(블록 글자 등)이 쓴다. 다른 언어가 생기면 그 곳을 Family의 switch로 바꾼다
+	internal static bool IsPython => Family == LanguageFamily.Python;
+
 	// 블록 분류별 색 (#487). 블록 바탕은 이 색을 연하게 섞어 칠하고(BlockView) 글자는 밝은색으로 쓰므로 밝은 색으로 둔다
 	// 분류 머리글의 색 네모, 참고 카드의 분류 태그는 이 색을 그대로 쓴다
 	// 시안 6의 색(제어 #F2D35A, 변수 #5EF2D6, 값 #6FD39A, 함수 #9A7BFF)에서 채도·밝기는 두고 색상만 옮긴 값이다 (사용자가 슬라이더로 고름).
@@ -25,7 +36,9 @@ public static class BlockLabels
 		BlockKind.Conditional or BlockKind.For or BlockKind.While
 			or BlockKind.Break or BlockKind.Continue => ControlColor,
 		BlockKind.Declare or BlockKind.Assign or BlockKind.ArrayDeclare
-			or BlockKind.ArrayGet or BlockKind.ArraySet => VariableColor,
+			or BlockKind.ArrayGet or BlockKind.ArraySet
+			or BlockKind.Global or BlockKind.Del or BlockKind.ListNew or BlockKind.ListAppend
+			or BlockKind.ListPop or BlockKind.ListLen => VariableColor,
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not => ValueColor,
 		// 함수 색 (#489): 함수 탭에서 꺼내는 블록(함수 호출, malloc, free, wait)과 문법 탭 「함수」 분류의 return.
 		// 예전의 메모리(분홍)·기타(회색) 분류는 함수 탭이 생기며 없앴다
@@ -37,6 +50,7 @@ public static class BlockLabels
 	/// </summary>
 	public static string TextOf(BlockData block)
 	{
+		if (IsPython) return PythonTextOf(block);
 		switch (block.Kind)
 		{
 			case BlockKind.Declare:
@@ -88,21 +102,79 @@ public static class BlockLabels
 		}
 	}
 
+	// Python 모양의 한 줄 글자 (#532). ; 없음, { } 대신 :
+	static string PythonTextOf(BlockData block)
+	{
+		switch (block.Kind)
+		{
+			case BlockKind.Assign:
+				return $"{Slot(block, 0)?.VariableName} = {Value(Slot(block, 1))}";
+			case BlockKind.Arithmetic:
+			case BlockKind.Compare:
+			case BlockKind.Logic:
+				return $"{Value(Slot(block, 0))} {OperatorText(Slot(block, 1)?.Option)} {Value(Slot(block, 2))}";
+			case BlockKind.Not:
+				return $"not {Value(Slot(block, 0))}";
+			case BlockKind.Conditional:
+				string branch = Slot(block, 0)?.Option;
+				if (branch == nameof(ConditionalBranch.Else)) return "else:";
+				return $"{BranchKeyword(branch)} {Value(Slot(block, 1))}:";
+			case BlockKind.For:
+				return $"for {Slot(block, 0)?.Name} in range({Value(Slot(block, 1))}, {Value(Slot(block, 2))}):";
+			case BlockKind.While:
+				return $"while {Value(Slot(block, 0))}:";
+			case BlockKind.Break:
+				return "break";
+			case BlockKind.Continue:
+				return "continue";
+			case BlockKind.ArrayGet:
+				return $"{Slot(block, 0)?.VariableName}[{Value(Slot(block, 1))}]";
+			case BlockKind.ArraySet:
+				return $"{Slot(block, 0)?.VariableName}[{Value(Slot(block, 1))}] = {Value(Slot(block, 2))}";
+			case BlockKind.Return:
+				return $"return {Value(Slot(block, 0))}";
+			case BlockKind.Wait:
+				return $"wait({Value(Slot(block, 0))}초)";
+			case BlockKind.Function:
+				return $"{FunctionName(block)}({string.Join(", ", block.Slots.ConvertAll(Value))})";
+			case BlockKind.Global:
+				return $"global {Slot(block, 0)?.Name}";
+			case BlockKind.Del:
+				return $"del {Slot(block, 0)?.VariableName}";
+			case BlockKind.ListNew:
+				return $"{Slot(block, 0)?.VariableName} = []";
+			case BlockKind.ListAppend:
+				return $"{Slot(block, 0)?.VariableName}.append({Value(Slot(block, 1))})";
+			case BlockKind.ListPop:
+				SlotData index = Slot(block, 1);
+				bool noIndex = index == null || (index.Block == null && BlockSlotText.ToText(index).Length == 0);
+				return $"{Slot(block, 0)?.VariableName}.pop({(noIndex ? "" : Value(index))})";
+			case BlockKind.ListLen:
+				return $"len({Value(Slot(block, 0))})";
+			default:
+				// 선언, 배열 만들기, malloc, free는 Python 블록 목록에 없다. 예전 데이터에 남아 있으면 C 모양으로 보인다
+				return block.Kind.ToString();
+		}
+	}
+
 	/// <summary>
-	/// 조건문 갈래 이름("If", "ElseIf", "Else")을 C 글자로
+	/// 조건문 갈래 이름("If", "ElseIf", "Else")을 내 캐릭터 언어의 글자로. Python의 else if는 elif
 	/// </summary>
 	public static string BranchKeyword(string branch) => branch switch
 	{
-		nameof(ConditionalBranch.ElseIf) => "else if",
+		nameof(ConditionalBranch.ElseIf) => IsPython ? "elif" : "else if",
 		nameof(ConditionalBranch.Else) => "else",
 		_ => "if",
 	};
 
 	/// <summary>
-	/// 연산자 enum 이름(BlockOptions.cs)을 C 글자로. 예: "Add" → "+", "And" → "&amp;&amp;"
+	/// 연산자 enum 이름(BlockOptions.cs)을 내 캐릭터 언어의 글자로. 예: "Add" → "+", "And" → "&amp;&amp;"(C) / "and"(Python), "FloorDivide" → "//"
 	/// </summary>
 	public static string OperatorText(string option) => option switch
 	{
+		nameof(ArithmeticOperator.FloorDivide) => "//",
+		nameof(LogicOperator.And) when IsPython => "and",
+		nameof(LogicOperator.Or) when IsPython => "or",
 		nameof(ArithmeticOperator.Add) => "+",
 		nameof(ArithmeticOperator.Subtract) => "-",
 		nameof(ArithmeticOperator.Multiply) => "*",
@@ -120,7 +192,14 @@ public static class BlockLabels
 	};
 
 	/// <summary>
-	/// 타입을 C 글자로. 예: Int → "int"
+	/// 연산 블록의 연산자 목록. C는 + - * / %, Python은 //를 더한다 (#532)
+	/// </summary>
+	public static string[] ArithmeticOptions => IsPython
+		? Enum.GetNames(typeof(ArithmeticOperator))
+		: Array.FindAll(Enum.GetNames(typeof(ArithmeticOperator)), name => name != nameof(ArithmeticOperator.FloorDivide));
+
+	/// <summary>
+	/// 타입을 C 글자로. 예: Int → "int". Python의 리스트는 list, 구슬은 Orb, None은 None (#532)
 	/// </summary>
 	public static string TypeName(VariableType type) => type == null ? "?" : type.Kind switch
 	{
@@ -131,6 +210,9 @@ public static class BlockLabels
 		VariableTypeKind.Char => "char",
 		VariableTypeKind.Struct => type.StructName ?? "struct",
 		VariableTypeKind.Pointer => TypeName(type.ElementType) + "*",
+		VariableTypeKind.List => "list",
+		VariableTypeKind.None => "None",
+		VariableTypeKind.Any => "value",
 		_ => type.Kind.ToString(),
 	};
 

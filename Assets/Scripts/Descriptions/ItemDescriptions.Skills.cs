@@ -265,48 +265,49 @@ public static partial class ItemDescriptions
 		// 구슬
 		[PredefinedFunctionIds.PyOrbCreate] = new ItemDescription
 		{
-			Summary = "마나 구슬 하나를 만들어 머리 위에 띄웁니다.",
-			Purpose = "",
+			Summary = "마나 구슬 하나를 만들어 머리 위에 띄우고, 그 구슬을 돌려줍니다.",
+			Purpose = "구슬 스킬에 넘길 구슬을 만들 때 씁니다.",
 			Example = "",
-			ExampleCode = "",
+			ExampleCode = "orb = orb_create()",
 			ExampleResult = "",
-			Caution = "구슬은 최대 5개까지 쌓입니다. 이미 5개면 만들지 않습니다.",
+			Returns = "만든 구슬 (Orb). 구슬이 이미 5개면 None (다 쓴 구슬도 셈)",
+			Caution = "돌려받은 구슬을 variable이나 list에 담지 않으면 바로 사라집니다. heap이 모자라면 MemoryError가 발생합니다.",
 		},
 		[PredefinedFunctionIds.PyOrbShot] = new ItemDescription
 		{
-			Summary = "마나 구슬 하나를 써서 대상에게 쏩니다.",
+			Summary = "넘긴 마나 구슬 하나를 써서 대상에게 쏩니다.",
 			Purpose = "",
 			Example = "",
-			ExampleCode = "",
+			ExampleCode = "orb_shot(get_bug(), orb)",
 			ExampleResult = "",
-			Caution = "구슬이 하나도 없으면 실패합니다.",
+			Caution = "쓴 구슬은 빨간 「다 쓴 구슬」이 되어 다시 쓸 수 없습니다(UsedManaOrbError). is_valid_orb(orb)로 확인합니다. 다 쓴 구슬도 5개에 들어가므로, 담은 variable이나 list에서 놓아야 사라집니다.",
 		},
 		[PredefinedFunctionIds.PyOrbBarrage] = new ItemDescription
 		{
-			Summary = "가진 구슬을 모두 써서 고른 대상들에게 하나씩 쏩니다.",
+			Summary = "구슬 list의 쓸 수 있는 구슬을 모두 써서, 대상 list의 몬스터들에게 하나씩 쏩니다.",
 			Purpose = "",
 			Example = "",
-			ExampleCode = "",
+			ExampleCode = "orb_barrage(targets, orbs)",
 			ExampleResult = "",
-			Caution = "고를 수 있는 대상 수는 가진 구슬 수입니다. 구슬이 없으면 실패합니다.",
+			Caution = "다 쓴 구슬은 건너뛰고 list에서 빼지 않습니다. 쓸 구슬이 없으면 NoManaOrbError가 발생합니다.",
 		},
 		[PredefinedFunctionIds.PyOrbBurst] = new ItemDescription
 		{
-			Summary = "가진 구슬을 모두 터뜨려 둘레의 적을 모두 맞힙니다.",
+			Summary = "구슬 list의 쓸 수 있는 구슬을 모두 터뜨려 둘레의 적을 모두 맞힙니다.",
 			Purpose = "",
 			Example = "",
-			ExampleCode = "",
+			ExampleCode = "orb_burst(orbs)",
 			ExampleResult = "",
-			Caution = "구슬이 많을수록 셉니다. 구슬이 없으면 실패합니다.",
+			Caution = "구슬이 많을수록 셉니다. 쓸 구슬이 없으면 NoManaOrbError가 발생합니다.",
 		},
 		[PredefinedFunctionIds.PyOrbShield] = new ItemDescription
 		{
-			Summary = "마나 구슬 하나를 써서 다음 피해 한 번을 막는 보호막을 두릅니다.",
+			Summary = "넘긴 마나 구슬 하나를 써서 다음 피해 한 번을 막는 보호막을 두릅니다.",
 			Purpose = "",
 			Example = "",
-			ExampleCode = "",
+			ExampleCode = "orb_shield(orb)",
 			ExampleResult = "",
-			Caution = "보호막은 10초 동안 유지됩니다. 구슬이 없으면 실패합니다.",
+			Caution = "보호막은 10초 동안 유지됩니다. 다 쓴 구슬을 넘기면 UsedManaOrbError가 발생합니다.",
 		},
 		// 원소
 		[PredefinedFunctionIds.PyMagicMissile] = new ItemDescription

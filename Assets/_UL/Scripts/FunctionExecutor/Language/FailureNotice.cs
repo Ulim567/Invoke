@@ -24,10 +24,20 @@ public static class FailureNotice
 	/// 시전 거부 rejection의 알림 문장. NotEnoughMemory, CompileError만 알리고, 그 밖의 거부면 null.
 	/// </summary>
 	// 다른 거부를 알리지 않는 이유: 쿨타임은 슬롯 덮개, 공격할 수 없는 장소는 무채색 슬롯처럼 화면이 이미 보여 준다. 메모리 부족과 컴파일 오류는 슬롯에서 원인을 알 수 없다
-	public static string ForRejection(CastRejection rejection)
+	public static string ForRejection(CastRejection rejection) => ForRejection(rejection, LanguageFamily.C);
+
+	/// <summary>
+	/// ForRejection과 같고, 컴파일 오류 거부를 시전자 언어 family의 이름으로 보인다(Python은 SyntaxError, #532).
+	/// </summary>
+	public static string ForRejection(CastRejection rejection, LanguageFamily family)
 	{
 		if (rejection == CastRejection.NotEnoughMemory) return $"{RejectedLabel} NotEnoughMemory\n남은 메모리가 함수 크기보다 적음";
-		if (rejection == CastRejection.CompileError) return $"{RejectedLabel} CompileError\n컴파일 오류가 있는 함수";
+		if (rejection == CastRejection.CompileError)
+			return family switch
+			{
+				LanguageFamily.Python => $"{RejectedLabel} SyntaxError\n문법 오류가 있는 함수",
+				_ => $"{RejectedLabel} CompileError\n컴파일 오류가 있는 함수",
+			};
 		return null;
 	}
 
@@ -55,8 +65,59 @@ public static class FailureNotice
 		if (info.Failure == FunctionFailure.SkillFailed && !string.IsNullOrEmpty(info.ErrorName))
 			return $"{RuntimeLabel} {info.ErrorName}\n{info.ErrorMessage}";
 
-		string description = Describe(info.Failure);
-		return description != null ? $"{RuntimeLabel} {info.Failure}\n{description}" : $"{RuntimeLabel} {info.Failure}";
+		string name = info.Family switch
+		{
+			LanguageFamily.Python => PythonName(info),
+			_ => info.Failure.ToString(),
+		};
+		string description = info.Family switch
+		{
+			LanguageFamily.Python => DescribePython(info),
+			_ => Describe(info.Failure),
+		};
+		return description != null ? $"{RuntimeLabel} {name}\n{description}" : $"{RuntimeLabel} {name}";
+	}
+
+	// Python 캐릭터에게 보이는 실패 이름 (#532, 이우림 결정 11/18). FunctionFailure는 그대로 두고 이름만 Python 예외 이름으로 바꾼다
+	// NoTarget, InvalidTarget은 Python에 같은 예외가 없어 그대로 둔다 (이우림 결정 11/18 (가))
+	// Overflow는 재귀 호출에서 났으면 RecursionError, 아니면(heap이 메모리를 채워 함수를 부르지 못함) MemoryError (이우림 결정 11/18 (나))
+	static string PythonName(TaskEndInfo info)
+	{
+		FunctionFailure failure = info.Failure;
+		if (failure == FunctionFailure.Overflow) return info.RecursiveOverflow ? "RecursionError" : "MemoryError";
+		switch (failure)
+		{
+			case FunctionFailure.UndeclaredVariable: return "NameError";
+			case FunctionFailure.TypeMismatch: return "TypeError";
+			case FunctionFailure.DivideByZero: return "ZeroDivisionError";
+			case FunctionFailure.IndexOutOfRange: return "IndexError";
+			case FunctionFailure.OutOfMemory: return "MemoryError";
+			case FunctionFailure.InvalidLiteral:
+			case FunctionFailure.NotInLoop:
+			case FunctionFailure.DuplicateVariable:
+			case FunctionFailure.MissingReturn:
+				return "SyntaxError";
+		}
+		return failure.ToString();
+	}
+
+	// Python 실패의 설명 (#532, 이우림 결정 11/18). 대상 실패는 C와 같다
+	static string DescribePython(TaskEndInfo info)
+	{
+		FunctionFailure failure = info.Failure;
+		if (failure == FunctionFailure.Overflow) return info.RecursiveOverflow ? "재귀 호출로 stack이 가득 참" : "남은 메모리가 없어 함수를 부르지 못함";
+		switch (failure)
+		{
+			case FunctionFailure.UndeclaredVariable: return "정의되지 않은 이름";
+			case FunctionFailure.TypeMismatch: return "값의 타입이 맞지 않음";
+			case FunctionFailure.DivideByZero: return "0으로 나눔";
+			case FunctionFailure.IndexOutOfRange: return "리스트 범위 밖 index";
+			case FunctionFailure.OutOfMemory: return "heap 메모리 부족";
+			case FunctionFailure.NoTarget:
+			case FunctionFailure.InvalidTarget:
+				return Describe(failure);
+		}
+		return null;
 	}
 
 	// runtime error인 실패의 설명. C 규칙에서 runtime error인 것만 둔다. 다른 언어에서 runtime error가 되는 실패는 이름만 보인다

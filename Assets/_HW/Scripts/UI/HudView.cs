@@ -12,6 +12,7 @@ using UnityEngine.UI;
 /// - 왼쪽 위: 설정(Esc) · Lv · 버그 조각 · 보스 코어 (PlayerProgress, 재료 그림은 박진우의 드롭 그림 첫 장). 그 아래 지금 장소 이름 (내 캐릭터가 있는 씬).<br/>
 /// - 아래 가운데: HP(PlayerHealth, 닳은 부분이 흰 잔상으로 잠시 남았다가 줄어듦 #431), Memory(ProcessMemory: 왼쪽부터 Data·Heap, 오른쪽부터 Stack), 슬롯 8칸(Q W E R A S D F).<br/>
 /// - 소환검 (#365): 아래 띠 왼쪽에 「소환검 n/5」와 5칸. SummonedSwords.Swords(박진우)를 읽기만 한다. 사용 가능 청록, 쓰는 중 어둡게, 누수 빨강.<br/>
+///   파이썬 마법사(ManaOrbs가 있는 캐릭터, #527)는 같은 자리에 「마나 구슬 n/5」와 5칸. 있는 구슬 칸만 밝게.<br/>
 /// - 레이드 던전 (시안 8-3): 왼쪽 위는 설정만, 바로가기 숨김. 파티원 목록(RaidPartyView)과 보스 체력 바(김도훈의 BossHealthBar + BossBarPercent)가 같은 프리팹에 있다.<br/>
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 걷히고 「x.x sec」) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
@@ -101,6 +102,8 @@ public class HudView : MonoBehaviour
 	GameObject player;
 	PlayerProgress progress;
 	SummonedSwords swords;
+	// 파이썬 마법사의 마나 구슬 (#527). 있으면 소환검 대신 보여 준다
+	ManaOrbs orbs;
 	PlayerHealth health;
 	ProcessMemory memory;
 	SlotLoadout loadout;
@@ -183,6 +186,7 @@ public class HudView : MonoBehaviour
 		if (player == null) return;
 		progress = player.GetComponent<PlayerProgress>();
 		swords = player.GetComponent<SummonedSwords>();
+		orbs = player.GetComponent<ManaOrbs>();
 		health = player.GetComponent<PlayerHealth>();
 		memory = player.GetComponent<ProcessMemory>();
 		loadout = player.GetComponent<SlotLoadout>();
@@ -290,6 +294,11 @@ public class HudView : MonoBehaviour
 	// 소환검: 칸마다 소환 순서대로 사용 가능(청록) / 쓰는 중(어두운 청록: 던짐, 찌르기, 검무, 검 타기 등) / 누수(빨강) / 없음
 	void RefreshSwords()
 	{
+		if (orbs != null)
+		{
+			RefreshOrbs();
+			return;
+		}
 		int count = swords != null ? swords.Swords.Count : 0;
 		SetText(swordText, $"소환검 {count}/{SummonedSwords.MaxCount}");
 		if (swordPips == null) return;
@@ -301,6 +310,19 @@ public class HudView : MonoBehaviour
 				: sword.State == SummonedSwordState.Ready ? swordReadyColor
 				: sword.State == SummonedSwordState.Leaked ? swordLeakedColor
 				: swordBusyColor;
+		}
+	}
+
+	// 마나 구슬 (#527): 소환검 자리에 「마나 구슬 n/5」. 구슬은 상태가 없어서 있는 칸만 밝게(사용 가능 색) 칠한다
+	void RefreshOrbs()
+	{
+		int count = Mathf.Clamp(orbs.Count, 0, ManaOrbs.MaxCount);
+		SetText(swordText, $"마나 구슬 {count}/{ManaOrbs.MaxCount}");
+		if (swordPips == null) return;
+		for (int i = 0; i < swordPips.Length; i++)
+		{
+			if (swordPips[i] == null) continue;
+			swordPips[i].color = i < count ? swordReadyColor : swordEmptyColor;
 		}
 	}
 

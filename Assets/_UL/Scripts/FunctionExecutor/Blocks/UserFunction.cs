@@ -29,6 +29,8 @@ public class UserFunction : FunctionBlock
 	readonly IReadOnlyList<ParameterData> parameters;
 	readonly VariableType returnType;
 	readonly bool isAsync;
+	// Python 함수의 이름 규칙(#532). C 함수와 코드로 만든 함수는 null이다
+	readonly PythonNames pythonNames;
 
 	public override string Name { get; }
 
@@ -70,8 +72,10 @@ public class UserFunction : FunctionBlock
 
 	// 블록 없이 함수 정보만 가진 함수를 만든다. 블록은 SetBlocks로 나중에 넣는다
 	// FunctionDataConverter만 쓴다. 재귀 호출에서 함수 안의 호출 블록이 아직 블록을 바꾸는 중인 자기 자신을 가리켜야 하기 때문
-	internal UserFunction(string name, int frameSize, IReadOnlyList<ParameterData> parameters, VariableType returnType, bool isAsync)
+	internal UserFunction(string name, int frameSize, IReadOnlyList<ParameterData> parameters, VariableType returnType, bool isAsync,
+		PythonNames pythonNames = null)
 	{
+		this.pythonNames = pythonNames;
 		Name = name;
 		// 호출 자리 1칸은 언제나 쓴다
 		FrameSize = frameSize < 1 ? 1 : frameSize;
@@ -111,6 +115,13 @@ public class UserFunction : FunctionBlock
 	// 반환 값 검사는 플레이어 책임이다. 반환 값을 정하는 return 블록을 플레이어가 놓기 때문
 	internal override bool TryValidateEnd(FunctionContext context)
 	{
+		// Python 함수(#532)는 반환 타입이 없다. return 값이면 그 값, return;이나 return 없이 끝나면 None을 돌려준다. MissingReturn은 없다
+		if (pythonNames != null)
+		{
+			ReturnValue = returnSource == null ? RuntimeValue.None : returnSource.Result;
+			return true;
+		}
+
 		if (returnType.Kind == VariableTypeKind.Void)
 		{
 			if (returnSource == null) return true;
@@ -139,7 +150,7 @@ public class UserFunction : FunctionBlock
 	protected override void OnStart(FunctionContext context)
 	{
 		Variables = new VariableStore();
-		context.PushVariables(Variables);
+		context.PushVariables(Variables, pythonNames);
 		DeclareParameters(context);
 		// function body는 범위를 따로 열지 않는다. C에서 function body의 맨 바깥 범위는 파라미터와 같은 범위이기 때문
 		statements = new Statements(Blocks, false);
@@ -167,6 +178,12 @@ public class UserFunction : FunctionBlock
 		{
 			ParameterData parameter = parameters[i];
 			RuntimeValue? argument = Arguments != null && i < Arguments.Length ? Arguments[i] : null;
+			// Python 함수(#532)의 파라미터는 타입이 없다. 받은 값을 그대로 담고, 받지 못했으면(슬롯에서 바로 시전) None이다
+			if (pythonNames != null)
+			{
+				Variables.SetDynamic(parameter.Name, argument ?? RuntimeValue.None);
+				continue;
+			}
 			RuntimeValue value = argument ?? DefaultValue(context, parameter.Type);
 			Variables.TryDeclare(parameter.Name, parameter.Type, value);
 		}

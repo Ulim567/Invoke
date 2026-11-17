@@ -18,8 +18,12 @@ internal static class NumericRules
 	public static bool TryCalculate(ArithmeticOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule,
 		out RuntimeValue result, out FunctionFailure failure)
 	{
+		if (rule.IsPython) return PythonRules.TryCalculate(op, left, right, out result, out failure);
+
 		result = default;
 		failure = FunctionFailure.TypeMismatch;
+		// //는 Python 연산자다(#532). C 함수에 있으면 계산할 수 없는 연산으로 본다
+		if (op == ArithmeticOperator.FloorDivide) return false;
 
 		if (!TryGetOperandKind(left, rule, out VariableTypeKind leftKind)) return false;
 		if (!TryGetOperandKind(right, rule, out VariableTypeKind rightKind)) return false;
@@ -50,7 +54,11 @@ internal static class NumericRules
 	/// </summary>
 	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted)
 	{
+		if (rule.IsPython) return PythonRules.TryConvertForStore(value, target, out converted);
+
 		converted = value;
+		// Any(#532)는 어떤 값이든 받는다. Python 함수와 스킬의 「아무 값」 파라미터에만 쓰이고 C 변수에는 쓰이지 않는다
+		if (target?.Kind == VariableTypeKind.Any) return true;
 		if (VariableStore.IsSameType(target, value.Type)) return true;
 		if (target == null || value.Type == null) return false;
 
@@ -117,6 +125,8 @@ internal static class NumericRules
 	// 타입이 섞이면 TryCalculate와 같은 규칙으로 맞춘 뒤 비교한다. C의 3 == 3.0처럼, 계산할 때와 같은 값으로 비교해야 하기 때문
 	public static bool TryCompare(CompareOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, out bool result)
 	{
+		if (rule.IsPython) return PythonRules.TryCompare(op, left, right, out result);
+
 		result = false;
 		VariableTypeKind leftKind = left.Type?.Kind ?? VariableTypeKind.Void;
 		VariableTypeKind rightKind = right.Type?.Kind ?? VariableTypeKind.Void;
@@ -219,6 +229,11 @@ internal static class NumericRules
 		}
 		return false;
 	}
+
+	/// <summary>
+	/// Python의 정수(int, bool)를 큰 정수로 꺼낸다 (#532). for의 range가 쓴다. 정수가 아니면 false(TypeError).
+	/// </summary>
+	public static bool TryGetPythonInteger(RuntimeValue value, out System.Numerics.BigInteger number) => PythonRules.TryGetInteger(value, out number);
 
 	static bool IsNumeric(VariableTypeKind kind) =>
 		kind == VariableTypeKind.Int || kind == VariableTypeKind.Float || kind == VariableTypeKind.Char || kind == VariableTypeKind.Bool;

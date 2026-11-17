@@ -78,6 +78,8 @@ public class CallBlock : ValueBlock
 
 		// 반환 값은 함수가 끝날 때 이미 반환 타입으로 맞춰 두었다(TryValidateEnd). 맞추지 못했으면 Done이 아니라 Failed로 끝났다
 		if (function.ReturnType.Kind != VariableTypeKind.Void) Result = running.ReturnValue.Value;
+		// Python(#532)에서 값을 돌려주지 않는 함수(void 스킬)의 호출은 None이다. C는 이 값을 읽지 않는다
+		else Result = RuntimeValue.None;
 		return BlockResult.Done;
 	}
 

@@ -31,10 +31,22 @@ public class LiteralValue : ValueBlock
 	{
 		isValid = TryParse(type, literal, out parsedValue);
 		isZeroLiteral = isValid &&type.Kind == VariableTypeKind.Int && parsedValue.AsInt() == 0;
+		// Python의 int는 넘치지 않으므로(#532) int 범위를 넘는 숫자 글자열도 큰 정수로 읽어 둔다. 쓸지는 실행할 때 언어를 보고 정한다
+		if (!isValid && type?.Kind == VariableTypeKind.Int && literal != null
+			&& System.Numerics.BigInteger.TryParse(literal, NumberStyles.Integer, CultureInfo.InvariantCulture, out System.Numerics.BigInteger big))
+			bigValue = RuntimeValue.FromInteger(big);
 	}
+
+	// int 범위를 넘는 정수 글자열의 큰 정수 값. Python 캐릭터만 쓴다. 그 밖에는 null
+	readonly RuntimeValue? bigValue;
 
 	protected override BlockResult Step(FunctionContext context)
 	{
+		if (!isValid && bigValue.HasValue && context.Rule.IsPython)
+		{
+			Result = bigValue.Value;
+			return BlockResult.Done;
+		}
 		if (!isValid)
 		{
 			context.RecordFailure(FunctionFailure.InvalidLiteral);
@@ -81,6 +93,12 @@ public class LiteralValue : ValueBlock
 
 			case VariableTypeKind.String:
 				value = RuntimeValue.FromString(literal);
+				return true;
+
+			// Python의 None (#532)
+			case VariableTypeKind.None:
+				if (literal != SlotData.NoneLiteral) return false;
+				value = RuntimeValue.None;
 				return true;
 
 			// 직접 입력할 수 있는 포인터는 NULL뿐이다. 가리키는 타입이 있는 포인터는 malloc으로만 만든다

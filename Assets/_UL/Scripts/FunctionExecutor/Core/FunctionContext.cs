@@ -54,6 +54,8 @@ public class FunctionContext
 	// 선언은 이 함수를 쓰지 않는다. 함수 안의 선언은 언제나 지역 변수(CurrentVariables)에 만든다
 	internal VariableStore FindVariables(string name)
 	{
+		if (CurrentNames != null) return FindPythonVariables(name);
+
 		VariableStore locals = CurrentVariables;
 		if (locals != null && locals.Contains(name)) return locals;
 
@@ -96,9 +98,51 @@ public class FunctionContext
 		return taken;
 	}
 
-	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
-	internal void PushVariables(VariableStore variables) => variableStack.Add(variables);
-	internal void PopVariables() => variableStack.RemoveAt(variableStack.Count - 1);
+	// 실행 중인 사용자 정의 함수들의 Python 이름 규칙. variableStack과 같은 순서이고, C 함수는 null이다 (#532)
+	readonly List<PythonNames> namesStack = new List<PythonNames>();
+
+	// 지금 실행 중인 사용자 정의 함수의 Python 이름 규칙. C 함수이거나 사용자 정의 함수 밖이면 null이다 (#532)
+	internal PythonNames CurrentNames => namesStack.Count > 0 ? namesStack[namesStack.Count - 1] : null;
+
+	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수(Python이면 이름 규칙도)를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
+	internal void PushVariables(VariableStore variables, PythonNames names = null)
+	{
+		variableStack.Add(variables);
+		namesStack.Add(names);
+	}
+
+	internal void PopVariables()
+	{
+		variableStack.RemoveAt(variableStack.Count - 1);
+		namesStack.RemoveAt(namesStack.Count - 1);
+	}
+
+	// Python의 변수 찾기 (#532). global로 적은 이름은 전역, 지역 이름은 지역에서만 찾는다(대입 전이면 null = NameError). 둘 다 아니면 전역
+	// 지역 이름을 전역에서 찾지 않는 이유: 실제 Python처럼 함수 안에서 대입하는 이름은 그 함수 전체에서 지역 변수이기 때문
+	VariableStore FindPythonVariables(string name)
+	{
+		PythonNames names = CurrentNames;
+		VariableStore globals = Memory != null ? Memory.Globals : null;
+		if (!names.Globals.Contains(name) && names.Locals.Contains(name))
+		{
+			VariableStore locals = CurrentVariables;
+			return locals != null && locals.Contains(name) ? locals : null;
+		}
+		return globals != null && globals.Contains(name) ? globals : null;
+	}
+
+	// Python의 대입이 값을 넣을 저장소 (#532). global로 적은 이름은 전역 변수 파일에 있는 이름일 때만 전역 저장소(없으면 false = NameError), 그 밖은 지역 저장소
+	// 전역 변수 파일에 없는 이름을 막는 이유: 데이터 영역 칸 수는 초기화 때 정해지고 실행 중에 늘지 않기 때문 (이우림 결정 11/18 (가))
+	internal bool TryGetPythonAssignTarget(string name, out VariableStore variables)
+	{
+		if (CurrentNames.Globals.Contains(name))
+		{
+			variables = Memory != null && Memory.IsGlobalName(name) ? Memory.Globals : null;
+			return variables != null;
+		}
+		variables = CurrentVariables;
+		return variables != null;
+	}
 
 	// 실행 중인 사용자 정의 함수들(부른 함수 포함)의 지역 변수, 파라미터, 지역 array 원소에 담긴 포인터 값
 	// HeapStorage가 누수를 판단할 때 루트로 본다. 다른 작업이 malloc한 객체를 지역 변수에만 담아 쓰는 동안 누수로 보지 않기 위함
@@ -181,6 +225,26 @@ public class FunctionContext
 		InputRequester = null;
 		RequestedInputType = null;
 		providedInput = null;
+	}
+
+	// 지금의 heap 표시. statement를 시작할 때 기록해 두고, 끝날 때 그 뒤에 만든 임시 객체를 놓는다 (#532)
+	internal int HeapMark => Memory != null ? Memory.Heap.CurrentMark : 0;
+
+	// Python statement가 끝났을 때 부른다 (#532). mark 뒤에 이 작업이 만든 객체를 작업의 지역 루트에서 빼고 가비지 컬렉션을 돌린다
+	// 변수·리스트에 담은 객체는 그 변수가 루트라서 남고, 아무 데도 담지 않은 객체(orb_create();의 구슬)만 해제된다
+	// C 함수와 가비지 컬렉션을 하지 않는 캐릭터는 아무것도 하지 않는다. C는 작업이 끝날 때 누수를 판단하기 때문
+	internal void ReleaseStatementTemporaries(int mark)
+	{
+		if (CurrentNames == null || Memory == null || !Memory.Heap.CollectsGarbage) return;
+		Memory.Heap.ReleaseTemporaries(task, mark);
+	}
+
+	// 변수에 담기 전의 값(리스트에서 꺼낸 구슬 등)이 가리키는 heap 객체를 이 statement가 끝날 때까지 쥔다 (#532)
+	// 그 사이에 다른 작업의 statement가 끝나 가비지 컬렉션이 돌아도 해제되지 않게 하기 위함
+	internal void HoldTemporary(RuntimeValue value)
+	{
+		if (Memory == null || !Memory.Heap.CollectsGarbage) return;
+		if (value.IsList || value.IsOrb) Memory.Heap.Hold(task, value.AsObjectPointer());
 	}
 
 	// obj를 heap에 올린다. 포인터의 주인은 이 작업이다. 주인을 채우는 것만 여기서 하고, 루트 집합과 누수 규칙은 HeapStorage가 맡는다

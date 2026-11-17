@@ -31,6 +31,18 @@ public class AssignBlock : Block
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
+		// Python(#532): 대입이 곧 변수 만들기. 타입은 넣은 값의 타입으로 바뀐다. global로 적었는데 전역 변수 파일에 없는 이름이면 NameError
+		if (context.CurrentNames != null)
+		{
+			if (!context.TryGetPythonAssignTarget(variableName, out VariableStore target))
+			{
+				context.RecordFailure(FunctionFailure.UndeclaredVariable);
+				return BlockResult.Failed;
+			}
+			target.SetDynamic(variableName, slots[0]);
+			return BlockResult.Done;
+		}
+
 		VariableStore variables = context.FindVariables(variableName);
 		if (variables == null || !variables.TryGetType(variableName, out VariableType type))
 		{

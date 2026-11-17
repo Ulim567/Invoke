@@ -276,6 +276,9 @@ public class BlockEditor : MonoBehaviour
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
 	static readonly string[] PaletteFunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
+	// 내 캐릭터가 Python이면 true (#532, 이우림). 컴파일 검사·블록 표기를 Python 규칙으로 한다
+	static bool IsPythonCharacter => PlayerCharacter.LocalLanguage == CharacterLanguages.Python;
+
 	static SlotData Int(string value) => SlotData.FromLiteral(new VariableType(VariableTypeKind.Int), value);
 
 	BlockField functionNameField;
@@ -947,7 +950,7 @@ public class BlockEditor : MonoBehaviour
 			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
 			if (slotFunction == null) continue; // 받지 못한 함수는 컴파일 오류가 아니다 (서버도 빌드에서 뺌)
 
-			List<List<FunctionData>> paths = SlotCompileChecker.FailedPaths(slotFunction, savedFunctions, globalsSaved);
+			List<List<FunctionData>> paths = SlotCompileChecker.FailedPaths(slotFunction, savedFunctions, globalsSaved, IsPythonCharacter);
 			if (paths.Count == 0) continue;
 			failedSlots.Add((slot, slotFunction.Guid));
 			foreach (List<FunctionData> path in paths)
@@ -1188,7 +1191,7 @@ public class BlockEditor : MonoBehaviour
 		var all = new Dictionary<string, List<FunctionChecker.Error>>();
 		foreach (FunctionData function in working)
 		{
-			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working);
+			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working, IsPythonCharacter);
 			if (errors.Count > 0) all[function.Guid] = errors;
 		}
 		// Global Variables도 함수처럼 고칠 때마다 다시 검사한다 (#506). 저장할 때만 검사해 두면 고치거나 다른 페이지로 갈 때 지워져 오류가 사라져 보였기 때문

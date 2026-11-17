@@ -71,6 +71,9 @@ public class LanguageRule : MonoBehaviour
 		CheckRuleData();
 	}
 
+	// 테스트가 코드로 만든 언어 규칙(예: LanguageRuleData.CreatePythonForTest)을 연결한다 (#532). 실행기의 Start보다 먼저(Awake에서) 부른다
+	internal void SetRuleDataForTest(LanguageRuleData rule) => ruleData = rule;
+
 	// 코드로 만든 ScriptableObject는 Unity가 저절로 지우지 않으므로 직접 지운다
 	void OnDestroy()
 	{

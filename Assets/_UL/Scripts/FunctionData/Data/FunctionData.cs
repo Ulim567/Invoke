@@ -90,4 +90,44 @@ public class FunctionData
 
 		return variables;
 	}
+
+	/// <summary>
+	/// global 블록에 적은 이름들 (Python, #532). 이 함수 안에서 이 이름에 대입하면 전역 변수를 바꾼다.
+	/// </summary>
+	public HashSet<string> GlobalNames()
+	{
+		HashSet<string> names = new HashSet<string>();
+		foreach (BlockData block in AllBlocks())
+			if (block.Kind == BlockKind.Global && block.Slots.Count >= 1 && !string.IsNullOrEmpty(block.Slots[0].Name))
+				names.Add(block.Slots[0].Name);
+		return names;
+	}
+
+	/// <summary>
+	/// Python 함수의 지역 이름들 (#532). 파라미터, 대입 블록의 왼쪽, for의 변수, del의 변수 가운데 global 블록에 적지 않은 이름이다.<br/>
+	/// 블록 위치와 상관없이 함수 전체에서 모은다. Python은 함수 안 어디에서든 대입하는 이름을 그 함수 전체의 지역 변수로 보기 때문이다.<br/>
+	/// 프레임 크기(1 + 지역 이름 수)를 계산할 때와, 변수를 읽을 때 지역·전역 중 어디서 찾을지 정할 때 쓴다.
+	/// </summary>
+	// if 안에서 대입한 이름도 if 밖에서 같은 지역 변수다. Python에는 { } 범위가 없기 때문
+	public HashSet<string> PythonLocalNames()
+	{
+		HashSet<string> globals = GlobalNames();
+		HashSet<string> names = new HashSet<string>();
+		foreach (ParameterData parameter in Parameters)
+			if (!string.IsNullOrEmpty(parameter?.Name)) names.Add(parameter.Name);
+
+		foreach (BlockData block in AllBlocks())
+		{
+			string name = block.Kind switch
+			{
+				BlockKind.Assign when block.Slots.Count >= 1 => block.Slots[0].VariableName,
+				BlockKind.For when block.Slots.Count >= 1 => block.Slots[0].Name,
+				// Python에서 del x도 x를 그 함수의 지역 이름으로 만든다
+				BlockKind.Del when block.Slots.Count >= 1 => block.Slots[0].VariableName,
+				_ => null,
+			};
+			if (!string.IsNullOrEmpty(name) && !globals.Contains(name)) names.Add(name);
+		}
+		return names;
+	}
 }

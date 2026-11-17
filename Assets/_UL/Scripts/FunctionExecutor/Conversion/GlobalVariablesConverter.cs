@@ -73,6 +73,7 @@ public static class GlobalVariablesConverter
 
 		variables = null;
 		failures = new List<Failure>();
+		if (rule.IsPython) return TryConvertPython(data, capacity, out variables, failures);
 		List<BlockData> declarations = data.Declarations ?? new List<BlockData>();
 		var converted = new List<(string, VariableType, RuntimeValue)>();
 		var names = new HashSet<string>();
@@ -250,6 +251,92 @@ public static class GlobalVariablesConverter
 	}
 
 	static bool IsEmpty(SlotData slot) => slot.Block == null && slot.VariableName == null && slot.Literal == null;
+
+	// Python 캐릭터의 전역 변수 파일(#532). 선언 대신 대입 블록(x = 0)만 둔다. 처음 값은 직접 적은 값(숫자, 글자, True·False, None)이나 빈 리스트([])만 된다
+	// 타입은 적지 않는다(목록의 Type이 null). 값이 타입을 가지고, 실행 중에 다른 타입을 대입할 수 있기 때문
+	// 빈 리스트는 여기서 heap에 올리지 않는다. 검사만 하는 쪽(편집 화면, 빌드)도 이 함수를 부르기 때문이다. 초기화가 ProcessMemory.ResetGlobals에서 올린다
+	static bool TryConvertPython(GlobalVariablesData data, int capacity, out List<(string Name, VariableType Type, RuntimeValue Value)> variables,
+		List<Failure> failures)
+	{
+		variables = null;
+		List<BlockData> assignments = data.Declarations ?? new List<BlockData>();
+		var converted = new List<(string, VariableType, RuntimeValue)>();
+		var names = new HashSet<string>();
+		for (int i = 0; i < assignments.Count; i++)
+		{
+			BlockData block = assignments[i];
+			if (block == null || block.Kind != BlockKind.Assign || block.Slots == null || block.Slots.Count < 2)
+			{
+				failures.Add(new Failure(i, -1, "전역에는 대입만 둘 수 있음"));
+				continue;
+			}
+
+			string name = block.Slots[0].VariableName;
+			if (string.IsNullOrEmpty(name))
+			{
+				failures.Add(new Failure(i, 0, "대입할 이름이 없음"));
+				continue;
+			}
+			// 같은 이름을 두 번 대입하면 데이터 영역 칸 수가 이름 수와 어긋나므로 막는다
+			if (!names.Add(name))
+			{
+				failures.Add(new Failure(i, 0, $"전역 변수 이름이 겹침: {name}"));
+				continue;
+			}
+
+			if (!TryGetPythonInitialValue(block.Slots[1], out RuntimeValue value, out string reason))
+			{
+				failures.Add(new Failure(i, 1, reason));
+				continue;
+			}
+			converted.Add((name, null, value));
+		}
+
+		// 전역 변수 하나 = 데이터 영역 1칸. 리스트의 원소는 heap에 들어가므로 데이터 영역에 세지 않는다
+		if (converted.Count > capacity)
+			failures.Add(new Failure(assignments.Count - 1, -1, $"데이터 영역 크기를 {converted.Count - capacity}칸 초과함"));
+
+		if (failures.Count > 0) return false;
+		variables = converted;
+		return true;
+	}
+
+	// Python 전역 변수의 처음 값. 직접 적은 값(int 범위를 넘는 정수 포함), None, 빈 리스트 블록만 받는다
+	// 빈 리스트는 포인터 없는 리스트 값으로 돌려준다. ProcessMemory.ResetGlobals가 이 값을 보고 heap에 빈 리스트를 올린다
+	static bool TryGetPythonInitialValue(SlotData slot, out RuntimeValue value, out string reason)
+	{
+		value = default;
+		reason = null;
+		if (slot == null || IsEmpty(slot))
+		{
+			reason = "전역 변수의 값이 비어 있음";
+			return false;
+		}
+		if (slot.Block != null)
+		{
+			if (slot.Block.Kind == BlockKind.ListNew)
+			{
+				value = RuntimeValue.FromList(HeapStorage.NullPointer);
+				return true;
+			}
+			reason = "전역 변수의 처음 값에는 값을 직접 적거나 []만 쓸 수 있음";
+			return false;
+		}
+		if (slot.VariableName != null)
+		{
+			reason = "전역 변수의 처음 값에는 값을 직접 적거나 []만 쓸 수 있음";
+			return false;
+		}
+		if (LiteralValue.TryParse(slot.Type, slot.Literal, out value)) return true;
+		if (slot.Type?.Kind == VariableTypeKind.Int
+			&& System.Numerics.BigInteger.TryParse(slot.Literal, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out System.Numerics.BigInteger big))
+		{
+			value = RuntimeValue.FromInteger(big);
+			return true;
+		}
+		reason = $"읽을 수 없는 값: {slot.Literal}";
+		return false;
+	}
 
 	// 오류 문장에 쓸 타입 글자. C처럼 소문자 이름, 포인터는 가리키는 struct 이름 뒤에 *
 	static string TypeText(VariableType type)

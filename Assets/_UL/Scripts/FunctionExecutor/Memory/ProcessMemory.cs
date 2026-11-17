@@ -47,6 +47,13 @@ public class ProcessMemory : MonoBehaviour
 	// 전역 변수 선언은 이 컴포넌트의 초기화 함수만 한다. 거기서 DataUsed도 함께 정하므로, 다른 곳에서 선언하면 칸 검사 없이 데이터 영역이 늘어나기 때문
 	internal VariableStore Globals { get; private set; }
 
+	// 전역 변수 파일에 적힌 이름들. 초기화(ResetGlobals) 때 정한다 (#532)
+	// 저장소(Globals)와 따로 두는 이유: Python의 del로 전역 변수를 지워도, 그 이름은 global로 다시 대입할 수 있어야 하기 때문
+	readonly HashSet<string> globalNames = new HashSet<string>();
+
+	// name이 전역 변수 파일에 적힌 이름이면 true. Python의 global 대입이 쓴다 (#532)
+	internal bool IsGlobalName(string name) => name != null && globalNames.Contains(name);
+
 	/// <summary>
 	/// 지금 데이터 영역이 쓰고 있는 칸 수. 전역 변수 하나에 1칸, 전역 array는 길이만큼 더한 값이다. 클라이언트 화면에서는 서버가 알려 준 값이다.
 	/// </summary>
@@ -140,9 +147,23 @@ public class ProcessMemory : MonoBehaviour
 	internal void ResetGlobals(IEnumerable<(string Name, VariableType Type, RuntimeValue Value)> variables)
 	{
 		VariableStore globals = new VariableStore();
+		globalNames.Clear();
 		int cells = 0;
 		foreach ((string variableName, VariableType type, RuntimeValue value) in variables)
 		{
+			globalNames.Add(variableName);
+			// Python 전역 변수(#532)는 타입이 값을 따라가므로 SetDynamic으로 만든다. 같은 이름 검사는 GlobalVariablesConverter가 했다
+			if (type == null)
+			{
+				// 처음 값 []는 검사 때 heap에 올리지 않고 포인터 없는 리스트로 온다. 초기화할 때마다 새 빈 리스트(0칸)를 올린다
+				// 루트 없이 올리는 이유: 이 전역 변수가 곧바로 가리키므로, 다른 루트에 넣으면 전역 변수를 바꿔도 해제되지 않기 때문
+				RuntimeValue initial = value.IsList && value.AsObjectPointer() == HeapStorage.NullPointer
+					? RuntimeValue.FromList(Heap.MallocUnrooted(new ListStorage(), 0))
+					: value;
+				globals.SetDynamic(variableName, initial);
+				cells += GlobalVariablesConverter.CellsOf(initial);
+				continue;
+			}
 			// 검사를 통과한 목록이므로 실패하지 않아야 한다. 실패하면 검사와 선언 규칙이 어긋난 코드 실수이므로 조용히 넘기지 않는다
 			if (!globals.TryDeclare(variableName, type, value))
 			{

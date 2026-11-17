@@ -33,6 +33,15 @@ public class ArraySetBlock : Block
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
+		// Python(#532): 리스트의 원소 쓰기 list[i] = 값. 원소 타입이 없으므로 값을 그대로 넣는다
+		if (context.CurrentNames != null)
+		{
+			if (!PythonLists.TryFind(context, arrayName, out ListStorage list, out _)) return BlockResult.Failed;
+			if (!PythonLists.TryGetIndex(context, list, slots[0], out int number)) return BlockResult.Failed;
+			list.Set(number, slots[1]);
+			return BlockResult.Done;
+		}
+
 		if (!ArrayStorage.TryFind(context, arrayName, out ArrayStorage array)) return BlockResult.Failed;
 		if (!ArrayStorage.TryGetIndex(slots[0], context.Rule, out int index))
 		{

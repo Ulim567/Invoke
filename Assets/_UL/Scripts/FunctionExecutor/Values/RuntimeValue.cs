@@ -34,6 +34,29 @@ public readonly struct RuntimeValue
 
 	public static RuntimeValue FromInt(int value) => new RuntimeValue(new VariableType(VariableTypeKind.Int), value);
 
+	/// <summary>
+	/// Python의 int 값 (#532). int 범위 안이면 FromInt와 같은 값이고, 넘으면 큰 정수를 그대로 담는다. Python의 int는 넘치지 않기 때문이다.<br/>
+	/// 큰 정수는 AsInt로 꺼낼 수 없다. IsBigInteger로 먼저 확인하거나 AsInteger로 꺼낸다.
+	/// </summary>
+	// 값이 int 범위 안이면 int로 담는 이유: 스킬과 C 블록은 AsInt로 꺼내므로, 보통 크기의 Python 정수가 C 정수와 같은 모양이어야 하기 때문
+	public static RuntimeValue FromInteger(System.Numerics.BigInteger value) =>
+		value >= int.MinValue && value <= int.MaxValue ? FromInt((int)value) : new RuntimeValue(new VariableType(VariableTypeKind.Int), value);
+
+	/// <summary>
+	/// None 값 (Python, #532). 타입 None은 이 값 하나만 가진다.
+	/// </summary>
+	public static RuntimeValue None => new RuntimeValue(new VariableType(VariableTypeKind.None), null);
+
+	/// <summary>
+	/// 마나 구슬(Orb) 값 (Python, #532). pointer는 구슬을 올린 heap의 포인터다. orb_create가 돌려준다.
+	/// </summary>
+	public static RuntimeValue FromOrb(int pointer) => new RuntimeValue(PythonObjects.OrbType, pointer);
+
+	/// <summary>
+	/// 리스트 값 (Python, #532). pointer는 리스트 객체(ListStorage)를 올린 heap의 포인터다. 두 변수가 같은 리스트를 가리킬 수 있다(b = a).
+	/// </summary>
+	internal static RuntimeValue FromList(int pointer) => new RuntimeValue(VariableType.ListOf(VariableType.AnyType), pointer);
+
 	public static RuntimeValue FromFloat(float value) => new RuntimeValue(new VariableType(VariableTypeKind.Float), value);
 
 	public static RuntimeValue FromBool(bool value) => new RuntimeValue(new VariableType(VariableTypeKind.Bool), value);
@@ -152,7 +175,12 @@ public readonly struct RuntimeValue
 		return type.Kind switch
 		{
 			VariableTypeKind.Int or VariableTypeKind.Float or VariableTypeKind.Bool
-				or VariableTypeKind.String or VariableTypeKind.Char or VariableTypeKind.Target => true,
+				or VariableTypeKind.String or VariableTypeKind.Char or VariableTypeKind.Target
+				or VariableTypeKind.None or VariableTypeKind.Any => true,
+			// Python의 리스트(#532). 원소 타입은 Any 또는 다룰 수 있는 타입(스킬의 Target 리스트 파라미터)
+			VariableTypeKind.List => type.ElementType == null || IsSupportedType(type.ElementType),
+			// Python의 게임 객체(Orb, #532)
+			VariableTypeKind.Struct => PythonObjects.IsKnown(type.StructName),
 			// 지금 포인터를 만드는 곳은 malloc뿐이고, malloc은 미리 정한 struct만 만든다
 			VariableTypeKind.Pointer => type.ElementType?.Kind == VariableTypeKind.Struct
 				&& PredefinedStructs.TryGet(type.ElementType.StructName, out _),
@@ -164,6 +192,18 @@ public readonly struct RuntimeValue
 
 	// 담은 타입과 다른 함수를 부르면 InvalidCastException이 난다. 실행기 코드의 실수이므로 바로 드러나게 한다
 	public int AsInt() => (int)value;
+	// Python의 큰 정수(int 범위 밖)이면 true (#532). 이 값은 AsInt로 꺼낼 수 없다
+	public bool IsBigInteger => value is System.Numerics.BigInteger;
+	// int 값을 큰 정수로 꺼낸다. int 범위 안의 값과 큰 정수 모두 된다 (#532)
+	public System.Numerics.BigInteger AsInteger() => value is System.Numerics.BigInteger big ? big : (int)value;
+	// None이면 true (#532)
+	public bool IsNone => Type?.Kind == VariableTypeKind.None;
+	// 마나 구슬(Orb)이면 true (#532)
+	public bool IsOrb => Type?.Kind == VariableTypeKind.Struct && Type.StructName == PythonObjects.Orb;
+	// 리스트이면 true (#532)
+	public bool IsList => Type?.Kind == VariableTypeKind.List;
+	// heap 객체(리스트, Orb)의 포인터 (#532)
+	public int AsObjectPointer() => (int)value;
 	public float AsFloat() => (float)value;
 	public bool AsBool() => (bool)value;
 	public string AsString() => (string)value;
@@ -204,6 +244,9 @@ public readonly struct RuntimeValue
 			VariableTypeKind.Char => AsChar() == '\0' ? "'\\0'" : $"'{AsChar()}'",
 			VariableTypeKind.String => $"\"{AsString()}\"",
 			VariableTypeKind.Pointer => $"포인터 {AsPointer()}",
+			VariableTypeKind.None => "None",
+			VariableTypeKind.List => $"list (heap {AsObjectPointer()})",
+			VariableTypeKind.Struct => $"{Type.StructName} (heap {AsObjectPointer()})",
 			// 없어진 오브젝트의 name을 읽으면 예외가 나므로 먼저 거른다
 			VariableTypeKind.Array => $"array (길이 {AsArray().Length})",
 			VariableTypeKind.Target => IsNoTarget ? "(대상 없음)" : TargetObject == null ? "(없어진 대상)" : TargetObject.name,

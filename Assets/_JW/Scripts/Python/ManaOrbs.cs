@@ -3,10 +3,22 @@ using Mirror;
 using UnityEngine;
 
 /// <summary>
-/// 마나 구슬 하나 (heap 객체). 파이썬 마법사의 구슬 생성(py.orb_create)이 heap에 올리고, 구슬 스킬이 Free로 쓴다.
-/// 화면의 구슬 그림은 ManaOrbView가 개수(ManaOrbs.Count)만 보고 그린다. 이 객체는 값이 없는 표식이다.
+/// 마나 구슬 하나 (heap 객체). 파이썬 마법사의 구슬 생성(py.orb_create)이 heap에 올리고 Orb 값으로 돌려준다 (#532).
+/// <para>
+/// - 플레이어는 Orb 값을 변수·리스트에 담아 구슬 스킬에 넘긴다.<br/>
+/// - 구슬 스킬은 구슬을 해제하지 않고 「다 쓴 구슬」(IsSpent)로만 바꾼다. 스킬은 넘겨받은 값이 변수에서 왔는지 리스트에서 왔는지 알 수 없기 때문이다.<br/>
+/// - heap에서 지우는 일은 가비지 컬렉션만 한다(가리키는 이름이 하나도 없을 때).<br/>
+/// - 다 쓴 구슬은 머리 위 그림, 쓸 수 있는 개수(ManaOrbs.Count), 최대 5개 제한에서 빠진다.
+/// </para>
 /// </summary>
-public class ManaOrb { }
+public class ManaOrb
+{
+	/// <summary>구슬 스킬이 이미 쓴 구슬이면 true. 다시 넘기면 UsedManaOrbError.</summary>
+	public bool IsSpent { get; private set; }
+
+	/// <summary>[서버] 구슬을 「다 쓴 구슬」로 바꾼다. 구슬 스킬(OrbSkill)만 부른다.</summary>
+	public void Spend() => IsSpent = true;
+}
 
 /// <summary>
 /// 쓸 수 있는 마나 구슬이 없어서 구슬이 필요한 스킬을 쓸 수 없다.
@@ -15,6 +27,14 @@ public class NoManaOrbError : SkillError
 {
 	// HUD 알림에 그대로 보인다(#480). 일어난 현상만 짧게 적는다
 	public override string Message => "쓸 수 있는 마나 구슬이 없음";
+}
+
+/// <summary>
+/// 구슬 스킬에 이미 쓴 마나 구슬(ManaOrb.IsSpent)을 넘겼다 (#532). 확인은 is_valid_orb(orb)로 한다.
+/// </summary>
+public class UsedManaOrbError : SkillError
+{
+	public override string Message => "이미 쓴 마나 구슬";
 }
 
 /// <summary>
@@ -53,8 +73,25 @@ public class ManaOrbs : NetworkBehaviour
 	// 클라이언트로만 접속한 화면이면 true. 이때 heap은 비어 있어 서버가 보낸 개수를 쓴다
 	static bool IsClientOnly => NetworkClient.active && !NetworkServer.active;
 
-	/// <summary>지금 가진 마나 구슬 수. 클라이언트에서는 서버가 보낸 값이다.</summary>
-	public int Count => IsClientOnly || memory == null || memory.Heap == null ? syncedCount : memory.Heap.CountObjects<ManaOrb>();
+	/// <summary>지금 쓸 수 있는 마나 구슬 수(다 쓴 구슬 제외, #532). 클라이언트에서는 서버가 보낸 값이다.</summary>
+	public int Count => IsClientOnly || memory == null || memory.Heap == null ? syncedCount : UsablePointers().Count;
+
+	/// <summary>
+	/// [서버] 쓸 수 있는 구슬(다 쓰지 않은 구슬)의 heap 포인터를 만든 순서대로 (#532). 머리 위 그림의 순서와 같다.
+	/// </summary>
+	public System.Collections.Generic.List<int> UsablePointers()
+	{
+		var usable = new System.Collections.Generic.List<int>();
+		if (memory == null || memory.Heap == null) return usable;
+		foreach (int pointer in memory.Heap.GetPointers<ManaOrb>())
+			if (memory.Heap.TryGet(pointer, out ManaOrb orb) && !orb.IsSpent) usable.Add(pointer);
+		return usable;
+	}
+
+	/// <summary>
+	/// [서버] 포인터 pointer인 구슬의 자리(머리 위 반원의 몇 번째). 쓸 수 있는 구슬이 아니면 -1 (#532).
+	/// </summary>
+	public int IndexOf(int pointer) => UsablePointers().IndexOf(pointer);
 
 	/// <summary>더 만들 수 있으면 true (최대 5개).</summary>
 	public bool CanCreate => Count < MaxCount;
@@ -97,7 +134,7 @@ public class ManaOrbs : NetworkBehaviour
 	public void Refresh()
 	{
 		if (IsClientOnly) return;
-		int count = memory.Heap.CountObjects<ManaOrb>();
+		int count = Count;
 		if (count == lastCount) return;
 		lastCount = count;
 		if (NetworkServer.active) syncedCount = count;

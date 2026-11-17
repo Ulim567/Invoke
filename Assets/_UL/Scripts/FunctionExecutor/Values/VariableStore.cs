@@ -139,6 +139,34 @@ public class VariableStore
 		return true;
 	}
 
+	/// <summary>
+	/// Python의 대입 (#532). 변수 name이 있으면 값과 타입을 value로 바꾸고, 없으면 가장 안쪽 범위에 만든다. 타입을 검사하지 않는다.<br/>
+	/// Python은 대입이 곧 변수 만들기이고, 변수의 타입은 그때 넣은 값의 타입이기 때문이다(x = 3 뒤에 x = "a"도 된다).
+	/// </summary>
+	public void SetDynamic(string name, RuntimeValue value)
+	{
+		if (string.IsNullOrEmpty(name)) throw new System.ArgumentException("변수 이름이 비어 있습니다.", nameof(name));
+
+		if (TryFind(name, out Variable variable))
+		{
+			variable.Type = value.Type;
+			variable.Value = value;
+			return;
+		}
+		scopes[scopes.Count - 1].Add(name, new Variable { Type = value.Type, Value = value });
+	}
+
+	/// <summary>
+	/// 변수 name을 지운다 (Python의 del, #532). 없는 이름이면 false를 돌려준다. 안쪽 범위부터 찾아 처음 찾은 변수 하나만 지운다.
+	/// </summary>
+	public bool Remove(string name)
+	{
+		if (name == null) return false;
+		for (int i = scopes.Count - 1; i >= 0; i--)
+			if (scopes[i].Remove(name)) return true;
+		return false;
+	}
+
 	// 안쪽 범위부터 찾는다. 바깥과 같은 이름이면 안쪽 변수가 보이게 하기 위함
 	bool TryFind(string name, out Variable variable)
 	{

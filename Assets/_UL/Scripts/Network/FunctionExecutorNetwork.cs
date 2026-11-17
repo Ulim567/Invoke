@@ -885,7 +885,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return null;
 		}
 
-		if (!FunctionDataConverter.TryConvert(data, functions, out UserFunction converted)) return null;
+		// 캐릭터 언어의 규칙으로 바꾼다(#532). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
+		if (!FunctionDataConverter.TryConvert(data, functions, language != null ? language.Rule : null, out UserFunction converted)) return null;
 		userFunctionOriginals[entry.Id] = converted;
 		return converted;
 	}
@@ -907,7 +908,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			if (slotOriginals[i] == null) return false;
 			slotGuids.Add(entry.Id);
 		}
-		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals);
+		// 캐릭터 언어의 규칙으로 컴파일한다 (#532). Python은 문법 오류만 찾는다
+		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals, language != null && language.Rule.IsPython);
 	}
 
 	void OnBuildSucceededChanged(bool oldValue, bool newValue) => BuildResultChanged?.Invoke();
@@ -1074,9 +1076,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		function is PredefinedFunction skill && skill.Parameters.Count > 0 && skill.Parameters[0].Type?.Kind == VariableTypeKind.Target;
 
 	// 첫 파라미터가 대상 array(Target array)인 스킬인지. 그때만 고른 몬스터들을 argument로 넘긴다 (전장 휩쓸기)
+	// Python 스킬(구슬 난사)의 대상 리스트(Target list)도 같다(#532). 스킬이 대상 array와 리스트를 함께 읽는다
 	static bool TakesTargetArray(FunctionBlock function) =>
 		function is PredefinedFunction skill && skill.Parameters.Count > 0
-		&& skill.Parameters[0].Type?.Kind == VariableTypeKind.Array
+		&& (skill.Parameters[0].Type?.Kind == VariableTypeKind.Array || skill.Parameters[0].Type?.Kind == VariableTypeKind.List)
 		&& skill.Parameters[0].Type.ElementType?.Kind == VariableTypeKind.Target;
 
 	// 받은 오브젝트들을 순서 그대로 몬스터로 바꾼다. 서버에서 찾지 못한 오브젝트(null)나 몬스터가 아닌 오브젝트는 null(대상 없음)로 둔다

@@ -30,6 +30,20 @@ public enum BlockKind
 	ArrayGet,
 	// array 원소 쓰기(arr[i] = 값)
 	ArraySet,
+
+	// 아래는 Python 블록 (#532). SkillTree.asset이 해금 블록을 숫자로 저장하므로 새 종류는 언제나 맨 끝에 더한다
+	// global x. 이 함수 안에서 x에 대입하면 전역 변수 x를 바꾼다
+	Global,
+	// del x. 이름 x를 지운다. 지운 뒤 읽으면 NameError
+	Del,
+	// [] 빈 리스트. 값 칸에 끼운다
+	ListNew,
+	// list.append(값)
+	ListAppend,
+	// list.pop(index). 값 칸에도 끼우고 statement로도 놓는다. index 칸을 비우면 맨 끝
+	ListPop,
+	// len(list). 값 칸에 끼운다
+	ListLen,
 }
 
 /// <summary>
@@ -106,14 +120,16 @@ public class BlockData
 	public static bool CanBeValue(BlockKind kind) => kind switch
 	{
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not
-			or BlockKind.Malloc or BlockKind.Function or BlockKind.ArrayGet => true,
+			or BlockKind.Malloc or BlockKind.Function or BlockKind.ArrayGet
+			or BlockKind.ListNew or BlockKind.ListPop or BlockKind.ListLen => true,
 		_ => false,
 	};
 
 	/// <summary>
-	/// 이 종류의 블록을 함수 몸통이나 블록 영역에 놓을 수 있으면 true. 값 칸에만 들어가는 블록을 뺀 나머지와 함수 블록.
+	/// 이 종류의 블록을 함수 몸통이나 블록 영역에 놓을 수 있으면 true. 값 칸에만 들어가는 블록을 뺀 나머지와 함수 블록, pop 블록.
 	/// </summary>
-	public static bool CanBeStatement(BlockKind kind) => kind == BlockKind.Function || !CanBeValue(kind);
+	// pop은 Python에서 꺼낸 값을 버리고 statement로도 쓴다(orbs.pop()). 함수 블록과 같다
+	public static bool CanBeStatement(BlockKind kind) => kind == BlockKind.Function || kind == BlockKind.ListPop || !CanBeValue(kind);
 
 	/// <summary>
 	/// blocks(function body 등) 안에 반복문 밖에 놓인 break, continue가 있으면 true. 조건문의 블록 영역 안까지 찾는다.<br/>
@@ -305,6 +321,42 @@ public class BlockData
 	/// </summary>
 	public static BlockData Wait(SlotData seconds) =>
 		Create(BlockKind.Wait, seconds);
+
+	/// <summary>
+	/// global 블록 (Python, #532). 예: global count. 칸: 이름
+	/// </summary>
+	public static BlockData Global(string name) =>
+		Create(BlockKind.Global, SlotData.FromName(name));
+
+	/// <summary>
+	/// del 블록 (Python, #532). 예: del orb. 칸: 변수
+	/// </summary>
+	public static BlockData Del(string variableName) =>
+		Create(BlockKind.Del, SlotData.VariableOnly(variableName));
+
+	/// <summary>
+	/// 빈 리스트 블록 (Python, #532). 예: []. 값 칸에 끼운다
+	/// </summary>
+	public static BlockData ListNew() =>
+		Create(BlockKind.ListNew);
+
+	/// <summary>
+	/// append 블록 (Python, #532). 예: orbs.append(o). 칸: 리스트 변수, 넣을 값
+	/// </summary>
+	public static BlockData ListAppend(string listName, SlotData value) =>
+		Create(BlockKind.ListAppend, SlotData.VariableOnly(listName), value);
+
+	/// <summary>
+	/// pop 블록 (Python, #532). 예: orbs.pop(0), orbs.pop(). 칸: 리스트 변수, index(비우면 맨 끝)
+	/// </summary>
+	public static BlockData ListPop(string listName, SlotData index = null) =>
+		Create(BlockKind.ListPop, SlotData.VariableOnly(listName), index ?? SlotData.EmptyValue());
+
+	/// <summary>
+	/// len 블록 (Python, #532). 예: len(orbs). 칸: 리스트 값
+	/// </summary>
+	public static BlockData ListLen(SlotData list) =>
+		Create(BlockKind.ListLen, list);
 
 	static BlockData Create(BlockKind kind, params SlotData[] slots) =>
 		new BlockData { Kind = kind, Slots = new List<SlotData>(slots) };

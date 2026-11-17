@@ -234,6 +234,8 @@ public class SlotLoadout : MonoBehaviour
 		if (string.IsNullOrEmpty(skillId) || skillId.StartsWith("input.")) return false;
 		// 더블점프는 해금하면 Space로 쓰는 패시브라 슬롯에 넣지 않는다 (#256). 블록코딩에서는 부를 수 있다
 		if (skillId == PredefinedFunctionIds.DoubleJump) return false;
+		// is_valid_orb는 값을 돌려주기만 하는 함수라 슬롯에 넣지 않는다 (#532, 이우림). is_valid_target(game.)과 같다
+		if (skillId == PredefinedFunctionIds.PyIsValidOrb) return false;
 		return PredefinedFunctionRegistry.TryGet(skillId, out _);
 	}
 
@@ -282,7 +284,9 @@ public class SlotLoadout : MonoBehaviour
 			return null;
 		}
 		// 실행할 수 없는 함수면 변환기가 콘솔 경고를 남긴다
-		return FunctionDataConverter.TryConvert(data, owned, out UserFunction function) ? function : null;
+		// 캐릭터 언어의 규칙으로 바꾼다(#532, 이우림). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
+		LanguageRule language = GetComponent<LanguageRule>();
+		return FunctionDataConverter.TryConvert(data, owned, language != null ? language.Rule : null, out UserFunction function) ? function : null;
 	}
 
 	void SaveAndNotify(int slot)

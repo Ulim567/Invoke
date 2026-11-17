@@ -25,7 +25,14 @@ public enum VariableTypeKind
 	Pointer,
 
 	// struct 이름(StructName)이 필요한 타입. 게임이 미리 정한 것과 플레이어가 만드는 것(Type 정의)을 함께 담는다
+	// Python의 게임 객체(Orb)도 이 종류에 이름을 담는다 (#532, PythonObjects)
 	Struct,
+
+	// 아래는 Python 타입 (#532). 함수 데이터 JSON은 이름으로 저장하지만, 순서를 지키려고 맨 끝에 더한다
+	// None 값 하나만 가진 타입
+	None,
+	// 어떤 값이든 받는 타입. 타입을 적지 않는 Python 함수의 파라미터·반환 값, 스킬의 「아무 값」 파라미터에 쓴다
+	Any,
 }
 
 /// <summary>
@@ -96,4 +103,29 @@ public class VariableType
 
 	public static VariableType TargetOf(TargetKind? kind) =>
 		new VariableType(VariableTypeKind.Target) { TargetKind = kind };
+
+	/// <summary>
+	/// 어떤 값이든 받는 타입 (Python, #532).
+	/// </summary>
+	public static VariableType AnyType => new VariableType(VariableTypeKind.Any);
+}
+
+/// <summary>
+/// Python 캐릭터가 값으로 다루는 게임 객체의 타입 이름 (#532). heap에 올라가고, 변수·리스트에 담는다. malloc 블록으로는 만들지 않는다.
+/// </summary>
+// PredefinedStructs(C의 malloc 목록)와 나누는 이유: 그 목록은 C 편집 화면의 malloc 드롭다운에 그대로 나오기 때문
+public static class PythonObjects
+{
+	// 마나 구슬. orb_create가 돌려준다
+	public const string Orb = "Orb";
+
+	/// <summary>
+	/// 마나 구슬 타입. 예: orb_create의 반환 타입, orb_shot의 orb 파라미터
+	/// </summary>
+	public static VariableType OrbType => VariableType.StructOf(Orb);
+
+	/// <summary>
+	/// name이 Python 게임 객체의 타입 이름이면 true.
+	/// </summary>
+	public static bool IsKnown(string name) => name == Orb;
 }

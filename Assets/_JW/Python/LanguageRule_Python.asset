@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LanguageRule
   rules:
   - failure: 0
-    handling: 2
+    handling: 0
     category: 1
   - failure: 1
     handling: 0
@@ -66,3 +66,4 @@ MonoBehaviour:
   stringEquality: 1
   allowShadowing: 1
   garbageCollected: 1
+  family: 0

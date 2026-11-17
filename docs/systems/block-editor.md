@@ -376,6 +376,16 @@
   - 함수 목록의 밑줄은 작업본(지금 고치는 내용, 다른 페이지의 작업본, 전역 변수의 작업본)까지 반영해 고칠 때마다 다시 본다 (#494). 예: Global Variables에서 x를 지우면 저장하기 전에도 x를 쓰는 슬롯 Q에 밑줄. 지금 고치는 함수에 빈 값 칸이 있어도 밑줄이 생김
 - 아직 없음: 키워드 굵은 글씨(굵은 Galmuri 글꼴 파일), 파라미터·반환 타입 고르기
 
+### Python 캐릭터 (#532, 이우림)
+- 기준: 내 캐릭터의 언어 방식(`BlockLabels.Family`, 캐릭터 언어에서 정함). 블록 글자, 블록 목록, 칸 규칙, 변수 목록, 참고 카드, 설명이 이 값으로 언어별 모양을 고름
+- 표기: `;` 없음, `{ }` 대신 `:`. `if 조건:`, `elif`, `else:`, `for i in range(a, b):`, `while 조건:`, `and`·`or`·`not`, `True`·`False`·`None`, 함수 틀 `def 이름(a, b):`(반환 타입·`}` 없음)
+- 블록 목록(`PythonPaletteGroups`): 제어(조건 If·Elif·Else, 반복), 변수(Assign·Global·Del, 리스트: List·Append·Pop·Len·List Get·List Set), 값(연산 `//` 포함, 비교, 논리, Not), 함수(Return). 선언·배열 만들기 없음
+- 함수 탭: 메모리(malloc·free) 구역 없음. `is_valid_orb`는 기본 함수 구역(「구슬 확인」)
+- 이름 칸: 대입의 왼쪽, del, 리스트 만들기·append·pop·`list[i]`의 이름은 적는 칸 + ▾ 고르기. 리스트 이름 ▾는 리스트 만들기로 만든 이름과 파라미터만(`BlockEditor.PythonListNames`). global의 이름 ▾는 Global Variables의 이름만(`PythonGlobalNames`)
+- 값 칸: `True`, `False`, `None`, 큰 정수, `'abc'`·`"abc"`(문자열). 타입을 막지 않고, 없는 이름도 빨갛게 하지 않음(실행 중 TypeError·NameError)
+- 컴파일(`FunctionChecker.Find(…, LanguageFamily)`): Python은 비어 있는 칸, 반복문 밖의 break·continue, 이름 없는 global, 지운 함수 호출만. 문장 앞에 「SyntaxError: 」(지운 함수는 「NameError: 」). Global Variables 오류도 「SyntaxError: 」
+- 참고 카드·설명창: 원형 `def orb_shot(target, orb)`, Python 키워드 색, 설명은 `ItemDescriptions.Python.cs`
+
 ### 전역 변수 (Global Variables)
 - 함수 목록의 `Global Variables`를 누르면 전역 변수 선언(`GlobalVariablesData.Declarations`)을 같은 편집 영역에서 고친다. 함수 이름 칸은 끈다
 - 불러오기: 실제 계정은 `ReceivedGlobals`의 복사본, 임시 계정은 `GlobalVariablesStorage.Load()`

@@ -67,12 +67,12 @@ public static class FailureNotice
 
 		string name = info.Family switch
 		{
-			LanguageFamily.Python => PythonName(info.Failure),
+			LanguageFamily.Python => PythonName(info),
 			_ => info.Failure.ToString(),
 		};
 		string description = info.Family switch
 		{
-			LanguageFamily.Python => DescribePython(info.Failure),
+			LanguageFamily.Python => DescribePython(info),
 			_ => Describe(info.Failure),
 		};
 		return description != null ? $"{RuntimeLabel} {name}\n{description}" : $"{RuntimeLabel} {name}";
@@ -80,8 +80,11 @@ public static class FailureNotice
 
 	// Python 캐릭터에게 보이는 실패 이름 (#532, 이우림 결정 11/18). FunctionFailure는 그대로 두고 이름만 Python 예외 이름으로 바꾼다
 	// NoTarget, InvalidTarget은 Python에 같은 예외가 없어 그대로 둔다 (이우림 결정 11/18 (가))
-	static string PythonName(FunctionFailure failure)
+	// Overflow는 재귀 호출에서 났으면 RecursionError, 아니면(heap이 메모리를 채워 함수를 부르지 못함) MemoryError (이우림 결정 11/18 (나))
+	static string PythonName(TaskEndInfo info)
 	{
+		FunctionFailure failure = info.Failure;
+		if (failure == FunctionFailure.Overflow) return info.RecursiveOverflow ? "RecursionError" : "MemoryError";
 		switch (failure)
 		{
 			case FunctionFailure.UndeclaredVariable: return "NameError";
@@ -89,7 +92,6 @@ public static class FailureNotice
 			case FunctionFailure.DivideByZero: return "ZeroDivisionError";
 			case FunctionFailure.IndexOutOfRange: return "IndexError";
 			case FunctionFailure.OutOfMemory: return "MemoryError";
-			case FunctionFailure.Overflow: return "RecursionError";
 			case FunctionFailure.InvalidLiteral:
 			case FunctionFailure.NotInLoop:
 			case FunctionFailure.DuplicateVariable:
@@ -100,8 +102,10 @@ public static class FailureNotice
 	}
 
 	// Python 실패의 설명 (#532, 이우림 결정 11/18). 대상 실패는 C와 같다
-	static string DescribePython(FunctionFailure failure)
+	static string DescribePython(TaskEndInfo info)
 	{
+		FunctionFailure failure = info.Failure;
+		if (failure == FunctionFailure.Overflow) return info.RecursiveOverflow ? "재귀 호출로 stack이 가득 참" : "남은 메모리가 없어 함수를 부르지 못함";
 		switch (failure)
 		{
 			case FunctionFailure.UndeclaredVariable: return "정의되지 않은 이름";
@@ -109,7 +113,6 @@ public static class FailureNotice
 			case FunctionFailure.DivideByZero: return "0으로 나눔";
 			case FunctionFailure.IndexOutOfRange: return "리스트 범위 밖 index";
 			case FunctionFailure.OutOfMemory: return "heap 메모리 부족";
-			case FunctionFailure.Overflow: return "stack이 가득 참";
 			case FunctionFailure.NoTarget:
 			case FunctionFailure.InvalidTarget:
 				return Describe(failure);

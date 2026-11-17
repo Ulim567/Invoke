@@ -19,6 +19,8 @@ public struct TaskEndInfo
 	public InterruptCause InterruptCause;
 	// 시전자 캐릭터의 언어 방식 (#532). HUD가 실패 이름을 그 언어의 이름(Python의 NameError 등)으로 보인다
 	public LanguageFamily Family;
+	// Overflow가 재귀 호출에서 났으면 true (#532). Python 캐릭터는 재귀면 RecursionError, 아니면 MemoryError로 보인다
+	public bool RecursiveOverflow;
 
 	/// <summary>
 	/// 끝난 작업 task에서 알릴 값을 모은다. 분류는 시전자 캐릭터의 언어 language가 정한다(없으면 RuntimeError).
@@ -26,7 +28,7 @@ public struct TaskEndInfo
 	public static TaskEndInfo From(FunctionTask task, LanguageRule language)
 	{
 		var info = new TaskEndInfo { EndReason = task.EndReason, InterruptCause = task.InterruptCause, ErrorName = "", ErrorMessage = "",
-			Family = language != null ? language.Family : LanguageFamily.C };
+			Family = language != null ? language.Family : LanguageFamily.C, RecursiveOverflow = task.OverflowWasRecursive };
 		if (task.Failure is FunctionFailure failure)
 		{
 			info.Failure = failure;

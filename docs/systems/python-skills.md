@@ -23,23 +23,30 @@
 | py.meteor | 메테오 | 단일 | 대상 발밑에 20틱 뒤 떨어져 반경 안 모두 |
 | py.blizzard | 블리자드 | 단일 | 대상 자리에 깔림, 10틱마다 반경 안 모두 + 이속 감소 |
 | py.venom_mist | 독 안개 | 단일 | 대상 자리에 깔림, 10틱마다 약한 데미지 + 중독 한 겹 |
-| py.orb_create | 구슬 생성 | 없음 | 마나 구슬 하나를 heap에 만듦 (최대 5) |
-| py.orb_shot | 구슬 발사 | 단일 | 구슬 1개 소비, 센 마법탄 |
-| py.orb_barrage | 구슬 난사 | 여러 명 | 구슬 전부 소비, 고른 대상들에게 하나씩 (찍을 수 있는 수 = 구슬 수) |
-| py.orb_burst | 구슬 폭발 | 범위 | 구슬 전부 소비, 둘레 모두에게 배율 × 구슬 수 |
-| py.orb_shield | 구슬 보호막 | 없음 | 구슬 1개 소비, 10초 동안 다음 피해 한 번 막음 |
+| py.orb_create | 구슬 생성 | 없음 | `orb_create()`: 마나 구슬 하나를 heap에 만들고 Orb로 돌려줌. 쓸 수 있는 구슬이 5개면 None, heap 부족은 MemoryError (#532) |
+| py.orb_shot | 구슬 발사 | 단일 | `orb_shot(target, orb)`: 넘긴 구슬을 써서 센 마법탄 (#532) |
+| py.orb_barrage | 구슬 난사 | 여러 명 | `orb_barrage(targets, orbs)`: 구슬 리스트의 쓸 수 있는 구슬을 모두 써서, 대상 리스트의 몬스터들에게 하나씩 (#532) |
+| py.orb_burst | 구슬 폭발 | 범위 | `orb_burst(orbs)`: 구슬 리스트의 쓸 수 있는 구슬을 모두 터뜨려 둘레 모두에게 배율 × 구슬 수 (#532) |
+| py.orb_shield | 구슬 보호막 | 없음 | `orb_shield(orb)`: 넘긴 구슬을 써서 10초 동안 다음 피해 한 번 막음 (#532) |
 | py.hex | 저주 | 단일 | 약한 마법탄 + 표식 |
 | py.snake_bind | 뱀 속박 | 단일 | 약한 마법탄 + 기절 |
 | py.flash | 섬광 | 범위 | 둘레 모두 실명, 데미지 없음 |
 | py.blink | 블링크 | 없음 | 바라보는 쪽 5칸 순간이동 (벽 앞에서 멈춤) |
 | py.levitate | 공중 부양 | 없음 | 6초 동안 ←→↑↓로 떠다님 |
 
-구슬이 필요한 스킬은 구슬이 없으면 `NoManaOrbError`로 끝난다.
+구슬 스킬 (#532, 이우림이 Python 문법 맞추기에서 고침):
+- 구슬을 해제하지 않고 「다 쓴 구슬」(`ManaOrb.IsSpent`)로만 바꾼다. 스킬은 넘겨받은 값이 변수에서 왔는지 리스트에서 왔는지 알 수 없기 때문
+- 다 쓴 구슬 하나를 넘김: `UsedManaOrbError`. 리스트에 쓸 구슬 없음: `NoManaOrbError`. 구슬이 아닌 값: TypeError(파라미터 타입 검사, 리스트 원소는 `FailWith(TypeMismatch)`)
+- 리스트의 다 쓴 구슬은 건너뛰고 리스트에서 빼지 않는다
+- 슬롯에서 바로 시전해 orb·orbs 값이 없으면 쓸 수 있는 구슬 중 먼저 만든 것부터 (임시 계정)
+- 구슬 확인: `is_valid_orb(orb)` (`py.is_valid_orb`, predefined-function.md)
 
 ## 구조
 - **마법탄은 오브젝트가 아니다.** `MagicBoltSkill`이 서버에서 매 틱 `MagicBolts` 표(속도, 사거리, 판정 상자, 관통)대로 움직이며 판정한다. 날아가는 시간은 스킬 틱 수 안에 끝나야 한다.
 - 그림은 `SkillEffectEvents.Fired/Hit/Ended`를 받은 각 화면의 `MagicEffectView`가 `Resources/Magic/{이름}_{bolt|hit|cast|zone|beam}` 프리팹으로 그린다. 프리팹이 없으면 그리지 않는다.
 - **마나 구슬**: heap 객체 `ManaOrb`. `ManaOrbs`가 개수를 SyncVar로 보내고(`Count`, `Changed`, `OrbPosition`), `ManaOrbView`가 머리 위에 그린다. 네트워크 오브젝트 아님.
+  - #532: 플레이어가 Orb 값으로 변수·리스트에 담는다. 숨은 시스템 전역에 두지 않는다(`MovesMallocedToSystemGlobals` false). 가리키는 이름이 없으면 가비지 컬렉션이 해제
+  - `Count`, 최대 5개: 쓸 수 있는 구슬(다 쓴 구슬 제외)만 센다. `UsablePointers()`, `IndexOf(포인터)`
 - **가비지 컬렉션**: `LanguageRuleData.GarbageCollected` → `HeapStorage.CollectsGarbage`. 도달할 수 없는 객체를 누수로 남기지 않고 해제하고 `ObjectFreed`로 알린다. 그래서 해제 스킬이 없다.
 - **구슬 보호막**: `OrbShield.Activate(초)`, `PlayerHealth.DamageBlocking`(true를 돌려주면 그 피해를 받지 않음).
 - **중독** (`StatusType.Poison`): 6초, 1초마다 3 × 겹친 수, 다시 걸면 한 겹 더(최대 3). `StatusEffects.PoisonTicked`, `PoisonStacks`. 아이콘은 `Resources/StatusIcons/Poison`.

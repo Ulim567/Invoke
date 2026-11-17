@@ -21,14 +21,14 @@
 | 스킬 트리 해금 | 모든 노드를 캐릭터마다 따로 엶 (공통 노드, 문법 노드 포함). 캐릭터마다 트리가 같다는 보장이 없음 |
 | 시작 장소 | 항상 로비. 장소·위치는 저장하지 않음 |
 | 새 캐릭터 처음 값 | 레벨 1, 경험치 0, 돈 0, 재료·페이지 함수·전역 변수 없음 |
-| 새 캐릭터 처음 해금 | `SkillTree.StartingNodes(언어)` + `SkillTree.AutoUnlockedBy(목록, 언어)` (#523). C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 구슬 생성, 구슬 발사. 처음 해금이 빠진 캐릭터는 `Load`가 빠진 노드를 넣음 (#523 전에 만든 파이썬 캐릭터) |
+| 새 캐릭터 처음 해금 | `SkillTree.StartingNodes(언어)` + `SkillTree.AutoUnlockedBy(목록, 언어)` (#523). C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 매직 미사일, 저주(#532, 임시. 스킬 트리 이슈에서 다시 정함). 처음 해금이 빠진 캐릭터는 `Load`가 빠진 노드를 넣음 (#523 전에 만든 파이썬 캐릭터) |
 | 블록·함수 개수 (#500) | 가진 개수만큼만 함수에 놓을 수 있음. DB는 가진 개수만 저장. 블록을 놓거나 지워도 가진 개수는 그대로이고, 남은 개수 = 가진 개수 − 함수에서 센 개수(`BlockUsageCounter`, `function-data.md` 「개수 세기 규칙」). 항목 하나당 최대 `ItemCountRules.MaxCount`(99) |
-| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수와 같음 (`ItemCountRules.Initial(언어)`). C: thrust 1, sword_throw 1, get_bug 2. Python(#486): py.orb_create 1, py.orb_shot 1, get_bug 1. 처음 남은 개수는 모두 0 (기획의 「튜토리얼을 마친 상태」) |
+| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수와 같음 (`ItemCountRules.Initial(언어)`). C: thrust 1, sword_throw 1, get_bug 2. Python(#532, 임시): py.magic_missile 1, py.hex 1, get_bug 2. 처음 남은 개수는 모두 0 (기획의 「튜토리얼을 마친 상태」) |
 | 해금할 때 지급 | 연 노드(같이 열린 노드 포함)마다 그 노드가 여는 블록·함수 1개씩 (`ItemCountRules.KeysUnlockedBy`) |
 | 임시 계정의 개수 | 개수를 쓰지 않음. 무엇이든 놓을 수 있고 「남은/가진」을 표시하지 않음 |
 | 슬롯 | 슬롯 8개는 언제나 그 슬롯의 슬롯 함수 하나. 빈 슬롯 없음, 장착(다른 함수·C 스킬을 슬롯에 넣기) 없음. C 스킬은 슬롯 함수 function body 안의 블록 |
 | 슬롯 함수 | 캐릭터를 만들 때 서버가 8개를 만듦. 이름 `slot1`~`slot8` 고정, 파라미터 없음, 반환 타입 `Void`, 비동기 아님. 이름·파라미터·반환 타입·비동기 여부 변경 불가. function body만 바꿈(빈 본문 가능) |
-| 새 캐릭터 처음 슬롯 함수 | 캐릭터 언어마다 다름 (`CharacterProgressData.NewSlotFunction(슬롯 번호, 언어)`). C: `slot1` = `thrust(GetBug());`, `slot2` = `sword_throw(GetBug());`. Python(#486): `slot1` = `orb_create();`, `slot2` = `orb_shot(GetBug());`. `slot3`~`slot8` = 빈 본문. 언어는 `ProgressStore`가 캐릭터 테이블에서 읽음(캐릭터 row가 없으면 C) |
+| 새 캐릭터 처음 슬롯 함수 | 캐릭터 언어마다 다름 (`CharacterProgressData.NewSlotFunction(슬롯 번호, 언어)`). C: `slot1` = `thrust(GetBug());`, `slot2` = `sword_throw(GetBug());`. Python(#532, 임시): `slot1` = `magic_missile(get_bug())`, `slot2` = `hex(get_bug())`. `slot3`~`slot8` = 빈 본문. 언어는 `ProgressStore`가 캐릭터 테이블에서 읽음(캐릭터 row가 없으면 C) |
 | 페이지 함수 | 슬롯에 걸리지 않은 함수. 편집 화면의 +로 추가, 최대 `ProgressRules.MaxPageFunctions`개(임시 5). 이름·파라미터 변경 가능 |
 | 빈 본문 슬롯 시전 | 그대로 시전됨 (stack 1칸). 서버가 빈 본문을 따로 검사하지 않음 |
 | 저장 시점 | 값이 바뀔 때마다 서버가 바로 DB에 씀 |
@@ -252,6 +252,7 @@
 | 검사 | 거부 | 규칙 |
 | --- | --- | --- |
 | 블록 종류 | `BlockLocked` | `SkillTree.IsBlockUnlocked(블록 종류, 해금 목록)`이 false. 어떤 노드에도 없는 블록 종류는 통과 |
+| 캐릭터 언어에 없는 블록 (#532) | `BlockLocked` | `BlockData.IsUsableIn(블록 종류, 언어 방식)`이 false. 예: Python 함수의 선언·malloc 블록, C 함수의 global·리스트 블록 |
 | C 스킬 | `SkillLocked` | 함수 블록(`IsUserFunction`이 false)이 부르는 고정 ID의 노드가 `SkillTree`에 있는데 해금 목록에 없음. 스킬 트리에 노드가 없는 ID(입력 함수 `input.*`, 테스트 함수 `test.*`)는 통과 |
 | 코드 영역 크기 | `CodeSizeExceeded` | 저장하는 함수를 반영한 함수 목록으로 `CodeSizeCalculator.Calculate(슬롯 함수 GUID 8개, 없음, 목록)`을 센 값이 `ProgressRules.MaxCodeSize`(임시 1000)보다 큼 |
 | 블록·함수 개수 (#500) | `CountExceeded` | `FunctionExecutorNetwork.CheckItemCounts`: 저장 전과 저장 후를 `BlockUsageCounter.Count`로 세어, 저장 후 쓴 개수가 가진 개수(`PlayerProgress.ItemCounts`)보다 많고 저장 전보다 늘어난 항목이 있음 (`ItemCountRules.FindShortage`). 위 세 검사를 통과한 뒤에 봄 |
@@ -331,4 +332,4 @@
   - `FunctionStorage`가 PC 파일 대신 서버로 함수를 보내도록 바뀜
 - 박진우와 확인할 것
   - 실제 계정은 장착 없음. 서버가 보낸 슬롯 함수 8개를 `SlotLoadout.SetEntries`로 받음 (PR #226 코멘트로 요청)
-  - 실제 캐릭터의 처음 슬롯 함수는 서버가 정함 (C: `slot1` 검 찌르기, `slot2` 검 던지기. Python: `slot1` 구슬 생성, `slot2` 구슬 발사, #486)
+  - 실제 캐릭터의 처음 슬롯 함수는 서버가 정함 (C: `slot1` 검 찌르기, `slot2` 검 던지기. Python: `slot1` 매직 미사일, `slot2` 저주, #532 임시)

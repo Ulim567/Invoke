@@ -16,7 +16,7 @@
 ## 정의
 
 ### 블록 종류
-- 언어별 표시: 실제 언어처럼 언어마다 다르게 보임 (지금은 C만, 나중에 다른 언어 추가)
+- 언어별 표시: 실제 언어처럼 언어마다 다르게 보임 (C, Python #532. 편집 화면이 캐릭터 언어로 고름)
   - 함수 데이터: 언어와 상관없는 이름으로 저장 (예: 드롭다운 선택지는 `Add`, `ElseIf`)
 - 블록 끼우기: 값 칸에 다른 블록 끼우기 가능 (Scratch 방식)
 - 변수
@@ -90,6 +90,16 @@
 | 함수 블록 | 값: 그 함수의 파라미터 수만큼 | 0 |
 | return | 값 1(비워도 됨) | 0 |
 | 기다리기 | 값 1(시간) | 0 |
+| `global` (Python, #532) | 이름 1 | 0 |
+| `del` (Python, #532) | 변수 1 | 0 |
+| 리스트 만들기 `name = []` (Python, #532) | 변수 1(이름) | 0 |
+| `append` (Python, #532) | 변수 1(리스트 이름), 값 1 | 0 |
+| `pop` (Python, #532) | 변수 1(리스트 이름), 값 1(index, 비워도 됨) | 0 |
+| `len` (Python, #532) | 값 1(리스트) | 0 |
+
+- Python 블록의 BlockKind(#532): `Global`, `Del`, `ListNew`, `ListAppend`, `ListPop`, `ListLen`. 맨 끝에 더함(SkillTree.asset이 해금 블록을 숫자로 저장)
+- Python의 대입 블록: 왼쪽 변수 칸에 새 이름을 적으면 그 이름의 변수가 생김. `list[i]` 읽기·쓰기는 원소 읽기·쓰기 블록(`ArrayGet`, `ArraySet`)을 같이 씀
+- Python 함수: 파라미터·반환 타입을 적지 않음(데이터의 칸은 남아 있으나 쓰지 않음)
 
 ### 함수 데이터에 담는 것
 - 저장하는 것
@@ -176,6 +186,8 @@
 | `Guid`, `Name`, `ReturnType`, `Parameters`, `Blocks`, `IsAsync` | - | - | 저장하는 값. 편집 화면이 직접 고침. `IsAsync`는 #132, 편집 화면 UI는 아직 없음 |
 | `AllBlocks()` | - | `IEnumerable<BlockData>` | 함수 몸통의 모든 블록 (칸, 블록 영역 안까지) |
 | `CountBlocks()` | - | `int` | 이 함수 하나의 블록 개수. 부르는 함수는 세지 않음 |
+| `GlobalNames()` (#532) | - | `HashSet<string>` | global 블록에 적은 이름 |
+| `PythonLocalNames()` (#532) | - | `HashSet<string>` | Python 함수의 지역 이름: 파라미터, 대입·리스트 만들기·for·del의 이름 가운데 global로 적지 않은 것. 프레임 크기와 변수 찾기에 씀 |
 | `LocalVariables()` | - | `List<(string Name, VariableType Type)>` | 선언, 배열 만들기, `for`의 변수. 프레임 크기 계산에 씀. array는 변수 하나로 들어 있고, 프레임의 array 칸 수(길이)는 `FunctionDataConverter`가 길이 칸에서 계산 |
 
 ### `BlockData` (블록 하나)
@@ -188,7 +200,8 @@
 | `SelfAndInnerBlocks()` | - | `IEnumerable<BlockData>` | 이 블록과 안쪽 블록 모두 |
 | `CountBlocks()` | - | `int` | 이 블록과 안쪽 블록의 개수 |
 | `CanBeValue(BlockKind)` | 블록 종류 | `bool` | 값 칸에 끼울 수 있는 종류인지. 함수 블록은 부를 함수의 반환 타입이 `Void`가 아닐 때만 끼울 수 있음 (부르는 쪽이 확인) |
-| `CanBeStatement(BlockKind)` | 블록 종류 | `bool` | 함수 몸통, 블록 영역에 놓을 수 있는 종류인지 |
+| `CanBeStatement(BlockKind)` | 블록 종류 | `bool` | 함수 몸통, 블록 영역에 놓을 수 있는 종류인지. pop은 값 칸과 함수 몸통 모두 (#532) |
+| `IsUsableIn(BlockKind, LanguageFamily)` (#532) | 블록 종류, 언어 방식 | `bool` | 그 언어에 있는 블록인지. C에만: 선언, 배열 만들기, malloc, free. Python에만: global, del, 리스트 블록 4개. 서버 저장 검사가 다른 언어의 블록을 `BlockLocked`로 거부할 때 씀 |
 | `AlwaysReturnsValue(blocks)` | 블록 목록(function body 등) | `bool` | 어느 갈래로 가든 반드시 값을 넣은 `return`을 만나면 `true`. 반환 타입이 있는 함수의 return 누락(compile error)을 저장할 때 찾는 검사가 씀. 반복문 안의 `return`은 세지 않음 (#132) |
 | 만들기 함수 | 블록마다 다름 | `BlockData` | `Declare`, `Assign`, `Arithmetic`, `Compare`, `Logic`, `Not`, `Conditional`, `For`, `While`, `Break`, `Continue`, `ArrayDeclare`, `Malloc`, `Free`, `CallUserFunction`, `CallPredefinedFunction`, `Return`, `Wait`, `ArrayGet`, `ArraySet`(#132). 칸을 순서대로 채워 줌 |
 
@@ -201,7 +214,7 @@
 | `Block` | - | `BlockData` | 값 칸에 끼운 블록 |
 | `Option` | - | `string` | 드롭다운에서 고른 것. `BlockOptions`의 enum 이름 (예: `"Add"`, `"ElseIf"`) |
 | `Name` | - | `string` | 이름 칸에 적은 새 이름 |
-| 만들기 함수 | 칸마다 다름 | `SlotData` | `FromLiteral`, `FromVariable`, `FromBlock`, `EmptyValue`, `VariableOnly`, `FromOption`, `FromTypeOption`, `FromName` |
+| 만들기 함수 | 칸마다 다름 | `SlotData` | `FromLiteral`, `FromVariable`, `FromBlock`, `EmptyValue`, `VariableOnly`, `FromOption`, `FromTypeOption`, `FromName`, `FromNone`(Python의 None, Type `None`, Literal `None`, #532) |
 
 ### `VariableType` (타입 하나), `ParameterData` (파라미터 하나)
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
@@ -211,6 +224,8 @@
 | `StructOf(string)` | struct 이름 | `VariableType` | 예: `Sword` |
 | `TargetOf(TargetKind?)` | 대상 종류 | `VariableType` | 대상 타입. 예: 몬스터 = `TargetOf(TargetKind.Bug)`. 종류를 `null`로 두면 어떤 종류의 대상이든 받는 타입 (#131) |
 | `TargetKind` | - | `TargetKind?` | 대상의 종류. `Target`이 아니면 `null`. 지금 값은 `Bug`(몬스터)만. JSON에는 `null`이 아닐 때만 적힘(예: `{"Kind":"Target","TargetKind":"Bug"}`) (#131) |
+| `VariableTypeKind.None`, `Any` (#532) | - | - | None 값의 타입, 어떤 값이든 받는 타입(Python 함수의 파라미터·반환, 스킬의 「아무 값」 파라미터). 맨 끝에 더함 |
+| `PythonObjects.Orb`, `OrbType` (#532) | - | `string`, `VariableType` | Python 마나 구슬의 타입 이름 `Orb`(`StructOf("Orb")`). malloc 목록(`PredefinedStructs`)에는 없음 |
 | `new ParameterData(string, VariableType)` | 이름, 타입 | `ParameterData` | |
 
 ### `PredefinedStructs` (미리 정한 struct 목록, #90)
@@ -232,7 +247,7 @@
 | enum | 값 |
 | --- | --- |
 | `ConditionalBranch` | `If`, `ElseIf`, `Else` |
-| `ArithmeticOperator` | `Add`, `Subtract`, `Multiply`, `Divide`, `Modulo` |
+| `ArithmeticOperator` | `Add`, `Subtract`, `Multiply`, `Divide`, `Modulo`, `FloorDivide`(Python의 `//`, #532) |
 | `CompareOperator` | `Greater`, `Less`, `Equal`, `NotEqual`, `GreaterOrEqual`, `LessOrEqual` |
 | `LogicOperator` | `And`, `Or` |
 
@@ -255,6 +270,7 @@
 - 선언 블록을 쓰는 이유: 편집 화면이 함수 몸통의 선언 블록 UI를 그대로 쓸 수 있음
 - 초기값 칸: 직접 입력한 값, `NULL`(`SlotData.FromNull`), 비움(기본값)만. 그 밖은 컴파일 오류(빌드 실패, #506)
 - 배열 만들기 블록의 길이 칸: 직접 입력한 1 이상의 int만 (지역 array와 같음). 원소의 처음 값은 언제나 기본값 (#478)
+- Python 캐릭터 (#532): 선언 블록 대신 대입 블록(`x = 0`, 값은 직접 적은 값·None)과 리스트 만들기 블록(`orbs = []`)만. 같은 이름 두 번은 오류
 - 저장: 편집 화면이 함수와 함께 저장 버튼으로 저장 (#506, block-editor.md 「저장 버튼」). 오류가 있어도 저장하고 빌드가 실패함. 임시 계정은 `GlobalVariablesStorage.Save` 뒤 `FunctionExecutorNetwork.ResendLocalGlobals`로 서버가 초기화
 
 ### `GlobalVariablesStorage` (전역 변수 파일 저장소, #139)

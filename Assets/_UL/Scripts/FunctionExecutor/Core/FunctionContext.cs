@@ -109,17 +109,31 @@ public class FunctionContext
 	internal PythonNames CurrentNames => namesStack.Count > 0 ? namesStack[namesStack.Count - 1] : null;
 
 	// 사용자 정의 함수가 실행을 시작할 때 자기 지역 변수(Python이면 이름 규칙도)를 올리고, 끝나거나 끊길 때 내린다. UserFunction만 부른다
-	internal void PushVariables(VariableStore variables, PythonNames names = null)
+	internal void PushVariables(VariableStore variables, PythonNames names = null, object functionKey = null)
 	{
 		variableStack.Add(variables);
 		namesStack.Add(names);
+		functionKeys.Add(functionKey);
 	}
 
 	internal void PopVariables()
 	{
 		variableStack.RemoveAt(variableStack.Count - 1);
 		namesStack.RemoveAt(namesStack.Count - 1);
+		functionKeys.RemoveAt(functionKeys.Count - 1);
 	}
+
+	// 실행 중인 사용자 정의 함수들을 가리키는 값(FunctionBlock.RecursionKey). variableStack과 같은 순서 (#532)
+	readonly List<object> functionKeys = new List<object>();
+
+	// key인 함수가 지금 호출 중이면 true (#532). Overflow가 재귀 때문인지 가릴 때 쓴다
+	internal bool IsRunningFunction(object key) => key != null && functionKeys.Contains(key);
+
+	// Overflow가 재귀 호출에서 났으면 true (#532). Python 캐릭터의 HUD가 RecursionError와 MemoryError를 나눌 때 쓴다
+	internal bool OverflowWasRecursive { get; private set; }
+
+	// Overflow를 기록한 블록이 원인(재귀인지)을 함께 남긴다
+	internal void RecordOverflowCause(bool recursive) => OverflowWasRecursive = recursive;
 
 	// Python의 변수 찾기 (#532). global로 적은 이름은 전역, 지역 이름은 지역에서만 찾는다(대입 전이면 null = NameError). 둘 다 아니면 전역
 	// 지역 이름을 전역에서 찾지 않는 이유: 실제 Python처럼 함수 안에서 대입하는 이름은 그 함수 전체에서 지역 변수이기 때문

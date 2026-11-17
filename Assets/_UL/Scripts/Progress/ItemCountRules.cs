@@ -15,7 +15,7 @@ public static class ItemCountRules
 	/// <summary>
 	/// 새 캐릭터의 처음 개수 (항목 ID → 개수). 캐릭터 언어(language)마다 다르다. 모르는 언어는 C.<br/>
 	/// - C: thrust 1, sword_throw 1, get_bug 2<br/>
-	/// - Python (#486): py.orb_create 1, py.orb_shot 1, get_bug 1<br/>
+	/// - Python (#532, 임시): py.magic_missile 1, py.hex 1, get_bug 2<br/>
 	/// 처음 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)가 쓰는 개수와 같아서, 처음 남은 개수는 모두 0이다.
 	/// </summary>
 	// 숫자를 직접 적지 않고 처음 슬롯 함수를 세어 만드는 이유: 처음 슬롯 함수를 바꿔도 처음 개수가 저절로 맞아,

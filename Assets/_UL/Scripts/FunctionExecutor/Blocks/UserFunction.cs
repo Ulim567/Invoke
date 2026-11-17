@@ -56,6 +56,9 @@ public class UserFunction : FunctionBlock
 
 	public override bool IsAsync => isAsync;
 
+	// 복사본(Clone)은 원본과 같은 블록 목록을 가리키므로, 블록 목록으로 같은 함수인지 가린다 (#532)
+	internal override object RecursionKey => Blocks;
+
 	/// <summary>
 	/// 프레임 크기 1(파라미터, 지역 변수 없음)인 함수를 만든다.
 	/// </summary>
@@ -150,7 +153,7 @@ public class UserFunction : FunctionBlock
 	protected override void OnStart(FunctionContext context)
 	{
 		Variables = new VariableStore();
-		context.PushVariables(Variables, pythonNames);
+		context.PushVariables(Variables, pythonNames, RecursionKey);
 		DeclareParameters(context);
 		// function body는 범위를 따로 열지 않는다. C에서 function body의 맨 바깥 범위는 파라미터와 같은 범위이기 때문
 		statements = new Statements(Blocks, false);

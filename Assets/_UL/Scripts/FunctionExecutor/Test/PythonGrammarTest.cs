@@ -77,6 +77,7 @@ public class PythonGrammarTest : MonoBehaviour
 		CastArithmetic();
 		CastFunctions();
 		CastLists();
+		CastRecursion();
 		StartNext();
 	}
 
@@ -204,6 +205,35 @@ public class PythonGrammarTest : MonoBehaviour
 			// 실패한 순간 남은 칸은 0이고, 작업이 끝나며 프레임 1칸을 돌려받는다
 			Check("MemoryError 뒤 남은 칸은 돌려받은 프레임 1칸", memory.Free == 1, $"실제 Free {memory.Free}");
 		}, forever);
+
+		// heap이 메모리를 채운 뒤 프레임 2칸짜리 함수를 부름 → Overflow지만 재귀가 아니므로 Python 이름은 MemoryError
+		FunctionData needsTwo = FunctionData.Create("needsTwo");
+		needsTwo.Blocks.Add(BlockData.Assign("a", L(1)));
+		FunctionData callsIt = Data("NoRoomCall", BlockData.CallUserFunction(needsTwo.Guid));
+		Cast(callsIt, new[] { needsTwo }, task =>
+		{
+			Check("메모리가 차서 함수를 못 부름: Overflow", task.Failure == FunctionFailure.Overflow, $"실제 {task.EndReason}, {task.Failure}");
+			Check("재귀가 아님", !task.OverflowWasRecursive);
+			string notice = FailureNotice.ForTaskEnd(TaskEndInfo.From(task, GetComponent<LanguageRule>()));
+			Check("HUD 이름 MemoryError", notice != null && notice.StartsWith("[Runtime Error] MemoryError"), $"실제 {notice}");
+		});
+	}
+
+	// 끝나지 않는 재귀 → Overflow, 재귀이므로 Python 이름은 RecursionError. 전역 리스트 full을 비운 뒤에 돈다
+	void CastRecursion()
+	{
+		FunctionData clear = Data("ClearFull", BlockData.Global("full"), BlockData.ListNew("full"));
+		Cast(clear, Array.Empty<FunctionData>(), Done(() => { }));
+		FunctionData recurse = FunctionData.Create("Recurse");
+		recurse.Blocks.Add(BlockData.Assign("a", L(1)));
+		recurse.Blocks.Add(BlockData.CallUserFunction(recurse.Guid));
+		Cast(recurse, Array.Empty<FunctionData>(), task =>
+		{
+			Check("끝나지 않는 재귀: Overflow", task.Failure == FunctionFailure.Overflow, $"실제 {task.EndReason}, {task.Failure}");
+			Check("재귀임", task.OverflowWasRecursive);
+			string notice = FailureNotice.ForTaskEnd(TaskEndInfo.From(task, GetComponent<LanguageRule>()));
+			Check("HUD 이름 RecursionError", notice != null && notice.StartsWith("[Runtime Error] RecursionError"), $"실제 {notice}");
+		});
 	}
 
 	// ---- 함수 데이터 도우미 ----

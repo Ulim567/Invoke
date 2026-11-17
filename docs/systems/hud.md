@@ -53,7 +53,7 @@
 | --- | --- |
 | 시전 거부 중 `NotEnoughMemory`, `CompileError`(빌드 실패, 문장 `[Cast Rejected] CompileError` / `컴파일 오류가 있는 함수`, #506)만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
 | 몬스터의 실행 중단 공격으로 끊긴 내 작업(`Interrupted`, 원인 `MonsterAttack`). 문장 `[Interrupted] 실행 중단 공격` / `함수가 모두 멈춤` (#504) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
-| runtime error로 분류된 실패(스킬 에러 포함) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
+| runtime error로 분류된 실패(스킬 에러 포함). Python 캐릭터는 Python 이름(NameError, TypeError 등, #532) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
 
 - 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 사망·장소 이동·재시작으로 끊긴 작업(원인 `System`, #504), 개발자 책임(`InternalError`), 실행 중에 난 compile error(시전 전에 빌드가 `CompileError` 거부로 잡음, #506)
 
@@ -99,5 +99,5 @@
 - 아래 띠, HP 막대 왼쪽: 「소환검 n/5」와 5칸. 내 캐릭터의 `SummonedSwords.Swords`(박진우)를 매 프레임 읽기만 한다 (클라이언트에서도 목록이 맞음, summoned-sword.md)
 - 칸은 소환 순서대로: 사용 가능(`Ready`) 청록, 쓰는 중(던짐, 찌르기, 검무, 검 타기, 떨어짐 등) 어두운 청록, 누수(`Leaked`) 빨강, 없음은 바탕색
 - 박진우의 임시 표시 `SummonedSwordHud`(OnGUI)를 대신한다
-- 파이썬 마법사 (#527): 내 캐릭터에 `ManaOrbs`(박진우)가 있으면 같은 자리에 「마나 구슬 n/5」와 5칸. `ManaOrbs.Count`를 매 프레임 읽기만 한다(클라이언트에서는 서버가 보낸 값). 구슬은 상태가 없어서 있는 칸만 사용 가능 색, 나머지는 바탕색
+- 파이썬 마법사 (#527): 내 캐릭터에 `ManaOrbs`(박진우)가 있으면 같은 자리에 「마나 구슬 n/5」와 5칸. `ManaOrbs.Count`를 매 프레임 읽기만 한다(클라이언트에서는 서버가 보낸 값). 구슬은 상태가 없어서 있는 칸만 사용 가능 색, 나머지는 바탕색. `ManaOrbs.Count`는 쓸 수 있는 구슬만 센다(다 쓴 구슬 제외, #532)
 

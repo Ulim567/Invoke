@@ -132,6 +132,19 @@ public class BlockData
 	public static bool CanBeStatement(BlockKind kind) => kind == BlockKind.Function || kind == BlockKind.ListPop || !CanBeValue(kind);
 
 	/// <summary>
+	/// 이 종류의 블록이 언어 방식 family에 있는 문법이면 true (#532). 서버의 저장 검사가 다른 언어의 블록이 든 함수를 거부할 때 쓴다(BlockLocked).<br/>
+	/// - C에만 있음: 선언, 배열 만들기, malloc, free<br/>
+	/// - Python에만 있음: global, del, 리스트 만들기, append, pop, len<br/>
+	/// - 나머지(조건문, 반복문, 대입, 연산, 함수 호출, return, wait, 원소 읽기·쓰기)는 두 언어 모두
+	/// </summary>
+	// 편집 화면은 언어마다 블록 목록을 따로 두어 보이지 않게만 한다. 조작한 데이터나 예전 데이터를 서버가 한 번 더 막기 위함 (이우림 결정 11/18)
+	public static bool IsUsableIn(BlockKind kind, LanguageFamily family) => family switch
+	{
+		LanguageFamily.Python => kind is not (BlockKind.Declare or BlockKind.ArrayDeclare or BlockKind.Malloc or BlockKind.Free),
+		_ => kind is not (BlockKind.Global or BlockKind.Del or BlockKind.ListNew or BlockKind.ListAppend or BlockKind.ListPop or BlockKind.ListLen),
+	};
+
+	/// <summary>
 	/// blocks(function body 등) 안에 반복문 밖에 놓인 break, continue가 있으면 true. 조건문의 블록 영역 안까지 찾는다.<br/>
 	/// 저장할 때 compile error를 찾는 검사가 쓴다. 실행기는 이 함수를 쓰지 않고, 실행 중에 만나면 NotInLoop로 실패시킨다.
 	/// </summary>

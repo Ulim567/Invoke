@@ -42,7 +42,8 @@ public static class SkillTreeDefaults
 		// 각 문법은 앞 단계 문법이 선행 조건이다
 		nodes.Add(Syntax(Sequence, "순차 실행", null, 0, new[] { BlockKind.Function, BlockKind.Wait },
 			"처음부터. 블록을 위에서부터 차례로 실행. C 스킬 블록, 기다리기"));
-		nodes.Add(Syntax(Variable, "변수", Sequence, 2, new[] { BlockKind.Declare, BlockKind.Assign }));
+		// global·del은 Python의 변수 블록이라 변수와 같이 연다 (#532, 임시. 스킬 트리 이슈에서 다시 정함)
+		nodes.Add(Syntax(Variable, "변수", Sequence, 2, new[] { BlockKind.Declare, BlockKind.Assign, BlockKind.Global, BlockKind.Del }));
 		nodes.Add(Syntax(Arithmetic, "연산", Variable, 3, new[] { BlockKind.Arithmetic }));
 		nodes.Add(Syntax(If, "if문", Arithmetic, 4, new[] { BlockKind.Conditional, BlockKind.Compare },
 			"비교(> < ==)는 조건에 쓰므로 if문과 같이 연다 (가정)"));
@@ -52,8 +53,9 @@ public static class SkillTreeDefaults
 		nodes.Add(Syntax(While, "while문", For, 7, new[] { BlockKind.While }));
 		nodes.Add(Syntax(Function, "함수", While, 8, new[] { BlockKind.Return },
 			"사용자 정의 함수 만들기·부르기, return. 함수 블록(BlockKind.Function)은 C 스킬과 같은 종류라 여기서 막지 않는다"));
-		nodes.Add(Syntax(List, "list", Function, 10, new[] { BlockKind.ArrayDeclare, BlockKind.ArrayGet, BlockKind.ArraySet },
-			"배열 만들기·읽기·바꾸기 블록을 같이 연다. 노드에 없는 블록은 늘 열려 있으므로 배열 블록 셋을 모두 여기 둔다"));
+		nodes.Add(Syntax(List, "list", Function, 10, new[] { BlockKind.ArrayDeclare, BlockKind.ArrayGet, BlockKind.ArraySet,
+				BlockKind.ListNew, BlockKind.ListAppend, BlockKind.ListPop, BlockKind.ListLen },
+			"배열 만들기·읽기·바꾸기 블록(C)과 리스트 블록(Python, #532)을 같이 연다. 노드에 없는 블록은 늘 열려 있으므로 모두 여기 둔다"));
 		nodes.Add(Syntax(TypeDefinition, "Type 정의", List, 12, null, "struct 만들기. 블록이 아직 없음"));
 
 		// 찌르기 --------------------------------------------------------------
@@ -101,15 +103,17 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.SwordRide, 8, PredefinedFunctionIds.DoubleJump, PredefinedFunctionIds.SummonSword));
 
 		// 파이썬 마법사 (#523, 박진우) ---------------------------------------------
-		// 구슬: 처음 슬롯 함수(orb_create, orb_shot)와 같은 둘이 처음부터 열려 있다
-		nodes.Add(Start(PredefinedFunctionIds.PyOrbCreate));
-		nodes.Add(Start(PredefinedFunctionIds.PyOrbShot));
+		// 구슬 (#532, 이우림 임시안. 스킬 트리 이슈에서 다시 정함): 구슬을 변수에 담아 넘기므로 변수 문법 뒤에 연다
+		// 재료는 처음 노드가 된 매직 미사일(조각 2)·저주(조각 3)의 것을 옮겨 왔다
+		nodes.Add(Skill(PredefinedFunctionIds.PyOrbCreate, 2, Variable));
+		nodes.Add(Skill(PredefinedFunctionIds.PyOrbShot, 3, PredefinedFunctionIds.PyOrbCreate));
 		nodes.Add(Skill(PredefinedFunctionIds.PyOrbShield, 4, PredefinedFunctionIds.PyOrbCreate));
-		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBarrage, 6, PredefinedFunctionIds.PyOrbShot));
+		// 구슬 난사는 구슬 리스트를 받으므로 list 문법도 필요하다
+		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBarrage, 6, PredefinedFunctionIds.PyOrbShot, List));
 		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBurst, 10, 1, PredefinedFunctionIds.PyOrbBarrage));
 		// 원소: 체인 라이트닝은 파이어볼과 얼음 창을 둘 다 해금해야 열린다
-		nodes.Add(new SkillTreeNode(PredefinedFunctionIds.PyMagicMissile, SkillTreeNodeKind.Skill, null, null, false, Cost(2, 0), null,
-			"원소 계열의 시작. 선행 없이 적은 재료로 둠"));
+		// 매직 미사일은 처음 슬롯 함수(magic_missile(get_bug()))와 같이 처음부터 열려 있다 (#532, 임시)
+		nodes.Add(Start(PredefinedFunctionIds.PyMagicMissile));
 		nodes.Add(Skill(PredefinedFunctionIds.PyFireball, 4, PredefinedFunctionIds.PyMagicMissile));
 		nodes.Add(Skill(PredefinedFunctionIds.PyIceSpear, 4, PredefinedFunctionIds.PyMagicMissile));
 		nodes.Add(Skill(PredefinedFunctionIds.PyChainLightning, 8, PredefinedFunctionIds.PyFireball, PredefinedFunctionIds.PyIceSpear));
@@ -118,8 +122,8 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.PyBlizzard, 8, PredefinedFunctionIds.PyIceSpear));
 		nodes.Add(Skill(PredefinedFunctionIds.PyVenomMist, 6, PredefinedFunctionIds.PyHex));
 		// 보조
-		nodes.Add(new SkillTreeNode(PredefinedFunctionIds.PyHex, SkillTreeNodeKind.Skill, null, null, false, Cost(3, 0), null,
-			"보조 계열의 시작. 선행 없이 재료만"));
+		// 저주는 처음 슬롯 함수(hex(get_bug()))와 같이 처음부터 열려 있다 (#532, 임시)
+		nodes.Add(Start(PredefinedFunctionIds.PyHex));
 		nodes.Add(Skill(PredefinedFunctionIds.PySnakeBind, 5, PredefinedFunctionIds.PyHex));
 		nodes.Add(Skill(PredefinedFunctionIds.PyFlash, 5, PredefinedFunctionIds.PyHex));
 		// 이동: 대시 → 더블점프(공통 노드) 다음

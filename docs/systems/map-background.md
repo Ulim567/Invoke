@@ -43,6 +43,7 @@
 - `MapPainter`: 메뉴 Invoke → 맵 → 「지금 씬 땅 칠하기」. 씬 이름과 같은 글자 설계도대로 Grid의 `Ground`·`Platform` 타일맵을 비우고 다시 칠한다. 맵 모양을 바꿀 때는 이 설계도를 고친 뒤 다시 누른다
 - 발판 나누기 (노션 11/16 겹친 발판 점프 불가): `MapPainter`가 발판을 칠한 뒤 발판 하나(가로로 이어진 칸)마다 `Platform`을 복제한 오브젝트(`Platform_1`, `Platform_2`, …)로 옮긴다. 원래 `Platform` 타일맵은 비워 두고 설정(레이어, Platform Effector, 콜라이더) 원본으로만 쓴다
   - 이유: 발판이 콜라이더 하나로 합쳐져 있으면, 아래에서 뚫고 오를 때 꺼 둔 충돌(`PlayerMovement`, 박진우)이 몸이 그 콜라이더에서 빠져나와야 다시 켜지는데, 겹친 발판(층 사이 3칸, 캐릭터 3.75칸)에서는 아래 발판에 서 있어도 몸이 위 발판에 걸쳐 「발판 안」으로 쳐서 점프가 안 됐다
+- 땅 콜라이더 (노션 11/16 대시 벽 뚫림): 장소 씬 땅(`Ground`)의 Composite Collider 2D는 Geometry Type **Polygons**(속이 찬 모양). Outlines(테두리 선만)였을 때 대시처럼 빠르게 벽에 부딪히면 벽 속으로 들어가 뚫고 나갔다. 메뉴 Invoke → 맵 → 땅 콜라이더 속 채우기(`GroundColliderFixer`)가 네 씬을 바꾸고 저장한다. 발판은 One Way라 그대로
 - 발판 그림 (노션 11/16): 바깥 장소(로비, 사냥터, 레이드)의 발판은 단단한 부분을 2픽셀 → 5픽셀로 두껍게 그린 `platform_thick_left / mid / right`(`Assets/_HW/Map/Tiles`). 타일 에셋은 처음 칠할 때 `Assets/_HW/Map/Palettes/PlatformThick`에 만든다. 콜라이더는 그림 모양(Sprite)을 따라 같이 두꺼워진다
 - `MapDecorator`: 메뉴 Invoke → 맵 → 「지금 씬 소품 놓기」. 배치표대로 `Props`(스프라이트 소품), Grid의 `Decor`(타일 소품), 연습장은 `BackWall`(벽 무늬)을 다시 놓는다. 셋 다 충돌 없음
 - 점프 높이가 4칸이라 발판·단은 바로 아래 땅보다 3칸 이하로 높게 둔다

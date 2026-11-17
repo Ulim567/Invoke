@@ -26,6 +26,7 @@ using UnityEngine.Tilemaps;
 /// 이유: 발판이 콜라이더 하나로 합쳐져 있으면, 박진우의 PlayerMovement가 아래에서 뚫고 오를 때 끈 충돌이 「몸이 그 콜라이더에서 빠져나올 때」 다시 켜지는데,
 /// 위아래로 겹친 발판(층 사이 3칸, 캐릭터 3.75칸)에서는 아래 발판에 서 있어도 몸이 위 발판에 걸쳐 있어 계속 「발판 안」으로 쳐서 점프가 안 됐다.<br/>
 /// 발판 그림 (노션 11/16): 바깥 장소의 발판은 단단한 부분을 2픽셀 → 5픽셀로 두껍게 그린 platform_thick_left / mid / right (Assets/_HW/Map/Tiles)를 쓴다. 타일 에셋은 처음 칠할 때 Palettes/PlatformThick에 만든다.
+/// 콜라이더는 그림 .meta의 Physics Shape로 맨 위 5픽셀 띠만 쓴다. 아래 장식까지 잡으면 발판 아래 땅에 선 캐릭터 머리가 걸쳐 그 자리에서 점프로 못 오른다.
 /// </para>
 /// </summary>
 public static class MapPainter

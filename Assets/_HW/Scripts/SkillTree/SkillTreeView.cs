@@ -12,6 +12,7 @@ using UnityEngine.UI;
 /// - 노드·선·계열 이름은 프리팹(Node Prefab, Line Prefab, Lane Label Prefab)에서 만들고 지우는 일은 ClearTree 한 곳에서 한다 (CLAUDE.md 코드 작성 규칙 3, 4).<br/>
 ///   탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 두고 칸에 넣는다.<br/>
 /// - 노드 위치는 SkillLayout·SyntaxLayout 표로 정한다. 표에 없는 노드는 맨 아래 「기타」 줄에 놓는다.<br/>
+/// - 스킬 탭은 내 캐릭터 언어(PlayerCharacter.LocalLanguage)의 노드만 보인다. C는 SkillLayout, Python은 PythonSkillLayout (#523). 문법 탭과 공통 이동은 두 언어 모두.<br/>
 ///   문법은 세로 한 줄이고, 트리 칸보다 길면 세로 스크롤을 켠다 (UpdateScroll).<br/>
 ///   같은 계열 안의 선행은 선으로 잇고, 다른 계열의 선행(예: 검 소환)은 이름 아래 「+ 검 소환」으로 적는다.<br/>
 /// - 창이 열리면 내 캐릭터의 PlayerProgress에서 해금 목록과 재료를 읽고, PlayerProgress.Changed마다 다시 그린다. 내 캐릭터가 없으면(네트워크 없는 시험) SetUnlocked로 받은 목록, 그것도 없으면 처음부터 해금된 노드만.<br/>
@@ -103,6 +104,38 @@ public class SkillTreeView : MonoBehaviour
 		[PredefinedFunctionIds.DoubleJump] = (4, 1, 10),
 		[PredefinedFunctionIds.SwordRide] = (4, 2, 10),
 	};
+
+	// 파이썬 마법사의 스킬 탭 (#523, 박진우). 대시·더블점프는 C와 같은 공통 노드. 다른 계열의 선행(파이어볼 → 메테오 등)은 이름 아래 「+ 이름」
+	static readonly string[] PythonSkillLanes = { "구슬", "원소", "범위", "보조", "이동" };
+	static readonly Dictionary<string, (int lane, int col, int row)> PythonSkillLayout = new Dictionary<string, (int, int, int)>
+	{
+		[PredefinedFunctionIds.PyOrbCreate] = (0, 0, 0),
+		[PredefinedFunctionIds.PyOrbShield] = (0, 1, 0),
+		[PredefinedFunctionIds.PyOrbShot] = (0, 0, 1),
+		[PredefinedFunctionIds.PyOrbBarrage] = (0, 1, 1),
+		[PredefinedFunctionIds.PyOrbBurst] = (0, 2, 1),
+
+		[PredefinedFunctionIds.PyMagicMissile] = (1, 0, 2),
+		[PredefinedFunctionIds.PyFireball] = (1, 1, 2),
+		[PredefinedFunctionIds.PyChainLightning] = (1, 2, 2),
+		[PredefinedFunctionIds.PyIceSpear] = (1, 1, 3),
+
+		[PredefinedFunctionIds.PyMeteor] = (2, 2, 4),
+		[PredefinedFunctionIds.PyBlizzard] = (2, 2, 5),
+		[PredefinedFunctionIds.PyVenomMist] = (2, 1, 6),
+
+		[PredefinedFunctionIds.PyHex] = (3, 0, 7),
+		[PredefinedFunctionIds.PySnakeBind] = (3, 1, 7),
+		[PredefinedFunctionIds.PyFlash] = (3, 1, 8),
+
+		[PredefinedFunctionIds.Dash] = (4, 0, 9),
+		[PredefinedFunctionIds.DoubleJump] = (4, 1, 9),
+		[PredefinedFunctionIds.PyBlink] = (4, 2, 9),
+		[PredefinedFunctionIds.PyLevitate] = (4, 3, 9),
+	};
+
+	// 내 캐릭터의 언어. 내 캐릭터가 없으면(네트워크 없는 시험) C
+	static string Language => PlayerCharacter.LocalLanguage;
 
 	// 문법은 한 계열. 앞 단계가 선행이라 위에서 아래로 한 줄 (같은 칸끼리는 Connect가 세로선으로 잇는다)
 	static readonly string[] SyntaxLanes = { "문법" };
@@ -203,8 +236,8 @@ public class SkillTreeView : MonoBehaviour
 		// 해금 목록이 비어 있으면(로그인 건너뛰기 임시 계정) 처음부터 해금된 노드를 보여 준다. 실제 계정은 늘 처음 노드가 들어 있다
 		if (unlocked.Count == 0)
 		{
-			foreach (string id in SkillTree.StartingNodes()) unlocked.Add(id);
-			foreach (string id in SkillTree.AutoUnlockedBy(unlocked)) unlocked.Add(id);
+			foreach (string id in SkillTree.StartingNodes(Language)) unlocked.Add(id);
+			foreach (string id in SkillTree.AutoUnlockedBy(unlocked, Language)) unlocked.Add(id);
 		}
 		Refresh();
 	}
@@ -216,8 +249,8 @@ public class SkillTreeView : MonoBehaviour
 			// 해금 목록을 아직 받지 않았으면 처음부터 해금된 노드만 (새 캐릭터와 같음)
 			if (unlocked == null)
 			{
-				unlocked = new HashSet<string>(SkillTree.StartingNodes());
-				foreach (string id in SkillTree.AutoUnlockedBy(unlocked)) unlocked.Add(id);
+				unlocked = new HashSet<string>(SkillTree.StartingNodes(Language));
+				foreach (string id in SkillTree.AutoUnlockedBy(unlocked, Language)) unlocked.Add(id);
 			}
 			return unlocked;
 		}
@@ -240,13 +273,16 @@ public class SkillTreeView : MonoBehaviour
 
 		bool skills = kind == SkillTreeNodeKind.Skill;
 		rowGap = skills ? RowGap : SyntaxRowGap;
-		string[] lanes = skills ? SkillLanes : SyntaxLanes;
-		Dictionary<string, (int lane, int col, int row)> layout = skills ? SkillLayout : SyntaxLayout;
+		string language = Language;
+		bool python = language == CharacterLanguages.Python;
+		string[] lanes = skills ? (python ? PythonSkillLanes : SkillLanes) : SyntaxLanes;
+		Dictionary<string, (int lane, int col, int row)> layout = skills ? (python ? PythonSkillLayout : SkillLayout) : SyntaxLayout;
 
 		// 위치 정하기. 표에 없는 노드는 맨 아래 「기타」 줄
 		int lastRow = layout.Values.Select(p => p.row).DefaultIfEmpty(-1).Max();
 		int extraRow = lastRow + 1, extraColumn = 0, maxColumn = 0;
-		foreach (SkillTreeNode node in SkillTree.Instance.Nodes.Where(n => n.Kind == kind))
+		// 내 캐릭터 언어의 노드만 (C 캐릭터에 py.*, 파이썬 캐릭터에 c.*를 보이지 않는다, #523)
+		foreach (SkillTreeNode node in SkillTree.Instance.Nodes.Where(n => n.Kind == kind && SkillTree.IsFor(n.Id, language)))
 		{
 			(int lane, int col, int row) p = layout.TryGetValue(node.Id, out var known) ? known : (lanes.Length, extraColumn++, extraRow);
 			placed[node.Id] = new Placed

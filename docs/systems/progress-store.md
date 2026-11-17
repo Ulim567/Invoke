@@ -21,7 +21,7 @@
 | 스킬 트리 해금 | 모든 노드를 캐릭터마다 따로 엶 (공통 노드, 문법 노드 포함). 캐릭터마다 트리가 같다는 보장이 없음 |
 | 시작 장소 | 항상 로비. 장소·위치는 저장하지 않음 |
 | 새 캐릭터 처음 값 | 레벨 1, 경험치 0, 돈 0, 재료·페이지 함수·전역 변수 없음 |
-| 새 캐릭터 처음 해금 | `SkillTree.StartingNodes()` + `SkillTree.AutoUnlockedBy` |
+| 새 캐릭터 처음 해금 | `SkillTree.StartingNodes(언어)` + `SkillTree.AutoUnlockedBy(목록, 언어)` (#523). C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 구슬 생성, 구슬 발사. 처음 해금이 빠진 캐릭터는 `Load`가 빠진 노드를 넣음 (#523 전에 만든 파이썬 캐릭터) |
 | 블록·함수 개수 (#500) | 가진 개수만큼만 함수에 놓을 수 있음. DB는 가진 개수만 저장. 블록을 놓거나 지워도 가진 개수는 그대로이고, 남은 개수 = 가진 개수 − 함수에서 센 개수(`BlockUsageCounter`, `function-data.md` 「개수 세기 규칙」). 항목 하나당 최대 `ItemCountRules.MaxCount`(99) |
 | 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수와 같음 (`ItemCountRules.Initial(언어)`). C: thrust 1, sword_throw 1, get_bug 2. Python(#486): py.orb_create 1, py.orb_shot 1, get_bug 1. 처음 남은 개수는 모두 0 (기획의 「튜토리얼을 마친 상태」) |
 | 해금할 때 지급 | 연 노드(같이 열린 노드 포함)마다 그 노드가 여는 블록·함수 1개씩 (`ItemCountRules.KeysUnlockedBy`) |

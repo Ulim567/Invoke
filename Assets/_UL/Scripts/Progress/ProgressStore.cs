@@ -132,10 +132,9 @@ public class ProgressStore
 	// 있는 row에 다시 넣으면 unique index 때문에 예외가 나고, 「들어가기」 요청을 처리하던 서버가 그 연결을 끊는다
 	public void CreateInitial(string characterKey)
 	{
-		// 처음 슬롯 함수와 처음 개수는 캐릭터 언어마다 다르다 (#486)
+		// 처음 슬롯 함수, 처음 개수(#486), 처음 해금(#523)은 캐릭터 언어마다 다르다
 		string language = LanguageOf(characterKey);
-		List<string> unlocked = SkillTree.StartingNodes();
-		unlocked.AddRange(SkillTree.AutoUnlockedBy(unlocked));
+		List<string> unlocked = StartingUnlocks(language);
 
 		db.RunInTransaction(() =>
 		{
@@ -176,10 +175,30 @@ public class ProgressStore
 	// 진행도 함수의 매개변수로 받지 않는 이유: 처음 값을 넣는 곳(CreateInitial, Load, ReplaceAll)이 여럿이라 모두 같은 언어를 쓰게 하기 위함
 	string LanguageOf(string characterKey) => db.Find<CharacterRecord>(characterKey)?.Language ?? CharacterLanguages.C;
 
+	// 그 언어의 처음 해금: 처음 노드와 같이 열리는 노드 (#523)
+	static List<string> StartingUnlocks(string language)
+	{
+		List<string> unlocked = SkillTree.StartingNodes(language);
+		unlocked.AddRange(SkillTree.AutoUnlockedBy(unlocked, language));
+		return unlocked;
+	}
+
+	// 그 언어의 처음 해금 가운데 빠진 노드를 넣는다. 트랜잭션 안에서 부른다 (#523)
+	// 파이썬 처음 노드(구슬 생성·구슬 발사)가 스킬 트리에 생기기 전에 만든 파이썬 캐릭터는 해금 목록에 없으므로 불러올 때 채운다
+	void InsertMissingStartingUnlocks(string characterKey)
+	{
+		foreach (string id in StartingUnlocks(LanguageOf(characterKey)))
+		{
+			if (db.Table<UnlockRow>().Where(r => r.CharacterKey == characterKey && r.NodeId == id).Count() == 0)
+				db.Insert(new UnlockRow { CharacterKey = characterKey, NodeId = id });
+		}
+	}
+
 	/// <summary>
 	/// 캐릭터의 진행도를 테이블 7개에서 읽어 돌려준다. 「들어가기」 때 서버가 부른다.<br/>
 	/// 진행도 row가 없는 캐릭터(이 기능 전에 만든 캐릭터)는 새 캐릭터와 같은 처음 row를 넣은 뒤 돌려준다.<br/>
 	/// 개수 row가 없는 캐릭터(#500 전에 만든 캐릭터, 개수를 비운 테스트 진행도)는 처음 개수를 넣은 뒤 돌려준다.<br/>
+	/// 그 언어의 처음 해금이 빠진 캐릭터(#523 전에 만든 파이썬 캐릭터)는 빠진 노드를 넣은 뒤 돌려준다.<br/>
 	/// 읽을 수 없는 함수 JSON과 SkillTree에 없는 노드 ID는 건너뛰고 로그를 남긴다.
 	/// </summary>
 	public CharacterProgressData Load(string characterKey)
@@ -205,6 +224,7 @@ public class ProgressStore
 		foreach (ItemCountRow row in db.Table<ItemCountRow>().Where(r => r.CharacterKey == characterKey))
 			data.ItemCounts[row.ItemId] = row.Count;
 
+		db.RunInTransaction(() => InsertMissingStartingUnlocks(characterKey));
 		foreach (UnlockRow row in db.Table<UnlockRow>().Where(r => r.CharacterKey == characterKey))
 		{
 			// SkillTree 에셋에서 지운 노드가 DB에 남아 있어도 서버가 멈추지 않게 한다

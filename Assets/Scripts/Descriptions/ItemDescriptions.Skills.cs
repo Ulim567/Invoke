@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-// 스킬 24개의 설명 (박진우). 칸의 뜻과 쓰는 규칙은 ItemDescription과 docs/systems/item-descriptions.md를 본다.
+// 스킬 41개의 설명 (박진우). C 24개, Python 17개(#523). 칸의 뜻과 쓰는 규칙은 ItemDescription과 docs/systems/item-descriptions.md를 본다.
 // - Summary(하는 일)는 예전 스킬 트리 짧은 설명을 옮긴 것이다. 확인하고 고친다
 // - 「예전 자세한 설명」 주석은 스킬 트리 설명 칸에 보이던 문단이다. 하는 일·용도·주의할 점으로 나누어 옮긴 뒤 주석을 지운다
 // - Slots(슬롯)를 비워 두면 파라미터 이름의 뜻(ItemDescriptions.ParameterMeaningOf)이 보인다. 스킬마다 다르게 쓰고 싶으면 적는다
@@ -254,6 +254,166 @@ public static partial class ItemDescriptions
 		{
 			// 예전 자세한 설명: 소환검 위에 올라타 이동합니다. 쓸 수 있는 소환검이 없으면 쓸 수 없습니다.
 			Summary = "소환검을 타고 이동합니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+
+		// 파이썬 마법사 (#523, 박진우) ----------------------------------------------
+		// 구슬
+		[PredefinedFunctionIds.PyOrbCreate] = new ItemDescription
+		{
+			Summary = "마나 구슬 하나를 만들어 머리 위에 띄웁니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "구슬은 최대 5개까지 쌓입니다. 이미 5개면 만들지 않습니다.",
+		},
+		[PredefinedFunctionIds.PyOrbShot] = new ItemDescription
+		{
+			Summary = "마나 구슬 하나를 써서 대상에게 쏩니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "구슬이 하나도 없으면 실패합니다.",
+		},
+		[PredefinedFunctionIds.PyOrbBarrage] = new ItemDescription
+		{
+			Summary = "가진 구슬을 모두 써서 고른 대상들에게 하나씩 쏩니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "고를 수 있는 대상 수는 가진 구슬 수입니다. 구슬이 없으면 실패합니다.",
+		},
+		[PredefinedFunctionIds.PyOrbBurst] = new ItemDescription
+		{
+			Summary = "가진 구슬을 모두 터뜨려 둘레의 적을 모두 맞힙니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "구슬이 많을수록 셉니다. 구슬이 없으면 실패합니다.",
+		},
+		[PredefinedFunctionIds.PyOrbShield] = new ItemDescription
+		{
+			Summary = "마나 구슬 하나를 써서 다음 피해 한 번을 막는 보호막을 두릅니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "보호막은 10초 동안 유지됩니다. 구슬이 없으면 실패합니다.",
+		},
+		// 원소
+		[PredefinedFunctionIds.PyMagicMissile] = new ItemDescription
+		{
+			Summary = "마법탄을 쏴 처음 닿은 적을 맞힙니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+		[PredefinedFunctionIds.PyFireball] = new ItemDescription
+		{
+			Summary = "불덩이를 쏴 닿은 적과 그 둘레의 적을 맞힙니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+		[PredefinedFunctionIds.PyIceSpear] = new ItemDescription
+		{
+			Summary = "얼음 창을 쏴 지나가는 적을 모두 맞히고 느리게 만듭니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+		[PredefinedFunctionIds.PyChainLightning] = new ItemDescription
+		{
+			Summary = "번개가 대상에게 바로 닿고 가까운 다른 적으로 튑니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+		// 범위
+		[PredefinedFunctionIds.PyMeteor] = new ItemDescription
+		{
+			Summary = "대상 발밑에 운석을 떨어뜨려 둘레의 적을 모두 맞힙니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "운석은 조금 뒤에 떨어집니다.",
+		},
+		[PredefinedFunctionIds.PyBlizzard] = new ItemDescription
+		{
+			Summary = "대상 자리에 눈보라를 깔아 안의 적을 계속 맞히고 느리게 만듭니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+		[PredefinedFunctionIds.PyVenomMist] = new ItemDescription
+		{
+			Summary = "대상 자리에 독 안개를 깔아 안의 적을 중독시킵니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "중독은 다시 걸리면 겹쳐서 더 아픕니다.",
+		},
+		// 보조
+		[PredefinedFunctionIds.PyHex] = new ItemDescription
+		{
+			Summary = "저주탄을 쏴 맞은 적에게 표식을 남깁니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "표식이 남은 적은 다음 공격에 더 큰 피해를 받습니다.",
+		},
+		[PredefinedFunctionIds.PySnakeBind] = new ItemDescription
+		{
+			Summary = "뱀을 날려 맞은 적을 기절시킵니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "",
+		},
+		[PredefinedFunctionIds.PyFlash] = new ItemDescription
+		{
+			Summary = "빛을 터뜨려 둘레의 적을 모두 실명시킵니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "피해는 주지 않습니다.",
+		},
+		// 이동
+		[PredefinedFunctionIds.PyBlink] = new ItemDescription
+		{
+			Summary = "바라보는 쪽으로 순간이동합니다.",
+			Purpose = "",
+			Example = "",
+			ExampleCode = "",
+			ExampleResult = "",
+			Caution = "벽 앞에서는 멈춥니다.",
+		},
+		[PredefinedFunctionIds.PyLevitate] = new ItemDescription
+		{
+			Summary = "잠시 동안 공중에 떠서 위아래 양옆으로 움직입니다.",
 			Purpose = "",
 			Example = "",
 			ExampleCode = "",

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 참고(Reference) 창의 카드 하나 (ReferenceCard 프리팹): 블록 이름, 분류 태그, 형식, 설명 한 문장. 보여 주기만 한다.
-/// 카드를 누르면 자세한 내용(채울 곳·파라미터, 돌려주는 값, 예시, 실행)이 펼쳐지고, 다시 누르면 접힌다 (#476 레퍼런스 페이지 형식).
+/// 카드를 누르면 자세한 내용(하는 일, 용도, 예시, 슬롯, return 값, 주의할 점, 실행)이 펼쳐지고, 다시 누르면 접힌다 (#476 레퍼런스 페이지 형식).
 /// <para>
 /// 프리팹 구성: 최상위에 Image(ui_card) + Button + Vertical Layout Group + 이 컴포넌트, 자식에 Title(이름 + 분류 태그 한 줄),
 /// Summary, Usage, Details, Expanded, Hint(Text - TextMeshPro). 프리팹은 메뉴 Invoke → UI → 편집·장착 화면 새 디자인으로 만들기가 만든다 (InvokeUIBuilder).
@@ -77,8 +77,8 @@ public class ReferenceCardView : MonoBehaviour
 		SetExpanded(false, hasSections);
 	}
 
-	// 맨 위에 설명 한 문장, 그 아래 항목마다 「이름」 줄과 내용을 놓고, 사이는 한 줄 비운다.
-	// 이름 붙은 줄(채울 곳, 파라미터, 돌려주는 값)은 「- 이름: 설명」으로, 이름은 형식 줄과 같은 코드 색. 예시도 코드 색
+	// 맨 위에 하는 일 한 문장, 그 아래 항목마다 「이름」 줄과 내용을 놓고, 사이는 한 줄 비운다.
+	// 이름 붙은 줄(슬롯, return 값)은 「- 이름: 설명」으로, 이름은 형식 줄과 같은 코드 색. 예시는 상황 → 코드(코드 색) → 결과
 	// 줄 앞 표시는 「-」: Galmuri11 글꼴에 「·」「—」가 없어 빈칸으로 보이기 때문 (#476)
 	static string BuildExpanded(BlockReferenceEntry entry)
 	{
@@ -93,16 +93,20 @@ public class ReferenceCardView : MonoBehaviour
 			{
 				// 줄 이름은 형식 줄·원형과 같은 규칙(BlockReference.ColorCode)으로 칠한다 (#489, 사용자가 통일을 요청).
 				// 형식 줄의 같은 글자와 같은 색이 되어, 이 줄이 형식의 어느 자리를 설명하는지 바로 보인다
-				// 예: 채울 곳 「타입」「처음 값」 = 형식의 한글 자리(흐린 보라), 파라미터 「target」 = 원형의 파라미터(하늘색), 돌려주는 값 「Target」 = 원형의 반환 타입(청록)
+				// 예: 채울 곳 「타입」「처음 값」 = 형식의 한글 자리(흐린 보라), 파라미터 「target」 = 원형의 파라미터(하늘색), return 값 「Target」 = 원형의 반환 타입(청록)
 				foreach ((string name, string body) in section.Items)
 				{
+					// 이름이 없는 줄(type의 「넣을 수 있는 빈칸: ...」)은 글만
+					if (string.IsNullOrEmpty(name)) { text.Append($"\n- <noparse>{body}</noparse>"); continue; }
 					text.Append($"\n- {BlockReference.ColorCode(name)}");
 					if (!string.IsNullOrEmpty(body)) text.Append($": <noparse>{body}</noparse>");
 				}
+				continue;
 			}
+			if (!string.IsNullOrEmpty(section.Body)) text.Append($"\n<noparse>{section.Body}</noparse>");
 			// 예시 코드도 형식 줄과 같은 코드 색 (#489). 흰색 한 색이면 키워드·함수 이름이 구분되지 않기 때문
-			else if (section.IsCode) text.Append($"\n{BlockReference.ColorCode(section.Body)}");
-			else text.Append($"\n<noparse>{section.Body}</noparse>");
+			if (!string.IsNullOrEmpty(section.Code)) text.Append($"\n{BlockReference.ColorCode(section.Code)}");
+			if (!string.IsNullOrEmpty(section.Result)) text.Append($"\n<color={LabelColor}>결과</color>  <noparse>{section.Result}</noparse>");
 		}
 		return text.ToString();
 	}

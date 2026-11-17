@@ -91,6 +91,8 @@ public class PythonOrbTest : MonoBehaviour
 			{
 				ExpectGlobal("r3", "False", "다 쓴 구슬 is_valid_orb(keep[0])");
 				Check("쓸 수 있는 구슬 1개 (다 쓴 구슬은 빠짐)", orbs.Count == 1, $"실제 {orbs.Count}");
+				Check("다 쓴 구슬 1개, 구슬 수 2개 (다 쓴 구슬도 셈)", orbs.SpentCount == 1 && orbs.TotalCount == 2, $"실제 다 씀 {orbs.SpentCount}, 모두 {orbs.TotalCount}");
+				Check("다 쓴 구슬 자리 표시 1개", (orbs.IsSpentAt(0) ? 1 : 0) + (orbs.IsSpentAt(1) ? 1 : 0) == 1);
 				Check("다 쓴 구슬은 해제되지 않음 (heap의 구슬 2개)", memory.Heap.GetPointers<ManaOrb>().Count == 2, $"실제 {memory.Heap.GetPointers<ManaOrb>().Count}");
 			}),
 			BlockData.CallPredefinedFunction(PredefinedFunctionIds.PyOrbBurst, V("keep")),
@@ -118,16 +120,20 @@ public class PythonOrbTest : MonoBehaviour
 			BlockData.CallPredefinedFunction(PredefinedFunctionIds.PyOrbShot, SlotData.EmptyValue(), L(3)));
 
 		// global o; del o → o의 구슬은 가리키는 이름이 없어 해제됨. keep의 다 쓴 구슬만 남음
-		Run("Del", Done(() => Check("del 뒤 heap의 구슬 1개", memory.Heap.GetPointers<ManaOrb>().Count == 1, $"실제 {memory.Heap.GetPointers<ManaOrb>().Count}")),
+		Run("Del", Done(() =>
+			{
+				Check("del 뒤 heap의 구슬 1개", memory.Heap.GetPointers<ManaOrb>().Count == 1, $"실제 {memory.Heap.GetPointers<ManaOrb>().Count}");
+				Check("del 뒤 구슬 수 1개, 다 쓴 구슬 1개", orbs.TotalCount == 1 && orbs.SpentCount == 1 && orbs.IsSpentAt(0), $"실제 모두 {orbs.TotalCount}, 다 씀 {orbs.SpentCount}");
+			}),
 			BlockData.Global("o"), BlockData.Del("o"));
 
-		// 쓸 수 있는 구슬이 5개면 6번째 orb_create()는 None. 함수가 끝나면 지역 리스트와 구슬 5개가 해제됨
+		// 다 쓴 구슬도 5개에 든다: keep의 다 쓴 구슬 1개 + 새 구슬 4개면 5번째 orb_create()부터 None. 함수가 끝나면 지역 리스트와 구슬 4개가 해제됨
 		BlockData loop = BlockData.For("i", L(0), L(6));
 		loop.InnerBlocks.Add(BlockData.ListAppend("lst", Call(PredefinedFunctionIds.PyOrbCreate)));
 		Run("Five", Done(() =>
 			{
 				ExpectGlobal("r4", "True", "6번째 orb_create() == None");
-				ExpectGlobal("r5", "5", "5개일 때 쓸 수 있는 구슬 수 len 확인용");
+				ExpectGlobal("r5", "True", "다 쓴 구슬 1개가 자리를 차지해 5번째 orb_create() == None");
 				Check("함수가 끝나면 지역 리스트의 구슬 해제 (heap의 구슬 1개)", memory.Heap.GetPointers<ManaOrb>().Count == 1, $"실제 {memory.Heap.GetPointers<ManaOrb>().Count}");
 				Check("쓸 수 있는 구슬 0개", orbs.Count == 0, $"실제 {orbs.Count}");
 			}),
@@ -135,7 +141,7 @@ public class PythonOrbTest : MonoBehaviour
 			BlockData.ListNew("lst"),
 			loop,
 			BlockData.Assign("r4", SlotData.FromBlock(BlockData.Compare(SlotData.FromBlock(BlockData.ArrayGet("lst", L(5))), CompareOperator.Equal, SlotData.FromNone()))),
-			BlockData.Assign("r5", L(5)));
+			BlockData.Assign("r5", SlotData.FromBlock(BlockData.Compare(SlotData.FromBlock(BlockData.ArrayGet("lst", L(4))), CompareOperator.Equal, SlotData.FromNone()))));
 
 		StartNext();
 	}

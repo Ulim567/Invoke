@@ -270,7 +270,7 @@ public static partial class ItemDescriptions
 			Example = "",
 			ExampleCode = "orb = orb_create()",
 			ExampleResult = "",
-			Returns = "만든 구슬 (Orb). 쓸 수 있는 구슬이 이미 5개면 None",
+			Returns = "만든 구슬 (Orb). 구슬이 이미 5개면 None (다 쓴 구슬도 셈)",
 			Caution = "돌려받은 구슬을 variable이나 list에 담지 않으면 바로 사라집니다. heap이 모자라면 MemoryError가 발생합니다.",
 		},
 		[PredefinedFunctionIds.PyOrbShot] = new ItemDescription
@@ -280,7 +280,7 @@ public static partial class ItemDescriptions
 			Example = "",
 			ExampleCode = "orb_shot(get_bug(), orb)",
 			ExampleResult = "",
-			Caution = "쓴 구슬은 「다 쓴 구슬」이 되어 다시 쓸 수 없습니다(UsedManaOrbError). is_valid_orb(orb)로 확인합니다.",
+			Caution = "쓴 구슬은 빨간 「다 쓴 구슬」이 되어 다시 쓸 수 없습니다(UsedManaOrbError). is_valid_orb(orb)로 확인합니다. 다 쓴 구슬도 5개에 들어가므로, 담은 variable이나 list에서 놓아야 사라집니다.",
 		},
 		[PredefinedFunctionIds.PyOrbBarrage] = new ItemDescription
 		{

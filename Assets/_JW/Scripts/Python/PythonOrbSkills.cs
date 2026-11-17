@@ -9,7 +9,7 @@ using UnityEngine;
 /// 구슬 생성. 마나 구슬 하나를 heap에 만들고 Orb 값으로 돌려준다 (대상 없음). 예: orb = orb_create()
 /// <para>
 /// - 크기는 표의 heap 크기(임시 2칸).<br/>
-/// - 쓸 수 있는 구슬이 이미 ManaOrbs.MaxCount(5)개면 만들지 않고 None을 돌려준다(C의 소환검 5개일 때 NULL과 같음).<br/>
+/// - 구슬이 이미 ManaOrbs.MaxCount(5)개면 만들지 않고 None을 돌려준다(C의 소환검 5개일 때 NULL과 같음). 다 쓴 구슬도 센다(C의 누수 소환검과 같음).<br/>
 /// - heap이 모자라면 MemoryError(OutOfMemory)로 끝난다(리스트 append와 같음).<br/>
 /// - 돌려준 구슬을 변수·리스트에 담지 않으면 그 statement가 끝날 때 가비지 컬렉션이 해제한다. 숨은 시스템 전역으로 옮기지 않는다.
 /// </para>
@@ -33,9 +33,8 @@ public class PyOrbCreate : MagicSkill
 			Return(RuntimeValue.None);
 			return;
 		}
-		// 쓸 수 있는 구슬이 이미 5개면 만들지 않는다. 다 쓴 구슬은 세지 않는다
-		int count = orbs.Count;
-		if (count >= ManaOrbs.MaxCount)
+		// 구슬이 이미 5개면 만들지 않는다. 다 쓴 구슬도 센다: 변수·리스트가 다 쓴 구슬을 놓아야 가비지 컬렉션이 해제해 자리가 돌아온다
+		if (!orbs.CanCreate)
 		{
 			Return(RuntimeValue.None);
 			return;
@@ -49,7 +48,7 @@ public class PyOrbCreate : MagicSkill
 		}
 		Return(RuntimeValue.FromOrb(pointer));
 		orbs.Refresh();
-		Effects(task)?.RaiseFired(Id, orbs.OrbPosition(count, count + 1), Vector2.zero);
+		Effects(task)?.RaiseFired(Id, orbs.OrbPosition(orbs.IndexOf(pointer), orbs.TotalCount), Vector2.zero);
 	}
 }
 
@@ -57,7 +56,7 @@ public class PyOrbCreate : MagicSkill
 /// 구슬을 쓰는 스킬의 기반 (#532).
 /// <para>
 /// - 쓸 구슬: 파라미터로 넘긴 Orb 값(orb) 또는 리스트(orbs). 파라미터 값이 없으면(슬롯에서 바로 시전) 쓸 수 있는 구슬 중 먼저 만든 것부터 고른다.<br/>
-/// - 구슬을 쓰면 「다 쓴 구슬」(ManaOrb.Spend)로 바꾼다. 해제하지 않는다. 머리 위 그림과 쓸 수 있는 개수에서 빠진다.<br/>
+/// - 구슬을 쓰면 「다 쓴 구슬」(ManaOrb.Spend)로 바꾼다. 해제하지 않는다. 쓸 수 있는 개수에서 빠지고, 머리 위와 HUD에 빨갛게 남는다.<br/>
 /// - 다 쓴 구슬 하나를 넘기면 UsedManaOrbError, 리스트에 쓸 구슬이 없으면 NoManaOrbError, 리스트에 구슬이 아닌 값이 있으면 TypeError(TypeMismatch).
 /// </para>
 /// </summary>
@@ -155,7 +154,7 @@ public abstract class OrbSkill : MagicBoltSkill
 		if (!TryPeekHeapObject(task, pointer, out ManaOrb orb) || orb.IsSpent) return false;
 
 		int index = orbs != null ? orbs.IndexOf(pointer) : -1;
-		position = orbs != null && index >= 0 ? orbs.OrbPosition(index, orbs.Count) : StaffTip(caster);
+		position = orbs != null && index >= 0 ? orbs.OrbPosition(index, orbs.TotalCount) : StaffTip(caster);
 		orb.Spend();
 		orbs?.Refresh();
 		return true;

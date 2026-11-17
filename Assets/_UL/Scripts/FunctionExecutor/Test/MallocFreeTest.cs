@@ -3,10 +3,12 @@ using UnityEngine;
 
 /// <summary>
 /// malloc 블록, free 블록 테스트용 컴포넌트. 실행기, FunctionExecutorLogger와 같은 오브젝트에 붙이고 콘솔 로그로 결과를 확인한다.<br/>
-/// 두 단계를 차례로 진행한다. 1단계가 끝나면 2단계를 시작한다.<br/>
+/// 세 단계를 차례로 진행한다. 앞 단계가 끝나면 다음 단계를 시작한다.<br/>
 /// - 1단계(이슈 완료 조건 4): malloc에서 HeapUsed가 오르고 free에서 내려가는지<br/>
 /// - 2단계(이슈 완료 조건 5): heap이 모자라면 변수에 NullPointer가 담기고, 그 변수로 free하면 C의 free(NULL)처럼 실패하지 않고 끝나는지(#120)<br/>
-/// 메모리 크기가 4칸 이상이어야 한다. 다른 테스트 컴포넌트와 함께 붙이지 않는다.
+/// - 3단계(#504): 같은 포인터를 두 번 free하면 DoubleFree로 실패하는지, 스킬 포인터 에러가 NULL·free한 포인터·그 밖으로 나뉘는지<br/>
+/// 메모리 크기가 4칸 이상이어야 한다. 캐릭터의 언어 규칙 파일(LanguageRule_C)에 DoubleFree 줄이 있어야 한다. 없으면 3단계가 InternalError로 끝나 실패한다.<br/>
+/// 다른 테스트 컴포넌트와 함께 붙이지 않는다.
 /// </summary>
 [RequireComponent(typeof(FunctionExecutor))]
 public class MallocFreeTest : MonoBehaviour
@@ -87,6 +89,31 @@ public class MallocFreeTest : MonoBehaviour
 		executor.Cast(new UserFunction(converted.Name, converted.FrameSize, blocks.ToArray()));
 	}
 
+	// 3단계. Sword* s = malloc(Sword); free(s); free(s); → 두 번째 free에서 DoubleFree
+	void CastDoubleFree()
+	{
+		FunctionData data = MakeMallocFree("DoubleFree");
+		data.Blocks.Add(BlockData.Free(SlotData.FromVariable("s")));
+		if (!FunctionDataConverter.TryConvert(data, System.Array.Empty<FunctionData>(), out UserFunction converted))
+		{
+			Check("DoubleFree: 변환 성공", false);
+			return;
+		}
+		BeginStage();
+		executor.Cast(converted);
+	}
+
+	// 스킬의 heap 함수가 낼 포인터 에러 종류. 작업 밖에서 heap에 직접 올렸다 해제한 포인터로 확인한다
+	void CheckPointerErrors()
+	{
+		int freed = memory.Heap.Malloc(null, "테스트용 객체", 0);
+		memory.Heap.Free(freed);
+		Check("PointerError: NULL → NullPointerError", InvalidPointerError.For(memory.Heap, HeapStorage.NullPointer) is NullPointerError);
+		Check("PointerError: free한 포인터 → FreedPointerError", InvalidPointerError.For(memory.Heap, freed) is FreedPointerError);
+		InvalidPointerError never = InvalidPointerError.For(memory.Heap, int.MaxValue);
+		Check("PointerError: 준 적 없는 값 → InvalidPointerError", never.GetType() == typeof(InvalidPointerError), $"실제 {never.GetType().Name}");
+	}
+
 	void BeginStage()
 	{
 		startTick = executor.CurrentTick;
@@ -106,6 +133,12 @@ public class MallocFreeTest : MonoBehaviour
 			case "HeapFull":
 				Check("HeapFull: 틱 4에 정상 종료 (free(NULL))", task.EndReason == FunctionTaskEndReason.Completed && tick == 4, $"실제 틱 {tick}, {task.EndReason}, {task.Failure}");
 				memory.Heap.Free(fillerPointer);
+				CastDoubleFree();
+				break;
+
+			case "DoubleFree":
+				Check("DoubleFree: DoubleFree로 실패", task.IsFailed && task.Failure == FunctionFailure.DoubleFree, $"실제 {task.EndReason}, {task.Failure}");
+				CheckPointerErrors();
 				Check("테스트가 끝난 뒤 HeapUsed가 시작할 때와 같음", memory.HeapUsed == heapAtStart, $"시작 {heapAtStart}, 지금 {memory.HeapUsed}");
 				break;
 		}

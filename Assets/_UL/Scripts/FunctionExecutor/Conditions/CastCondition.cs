@@ -15,6 +15,8 @@ public enum CastRejection
 	CannotAct,
 	// 시전자가 공격할 수 없는 장소(PlaceScenes.NoCastPlaces, 지금은 로비)에 있다. 멀티플레이에서 서버의 FunctionExecutorNetwork가 쓴다 (#313)
 	InNoCastPlace,
+	// 슬롯이 컴파일에 실패했다: 슬롯 함수나 그 함수가 부르는 함수, 전역 변수 파일에 컴파일 오류가 있음. 멀티플레이에서 서버의 FunctionExecutorNetwork가 쓴다 (#506)
+	CompileError,
 }
 
 /// <summary>

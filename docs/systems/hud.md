@@ -17,6 +17,7 @@
 | 자리 | 보여 주는 것 | 읽는 곳 |
 | --- | --- | --- |
 | 왼쪽 위 띠 | 설정(Esc) · Lv · 버그 조각 · 보스 코어. 재료 앞에 재료 그림 16×16 (#431, 박진우의 `material_{ID}.png` 첫 장) | `PlayerProgress.Level`, `GetMaterialCount("bug_fragment" / "boss_core")` |
+| Lv 바로 옆 | 경험치 바 40×5 (김도훈 `ExpBarView`). 경험치가 늘면 연한 막대(EFFFD9)가 바로 차고 0.3초 뒤 연두 막대(9BE15D, 메이플스토리 경험치 바 색)가 서서히 따라 찬다. 레벨업하면 끝까지 찬 뒤 0부터 다시. 최대 레벨은 가득. 접속 직후 1초와 경험치가 줄었을 때는 바로 맞춤. 레이드에서는 Lv와 같이 숨김 | `PlayerProgress.Exp`, `Level`, `LevelRules.ExpToNext` |
 | 그 아래 | 「> 사냥터」 지금 장소 이름 | 내 캐릭터가 있는 씬 이름 (`PlaceScenes` 상수 → 한글) |
 | 아래 가운데 | HP 막대·숫자. 닳으면 흰 잔상이 0.3초 남았다가 줄어든다 (#431, 몬스터·보스 체력 바와 같은 방식. 회복은 바로) | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
@@ -50,10 +51,11 @@
 
 | 알리는 것 | 받는 곳 |
 | --- | --- |
-| 시전 거부 중 `NotEnoughMemory`만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
-| 내 작업의 실행 중단(`Interrupted`), runtime error로 분류된 실패(스킬 에러 포함) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
+| 시전 거부 중 `NotEnoughMemory`, `CompileError`(빌드 실패, 문장 `[Cast Rejected] CompileError` / `컴파일 오류가 있는 함수`, #506)만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
+| 몬스터의 실행 중단 공격으로 끊긴 내 작업(`Interrupted`, 원인 `MonsterAttack`). 문장 `[Interrupted] 실행 중단 공격` / `함수가 모두 멈춤` (#504) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
+| runtime error로 분류된 실패(스킬 에러 포함) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
 
-- 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 개발자 책임(`InternalError`), compile error(편집 화면이 저장할 때 잡음)
+- 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 사망·장소 이동·재시작으로 끊긴 작업(원인 `System`, #504), 개발자 책임(`InternalError`), 실행 중에 난 compile error(시전 전에 빌드가 `CompileError` 거부로 잡음, #506)
 
 - 아래 띠 (#431): 띠 전체를 칠하지 않는다 (바닥을 너무 가림). 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자(`hud_band_fade`)
 
@@ -67,6 +69,7 @@
 
 ## 맞춘 결과
 - 이우림이 고친 것 (#480): `HudView`에 실패 알림, `HudUIBuilder`에 알림 칸(`Notice`). HUD 프리팹은 메뉴로 다시 만듦
+- 김도훈이 고친 것 (경험치 바): `HudUIBuilder`에 Lv 옆 `ExpBar`(+`ExpBarView`, `Assets/_DH/Scripts/UI`)와 레이드에서 숨기기. `HudView`는 그대로. HUD 프리팹은 메뉴로 다시 만듦
 - 소환검 개수(`SummonedSwordHud`, 박진우)와 체력 바(`TempHealthBar`, 김도훈)의 임시 표시는 이 HUD가 대신할 예정. 그때 각자 끈다
 
 ## 레이드 던전 (시안 8-3, #337)

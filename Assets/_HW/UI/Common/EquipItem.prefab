@@ -751,6 +751,7 @@ MonoBehaviour:
   normalSprite: {fileID: 21300000, guid: 7bdbfb8ec78d4c8791b26296716bccc7, type: 3}
   selectedSprite: {fileID: 21300000, guid: 9006c2d398054863877a536e6d834f20, type: 3}
   boxSprite: {fileID: 21300000, guid: 7bdbfb8ec78d4c8791b26296716bccc7, type: 3}
+  deleteButton: {fileID: 0}
   nameColor: {r: 0.9098039, g: 0.9254902, b: 1, a: 1}
   dimColor: {r: 0.3529412, g: 0.38431373, b: 0.5647059, a: 1}
   errorColor: {r: 1, g: 0.5411765, b: 0.5882353, a: 1}

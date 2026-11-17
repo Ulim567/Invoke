@@ -2,7 +2,8 @@
 /// 작업이 끝난 이유를 화면에 알릴 때 쓰는 값. 서버가 시전한 사람에게 보낸다 (FunctionExecutorNetwork.OwnTaskEnded).
 /// <para>
 /// - EndReason이 Failed일 때만 Failure, Category가 뜻이 있다.<br/>
-/// - Failure가 SkillFailed일 때만 ErrorName(에러 클래스 이름, 예: UnarmedError), ErrorMessage(SkillError.Message)가 있다. 그 밖에는 빈 글자열이다.
+/// - Failure가 SkillFailed일 때만 ErrorName(에러 클래스 이름, 예: UnarmedError), ErrorMessage(SkillError.Message)가 있다. 그 밖에는 빈 글자열이다.<br/>
+/// - EndReason이 Interrupted일 때만 InterruptCause가 뜻이 있다 (#504).
 /// </para>
 /// </summary>
 // FunctionTask를 그대로 보내지 않는 이유: 작업은 블록, 메모리 같은 서버의 실행 상태를 가지고 있어 네트워크로 보낼 수 없다
@@ -15,13 +16,14 @@ public struct TaskEndInfo
 	public FailureCategory Category;
 	public string ErrorName;
 	public string ErrorMessage;
+	public InterruptCause InterruptCause;
 
 	/// <summary>
 	/// 끝난 작업 task에서 알릴 값을 모은다. 분류는 시전자 캐릭터의 언어 language가 정한다(없으면 RuntimeError).
 	/// </summary>
 	public static TaskEndInfo From(FunctionTask task, LanguageRule language)
 	{
-		var info = new TaskEndInfo { EndReason = task.EndReason, ErrorName = "", ErrorMessage = "" };
+		var info = new TaskEndInfo { EndReason = task.EndReason, InterruptCause = task.InterruptCause, ErrorName = "", ErrorMessage = "" };
 		if (task.Failure is FunctionFailure failure)
 		{
 			info.Failure = failure;

@@ -35,6 +35,18 @@ public static class FunctionStorage
 	}
 
 	/// <summary>
+	/// GUID의 함수 파일을 지운다 (#494). 파일이 있어서 지웠으면 true, 없으면 false.
+	/// 슬롯에 끼운 함수인지, 다른 함수가 부르는지는 부르는 쪽(편집 화면)이 먼저 본다.
+	/// </summary>
+	public static bool Delete(string guid)
+	{
+		string path = PathOf(guid);
+		if (path == null || !File.Exists(path)) return false;
+		File.Delete(path);
+		return true;
+	}
+
+	/// <summary>
 	/// 저장한 함수를 모두 이름 순서로 불러온다. 읽을 수 없는 파일은 건너뛴다.
 	/// </summary>
 	public static List<FunctionData> LoadAll()

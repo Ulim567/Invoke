@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 /// <summary>
@@ -9,7 +10,11 @@ using UnityEngine;
 /// - 내 캐릭터가 다른 장소로 가면 놓아준다. 호스트에서는 씬이 서버에 남아 있어도 OnTriggerExit2D가 불리지 않기 때문이다.<br/>
 /// - 검을 타고 나는 중(PlayerMovement.IsRiding)이거나 죽었거나 경직 중(PlayerHealth.CanAct가 false)이면 ↑를 무시한다.<br/>
 /// - 표시 (#434): ↑ 안내 자리에 작은 민트 마름모가 늘 천천히 위아래로 떠 있다. 가까이 가면 밝아지고 위에 ↑ 키 그림이 뜬다. 이때 예전 ↑ 안내(노란 세모)는 켜지 않는다.
-///   그림은 코드로 만들고(마름모 7×7, 키 9×9픽셀, 16 PPU) 안내와 같은 Sorting Layer에 그린다. 씬·프리팹은 고치지 않는다. Show Idle Marker를 끄면 예전 안내만.
+///   그림은 코드로 만들고(마름모 7×7, 키 9×9픽셀, 16 PPU) 안내와 같은 Sorting Layer에 그린다. 씬·프리팹은 고치지 않는다. Show Idle Marker를 끄면 예전 안내만.<br/>
+/// - 행선지 안내 (노션 11/16 맵 확장): Sign이 있으면 가까이 갔을 때 마름모·작은 ↑ 키 대신 「[↑] 사냥터로 이동」 한 줄 안내판을 띄운다.
+///   다른 게임처럼 키 그림 + 할 일을 한 줄로, 캐릭터 머리·이름표보다 위(문 위 끝 + 1.8칸)에, 0.12초 동안 2픽셀 올라오며 나타난다.
+///   안내판 안의 자리(바탕 크기, 키·글자 위치)는 처음 보일 때 실제로 그려진 글자 크기로 맞춘다 (에디터에서는 글자 크기를 정확히 못 잼).
+///   안내판(바탕 + 키 그림 + TextMeshPro)은 에디터 메뉴 Invoke → 맵 → 문 위치·행선지 표시 맞추기가 문마다 만들어 넣는다. 비워 두면 예전 표시.
 /// </para>
 /// </summary>
 public abstract class PlaceInteractable : MonoBehaviour
@@ -19,6 +24,21 @@ public abstract class PlaceInteractable : MonoBehaviour
 
 	[SerializeField, Tooltip("상호작용할 수 있는 물체 표시 (#434). 켜면 위의 ↑ 안내 대신, 평소에는 민트 마름모, 가까이 가면 밝은 마름모 + ↑ 키를 보여 준다")]
 	bool showIdleMarker = true;
+
+	[SerializeField, Min(1), Tooltip("가까이 갔을 때 마름모 위에 뜨는 ↑ 키 그림의 크기 배수 (Sign이 없을 때만). 사냥터 사이 포탈은 크게")]
+	int keyScale = 1;
+
+	[SerializeField, Tooltip("가까이 갔을 때 띄우는 한 줄 안내판 (예: [↑] 사냥터로 이동). 있으면 마름모·↑ 키 대신 이것을 보여 준다. 메뉴 Invoke → 맵 → 문 위치·행선지 표시 맞추기가 넣는다")]
+	GameObject sign;
+
+	// 안내판 나타나기: 0~1 (0.12초), 그동안 2픽셀 올라옴
+	const float SignFadeTime = 0.12f;
+	float signShown;
+	Vector3 signBase;
+	bool signLaidOut;
+	SpriteRenderer[] signSprites;
+	TMPro.TMP_Text[] signTexts;
+	Color[] signSpriteColors;
 
 	PlayerInputReader localPlayer;
 
@@ -35,6 +55,15 @@ public abstract class PlaceInteractable : MonoBehaviour
 	void Awake()
 	{
 		if (prompt != null) prompt.SetActive(false);
+		if (sign != null)
+		{
+			signBase = sign.transform.localPosition;
+			signSprites = sign.GetComponentsInChildren<SpriteRenderer>(true);
+			signTexts = sign.GetComponentsInChildren<TMPro.TMP_Text>(true);
+			signSpriteColors = new Color[signSprites.Length];
+			for (int i = 0; i < signSprites.Length; i++) signSpriteColors[i] = signSprites[i].color;
+			sign.SetActive(false);
+		}
 		if (showIdleMarker) CreateMarker();
 	}
 
@@ -65,7 +94,9 @@ public abstract class PlaceInteractable : MonoBehaviour
 		// 가까이 갔을 때 마름모 위에 뜨는 ↑ 키 (9×9)
 		var keyObject = new GameObject("Key");
 		keyObject.transform.SetParent(go.transform, false);
-		keyObject.transform.localPosition = new Vector3(0f, 9f / PixelsPerUnit, 0f);
+		// 키 아래 끝이 마름모 위 끝에서 1픽셀 위에 오게 (키는 Key Scale배)
+		keyObject.transform.localPosition = new Vector3(0f, (3.5f + 1f + 4.5f * keyScale) / PixelsPerUnit, 0f);
+		keyObject.transform.localScale = new Vector3(keyScale, keyScale, 1f);
 		key = keyObject.AddComponent<SpriteRenderer>();
 		key.sprite = KeySprite();
 		keyObject.SetActive(false);
@@ -128,7 +159,12 @@ public abstract class PlaceInteractable : MonoBehaviour
 	{
 		if (marker == null) return;
 		bool near = localPlayer != null;
-		if (key.gameObject.activeSelf != near) key.gameObject.SetActive(near);
+		// 안내판이 있으면 가까이 갔을 때 마름모·키 대신 안내판만
+		bool useSign = sign != null;
+		bool showKey = near && !useSign;
+		if (key.gameObject.activeSelf != showKey) key.gameObject.SetActive(showKey);
+		bool showMarker = !(near && useSign);
+		if (marker.gameObject.activeSelf != showMarker) marker.gameObject.SetActive(showMarker);
 		float t = Time.time * (near ? 3.5f : 2f) + markerPhase;
 		float bob = Mathf.Round(Mathf.Sin(t) * 1.5f) / PixelsPerUnit;
 		Vector3 lossy = transform.lossyScale;
@@ -154,9 +190,61 @@ public abstract class PlaceInteractable : MonoBehaviour
 		SetPrompt(false);
 	}
 
+	// 안내판: 가까이 가면 0.12초 동안 2픽셀 올라오며 나타나고, 멀어지면 같은 시간에 사라진다
+	void UpdateSign()
+	{
+		if (sign == null) return;
+		bool near = localPlayer != null;
+		signShown = Mathf.MoveTowards(signShown, near ? 1f : 0f, Time.deltaTime / SignFadeTime);
+		bool visible = signShown > 0f;
+		if (sign.activeSelf != visible) sign.SetActive(visible);
+		if (!visible) return;
+		if (!signLaidOut) LayoutSign();
+		float rise = Mathf.Round((1f - signShown) * -2f) / PixelsPerUnit;
+		sign.transform.localPosition = signBase + new Vector3(0f, rise, 0f);
+		for (int i = 0; i < signSprites.Length; i++)
+		{
+			Color c = signSpriteColors[i];
+			c.a *= signShown;
+			signSprites[i].color = c;
+		}
+		foreach (TMPro.TMP_Text text in signTexts) text.alpha = signShown;
+	}
+
+	// 안내판 안의 자리를 실제로 그려진 글자 크기로 맞춘다 (처음 보일 때 한 번). 켜진 뒤에야 글자 범위를 정확히 잴 수 있다
+	// 왼쪽 여백 2 + ↑ 키 9 + 사이 3 + 글자 + 오른쪽 여백 4 (픽셀), 높이 13. 글자 세로 가운데를 안내판 가운데에
+	void LayoutSign()
+	{
+		signLaidOut = true;
+		Transform pill = sign.transform.Find("Pill");
+		Transform keyIcon = sign.transform.Find("Key");
+		Transform textTransform = sign.transform.Find("Text");
+		if (pill == null || keyIcon == null || textTransform == null || !textTransform.TryGetComponent(out TMPro.TMP_Text label)) return;
+
+		const float Px = 1f / PixelsPerUnit;
+		label.rectTransform.localPosition = Vector3.zero;
+		label.ForceMeshUpdate(true, true);
+		Bounds glyphs = label.textBounds;
+		if (glyphs.size.x <= 0f) return;
+
+		float textWidth = Mathf.Ceil(glyphs.size.x / Px) * Px;
+		float width = 14 * Px + textWidth + 4 * Px;
+		float height = 13 * Px;
+		float left = -Mathf.Round(width / 2f / Px) * Px;
+
+		if (pill.TryGetComponent(out SpriteRenderer pillRenderer)) pillRenderer.size = new Vector2(width, height);
+		pill.localPosition = new Vector3(left + width / 2f, height / 2f, 0f);
+		keyIcon.localPosition = new Vector3(left + 6.5f * Px, height / 2f, 0f);
+		Vector3 textPosition = new Vector3(left + 14 * Px - glyphs.min.x, height / 2f - glyphs.center.y, 0f);
+		textPosition.x = Mathf.Round(textPosition.x / Px) * Px;
+		textPosition.y = Mathf.Round(textPosition.y / Px) * Px;
+		label.rectTransform.localPosition = textPosition;
+	}
+
 	void Update()
 	{
 		UpdateMarker();
+		UpdateSign();
 		if (localPlayer == null) return;
 
 		// 호스트에서는 내 캐릭터가 다른 장소로 가도 로비 씬이 서버에 남아 있고, 다른 물리 세계로 옮겨진 캐릭터에는 OnTriggerExit2D가 불리지 않는다

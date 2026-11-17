@@ -3,7 +3,7 @@
 /// <para>
 /// - value slot의 포인터가 가리키는 객체를 heap에서 해제하고 칸을 돌려준다. 화면의 오브젝트는 없애지 않는다.<br/>
 /// - NULL(NullPointer, 직접 입력한 NULL, 언어 규칙이 ZeroIsNull일 때 직접 입력한 0)이면 C처럼 아무 일도 하지 않고 끝난다.<br/>
-/// - 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)이면 InvalidPointer로 실패한다(플레이어 코드 에러).<br/>
+/// - 이미 free한 포인터이면 DoubleFree, 그 밖의 쓸 수 없는 포인터(누수된 포인터, 준 적 없는 값)이면 InvalidPointer로 실패한다(플레이어 코드 에러).<br/>
 /// - value slot이 포인터가 아니면 TypeMismatch로 실패한다.
 /// </para>
 /// </summary>
@@ -42,7 +42,8 @@ public class FreeBlock : Block
 		if (!context.Memory.Heap.Free(pointer))
 		{
 			// 스킬의 Free와 달리 SkillFailed로 내지 않는다. 플레이어가 짠 free이므로 언어 규칙 표가 분류하는 플레이어 코드 에러다
-			context.RecordFailure(FunctionFailure.InvalidPointer);
+			// 이미 free한 포인터는 DoubleFree로 나눈다. C를 배우는 플레이어가 가장 흔히 만드는 포인터 실수라 이름으로 바로 알게 하기 위함 (#504)
+			context.RecordFailure(context.Memory.Heap.WasFreed(pointer) ? FunctionFailure.DoubleFree : FunctionFailure.InvalidPointer);
 			return BlockResult.Failed;
 		}
 		return BlockResult.Done;

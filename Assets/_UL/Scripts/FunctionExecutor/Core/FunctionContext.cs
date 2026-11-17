@@ -42,6 +42,10 @@ public class FunctionContext
 	// 블록이 따를 언어 규칙(기본값, 숫자 타입 변환). 언어 규칙 파일이 없으면 C 규칙만 가진 임시 규칙이다
 	internal LanguageRuleData Rule => language.Rule;
 
+	// 1틱의 길이(초). 기다리기 블록이 적은 초를 틱 수로 바꿀 때 쓴다 (#502)
+	// 실행 문맥은 실행기를 모르므로, 실행기가 작업을 만들 때 값만 넘겨받는다
+	internal float SecondsPerTick { get; }
+
 	// 지금 실행 중인 사용자 정의 함수의 지역 변수. 사용자 정의 함수 밖(사전 정의 함수만 시전한 작업)이면 null이다
 	internal VariableStore CurrentVariables => variableStack.Count > 0 ? variableStack[variableStack.Count - 1] : null;
 
@@ -66,13 +70,14 @@ public class FunctionContext
 	// 개발자 책임인 잘못을 블록이 기록했는지. true이면 작업이 언어 규칙 표를 거치지 않고 InternalError로 끝난다
 	internal bool InternalErrorRecorded { get; private set; }
 
-	internal FunctionContext(FunctionTask task, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language)
+	internal FunctionContext(FunctionTask task, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, float secondsPerTick)
 	{
 		this.task = task;
 		this.language = language;
 		Memory = memory;
 		Cooldowns = cooldowns;
 		Caster = caster;
+		SecondsPerTick = secondsPerTick;
 	}
 
 	// return 블록이 계산한 값(value slot의 복사본). 값을 비운 return;이거나 return을 만나지 않았으면 null이다

@@ -15,7 +15,8 @@ using UnityEngine.UI;
 /// - 블록 목록 해금 (#396, 이우림 #309): 실제 계정(server != null)이면 해금한 문법 블록(SkillTree.IsBlockUnlocked)과 해금한 C 스킬만 보여 준다.
 ///   서버가 저장 때 하는 검사(FunctionExecutorNetwork.CheckFunctionContent)와 같은 규칙이다. 스킬 트리에 노드가 없는 함수(input.* 등)는 늘 보인다.
 ///   임시 계정은 서버가 검사하지 않고 해금 목록도 비어 있으므로 모두 보여 준다. 편집 화면을 열 때마다 목록을 다시 만들어서, 스킬 트리에서 해금하면 다음에 열 때 보인다.<br/>
-/// - 저장: 실제 계정(내 캐릭터의 FunctionExecutorNetwork.UsesServerData)이면 서버 DB(RequestSaveFunction), 아니면 이 컴퓨터의 파일(FunctionStorage). (이우림 #226, #239)<br/>
+/// - 저장: 저장 버튼이 고친 모든 파일(함수, 전역 변수)을 한꺼번에 저장하고 자동으로 컴파일한다. 컴파일 오류가 있어도 저장한다 (#506, Save).<br/>
+///   실제 계정(내 캐릭터의 FunctionExecutorNetwork.UsesServerData)이면 서버 DB(RequestSaveAll), 아니면 이 컴퓨터의 파일(FunctionStorage, GlobalVariablesStorage). (이우림 #226, #239)<br/>
 ///   실제 계정은 슬롯 함수 slot1~slot8이 늘 있고(이름 고정), 페이지 함수는 ProgressRules.MaxPageFunctions개까지 더할 수 있다.
 /// </para>
 /// <para>
@@ -25,7 +26,7 @@ using UnityEngine.UI;
 /// 화면 배치 (이우림의 「블록 견본」): 왼쪽 함수 목록(Global Variables, 슬롯 1~8, 페이지 함수), 위쪽 함수 이름·저장 상태·저장 버튼,
 /// 가운데 편집 영역, 오른쪽 분류별 블록 목록. 목록 줄과 머리글은 ListItemView, ListHeaderView 프리팹으로 만든다.<br/>
 /// - Global Variables를 누르면 전역 변수 선언(GlobalVariablesData.Declarations)을 같은 편집 영역에서 고친다.
-///   저장: 실제 계정이면 RequestSaveGlobals, 아니면 내 캐릭터의 FunctionExecutor.TrySaveGlobalVariables (function-executor.md 「전역 변수」).
+///   저장은 함수와 함께 저장 버튼으로 한다 (function-executor.md 「전역 변수」).
 /// </para>
 /// </summary>
 public class BlockEditor : MonoBehaviour
@@ -84,7 +85,7 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("저장 버튼 프리팹. 비워 두면 Button Prefab")]
 	Button saveButtonPrefab;
 
-	[SerializeField, Tooltip("컴파일 버튼 프리팹 (보라색). 비워 두면 컴파일 버튼을 만들지 않는다")]
+	[SerializeField, Tooltip("쓰지 않음 (#506). 컴파일은 저장할 때 자동으로 한다. 빌더(InvokeUIBuilder)가 연결하므로 칸만 남겨 둠")]
 	Button compileButtonPrefab;
 
 	[SerializeField, Tooltip("블록 목록에서 분류 하나의 칩들을 담는 칸 (PaletteGroup 프리팹: Flow Layout Group). 비워 두면 칩을 한 줄씩 쌓는다")]
@@ -134,12 +135,25 @@ public class BlockEditor : MonoBehaviour
 	[SerializeField, Tooltip("오류가 난 블록에 씌우는 빨간 테두리와 ! (ErrorFrame 프리팹)")]
 	RectTransform errorFramePrefab;
 
-	[SerializeField, Tooltip("컴파일 성공 알림 (편집 영역 위의 초록 알약. 처음엔 꺼 둔다)")]
+	[SerializeField, Tooltip("빌드 성공 알림 「Build 성공」 (편집 영역 위의 초록 알약. 처음엔 꺼 둔다, #506)")]
 	GameObject compileOkBadge;
 
 	[Header("함수 틀 (비워 두면 편집 영역 위아래에 틀을 두지 않는다)")]
 	[SerializeField, Tooltip("편집 영역 위의 「반환 타입 이름(파라미터) {」와 아래의 「}」 (#432)")]
 	FunctionFrameView functionFrame;
+
+	[SerializeField, Tooltip("고칠 수 있는 함수 이름 칸의 밑줄 (blk_underline). 비워 두면 밑줄 없이 글자만 보인다")]
+	Sprite nameFieldSprite;
+
+	[SerializeField, Tooltip("고칠 수 있는 함수 이름 칸의 밑줄 색")]
+	Color nameFieldColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+
+	[Header("오른쪽 창 너비·접기 (비워 두면 너비를 바꿀 수 없고 접히지 않는다)")]
+	[SerializeField, Tooltip("오른쪽 창 왼쪽 끝의 손잡이 (PanelHandle의 EditorSidePanel). 열린 탭을 다시 누르면 이걸로 창을 접는다")]
+	EditorSidePanel sidePanel;
+
+	[SerializeField, Tooltip("세로 탭 맨 아래의 > < 버튼 (PanelToggle). 누르면 오른쪽 창을 접거나 편다")]
+	Button panelToggleButton;
 
 	[Header("확인창 (비워 두면 묻지 않고 바로 연다)")]
 	[SerializeField, Tooltip("저장하지 않은 변경이 있을 때 다른 함수를 열거나 나가기 전에 묻는 확인창 (#432)")]
@@ -160,6 +174,22 @@ public class BlockEditor : MonoBehaviour
 
 	[SerializeField, Tooltip("참고 창의 카드 하나 (ReferenceCard 프리팹)")]
 	ReferenceCardView referenceCardPrefab;
+
+	[Header("함수 탭 (#489, 비워 두면 함수 탭을 쓰지 않는다)")]
+	[SerializeField, Tooltip("함수 탭 창 (오른쪽 세로 막대의 「함수」를 누르면 보임. 처음엔 꺼 둔다)")]
+	GameObject functionView;
+
+	[SerializeField, Tooltip("세로 막대의 「함수」 버튼")]
+	Button functionTabButton;
+
+	[SerializeField, Tooltip("함수 탭의 검색 칸. 한글 이름, 영문 이름, 구역 이름으로 찾는다. 비워 두면 검색 없이 모두 보여 준다")]
+	TMP_InputField functionSearch;
+
+	[SerializeField, Tooltip("함수 탭에서 구역 머리글과 함수 항목이 쌓이는 곳 (Vertical Layout Group. 스크롤의 Content)")]
+	RectTransform functionTabList;
+
+	[SerializeField, Tooltip("함수 탭의 함수 항목 한 줄 (FunctionItem 프리팹)")]
+	FunctionItemView functionTabItemPrefab;
 
 	[SerializeField, Tooltip("블록 수·코드 크기 글자 (위쪽 줄 오른쪽). 비워 두면 위쪽 줄에 만든다")]
 	TMP_Text infoLabel;
@@ -182,49 +212,65 @@ public class BlockEditor : MonoBehaviour
 	/// <summary>끌고 있는 블록을 올려 두는 곳</summary>
 	public RectTransform DragLayer => dragLayer;
 
-	// 블록 목록에 보여 줄 문법 블록 견본들 (분류별). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
-	// 「함수」 분류는 사전 정의 함수(C 스킬 등)로 채운다 (Blocks가 null)
-	static readonly (string Title, Func<BlockData>[] Blocks)[] PaletteGroups =
+	// 블록 목록에 보여 줄 문법 블록 견본들. 분류 → 소분류 → 블록 (#487, 시안 6). 끌 때마다 새 데이터를 만들도록 함수로 둔다.
+	// 소분류 이름은 칩 줄 맨 앞에 회색 글씨로 보인다. 이름이 빈 소분류는 글씨 없이 칩만 놓는다
+	// 문법 탭에는 문법 블록만 둔다 (#489). 스킬·기본 함수·malloc·free·wait·내가 만든 함수는 함수 탭에서 끈다 (RebuildFunctionTab)
+	static readonly (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] PaletteGroups =
 	{
-		("제어", new Func<BlockData>[]
+		("제어", new[]
 		{
-			() => BlockData.Conditional(ConditionalBranch.If),
-			() => BlockData.Conditional(ConditionalBranch.ElseIf),
-			() => BlockData.Conditional(ConditionalBranch.Else),
-			() => BlockData.For("i", Int("0"), Int("10")),
-			() => BlockData.While(SlotData.EmptyValue()),
-			() => BlockData.Break(),
-			() => BlockData.Continue(),
+			("조건", new Func<BlockData>[]
+			{
+				() => BlockData.Conditional(ConditionalBranch.If),
+				() => BlockData.Conditional(ConditionalBranch.ElseIf),
+				() => BlockData.Conditional(ConditionalBranch.Else),
+			}),
+			("반복", new Func<BlockData>[]
+			{
+				() => BlockData.For("i", Int("0"), Int("10")),
+				() => BlockData.While(SlotData.EmptyValue()),
+				() => BlockData.Break(),
+				() => BlockData.Continue(),
+			}),
 		}),
-		("변수", new Func<BlockData>[]
+		("변수", new[]
 		{
-			() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
-			// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
-			() => BlockData.Assign("", SlotData.EmptyValue()),
-			() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
-			() => BlockData.ArrayGet("", SlotData.EmptyValue()),
-			() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			("변수", new Func<BlockData>[]
+			{
+				() => BlockData.Declare(new VariableType(VariableTypeKind.Int), "x"),
+				// 대입·원소 읽기·쓰기의 변수 칸은 비워 두고, 놓은 뒤 드롭다운에서 선언한 변수를 고른다 (#474 5단계)
+				() => BlockData.Assign("", SlotData.EmptyValue()),
+			}),
+			("배열", new Func<BlockData>[]
+			{
+				() => BlockData.ArrayDeclare(new VariableType(VariableTypeKind.Int), "arr", Int("3")),
+				() => BlockData.ArrayGet("", SlotData.EmptyValue()),
+				() => BlockData.ArraySet("", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			}),
 		}),
 		// 값 칸에 끼우는 블록
-		("값", new Func<BlockData>[]
+		("값", new[]
 		{
-			() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
-			() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
-			() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
-			() => BlockData.Not(SlotData.EmptyValue()),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
+				() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
+				() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
+				() => BlockData.Not(SlotData.EmptyValue()),
+			}),
 		}),
-		("함수", null),
-		("메모리", new Func<BlockData>[]
+		// 함수를 끝내는 Return만. 함수를 부르는 블록은 함수 탭에 있다 (#489)
+		("함수", new[]
 		{
-			() => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)),
-			() => BlockData.Free(SlotData.EmptyValue()),
-		}),
-		("기타", new Func<BlockData>[]
-		{
-			() => BlockData.Return(),
-			() => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5")),
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Return(),
+			}),
 		}),
 	};
+
+	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
+	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
@@ -239,6 +285,19 @@ public class BlockEditor : MonoBehaviour
 	bool dirty; // 열고 나서 고쳤는지 (이름 뒤 *)
 	bool unsavedNewPage; // 「+」로 만든 새 페이지를 아직 저장하지 않았는지. 비어 있어도 저장하지 않은 것으로 친다 (HasUnsavedChanges)
 	bool savePending; // 서버에 저장을 요청하고 답을 기다리는 중인지. 답이 오기 전에는 저장했는지 알 수 없어 다른 함수를 열지 못하게 한다
+
+	// 저장하지 않은 작업본 (#494). 다른 페이지로 옮겨도 고친 내용을 버리지 않고 여기에 두었다가, 다시 열면 이어서 고친다.
+	// 예: 전역 변수 x를 지운 채로 x를 쓰는 슬롯 Q를 고치러 갈 수 있어야 하기 때문이다.
+	// 함수는 GUID로 찾고, 「+」로 만들어 아직 저장하지 않은 새 페이지도 들어 있다. 저장하면 빼고, 나가기 확인창에서 「나가기」를 누르면 모두 버린다
+	readonly Dictionary<string, FunctionData> drafts = new Dictionary<string, FunctionData>();
+	GlobalVariablesData globalsDraft; // 저장하지 않은 전역 변수 작업본. 없으면 null
+
+	// 서버에 페이지 함수 지우기를 요청하고 답을 기다리는 함수의 GUID와 상태 줄에 보일 이름 (#494). 답이 오면 비운다
+	// 서버에 한꺼번에 저장을 요청한 함수들의 GUID와 전역 변수를 함께 보냈는지 (#506). 성공하면 그 작업본을 뺀다
+	List<string> pendingSaveGuids;
+	bool pendingSaveGlobals;
+	string pendingDeleteGuid;
+	string pendingDeleteLabel;
 
 	// 전역 변수 편집 중이면 true. 이때 편집 영역은 globals.Declarations를 보여 준다
 	bool editingGlobals;
@@ -270,28 +329,62 @@ public class BlockEditor : MonoBehaviour
 	const float GhostAlpha = 0.4f;
 
 	BlockValueSlot highlightedSlot;
+	// 값 블록을 끌 때 마우스에서 이 거리(캔버스 단위) 안의 칸에 붙인다. 값 칸이 작아 마우스 끝 한 점으로는 맞히기 어렵기 때문
+	const float SnapDistance = 16f;
+	// 함수 틀 안 이름 칸의 높이. 머리줄(28)에서 위아래 여백을 뺀 정도
+	const float NameFieldHeight = 20f;
+	// 지금 붙어 있는 칸(highlightedSlot)이 붙기 직전의 화면 사각형. 미리보기를 끼워 칸이 넓어지거나 줄이 바뀌어도
+	// 마우스가 이 자리 근처에 있으면 그 칸에 그대로 붙어 있게 한다 (미리보기가 왔다 갔다 하지 않게)
+	Rect snapRect;
+	// 블록을 끄는 동안 청록·어둡게 표시한 빈 칸들 (#487). 놓으면 표시를 지운다
+	readonly List<BlockValueSlot> hintedSlots = new List<BlockValueSlot>();
 	Button asyncButton;
 	bool paletteBuilt;
 	readonly List<BlockValueSlot> errorSlots = new List<BlockValueSlot>();
 	readonly List<RectTransform> errorFrames = new List<RectTransform>();
+	// 컴파일 오류로 칠한 변수 칸(블록 UI, 칸 번호)과 값 칸에 끼운 블록 (#504). 다음에 고치면 errorSlots와 함께 되돌린다
+	readonly List<(BlockView view, int index)> errorVariableSlots = new List<(BlockView, int)>();
+	readonly List<BlockView> errorHeldViews = new List<BlockView>();
 	readonly List<GameObject> errorItems = new List<GameObject>();
-	string compileFailedKey; // 마지막 컴파일에서 오류가 난 함수 (목록에서 빨간 밑줄)
-	GlobalVariablesData listGlobals; // 함수 목록의 오류 검사에 쓰는 전역 변수
+	// 오류 창에 지금 보이는 오류들의 글자·자리를 이은 것. 같으면 다시 만들지 않는다 (고칠 때마다 Redraw가 오류 창을 다시 그리기 때문)
+	string shownErrorsKey;
+	// 함수 목록 줄을 눌렀을 때 하는 일 (함수 GUID → 열기). 오류 창의 「블록 보기」가 다른 함수의 오류일 때 그 함수를 먼저 열 때 쓴다
+	readonly Dictionary<string, Action> openActions = new Dictionary<string, Action>();
+	GlobalVariablesData listGlobals; // 저장된 전역 변수. 작업본이 없을 때 WorkingGlobals가 쓴다
 	Coroutine successRoutine;
 	readonly List<GameObject> savedButtons = new List<GameObject>();
-	readonly List<(ListItemView item, string prefix, string guid, string name, string detail, bool dim, bool error)> functionItems = new List<(ListItemView, string, string, string, string, bool, bool)>();
+	// 함수 목록의 줄. 컴파일 오류(빨간 밑줄)는 작업본에 따라 바뀌므로 줄에 두지 않고 Redraw가 계산한다 (#494)
+	readonly List<(ListItemView item, string prefix, string guid, string name, string detail, bool dim)> functionItems = new List<(ListItemView, string, string, string, string, bool)>();
+	// 저장된 상태의 빌드 결과 (#506). 목록을 다시 읽을 때(저장, 지우기, 편집 화면 열기) RefreshBuildState가 서버의 빌드와 같은 규칙으로 정한다
+	// 저장된 상태로 보는 이유: 서버가 실제로 실행하는 것은 저장된 함수이므로, 「✓면 시전된다」가 늘 맞게 하기 위함 (사용자 결정 11/16 (가))
+	bool savedBuildOk = true;
+	bool savedGlobalsFailed;
+	readonly List<(int Slot, string Guid)> failedSlots = new List<(int, string)>(); // 빌드 실패의 원인인 슬롯 (✗를 붙인다)
+	// 오류가 있는 함수 GUID → 슬롯에서 그 함수까지의 호출 경로들 (「슬롯 Q > aim > find」). 경로의 단계마다 그 함수 GUID, 보일 이름,
+	// 다음 함수를 부르는 블록의 순번(IndexOfBlock과 같은 순번)을 둔다. 오류 카드에서 이름을 누르면 그 함수를 열고 그 블록을 깜빡이기 위함. 마지막 단계(오류가 난 함수)는 GUID가 null
+	readonly Dictionary<string, List<List<(string Guid, string Label, int CallIndex)>>> buildPaths = new Dictionary<string, List<List<(string, string, int)>>>();
+	ListHeaderView slotHeader; // 함수 목록의 「슬롯」 머리글. 빌드 결과 ✓·✗를 보인다
 	List<FunctionData> savedFunctions = new List<FunctionData>();
 
 	void Start()
 	{
 		if (trashZone != null) trashZone.SetActive(false);
-		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => ShowTab(RightTab.Blocks));
-		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => ShowTab(RightTab.Errors));
-		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => ShowTab(RightTab.Reference));
+		if (blockTabButton != null) blockTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Blocks));
+		if (functionTabButton != null) functionTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Functions));
+		if (errorTabButton != null) errorTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Errors));
+		if (referenceTabButton != null) referenceTabButton.onClick.AddListener(() => OnTabClicked(RightTab.Reference));
+		if (panelToggleButton != null)
+		{
+			panelToggleButton.onClick.AddListener(TogglePanel);
+			panelToggleButton.gameObject.SetActive(sidePanel != null); // 접을 창(손잡이)이 없으면 버튼도 숨긴다
+		}
+		// 창 너비가 바뀐 그 자리에서 블록 자리의 최소 크기를 맞춘다. Update에서만 맞추면 손잡이를 끄는 프레임에 가로 스크롤바가 깜빡인다
+		if (sidePanel != null) sidePanel.Resized += OnSidePanelResized;
 		if (referenceSearch != null) referenceSearch.onValueChanged.AddListener(_ => RebuildReference());
 		if (paletteSearch != null) paletteSearch.onValueChanged.AddListener(_ => RebuildPalette());
+		if (functionSearch != null) functionSearch.onValueChanged.AddListener(_ => RebuildFunctionTab());
 		if (functionFrame != null && functionFrame.ReturnButton != null) functionFrame.ReturnButton.onClick.AddListener(OpenReturnTypeDropdown);
-		ShowErrors(new List<FunctionChecker.Error>());
+		ShowErrors(new List<ShownError>());
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
 		ShowTab(RightTab.Blocks);
 
@@ -328,6 +421,14 @@ public class BlockEditor : MonoBehaviour
 		fittedViewportSize = size;
 		workspaceMinSize.minWidth = size.x;
 		workspaceMinSize.minHeight = size.y;
+	}
+
+	// 오른쪽 창 너비가 바뀐 직후 (EditorSidePanel.Resized). 최소 크기만 바꾸면 블록 자리의 실제 크기는 화면 배치를 다시 계산할 때에야 줄어드는데,
+	// 그 전에 ScrollRect가 LateUpdate에서 줄기 전의 블록 자리와 좁아진 보이는 칸을 비교해 가로 스크롤바를 켠다. 그래서 블록 자리 배치를 바로 다시 계산한다
+	void OnSidePanelResized()
+	{
+		FitWorkspaceToViewport();
+		if (layoutRoot != null) LayoutRebuilder.ForceRebuildLayoutImmediate(layoutRoot);
 	}
 
 	// 설명창 (#476) -------------------------------------------------------------
@@ -422,7 +523,11 @@ public class BlockEditor : MonoBehaviour
 		savePending = false; // 편집 화면을 닫은 동안 답이 오지 못했어도 막힌 채로 남지 않게
 		if (confirmDialog != null) confirmDialog.Hide();
 		ReloadSavedFunctions();
-		if (!editingGlobals && server != null && (Function == null || savedFunctions.All(f => f.Guid != Function.Guid))) OpenFirstSlot();
+		if (!editingGlobals && server != null && (Function == null || savedFunctions.All(f => f.Guid != Function.Guid)))
+		{
+			StashCurrent(); // 저장하지 않은 새 페이지였으면 작업본으로 둔다
+			OpenFirstSlot();
+		}
 	}
 
 	// 실제 계정이면 내 캐릭터의 FunctionExecutorNetwork에 연결한다
@@ -438,10 +543,14 @@ public class BlockEditor : MonoBehaviour
 		if (server == null) return;
 		server.PlayerDataReceived += OnServerDataReceived;
 		server.PlayerDataRequestAnswered += OnServerAnswered;
+		// 가진 개수가 바뀌면(해금, 상점) 「남은/가진」을 다시 센다 (#500)
+		if (localPlayer.TryGetComponent(out progressForCounts)) progressForCounts.Changed += RefreshCounts;
 	}
 
 	void UnbindServer()
 	{
+		if (progressForCounts != null) progressForCounts.Changed -= RefreshCounts;
+		progressForCounts = null;
 		if (server == null) return;
 		server.PlayerDataReceived -= OnServerDataReceived;
 		server.PlayerDataRequestAnswered -= OnServerAnswered;
@@ -458,108 +567,137 @@ public class BlockEditor : MonoBehaviour
 
 	void OnServerAnswered(PlayerDataRequest request, PlayerDataRequestResult result)
 	{
-		if (request == PlayerDataRequest.SaveFunction || request == PlayerDataRequest.SaveGlobals) savePending = false;
-		if (request == PlayerDataRequest.SaveGlobals)
+		if (request == PlayerDataRequest.SaveAll || request == PlayerDataRequest.DeleteFunction) savePending = false;
+		if (request == PlayerDataRequest.DeleteFunction)
 		{
-			bool saved = result == PlayerDataRequestResult.Saved;
-			if (saved && editingGlobals) dirty = false;
-			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
-			if (saved) ReloadSavedFunctions();
-			SetMessage(saved ? "저장됨" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인)", !saved);
-			Redraw();
+			// 성공이면 이 답보다 먼저 ReceivedFunctions에서 빠지고 목록을 다시 그렸다 (OnServerDataReceived)
+			string guid = pendingDeleteGuid, label = pendingDeleteLabel ?? "함수";
+			pendingDeleteGuid = pendingDeleteLabel = null;
+			if (result == PlayerDataRequestResult.Saved && guid != null) AfterPageDeleted(guid, label);
+			else
+			{
+				SetMessage(result switch
+				{
+					PlayerDataRequestResult.SlotFunctionLocked => "슬롯 함수는 지울 수 없음",
+					PlayerDataRequestResult.UnknownFunction => $"{label}{Eul(label)} 찾지 못해 지우지 못함",
+					_ => $"지우지 못함 ({result})",
+				}, true);
+				Redraw();
+			}
 			return;
 		}
-		if (request != PlayerDataRequest.SaveFunction) return;
-		if (result == PlayerDataRequestResult.Saved && !editingGlobals) dirty = false;
+		if (request != PlayerDataRequest.SaveAll) return;
+		// 답을 기다리는 동안 다른 페이지를 열 수 없으므로, 보낸 파일들의 작업본이 그대로 있다
+		List<string> sentGuids = pendingSaveGuids ?? new List<string>();
+		bool sentGlobals = pendingSaveGlobals;
+		pendingSaveGuids = null;
+		pendingSaveGlobals = false;
+		if (result == PlayerDataRequestResult.Saved)
+		{
+			AfterSaved(sentGuids, sentGlobals);
+			return;
+		}
+		// 거부되면 어느 파일도 저장되지 않았다. 고친 내용은 작업본으로 남는다
 		SetMessage(result switch
 		{
-			PlayerDataRequestResult.Saved => "저장됨",
 			PlayerDataRequestResult.TooManyFunctions => $"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음",
 			PlayerDataRequestResult.SlotFunctionLocked => "슬롯 함수는 이름, 파라미터를 바꿀 수 없음",
 			PlayerDataRequestResult.InvalidData => "저장하지 못함 (함수 데이터 오류)",
 			PlayerDataRequestResult.BlockLocked => "저장하지 못함 (아직 해금하지 않은 블록이 있음)",
 			PlayerDataRequestResult.SkillLocked => "저장하지 못함 (아직 해금하지 않은 스킬이 있음)",
 			PlayerDataRequestResult.CodeSizeExceeded => $"저장하지 못함 (슬롯의 코드 영역이 {ProgressRules.MaxCodeSize}을 넘음)",
+			PlayerDataRequestResult.CountExceeded => CountShortageMessage(FindCountShortage(WorkingFunctions(), WorkingGlobals())),
+			PlayerDataRequestResult.TooLarge => "저장하지 못함 (저장할 내용이 너무 큼)",
 			_ => $"저장하지 못함 ({result})",
-		}, result != PlayerDataRequestResult.Saved);
+		}, true);
 		Redraw();
 	}
 
 	/// <summary>
-	/// 저장하지 않은 변경이 있으면 true: 열고 나서 고쳤거나(이름 뒤 *), 「+」로 만든 새 페이지를 아직 저장하지 않았을 때.
-	/// 편집 화면을 처음 열 때 기본으로 열리는 빈 함수는 고치기 전까지 해당하지 않는다.
+	/// 저장하지 않은 변경이 어느 페이지에든 있으면 true: 지금 페이지를 열고 나서 고쳤거나, 「+」로 만든 새 페이지를 아직 저장하지 않았거나,
+	/// 다른 페이지에 저장하지 않은 작업본이 있을 때 (#494). 편집 화면을 처음 열 때 기본으로 열리는 빈 함수는 고치기 전까지 해당하지 않는다.
 	/// </summary>
-	public bool HasUnsavedChanges
-	{
-		get
-		{
-			if (dirty) return true;
-			return unsavedNewPage && !editingGlobals && Function != null && savedFunctions.All(f => f.Guid != Function.Guid);
-		}
-	}
+	public bool HasUnsavedChanges => CurrentUnsaved || drafts.Count > 0 || globalsDraft != null;
+
+	// 지금 연 페이지에 저장하지 않은 변경이 있으면 true (이름 뒤 *)
+	bool CurrentUnsaved =>
+		dirty || (unsavedNewPage && !editingGlobals && Function != null && savedFunctions.All(f => f.Guid != Function.Guid));
 
 	/// <summary>
-	/// 다른 함수를 열기 전에 부른다 (함수 목록의 줄, 「+」, Global Variables). 저장하지 않은 변경이 없으면 바로 open을 하고,
-	/// 있으면 확인창에서 「예」를 눌렀을 때 open을 한다. 서버 저장의 답을 기다리는 중이면 열지 않는다.
+	/// 다른 함수를 열 때 부른다 (함수 목록의 줄, 「+」, Global Variables). 지금 페이지의 고친 내용은 작업본으로 두고 open을 한다 (#494).
+	/// 예전에는 고친 내용을 버릴지 물었지만, 지운 전역 변수를 쓰던 함수를 고치러 가려면 고친 내용을 들고 옮겨야 해서 묻지 않는다.
+	/// 서버 저장의 답을 기다리는 중이면 열지 않는다. 답이 오기 전에 페이지가 바뀌면 어느 페이지를 저장했는지 알 수 없기 때문이다.
 	/// </summary>
-	void RequestOpen(string label, Action open, string verb = "여시겠습니까")
+	void SwitchTo(Action open)
 	{
-		if (!HasUnsavedChanges || confirmDialog == null)
-		{
-			open();
-			return;
-		}
 		if (savePending)
 		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
 			return;
 		}
-		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
-		confirmDialog.Show($"파일이 저장되지 않았습니다.\n{label}{Eul(label)} {verb}?", open);
+		StashCurrent();
+		open();
 	}
 
-	/// <summary>
-	/// 편집 화면을 닫기 전에 부른다 (BlockEditorPanel). 저장하지 않은 변경이 없으면 바로 close를 하고, 있으면 확인창에서 「예」를 눌렀을 때
-	/// 저장하지 않은 내용을 버리고 close를 한다. 버리지 않으면 다음에 열 때 고치던 내용이 저장된 것처럼 남기 때문이다.
-	/// </summary>
-	public void RequestClose(Action close)
-	{
-		if (!HasUnsavedChanges || confirmDialog == null)
-		{
-			close();
-			return;
-		}
-		if (savePending)
-		{
-			ShowNotice("저장하는 중입니다. 잠시 뒤에 다시 눌러 주세요", false);
-			return;
-		}
-		confirmDialog.Show("파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?", () =>
-		{
-			DiscardUnsaved();
-			close();
-		});
-	}
-
-	// 저장하지 않은 내용을 버리고 마지막으로 저장한 상태를 다시 연다. 저장한 적 없는 새 페이지는 사라지고 처음 화면으로 돌아간다
-	void DiscardUnsaved()
+	// 지금 페이지에 저장하지 않은 변경이 있으면 작업본으로 둔다. 다른 페이지를 열거나 편집 영역을 비우기 전에 부른다
+	void StashCurrent()
 	{
 		if (editingGlobals)
 		{
-			OpenGlobals();
+			if (dirty) globalsDraft = globals;
 			return;
 		}
+		if (Function != null && CurrentUnsaved) drafts[Function.Guid] = Function;
+	}
 
-		FunctionData saved = Function != null ? savedFunctions.FirstOrDefault(f => f.Guid == Function.Guid) : null;
-		if (saved != null)
+	/// <summary>
+	/// 편집 화면을 닫기 전에 부른다 (BlockEditorPanel). 저장하지 않은 변경이 어느 페이지에도 없으면 바로 close를 하고, 있으면 확인창에서
+	/// 「나가기」를 눌렀을 때 모든 페이지의 저장하지 않은 내용을 버리고 close를 한다. 「취소」를 누르면 편집 화면에 남는다.
+	/// 버리지 않으면 다음에 열 때 고치던 내용이 저장된 것처럼 남기 때문이다.<br/>
+	/// 저장된 상태가 빌드에 실패했으면(모든 슬롯이 시전되지 않음) 같은 확인창으로 알린다. 둘 다면 확인창 하나로 합친다 (#506).
+	/// </summary>
+	public void RequestClose(Action close)
+	{
+		bool unsaved = HasUnsavedChanges;
+		bool buildFailed = !savedBuildOk;
+		if ((!unsaved && !buildFailed) || confirmDialog == null)
 		{
-			Open(server != null ? Copy(saved) : FunctionStorage.Load(saved.Guid) ?? saved);
+			close();
 			return;
 		}
+		if (savePending)
+		{
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
+			return;
+		}
+		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 「니까?」처럼 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
+		// 둘 다일 때 하나로 합치는 이유: 확인창이 두 번 연달아 뜨지 않게 (사용자 결정 11/16 (가))
+		string text = unsaved && buildFailed ? "파일이 저장되지 않았고, Build에 실패한 상태입니다.\n저장하지 않고 나가시겠습니까?"
+			: unsaved ? "파일이 저장되지 않았습니다.\n저장하지 않고 나가시겠습니까?"
+			: "Build에 실패했습니다.\n이대로 나가면 모든 슬롯을 시전할 수 없습니다.";
+		confirmDialog.Show(text, () =>
+		{
+			if (unsaved) DiscardUnsaved();
+			close();
+		}, "나가기 (Enter)", "취소 (Esc)");
+	}
 
-		if (server != null) OpenFirstSlot();
-		else Open(FunctionData.Create(UniqueName("새_함수")));
-		ReloadSavedFunctions(); // 사라진 새 페이지 줄을 목록에서 뺀다
+	// 모든 페이지의 저장하지 않은 내용(작업본)을 버리고, 지금 페이지는 마지막으로 저장한 상태를 다시 연다.
+	// 저장한 적 없는 새 페이지는 사라지고 처음 화면으로 돌아간다
+	void DiscardUnsaved()
+	{
+		drafts.Clear();
+		globalsDraft = null;
+
+		if (editingGlobals) OpenGlobals();
+		else
+		{
+			FunctionData saved = Function != null ? savedFunctions.FirstOrDefault(f => f.Guid == Function.Guid) : null;
+			if (saved != null) Open(server != null ? Copy(saved) : FunctionStorage.Load(saved.Guid) ?? saved);
+			else if (server != null) OpenFirstSlot();
+			else Open(FunctionData.Create(UniqueName("새_함수")));
+		}
+		ReloadSavedFunctions(); // 사라진 새 페이지 줄을 빼고, 작업본의 이름 대신 저장된 이름을 보인다
 	}
 
 	// 「을」 「를」을 받침에 맞게 고른다. 한글이 아닌 글자(guard 등)로 끝나면 둘을 같이 적는다
@@ -567,6 +705,9 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (string.IsNullOrEmpty(word)) return "을(를)";
 		char last = word[word.Length - 1];
+		// 영문 대문자 한 글자로 끝나면 그 글자를 읽는 소리로 고른다 (#487, 「슬롯 W를」, 「슬롯 R을」). 엘·엠·엔·알만 받침이 있다
+		if (last >= 'A' && last <= 'Z' && (word.Length == 1 || !char.IsLetter(word[word.Length - 2])))
+			return "LMNR".IndexOf(last) >= 0 ? "을" : "를";
 		if (last < 0xAC00 || last > 0xD7A3) return "을(를)";
 		return (last - 0xAC00) % 28 == 0 ? "를" : "을";
 	}
@@ -580,9 +721,24 @@ public class BlockEditor : MonoBehaviour
 	/// <summary>
 	/// 함수 하나를 편집 영역에 연다. 함수에 블록이 이미 있으면 (불러온 함수) 그대로 화면에 만든다.
 	/// </summary>
-	public void Open(FunctionData function)
+	public void Open(FunctionData function) => OpenFunction(function, false);
+
+	// 함수 목록에서 고른 함수를 연다. 저장하지 않은 작업본이 있으면 그것을, 없으면 loadSaved로 읽은 저장된 함수를 연다 (#494)
+	void OpenPage(string guid, Func<FunctionData> loadSaved)
 	{
-		// 변수 고르기와 칸 규칙은 저장된 전역 변수를 본다. 전역 변수를 고치다 저장하지 않고 왔으면 저장된 것으로 되돌려 둔다 (#474)
+		if (drafts.TryGetValue(guid, out FunctionData draft))
+		{
+			OpenFunction(draft, true);
+			return;
+		}
+		FunctionData saved = loadSaved();
+		if (saved != null) OpenFunction(saved, false);
+	}
+
+	// fromDraft: 저장하지 않은 작업본을 다시 여는지. 그러면 연 뒤에도 「저장하지 않은 변경 있음」으로 둔다
+	void OpenFunction(FunctionData function, bool fromDraft)
+	{
+		// 저장된 전역 변수. 변수 고르기와 칸 규칙은 작업본이 있으면 작업본을 본다 (VisibleVariables, #506)
 		listGlobals = CurrentGlobals();
 		workspace.ClearViews();
 		editingGlobals = false;
@@ -591,46 +747,50 @@ public class BlockEditor : MonoBehaviour
 		workspace.Bind(function.Blocks, this);
 		if (functionNameField != null)
 		{
-			functionNameField.Text = function.Name;
-			functionNameField.Interactable = !IsSlotFunction(function); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
+			functionNameField.Text = DisplayNameOf(function);
+			SetNameFieldEditable(!IsSlotFunction(function)); // 슬롯 함수 이름(slot1~slot8)은 바꿀 수 없음
 		}
-		dirty = false;
+		dirty = fromDraft;
 		SetMessage("");
 		ResetCompileResult();
 		RemoveStaleUnsavedEntry();
 		Redraw();
 	}
 
-	// 저장하지 않은 새 페이지에서 다른 곳으로 옮겼으면 그 페이지의 「저장 안 함」 줄을 목록에서 지운다.
-	// 저장한 적이 없어서 다시 열 수 없는데도 줄이 남아 있으면 눌러도 아무 일이 없기 때문이다 (#432)
+	// 저장하지 않은 새 페이지를 작업본으로 두지 않고 다른 곳으로 옮겼으면(고치지 않은 기본 빈 함수 등) 그 페이지의 「저장 안 함」 줄을 목록에서 지운다.
+	// 저장한 적이 없어서 다시 열 수 없는데도 줄이 남아 있으면 눌러도 아무 일이 없기 때문이다 (#432). 작업본으로 둔 새 페이지는 줄을 남긴다 (#494)
 	void RemoveStaleUnsavedEntry()
 	{
 		string currentGuid = editingGlobals ? null : Function?.Guid;
 		bool stale = functionItems.Any(e => e.guid != null && e.guid != GlobalsKey
-			&& e.guid != currentGuid && savedFunctions.All(f => f.Guid != e.guid));
+			&& e.guid != currentGuid && !drafts.ContainsKey(e.guid) && savedFunctions.All(f => f.Guid != e.guid));
 		if (stale) ReloadSavedFunctions();
 	}
 
-	// 다른 함수를 열면 지난 컴파일 결과(오류 창, 빨간 표시, 성공 알림)를 지우고 블록 목록으로 돌아간다
+	// 다른 함수를 열면 지난 컴파일 결과(빨간 표시, 성공 알림)를 지운다.
+	// 오류 창과 열린 탭은 그대로 둔다. 오류 창은 모든 함수의 오류를 보이므로 다른 함수를 열어도 목록이 바뀌지 않기 때문
 	void ResetCompileResult()
 	{
-		compileFailedKey = null;
 		ClearErrorMarks();
-		ShowErrors(new List<FunctionChecker.Error>());
-		// 지난 오류 창만 블록 목록으로 돌린다. 참고 창을 보던 중이면 그대로 둔다
-		if (rightTab == RightTab.Errors) ShowTab(RightTab.Blocks);
+		HideSuccess();
+	}
+
+	// 컴파일 성공 알림(초록)을 바로 지운다
+	void HideSuccess()
+	{
 		if (successRoutine != null) StopCoroutine(successRoutine);
 		successRoutine = null;
 		if (compileOkBadge != null) compileOkBadge.SetActive(false);
 	}
 
 	/// <summary>
-	/// 전역 변수 선언을 편집 영역에 연다 (함수 목록의 Global Variables). 실제 계정이면 서버가 보낸 것, 아니면 이 컴퓨터의 파일.
+	/// 전역 변수 선언을 편집 영역에 연다 (함수 목록의 Global Variables). 저장하지 않은 작업본이 있으면 그것을 (#494),
+	/// 없으면 실제 계정은 서버가 보낸 것, 임시 계정은 이 컴퓨터의 파일.
 	/// </summary>
 	public void OpenGlobals()
 	{
-		GlobalVariablesData source = server != null ? server.ReceivedGlobals : GlobalVariablesStorage.Load();
-		globals = CopyGlobals(source);
+		bool fromDraft = globalsDraft != null;
+		globals = fromDraft ? globalsDraft : CopyGlobals(server != null ? server.ReceivedGlobals : GlobalVariablesStorage.Load());
 
 		workspace.ClearViews();
 		editingGlobals = true;
@@ -639,9 +799,9 @@ public class BlockEditor : MonoBehaviour
 		if (functionNameField != null)
 		{
 			functionNameField.Text = "Global Variables";
-			functionNameField.Interactable = false;
+			SetNameFieldEditable(false);
 		}
-		dirty = false;
+		dirty = fromDraft;
 		SetMessage("");
 		ResetCompileResult();
 		RemoveStaleUnsavedEntry();
@@ -656,127 +816,269 @@ public class BlockEditor : MonoBehaviour
 			: new GlobalVariablesData();
 	}
 
-	// 전역 변수 저장. 검사에 걸리면 저장하지 않는다 (function-executor.md 「전역 변수」 저장 검사)
-	void SaveGlobals()
-	{
-		if (server != null)
-		{
-			savePending = true; // 요청이 바로 거부되면 답이 이 줄 안에서 와서 곧바로 풀린다
-			server.RequestSaveGlobals(globals);
-			SetMessage("저장하는 중...");
-			Redraw();
-			return;
-		}
-
-		NetworkIdentity localPlayer = NetworkClient.localPlayer;
-		if (localPlayer == null || !localPlayer.TryGetComponent(out FunctionExecutor executor))
-		{
-			SetMessage("내 캐릭터의 함수 실행기를 찾지 못해 저장하지 못함", true);
-			Redraw();
-			return;
-		}
-		bool ok = executor.TrySaveGlobalVariables(globals);
-		if (ok)
-		{
-			dirty = false;
-			// 저장한 전역 변수로 함수 목록의 오류 표시와 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
-			ReloadSavedFunctions();
-		}
-		SetMessage(ok ? "저장됨 (전역 변수를 새로 만듦)" : "전역 변수를 저장하지 못함 (int x = 3; 처럼 선언만, 칸 수 확인. 콘솔 참고)", !ok);
-		Redraw();
-	}
-
 	/// <summary>
-	/// 지금 함수를 저장하고 저장한 함수 목록을 다시 읽는다. 저장하기 전에 컴파일(Compile과 같은 검사)을 하고, 오류가 있으면 저장하지 않는다.
-	/// 전역 변수는 컴파일 대신 저장 검사(FunctionExecutor.CanUseGlobalVariables)가 막는다.
-	/// </summary>
-	public void SaveFunction()
-	{
-		// 펼쳐 두고 비운 선언의 처음 값 칸을 접는다. 빈 처음 값은 기본값으로 실행되므로 저장한 모양을 int x;로 맞춘다 (#474)
-		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.CollapseEmptyInitialValue();
-
-		if (editingGlobals)
-		{
-			SaveGlobals();
-			return;
-		}
-
-		// 저장하기 전에 항상 컴파일한다. 오류가 있으면 서버에도 파일에도 저장하지 않고, 오류 창과 빨간 표시를 보여 준다 (#432)
-		// 저장하지 않은 내용은 편집 화면에 그대로 남으므로, 고친 뒤 다시 저장하면 된다
-		int compileErrors = RunCompile();
-		if (compileErrors > 0)
-		{
-			SetMessage($"컴파일 오류 {compileErrors}개가 있어 저장하지 않았습니다", true);
-			Redraw();
-			return;
-		}
-
-		if (NameTaken(Function.Name, Function.Guid))
-		{
-			SetMessage($"이미 「{Function.Name}」 함수가 있어서 저장하지 못했어요. 이름을 바꿔 주세요", true);
-			Redraw();
-			return;
-		}
-
-		// 실제 계정: 서버 DB에 저장 요청. 결과는 OnServerAnswered, 목록은 OnServerDataReceived에서 다시 그린다
-		if (server != null)
-		{
-			bool isNewPage = savedFunctions.All(f => f.Guid != Function.Guid);
-			if (isNewPage && PageFunctions().Count() >= ProgressRules.MaxPageFunctions)
-			{
-				SetMessage($"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음", true);
-				Redraw();
-				return;
-			}
-			savePending = true; // 요청이 바로 거부되면 답이 이 줄 안에서 와서 곧바로 풀린다
-			server.RequestSaveFunction(Function);
-			SetMessage("저장하는 중...");
-			Redraw();
-			return;
-		}
-
-		FunctionStorage.Save(Function);
-		dirty = false;
-		SetMessage("저장됨");
-		ReloadSavedFunctions();
-
-		// 슬롯에 넣어 둔 함수를 고쳤을 수 있으므로, 내 캐릭터의 슬롯 원본을 새로 만든다 (slot-caster.md 「ReloadFunctions」)
-		// ReloadFunctions가 Changed를 내면 FunctionExecutorNetwork가 서버로 함수를 다시 보낸다 (network.md 「함수 데이터 전송」)
-		NetworkIdentity localPlayer = NetworkClient.localPlayer;
-		if (localPlayer != null && localPlayer.TryGetComponent(out SlotLoadout loadout)) loadout.ReloadFunctions();
-		Debug.Log($"[BlockEditor] 「{Function.Name}」 저장함: {FunctionStorage.PathOf(Function)}");
-	}
-
-	/// <summary>
-	/// 저장하기 전에 지금 함수(또는 전역 변수)를 검사한다. 결과는 위쪽 상태 글자에 보인다. 저장은 하지 않는다.
+	/// 저장 버튼 (#506). 고친 모든 파일(지금 페이지, 다른 페이지의 작업본, Global Variables의 작업본)을 한꺼번에 저장한다.
+	/// 컴파일 오류가 있어도 저장한다. 저장한 뒤 자동으로 컴파일해 오류를 오류 창과 빨간 표시로 보인다 (ShowCompileResult).
 	/// <para>
-	/// 검사: 반복문 밖의 break·continue(BlockData.HasJumpOutsideLoop), 값을 돌려줘야 하는데 return이 없는 길(BlockData.AlwaysReturnsValue),
-	/// 비어 있는 값 칸. 전역 변수는 FunctionExecutor.CanUseGlobalVariables (function-data.md, function-executor.md).
+	/// 저장하지 않는 경우: 같은 이름의 함수, 실제 계정의 페이지 함수 수 초과·가진 개수 부족(서버도 다시 검사), 서버가 거부한 경우(해금, 코드 영역, 슬롯 함수의 틀).
+	/// 이때는 어느 파일도 저장하지 않고, 고친 내용은 작업본으로 남는다.
 	/// </para>
 	/// </summary>
-	public void Compile() => RunCompile();
-
-	// 컴파일 버튼과 저장이 함께 쓰는 검사. 오류 수를 돌려준다 (0이면 성공)
-	int RunCompile()
+	// 예전(#494)에는 지금 페이지만 저장하고 컴파일 오류가 있으면 저장을 거부했다. 다른 함수의 오류 때문에 고친 파일이 저장되지 않아 바꿨다 (사용자 결정 11/16)
+	// 시전을 막는 것은 서버가 정한 빌드 결과(FunctionExecutorNetwork.IsBuildSucceeded)다
+	public void Save()
 	{
-		List<FunctionChecker.Error> errors;
-		if (editingGlobals)
+		if (savePending)
 		{
-			errors = new List<FunctionChecker.Error>();
-			NetworkIdentity localPlayer = NetworkClient.localPlayer;
-			bool ok = localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutor executor) && executor.CanUseGlobalVariables(globals);
-			if (!ok) errors.Add(new FunctionChecker.Error { Code = "Global Variables", Message = "int x = 3; 같은 선언 블록과 int arr[5]; 같은 배열 만들기 블록만 넣을 수 있어요. 칸 수도 확인하세요 (자세한 이유는 콘솔)" });
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
+			return;
 		}
-		else errors = FunctionChecker.Find(Function, CurrentGlobals(), savedFunctions);
 
-		ShowErrors(errors);
-		MarkErrors(errors);
-		compileFailedKey = errors.Count > 0 ? OpenKey : null;
-		if (errors.Count > 0) ShowTab(RightTab.Errors);
-		else ShowSuccess();
-		SetMessage(errors.Count == 0 ? "컴파일 성공" : $"컴파일 오류 {errors.Count}개", errors.Count > 0);
+		// 펼쳐 두고 비운 선언의 처음 값 칸을 접는다. 빈 처음 값은 기본값으로 실행되므로 저장한 모양을 int x;로 맞춘다 (#474)
+		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.CollapseEmptyInitialValue();
+		// 지금 페이지의 고친 내용도 작업본에 넣어 다른 페이지와 함께 저장한다
+		StashCurrent();
+		List<FunctionData> changed = drafts.Values.ToList();
+		GlobalVariablesData changedGlobals = globalsDraft;
+		if (changed.Count == 0 && changedGlobals == null)
+		{
+			SetMessage("저장됨");
+			Redraw();
+			return;
+		}
+
+		string refusal = FindSaveRefusal(changed);
+		if (refusal != null)
+		{
+			SetMessage(refusal, true);
+			Redraw();
+			return;
+		}
+
+		// 실제 계정: 서버 DB에 한꺼번에 저장 요청. 결과는 OnServerAnswered, 목록은 OnServerDataReceived에서 다시 그린다
+		if (server != null)
+		{
+			savePending = true; // 요청이 바로 거부되면 답이 이 줄 안에서 와서 곧바로 풀린다
+			pendingSaveGuids = changed.Select(f => f.Guid).ToList();
+			pendingSaveGlobals = changedGlobals != null;
+			server.RequestSaveAll(changed, changedGlobals);
+			if (savePending) SetMessage("저장하는 중...");
+			Redraw();
+			return;
+		}
+
+		// 임시 계정: 이 컴퓨터의 파일에 쓴다
+		foreach (FunctionData function in changed) FunctionStorage.Save(function);
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (changedGlobals != null)
+		{
+			GlobalVariablesStorage.Save(changedGlobals);
+			// 서버(호스트면 이 컴퓨터)가 새 전역 변수로 프로세스를 새로 시작하고 슬롯을 다시 컴파일하게 보낸다
+			if (localPlayer != null && localPlayer.TryGetComponent(out FunctionExecutorNetwork network)) network.ResendLocalGlobals();
+		}
+		// 슬롯에 넣어 둔 함수를 고쳤을 수 있으므로, 내 캐릭터의 슬롯 원본을 새로 만든다 (slot-caster.md 「ReloadFunctions」)
+		// ReloadFunctions가 Changed를 내면 FunctionExecutorNetwork가 서버로 함수를 다시 보낸다 (network.md 「함수 데이터 전송」)
+		if (changed.Count > 0 && localPlayer != null && localPlayer.TryGetComponent(out SlotLoadout loadout)) loadout.ReloadFunctions();
+		Debug.Log($"[BlockEditor] 함수 {changed.Count}개{(changedGlobals != null ? ", 전역 변수" : "")} 저장함: {Application.persistentDataPath}");
+		AfterSaved(changed.Select(f => f.Guid).ToList(), changedGlobals != null);
+	}
+
+	// 저장하지 않을 이유. 없으면 null. 실제 계정의 페이지 함수 수와 개수는 서버도 같은 규칙으로 다시 검사한다
+	string FindSaveRefusal(List<FunctionData> changed)
+	{
+		foreach (FunctionData function in changed)
+		{
+			if (NameTaken(function.Name, function.Guid))
+				return $"이미 「{function.Name}」 함수가 있어서 저장하지 못했어요. 이름을 바꿔 주세요";
+		}
+		if (server == null) return null;
+
+		if (PageFunctions().Count() + NewPages().Count > ProgressRules.MaxPageFunctions)
+			return $"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음";
+		// 가진 개수보다 많이 쓰면 서버에 보내지 않고 어느 항목이 모자란지 알린다 (#500)
+		ItemCountRules.Shortage? shortage = FindCountShortage(WorkingFunctions(), WorkingGlobals());
+		return shortage != null ? CountShortageMessage(shortage) : null;
+	}
+
+	// 저장한 뒤: 저장한 파일의 작업본을 빼고, 목록을 다시 읽고, 자동 컴파일 결과를 보인다
+	void AfterSaved(IEnumerable<string> savedGuids, bool savedGlobals)
+	{
+		foreach (string guid in savedGuids) drafts.Remove(guid);
+		if (savedGlobals) globalsDraft = null;
+		dirty = false;
+		// 저장한 함수와 전역 변수로 함수 목록, 변수 고르기 목록(listGlobals)을 다시 만든다 (#474)
+		ReloadSavedFunctions();
+		bool built = ShowCompileResult();
+		SetMessage(built ? "저장됨" : $"저장됨. {BuildFailureText()}", !built);
 		Redraw();
-		return errors.Count;
+	}
+
+	// 저장·지우기 뒤의 자동 컴파일 (#506). 모든 함수와 Global Variables를 검사해 오류 창에 보이고, 지금 연 함수의 오류 자리를 칠한다.
+	// 빌드 결과는 목록을 다시 읽을 때 RefreshBuildState가 정해 두었다. 성공이면 「Build 성공」 알림을 띄우고 true를 돌려준다
+	// 오류가 하나라도 있으면 오류 탭을 연다 (슬롯이 부르지 않는 페이지 함수의 오류도 보이기 위함)
+	bool ShowCompileResult()
+	{
+		Dictionary<string, List<FunctionChecker.Error>> all = FindAllErrors(WorkingFunctions(), WorkingGlobals());
+
+		MarkErrors(OpenKey != null && all.TryGetValue(OpenKey, out List<FunctionChecker.Error> openErrors) ? openErrors : new List<FunctionChecker.Error>());
+		if (all.Count > 0) ShowTab(RightTab.Errors);
+		if (savedBuildOk) ShowSuccess();
+		return savedBuildOk;
+	}
+
+	// 저장된 함수와 전역 변수로 서버의 빌드(FunctionExecutorNetwork.Build)와 같은 규칙의 빌드 결과를 정한다 (#506, 사용자 결정 11/16 (나))
+	// 슬롯 함수들과 그 함수가 부르는 함수, Global Variables 중 하나라도 오류가 있으면 실패. 슬롯이 부르지 않는 페이지 함수의 오류는 넣지 않는다
+	// 실패한 슬롯과, 오류가 있는 함수까지의 호출 경로도 남긴다 (✗와 오류 카드의 「슬롯 Q → aim → find」)
+	// 서버의 결과(IsBuildSucceeded)를 기다리지 않는 이유: 저장의 답과 SyncVar가 오는 순서가 정해져 있지 않아, 답을 받은 순간에는 지난 결과일 수 있기 때문
+	void RefreshBuildState()
+	{
+		failedSlots.Clear();
+		buildPaths.Clear();
+		GlobalVariablesData globalsSaved = CurrentGlobals();
+		savedGlobalsFailed = globalsSaved != null && FindGlobalsErrors(globalsSaved) != null;
+
+		SlotLoadout loadout = null;
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (localPlayer != null) localPlayer.TryGetComponent(out loadout);
+		for (int slot = 0; loadout != null && slot < SlotLoadout.SlotCount; slot++)
+		{
+			SlotLoadout.Entry entry = loadout.GetEntry(slot);
+			if (entry.IsEmpty || entry.Kind != SlotLoadout.EntryKind.UserFunction) continue;
+			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
+			if (slotFunction == null) continue; // 받지 못한 함수는 컴파일 오류가 아니다 (서버도 빌드에서 뺌)
+
+			List<List<FunctionData>> paths = SlotCompileChecker.FailedPaths(slotFunction, savedFunctions, globalsSaved);
+			if (paths.Count == 0) continue;
+			failedSlots.Add((slot, slotFunction.Guid));
+			foreach (List<FunctionData> path in paths)
+			{
+				// 슬롯 함수는 이름(slot1 등) 대신 「슬롯 Q」, 그 뒤는 부른 함수의 이름
+				var steps = new List<(string, string, int)>();
+				for (int i = 0; i < path.Count; i++)
+				{
+					string label = i == 0 ? $"슬롯 {KeyOf(slot)}" : path[i].Name;
+					bool last = i == path.Count - 1;
+					steps.Add((last ? null : path[i].Guid, label, last ? -1 : CallIndexOf(path[i], path[i + 1].Guid)));
+				}
+				string failedGuid = path[path.Count - 1].Guid;
+				if (!buildPaths.TryGetValue(failedGuid, out var list)) buildPaths[failedGuid] = list = new List<List<(string, string, int)>>();
+				list.Add(steps);
+			}
+		}
+		savedBuildOk = !savedGlobalsFailed && failedSlots.Count == 0;
+	}
+
+	// caller 안에서 calleeGuid 함수를 부르는 첫 블록의 순번 (IndexOfBlock과 같은 순번). 없으면 -1
+	static int CallIndexOf(FunctionData caller, string calleeGuid)
+	{
+		int index = 0;
+		foreach (BlockData block in AllBlocksOf(caller.Blocks))
+		{
+			if (block.Kind == BlockKind.Function && block.IsUserFunction && block.FunctionId == calleeGuid) return index;
+			index++;
+		}
+		return -1;
+	}
+
+	// 상태 줄의 「Build 실패: 슬롯 Q, W」: 빌드 실패의 원인 (Global Variables, 실패한 슬롯들)
+	string BuildFailureText()
+	{
+		var causes = new List<string>();
+		if (savedGlobalsFailed) causes.Add("Global Variables");
+		causes.AddRange(failedSlots.Select(s => $"슬롯 {KeyOf(s.Slot)}"));
+		return causes.Count > 0 ? $"Build 실패: {string.Join(", ", causes)}" : "Build 실패";
+	}
+
+	// 전역 변수 파일의 오류. 없으면 null. 내 캐릭터의 실행기가 찾은 첫 번째 이유를 그대로 보인다 (#504). 예: 같은 scope에서 재정의할 수 없음: x
+	List<FunctionChecker.Error> FindGlobalsErrors(GlobalVariablesData file)
+	{
+		if (file == null) return null;
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		// 내 캐릭터의 실행기를 찾지 못하면(접속 전 등) 검사할 수 없으므로 오류가 없는 것으로 본다. 다시 그릴 때마다 부르므로 카드가 깜빡이지 않게
+		if (localPlayer == null || !localPlayer.TryGetComponent(out FunctionExecutor executor)) return null;
+		if (executor.CanUseGlobalVariables(file, out List<GlobalVariablesConverter.Failure> failures)) return null;
+
+		// 찾은 오류마다 거부한 선언과 칸을 담는다 (#506). 함수의 오류처럼 빨간 표시를 하고, 오류 카드를 누르면 그 자리를 깜빡이기 위함
+		// 칸은 값 칸(처음 값, array 길이)만 담는다. 타입·이름 칸은 칠할 UI가 없어서, 그 오류는 선언 블록 전체를 깜빡인다
+		var errors = new List<FunctionChecker.Error>();
+		foreach (GlobalVariablesConverter.Failure failure in failures)
+		{
+			BlockData block = file.Declarations != null && failure.Index >= 0 && failure.Index < file.Declarations.Count ? file.Declarations[failure.Index] : null;
+			var found = new FunctionChecker.Error { Block = block, Code = block != null ? BlockLabels.TextOf(block) : "", Message = failure.Message };
+			if (block?.Slots != null && failure.Slot >= 0 && failure.Slot < block.Slots.Count && block.Slots[failure.Slot].Kind == SlotKind.Value)
+				found.Slots.Add((block, failure.Slot));
+			errors.Add(found);
+		}
+		return errors;
+	}
+
+	// 페이지 함수 지우기 (#494) ---------------------------------------------------
+
+	// 함수 목록의 페이지 줄 ×를 눌렀을 때. 확인창에서 「지우기」를 눌렀을 때 지운다. 지우는 것은 바로 저장소(서버 DB, 이 컴퓨터 파일)에 반영되므로 「지우기를 저장하는 버튼」이다
+	void RequestDeletePage(FunctionData page)
+	{
+		if (savePending)
+		{
+			ShowNotice("저장 진행 중. 잠시 후 다시 시도", false);
+			return;
+		}
+		if (IsSlotFunction(page)) return; // 슬롯 함수는 지울 수 없다 (×도 보이지 않음)
+		// 다른 함수가 이 함수를 불러도 지운다 (#506). 지운 뒤 자동 컴파일이 「선언하지 않은 함수」 오류로 알리고, 그 함수를 부르는 슬롯은 서버가 시전을 거부한다
+
+		string label = LabelOf(page);
+		if (confirmDialog == null)
+		{
+			DeletePage(page);
+			return;
+		}
+		// 문장마다 줄을 나눈다. 한 줄로 이어 쓰면 확인창 폭에서 글자 중간이 잘려 다음 줄로 넘어가기 때문 (#476)
+		confirmDialog.Show($"{label}{Eul(label)} 지우시겠습니까?\n지운 함수는 되돌릴 수 없습니다.", () => DeletePage(page), "지우기 (Enter)", "취소 (Esc)");
+	}
+
+	// 실제 계정은 서버에 지우기를 요청하고(답은 OnServerAnswered), 임시 계정은 이 컴퓨터의 파일을 바로 지운다
+	void DeletePage(FunctionData page)
+	{
+		if (server != null)
+		{
+			savePending = true; // 답이 오기 전에는 다른 페이지를 열거나 나가지 못하게 한다 (저장과 같음)
+			pendingDeleteGuid = page.Guid;
+			pendingDeleteLabel = LabelOf(page);
+			server.RequestDeleteFunction(page.Guid);
+			if (savePending) SetMessage("지우는 중...");
+			Redraw();
+			return;
+		}
+
+		bool deleted = FunctionStorage.Delete(page.Guid);
+		if (deleted) AfterPageDeleted(page.Guid, LabelOf(page));
+		else
+		{
+			SetMessage($"{LabelOf(page)}{Eul(LabelOf(page))} 지우지 못했습니다 (파일 없음)", true);
+			Redraw();
+		}
+	}
+
+	// 지운 뒤: 그 페이지의 작업본을 버리고, 지운 페이지를 열어 두었으면 다른 곳을 연다
+	void AfterPageDeleted(string guid, string label)
+	{
+		drafts.Remove(guid);
+		if (!editingGlobals && Function != null && Function.Guid == guid)
+		{
+			if (server != null) OpenFirstSlot();
+			else Open(FunctionData.Create(UniqueName("새_함수")));
+		}
+		ReloadSavedFunctions();
+		// 지운 함수를 부르던 곳이 있으면 자동 컴파일이 오류로 알린다 (#506)
+		bool built = ShowCompileResult();
+		SetMessage(built ? $"{label}{Eul(label)} 지웠습니다" : $"{label}{Eul(label)} 지웠습니다. {BuildFailureText()}", !built);
+		Redraw();
+	}
+
+	// 상태 글자·오류 창에 보일 함수 이름: 슬롯 함수는 「슬롯 Q」, 나머지는 「페이지 이름」 (확인창의 글자와 같음)
+	string LabelOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? $"슬롯 {KeyOf(slot)}" : $"페이지 {function.Name}";
 	}
 
 	string OpenKey => editingGlobals ? GlobalsKey : Function?.Guid;
@@ -784,7 +1086,7 @@ public class BlockEditor : MonoBehaviour
 	// 컴파일 검사에 쓸 전역 변수 선언: 실제 계정은 서버가 보낸 것, 아니면 이 컴퓨터의 파일
 	GlobalVariablesData CurrentGlobals() => server != null ? server.ReceivedGlobals : GlobalVariablesStorage.Load();
 
-	// 컴파일 성공: 편집 영역 위에 초록 알림을 잠깐 띄운다
+	// 빌드 성공: 편집 영역 위에 초록 알림(「Build 성공」)을 잠깐 띄운다 (#506)
 	void ShowSuccess()
 	{
 		if (compileOkBadge == null) return;
@@ -800,17 +1102,14 @@ public class BlockEditor : MonoBehaviour
 		successRoutine = null;
 	}
 
-	// 오류가 난 자리를 화면에 표시: 오류가 난 블록에 빨간 테두리와 !, 비어 있는 값 칸은 빨강
+	// 오류가 난 자리를 화면에 표시: 오류가 난 블록에 빨간 테두리와 !, 오류가 난 칸(FunctionChecker.Error.Slots)은 빨강
+	// 칸은 FunctionChecker가 찾은 그대로 칠한다 (#504). 변수 칸과 선언하지 않은 식별자를 적은 칸도 칠해, 블록의 어느 칸이 틀렸는지 보이게
 	void MarkErrors(List<FunctionChecker.Error> errors)
 	{
 		ClearErrorMarks();
-		if (editingGlobals) return;
-		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
-		{
-			if (!slot.IsMissingValue && !slot.HasWrongValue) continue;
-			slot.SetError(true);
-			errorSlots.Add(slot);
-		}
+		foreach (FunctionChecker.Error error in errors)
+			foreach ((BlockData owner, int index) in error.Slots)
+				SetSlotError(owner, index, true, true);
 		if (errorFramePrefab == null) return;
 		foreach (FunctionChecker.Error error in errors)
 		{
@@ -843,10 +1142,185 @@ public class BlockEditor : MonoBehaviour
 	void ClearErrorMarks()
 	{
 		foreach (BlockValueSlot slot in errorSlots) if (slot != null) slot.SetError(false);
+		foreach ((BlockView view, int index) in errorVariableSlots) if (view != null) view.SetVariableSlotError(index, false);
+		foreach (BlockView view in errorHeldViews) if (view != null) view.SetError(false);
 		foreach (RectTransform frame in errorFrames) if (frame != null) Destroy(frame.gameObject);
 		errorSlots.Clear();
+		errorVariableSlots.Clear();
+		errorHeldViews.Clear();
 		errorFrames.Clear();
 	}
+
+	// owner 블록의 index번 칸 UI를 오류 색으로 칠하거나 되돌린다 (#504)
+	// 값 칸은 BlockValueSlot이, 변수 칸(대입의 왼쪽, array 이름)은 BlockView가 칠한다. 값 칸에 블록을 끼웠으면 칸이 블록에 가려 보이지 않으므로 끼운 블록을 칠한다
+	// remember이면 다음에 고칠 때(ClearErrorMarks) 되돌릴 수 있게 기억한다
+	void SetSlotError(BlockData owner, int index, bool on, bool remember)
+	{
+		BlockView view = ViewOf(owner);
+		if (view == null) return;
+		BlockValueSlot valueSlot = view.GetComponentsInChildren<BlockValueSlot>(true).FirstOrDefault(s => s.OwnerData == owner && s.Index == index);
+		if (valueSlot != null && valueSlot.Held != null)
+		{
+			valueSlot.Held.SetError(on);
+			if (remember && on) errorHeldViews.Add(valueSlot.Held);
+		}
+		else if (valueSlot != null)
+		{
+			valueSlot.SetError(on);
+			if (remember && on) errorSlots.Add(valueSlot);
+		}
+		else if (view.SetVariableSlotError(index, on) && remember && on)
+			errorVariableSlots.Add((view, index));
+	}
+
+	// 컴파일 오류로 칠해 둔 칸들을 다시 칠한다. 칸을 깜빡인 뒤 원래 표시로 돌려놓을 때 쓴다
+	void ReapplyErrorMarks()
+	{
+		foreach (BlockValueSlot slot in errorSlots) if (slot != null) slot.SetError(true);
+		foreach ((BlockView view, int index) in errorVariableSlots) if (view != null) view.SetVariableSlotError(index, true);
+		foreach (BlockView view in errorHeldViews) if (view != null) view.SetError(true);
+	}
+
+	// 모든 함수(작업본 포함)의 오류. 키는 함수 GUID, 전역 변수는 GlobalsKey. 오류가 없는 함수는 들어 있지 않다.
+	// 함수 목록의 빨간 밑줄과 오류 창이 같은 결과를 쓴다
+	Dictionary<string, List<FunctionChecker.Error>> FindAllErrors(List<FunctionData> working, GlobalVariablesData workingGlobals)
+	{
+		var all = new Dictionary<string, List<FunctionChecker.Error>>();
+		foreach (FunctionData function in working)
+		{
+			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working);
+			if (errors.Count > 0) all[function.Guid] = errors;
+		}
+		// Global Variables도 함수처럼 고칠 때마다 다시 검사한다 (#506). 저장할 때만 검사해 두면 고치거나 다른 페이지로 갈 때 지워져 오류가 사라져 보였기 때문
+		List<FunctionChecker.Error> globalsErrors = FindGlobalsErrors(workingGlobals);
+		if (globalsErrors != null) all[GlobalsKey] = globalsErrors;
+		return all;
+	}
+
+	// 오류 창에 모든 함수의 오류를 보인다. 함수 목록 순서(Global Variables, 슬롯, 페이지)대로
+	void ShowAllErrors(Dictionary<string, List<FunctionChecker.Error>> all, List<FunctionData> working, GlobalVariablesData workingGlobals)
+	{
+		var shown = new List<ShownError>();
+
+		// 함수 목록에 있는 순서대로. 목록이 없는 화면(위쪽 줄 버튼)이면 작업본 순서대로
+		var order = new List<string>();
+		foreach (var entry in functionItems)
+			if (entry.guid != null && !order.Contains(entry.guid)) order.Add(entry.guid);
+		foreach (string guid in all.Keys)
+			if (!order.Contains(guid)) order.Add(guid);
+
+		foreach (string guid in order)
+		{
+			if (!all.TryGetValue(guid, out List<FunctionChecker.Error> errors)) continue;
+			FunctionData function = guid == GlobalsKey ? null : working.FirstOrDefault(f => f.Guid == guid);
+			string location = function != null ? LocationOf(function) : "Global Variables";
+			// 슬롯을 거쳐 빌드에 들어간 함수는 슬롯에서 그 함수까지의 호출 경로를 보인다 (#506). 여러 슬롯이 부르면 슬롯마다 한 줄 (사용자 결정 (나))
+			// 이름마다 TMP 링크(<link="번호">)를 달아, 누른 이름의 함수를 열고 다음 함수를 부르는 블록을 깜빡인다. 마지막 이름은 오류 자리를 깜빡인다
+			// 이름 사이는 「 > 」. Galmuri11 글꼴에 「→」가 없기 때문
+			List<(string Guid, int BlockIndex)> pathLinks = null;
+			if (function != null && buildPaths.TryGetValue(guid, out var paths))
+			{
+				pathLinks = new List<(string, int)>();
+				var lines = new List<string>();
+				foreach (var path in paths)
+				{
+					var names = new List<string>();
+					foreach ((string stepGuid, string label, int callIndex) in path)
+					{
+						// 밑줄은 누를 수 있는 이름에만 긋는다. 사이의 「 > 」에는 긋지 않는다 (사용자 요청)
+						names.Add($"<link=\"{pathLinks.Count}\"><u>{label}</u></link>");
+						pathLinks.Add((stepGuid, callIndex));
+					}
+					lines.Add(string.Join(" > ", names));
+				}
+				location = string.Join("\n> ", lines);
+			}
+			// 오류 자리를 순번으로 찾을 블록들: 함수는 그 함수의 블록, Global Variables는 선언들 (#506)
+			List<BlockData> roots = function != null ? function.Blocks : guid == GlobalsKey ? workingGlobals?.Declarations : null;
+			foreach (FunctionChecker.Error error in errors)
+			{
+				string code = CodeOf(error);
+				// 같은 함수 안의 같은 문장은 거르지 않는다. 빈 칸이 둘인 블록은 「expression이 비어 있음」이 두 줄이어야 하기 때문 (#504)
+				shown.Add(new ShownError { Message = error.Message, Code = code, Location = location, Guid = guid,
+					BlockIndex = roots != null ? IndexOfBlock(roots, error.Block) : -1,
+					Slots = roots != null ? SlotIndexesOf(roots, error) : null, PathLinks = pathLinks });
+			}
+		}
+		ShowErrors(shown);
+	}
+
+	// 오류 카드 마지막 줄 「> 이름」의 이름: 슬롯 함수는 「슬롯 Q」, 페이지 함수는 이름만 (「페이지」는 붙이지 않음, 사용자 결정)
+	string LocationOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? $"슬롯 {KeyOf(slot)}" : function.Name;
+	}
+
+	// 오류 카드 가운데 줄의 코드 (예: if ( )). 특정 블록에 붙지 않은 오류(return 없음, 전역 변수 오류)는 빈 글자라 줄이 빠진다
+	static string CodeOf(FunctionChecker.Error error) => error.Block != null ? error.Code : "";
+
+	// 함수 안의 모든 블록을 정해진 순서로 (맨 위 블록부터, 칸·블록 영역 안쪽까지). 함수를 다시 열면 블록 데이터가 새로 만들어지므로 순번으로 같은 블록을 찾는다
+	// roots는 함수의 블록(FunctionData.Blocks) 또는 Global Variables의 선언(GlobalVariablesData.Declarations, #506)
+	static IEnumerable<BlockData> AllBlocksOf(List<BlockData> roots) =>
+		roots == null ? Enumerable.Empty<BlockData>() : roots.SelectMany(b => b.SelfAndInnerBlocks());
+
+	// 오류가 난 칸들을 (블록 순번, 칸 번호)로. 블록 순번은 IndexOfBlock과 같아, 함수를 다시 열어도 같은 칸을 찾는다 (#504)
+	static List<(int Block, int Slot)> SlotIndexesOf(List<BlockData> roots, FunctionChecker.Error error) =>
+		error.Slots.Select(s => (IndexOfBlock(roots, s.Owner), s.Index)).Where(s => s.Item1 >= 0).ToList();
+
+	static int IndexOfBlock(List<BlockData> roots, BlockData block)
+	{
+		if (block == null) return -1;
+		int index = 0;
+		foreach (BlockData b in AllBlocksOf(roots))
+		{
+			if (ReferenceEquals(b, block)) return index;
+			index++;
+		}
+		return -1;
+	}
+
+	// 오류 카드의 「> 이름」: 그 함수(또는 Global Variables)가 열려 있지 않으면 함수 목록 줄을 누른 것처럼 먼저 연다 (작업본은 그대로 남음).
+	// 그다음 오류가 난 칸이 있으면 그 칸만, 칸이 없는 오류면 블록을 깜빡인다 (blockIndex가 -1이면 열기만)
+	// 칸만 깜빡이는 이유: 블록 전체를 깜빡이면 블록의 어느 칸이 틀렸는지 알 수 없기 때문 (#504)
+	void ShowErrorBlock(string guid, int blockIndex, List<(int Block, int Slot)> slots)
+	{
+		if (!IsOpen(guid))
+		{
+			if (!openActions.TryGetValue(guid, out Action open)) return;
+			open();
+			if (!IsOpen(guid)) return; // 저장하는 중이라 열지 못함
+		}
+		List<BlockData> blocks = AllBlocksOf(editingGlobals ? globals?.Declarations : Function?.Blocks).ToList();
+		if (slots != null && slots.Count > 0)
+		{
+			var targets = slots.Select(s => (owner: blocks.ElementAtOrDefault(s.Block), index: s.Slot)).Where(s => s.owner != null).ToList();
+			if (targets.Count > 0)
+			{
+				StartCoroutine(BlinkSlots(targets));
+				return;
+			}
+		}
+		if (blockIndex < 0) return;
+		BlockData block = blocks.ElementAtOrDefault(blockIndex);
+		if (block != null) ShowBlock(block);
+	}
+
+	// 오류가 난 칸을 세 번 깜빡인다: 오류 색을 켰다 껐다 한 뒤, 컴파일 표시로 칠해 두었던 칸은 다시 칠한다
+	System.Collections.IEnumerator BlinkSlots(List<(BlockData owner, int index)> slots)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			foreach ((BlockData owner, int index) in slots) SetSlotError(owner, index, true, false);
+			yield return new WaitForSeconds(0.15f);
+			foreach ((BlockData owner, int index) in slots) SetSlotError(owner, index, false, false);
+			yield return new WaitForSeconds(0.15f);
+		}
+		ReapplyErrorMarks();
+	}
+
+	// guid의 함수(GlobalsKey면 Global Variables)를 지금 편집 영역에 열어 두었으면 true
+	bool IsOpen(string guid) => guid == GlobalsKey ? editingGlobals : !editingGlobals && Function != null && Function.Guid == guid;
 
 	// 「블록 보기」: 그 블록을 세 번 깜빡인다
 	void ShowBlock(BlockData block)
@@ -947,7 +1421,103 @@ public class BlockEditor : MonoBehaviour
 		ParkGhost();
 	}
 
-	/// <summary>놓을 자리 표시(반투명 미리보기, 보라색 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
+	/// <summary>
+	/// 블록을 끌기 시작할 때 부른다 (BlockView, #487). 끄는 블록이 값 칸에 들어가는 블록이면, 편집 영역의 빈 칸마다
+	/// 끼울 수 있는 칸은 청록, 끼울 수 없는 칸은 어둡게 표시한다 (시안 6-11). 값 칸에 들어가지 않는 블록(if, void 함수 등)은 표시하지 않는다.
+	/// </summary>
+	public void ShowDragHints(BlockView dragged)
+	{
+		HideDragHints();
+		if (!CanBeValue(dragged.Data)) return;
+		// 끄는 블록은 이미 편집 영역에서 꺼내 DragLayer에 있으므로, 자기 안의 칸은 여기에 들어오지 않는다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			if (!slot.IsEmpty) continue; // 값이 들어 있는 칸은 그대로 둔다
+			slot.SetDragHint(slot.CanAccept(dragged.Data) ? BlockValueSlot.DragHint.Accept : BlockValueSlot.DragHint.Reject);
+			hintedSlots.Add(slot);
+		}
+	}
+
+	/// <summary>
+	/// 값 칸에 들어갈 블록을 끄는 동안, 마우스에서 SnapDistance 안에 있는 칸 중 끼울 수 있는 가장 가까운 칸 (BlockView가 놓을 자리를 찾을 때 부른다).
+	/// 이미 붙어 있는 칸은 붙기 직전의 자리까지 거리로 치고, 거리가 같으면 그 칸을 그대로 고른다.
+	/// 마우스가 편집 영역 밖(블록 목록, 휴지통)에 있거나 가까운 칸이 없으면 null.
+	/// </summary>
+	public BlockValueSlot FindSnapSlot(BlockData dragged, Vector2 screenPosition, Camera eventCamera)
+	{
+		if (!CanBeValue(dragged)) return null;
+		// 편집 영역 밖에서는 붙지 않는다. 블록 목록에 놓아 지우려는 블록이 편집 영역 가장자리의 칸에 붙지 않게
+		RectTransform area = workspaceViewport != null ? workspaceViewport : (RectTransform)workspace.transform;
+		if (!RectTransformUtility.RectangleContainsScreenPoint(area, screenPosition, eventCamera)) return null;
+		Rect areaRect = ScreenRectOf(area, eventCamera);
+		float scale = CanvasScale();
+
+		BlockValueSlot best = null;
+		float bestDistance = float.MaxValue;
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			// 미리보기(DropGhost)는 끄는 블록을 Instantiate한 복사본이라 칸이 Init되지 않았다(editor가 null). 편집 영역에 들어와 있어도 진짜 칸이 아니므로 건너뛴다 (#498)
+			if (dropGhost != null && slot.transform.IsChildOf(dropGhost)) continue;
+			if (!slot.CanAccept(dragged)) continue;
+			Rect rect = ScreenRectOf((RectTransform)slot.transform, eventCamera);
+			if (!rect.Overlaps(areaRect)) continue; // 스크롤로 가려진 칸
+			bool attached = ReferenceEquals(slot, highlightedSlot);
+			float distance = DistanceTo(rect, screenPosition) / scale;
+			if (attached) distance = Mathf.Min(distance, DistanceTo(snapRect, screenPosition) / scale);
+			if (distance > SnapDistance) continue;
+			if (distance < bestDistance || (distance <= bestDistance && attached))
+			{
+				best = slot;
+				bestDistance = distance;
+			}
+		}
+
+		// 새 칸에 붙을 때 그 칸의 지금 자리(미리보기를 끼우기 전)를 기억한다
+		if (best != null && !ReferenceEquals(best, highlightedSlot)) snapRect = ScreenRectOf((RectTransform)best.transform, eventCamera);
+		return best;
+	}
+
+	// rect의 화면 좌표 사각형
+	static Rect ScreenRectOf(RectTransform rect, Camera eventCamera)
+	{
+		var corners = new Vector3[4];
+		rect.GetWorldCorners(corners);
+		Vector2 min = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[0]);
+		Vector2 max = min;
+		for (int i = 1; i < 4; i++)
+		{
+			Vector2 p = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[i]);
+			min = Vector2.Min(min, p);
+			max = Vector2.Max(max, p);
+		}
+		return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+	}
+
+	// 점에서 사각형까지 거리 (사각형 안이면 0)
+	static float DistanceTo(Rect rect, Vector2 point)
+	{
+		float dx = Mathf.Max(rect.xMin - point.x, 0f, point.x - rect.xMax);
+		float dy = Mathf.Max(rect.yMin - point.y, 0f, point.y - rect.yMax);
+		return Mathf.Sqrt(dx * dx + dy * dy);
+	}
+
+	// 화면 픽셀 → 캔버스 단위. 해상도가 달라도 붙는 거리가 화면의 UI 크기에 맞게
+	float CanvasScale()
+	{
+		Canvas canvas = dragLayer != null ? dragLayer.GetComponentInParent<Canvas>() : null;
+		float scale = canvas != null ? canvas.rootCanvas.scaleFactor : 1f;
+		return scale > 0f ? scale : 1f;
+	}
+
+	/// <summary>끄는 동안의 칸 표시를 모두 지운다. 블록을 놓을 때 BlockView가 부른다 (#487)</summary>
+	public void HideDragHints()
+	{
+		foreach (BlockValueSlot slot in hintedSlots)
+			if (slot != null) slot.SetDragHint(BlockValueSlot.DragHint.None);
+		hintedSlots.Clear();
+	}
+
+	/// <summary>놓을 자리 표시(반투명 미리보기, 놓을 값 칸)를 모두 지운다. 놓을 때 BlockView가 부른다</summary>
 	public void HideDropPreview()
 	{
 		if (highlightedSlot != null)
@@ -1025,22 +1595,71 @@ public class BlockEditor : MonoBehaviour
 	}
 
 	// 오른쪽 세로 막대가 고르는 창 세 가지
-	enum RightTab { Blocks, Errors, Reference }
+	enum RightTab { Blocks, Functions, Errors, Reference }
 
 	RightTab rightTab = RightTab.Blocks;
 
-	// 오른쪽: 블록 목록, 오류 창, 참고 창 중 하나만 보인다
-	void ShowTab(RightTab tab)
+	// 오른쪽 창이 접혀 세로 탭만 보이면 true
+	bool PanelCollapsed => sidePanel != null && sidePanel.Collapsed;
+
+	// 세로 탭을 눌렀을 때: 이미 열린 탭을 다시 누르면 오른쪽 창을 접고, 접혀 있으면 펴서 누른 탭을 연다.
+	// 편집 영역을 넓게 쓰고 싶을 때 창을 치울 수 있게
+	void OnTabClicked(RightTab tab)
+	{
+		if (sidePanel != null && !PanelCollapsed && rightTab == tab)
+		{
+			sidePanel.SetCollapsed(true);
+			ShowTab(tab, expand: false);
+			return;
+		}
+		ShowTab(tab);
+	}
+
+	// 세로 탭 맨 아래 > < 버튼: 열려 있으면 접고, 접혀 있으면 마지막에 보던 탭으로 편다
+	void TogglePanel()
+	{
+		if (sidePanel == null) return;
+		if (PanelCollapsed)
+		{
+			ShowTab(rightTab);
+			return;
+		}
+		sidePanel.SetCollapsed(true);
+		ShowTab(rightTab, expand: false);
+	}
+
+	// 오른쪽: 블록 목록, 함수 탭, 오류 창, 참고 창 중 하나만 보인다. 접혀 있으면 하나도 보이지 않는다.
+	// expand면 접힌 창을 편다. 컴파일 오류처럼 바로 보여 줘야 할 때도 펴서 연다 (사용자 결정).
+	// 다른 함수를 열 때 오류 탭을 문법 탭으로 돌리는 것처럼, 탭만 바꿔 둘 때는 expand를 false로 해 접힌 채 둔다
+	void ShowTab(RightTab tab, bool expand = true)
 	{
 		rightTab = tab;
-		if (paletteView != null) paletteView.SetActive(tab == RightTab.Blocks);
-		if (errorView != null) errorView.SetActive(tab == RightTab.Errors);
-		if (referenceView != null) referenceView.SetActive(tab == RightTab.Reference);
-		SetTabLook(blockTabButton, tab == RightTab.Blocks);
-		SetTabLook(errorTabButton, tab == RightTab.Errors);
-		SetTabLook(referenceTabButton, tab == RightTab.Reference);
+		if (expand && sidePanel != null) sidePanel.SetCollapsed(false);
+		bool open = !PanelCollapsed;
+		if (paletteView != null) paletteView.SetActive(open && tab == RightTab.Blocks);
+		if (functionView != null) functionView.SetActive(open && tab == RightTab.Functions);
+		if (errorView != null) errorView.SetActive(open && tab == RightTab.Errors);
+		if (referenceView != null) referenceView.SetActive(open && tab == RightTab.Reference);
+		// 접혀 있으면 어느 탭도 고른 모양이 아니다
+		SetTabLook(blockTabButton, open && tab == RightTab.Blocks);
+		SetTabLook(functionTabButton, open && tab == RightTab.Functions);
+		SetTabLook(errorTabButton, open && tab == RightTab.Errors);
+		SetTabLook(referenceTabButton, open && tab == RightTab.Reference);
+		if (!open) return;
 		// 참고 탭을 열 때마다 카드를 다시 만든다. 스킬 트리 설명이나 해금 상태가 바뀌어도 다음에 열 때 맞춰진다
 		if (tab == RightTab.Reference) RebuildReference();
+		// 함수 탭도 열 때마다 다시 만든다. 그 사이 해금하거나 함수를 저장했어도 맞춰진다
+		if (tab == RightTab.Functions) RebuildFunctionTab();
+	}
+
+	/// <summary>
+	/// 블록 목록의 칩이나 함수 탭의 항목에서 새 블록을 꺼내 끌기 시작한다 (#489). 이후 끌기 이벤트는 새 블록이 받는다.
+	/// finished는 블록을 놓았을 때 한 번 불린다 (함수 탭 항목의 점선 표시를 되돌릴 때). 없으면 null.
+	/// </summary>
+	public void BeginNewBlockDrag(BlockData data, UnityEngine.EventSystems.PointerEventData eventData, Action finished = null)
+	{
+		ClearHover(); // 끌기 시작하면 설명창을 지운다
+		CreateView(data, dragLayer).BeginDragAsNew(eventData, finished);
 	}
 
 	// 참고 창: 검색 칸의 글자에 맞는 카드를 처음부터 다시 만든다 (BlockReference.Search)
@@ -1051,12 +1670,13 @@ public class BlockEditor : MonoBehaviour
 		string query = referenceSearch != null ? referenceSearch.text : "";
 		List<BlockReferenceEntry> found = BlockReference.Search(query);
 
-		// 블록 목록과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
-		// 블록 목록에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
-		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Category)).Distinct();
+		// 문법 탭과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
+		// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
+		// 문법 탭에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
+		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
 		foreach (string category in categories)
 		{
-			List<BlockReferenceEntry> cards = found.Where(entry => entry.Category == category).ToList();
+			List<BlockReferenceEntry> cards = found.Where(entry => entry.Group == category).ToList();
 			if (cards.Count == 0) continue;
 			if (headerPrefab != null)
 			{
@@ -1074,8 +1694,29 @@ public class BlockEditor : MonoBehaviour
 		if (tab.targetGraphic != null) tab.targetGraphic.color = active ? Color.white : new Color(1, 1, 1, 0.35f);
 	}
 
-	void ShowErrors(List<FunctionChecker.Error> errors)
+	// 오류 창의 오류 하나: 설명, 코드, 「> 이름」 세 줄. Guid·BlockIndex는 「> 이름」을 누를 때 열 함수와 깜빡일 블록 (BlockIndex가 -1이면 함수만 연다)
+	// Slots는 깜빡일 칸 (블록 순번, 칸 번호). 있으면 블록 대신 그 칸들만 깜빡인다 (#504)
+	struct ShownError
 	{
+		public string Message;  // 설명 (예: expression이 비어 있음)
+		public string Code;     // 오류가 난 블록의 글자 (예: if ( )). 블록이 없으면 빈 글자
+		public string Location; // 함수 이름 (예: temp, 슬롯 Q, Global Variables) 또는 호출 경로 (예: <link="0">슬롯 Q</link> > <link="1">temp</link>)
+		public List<(string Guid, int BlockIndex)> PathLinks; // 호출 경로의 링크마다 열 함수와 깜빡일 블록. Guid가 null이면 오류 자리(아래 Guid·BlockIndex·Slots). 경로가 없으면 null
+		public string Guid;
+		public int BlockIndex;
+		public List<(int Block, int Slot)> Slots;
+	}
+
+	static string SlotsKey(List<(int Block, int Slot)> slots) =>
+		slots == null ? "" : string.Join(",", slots.Select(s => $"{s.Block}.{s.Slot}"));
+
+	void ShowErrors(List<ShownError> errors)
+	{
+		// 고칠 때마다 불리므로, 보이는 내용이 같으면 다시 만들지 않는다
+		string key = string.Join("\n", errors.Select(e => $"{e.Message}\t{e.Code}\t{e.Location}\t{e.Guid}\t{e.BlockIndex}\t{SlotsKey(e.Slots)}"));
+		if (key == shownErrorsKey) return;
+		shownErrorsKey = key;
+
 		foreach (GameObject item in errorItems) if (item != null) Destroy(item);
 		errorItems.Clear();
 
@@ -1083,16 +1724,21 @@ public class BlockEditor : MonoBehaviour
 		if (errorText != null)
 		{
 			errorText.gameObject.SetActive(errors.Count == 0 || !useItems);
-			errorText.text = errors.Count == 0 ? "오류 없음\n\n컴파일을 누르면 여기에 결과가 나와요."
-				: "- " + string.Join("\n\n- ", errors.ConvertAll(e => $"{e.Code}  {e.Message}"));
+			errorText.text = errors.Count == 0 ? "오류 없음\n\n모든 함수의 오류가 여기에 나와요."
+				: string.Join("\n\n", errors.Select(e => string.IsNullOrEmpty(e.Code) ? $"{e.Message}\n> {e.Location}" : $"{e.Message}\n{e.Code}\n> {e.Location}"));
 		}
 		if (useItems)
 		{
-			foreach (FunctionChecker.Error error in errors)
+			foreach (ShownError error in errors)
 			{
 				ErrorItemView item = Instantiate(errorItemPrefab, errorList);
-				BlockData block = error.Block;
-				item.Show(error.Code, error.Message, block != null ? () => ShowBlock(block) : null);
+				string guid = error.Guid;
+				int index = error.BlockIndex;
+				List<(int Block, int Slot)> slots = error.Slots;
+				Action onLocation = guid != null ? () => ShowErrorBlock(guid, index, slots) : null;
+				// 호출 경로의 이름마다 누를 때 할 일 (#506). 오류가 난 함수의 이름은 「> 이름」을 누른 것과 같다
+				List<Action> links = error.PathLinks?.Select(link => link.Guid == null ? onLocation : (Action)(() => ShowErrorBlock(link.Guid, link.BlockIndex, null))).ToList();
+				item.Show(error.Message, error.Code, error.Location, onLocation, links);
 				errorItems.Add(item.gameObject);
 			}
 		}
@@ -1162,6 +1808,12 @@ public class BlockEditor : MonoBehaviour
 		SlotRules.Fits(RuleOf(owner, index), content, FindUserFunction, VariableTypeLookup(owner));
 
 	/// <summary>
+	/// owner 블록의 index번 값 칸에 맞지 않는 content를 넣었을 때 컴파일 오류 창에 나올 문장 (#504). 값 칸이 상태 줄에 같은 문장을 띄울 때 부른다.
+	/// </summary>
+	public string WrongValueMessage(BlockData owner, int index, SlotData content) =>
+		FunctionChecker.WrongValueMessage(owner, content, RuleOf(owner, index), FindUserFunction, VariableTypeLookup(owner));
+
+	/// <summary>
 	/// owner 블록의 index번 값 칸에 값 블록 block을 끼울 수 있으면 true.
 	/// </summary>
 	public bool FitsBlock(BlockData owner, int index, BlockData block) =>
@@ -1175,7 +1827,8 @@ public class BlockEditor : MonoBehaviour
 	{
 		Dictionary<string, VariableType> found;
 		if (editingGlobals) found = VariableScopes.VisibleAt(globals?.Declarations, new VariableScopes.Stack(), owner);
-		else found = VariableScopes.VisibleAt(Function?.Blocks, VariableScopes.Start(Function, listGlobals), owner);
+		// 전역 변수는 저장하지 않은 작업본까지 본다 (#506). 저장 버튼이 모든 파일을 함께 저장하므로, Global Variables에 더한 변수를 저장하기 전에도 고를 수 있게
+		else found = VariableScopes.VisibleAt(Function?.Blocks, VariableScopes.Start(Function, WorkingGlobals()), owner);
 		return found ?? new Dictionary<string, VariableType>();
 	}
 
@@ -1208,7 +1861,8 @@ public class BlockEditor : MonoBehaviour
 		if (!block.IsUserFunction) return BlockLabels.FunctionName(block);
 		if (Function != null && Function.Guid == block.FunctionId) return Function.Name;
 		FunctionData found = savedFunctions.FirstOrDefault(f => f.Guid == block.FunctionId);
-		return found != null ? found.Name : "없는_함수";
+		// 지운 함수: 플레이어가 지을 수 없는 이름(@는 함수 이름 규칙 BlockSlotText.IsFunctionName에 없음)으로 보여, 진짜 함수와 헷갈리지 않게 한다 (#506)
+		return found != null ? found.Name : "@unknown";
 	}
 
 	/// <summary>
@@ -1237,6 +1891,7 @@ public class BlockEditor : MonoBehaviour
 	{
 		dirty = true;
 		ClearErrorMarks(); // 고쳤으면 지난 컴파일의 빨간 표시를 지운다
+		// 오류 창은 아래 Redraw가 지금 내용으로 다시 검사해 그린다
 		SetMessage(""); // 「저장됨」을 지우고 「저장하지 않은 변경 있음」을 보인다
 		Redraw();
 	}
@@ -1253,10 +1908,21 @@ public class BlockEditor : MonoBehaviour
 	void Redraw()
 	{
 		if (layoutRoot != null) LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
+		// 블록을 놓거나 지운 뒤, 저장 결과를 받은 뒤 모두 Redraw를 거치므로 여기서 「남은/가진」을 다시 센다 (#500)
+		RefreshCounts();
 		if (Function == null && !editingGlobals) return;
 
 		// 빈 값 칸의 안내 글자 (#476). 선언의 타입이나 대입의 변수를 바꾸면 다른 칸이 받는 타입도 바뀌므로 고칠 때마다 다시 쓴다
-		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>()) slot.RefreshPlaceholder();
+		// 칸 테두리(실선·점선·없음, #487)도 내용이 바뀌면 달라지므로 함께 다시 그린다
+		foreach (BlockValueSlot slot in workspace.GetComponentsInChildren<BlockValueSlot>())
+		{
+			// 미리보기(DropGhost)의 칸은 Init되지 않은 복사본이라 건너뛴다. 지금은 끄는 동안 Redraw를 부르지 않지만, 부르게 되어도 오류가 나지 않게 (#498)
+			if (dropGhost != null && slot.transform.IsChildOf(dropGhost)) continue;
+			slot.RefreshPlaceholder();
+			slot.RefreshLook();
+		}
+		// 블록을 옮기면 겹친 깊이가 바뀌어 칠(밝기 교대)과 줄 여백도 달라지므로 다시 맞춘다 (#487). 옮긴 블록 안쪽 블록까지 모두
+		foreach (BlockView view in workspace.GetComponentsInChildren<BlockView>()) view.RefreshLook();
 
 		// 동기·비동기 버튼 (슬롯 함수와 전역 변수는 바꿀 수 없음)
 		if (asyncButton != null)
@@ -1268,16 +1934,26 @@ public class BlockEditor : MonoBehaviour
 
 		if (functionFrame != null) UpdateFunctionFrame();
 
-		// 함수 목록: 지금 연 것을 고른 모양으로, 고쳤으면 이름 뒤 *
+		// 함수 목록: 지금 연 것을 고른 모양으로, 저장하지 않은 변경이 있으면 이름 뒤 * (지금 페이지와 작업본이 있는 페이지, #494)
+		// 컴파일 오류가 있으면 이름에 빨간 밑줄. 작업본까지 반영해 고칠 때마다 다시 본다 (#494).
+		// 예: 전역 변수 x를 지우면 저장하기 전에도 x를 쓰는 슬롯 Q에 밑줄이 생겨 어디를 고쳐야 하는지 보인다
+		// 오류 창도 같은 검사 결과로 모든 함수의 오류를 보인다 (지금 연 함수만이 아니라, 사용자 요청)
 		string openKey = editingGlobals ? GlobalsKey : Function.Guid;
+		List<FunctionData> working = WorkingFunctions();
+		GlobalVariablesData workingGlobals = WorkingGlobals();
+		Dictionary<string, List<FunctionChecker.Error>> allErrors = FindAllErrors(working, workingGlobals);
 		foreach (var entry in functionItems)
 		{
 			if (entry.item == null) continue;
 			bool open = entry.guid != null && entry.guid == openKey;
-			// 저장한 함수에 컴파일 오류가 있으면 이름에 빨간 밑줄 (견본)
-			bool error = entry.error || (entry.guid != null && entry.guid == compileFailedKey);
-			entry.item.Show(entry.prefix, entry.name + (open && HasUnsavedChanges ?" <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
+			bool unsaved = open ? CurrentUnsaved : entry.guid != null && (drafts.ContainsKey(entry.guid) || (entry.guid == GlobalsKey && globalsDraft != null));
+			// 빌드 실패의 원인인 슬롯(자기 함수에는 오류가 없어도 오류가 있는 함수를 부르는 슬롯)도 오류가 있는 함수처럼 빨간 밑줄 (#506, 사용자 결정)
+			// 멀쩡한 슬롯에는 아무것도 붙이지 않는다. 빌드 결과(시전 가능 여부)는 「슬롯」 머리글 하나에만 보인다
+			bool error = entry.guid != null && (allErrors.ContainsKey(entry.guid) || failedSlots.Exists(s => s.Guid == entry.guid));
+			entry.item.Show(entry.prefix, entry.name + (unsaved ? " <color=#8B9CFF>*</color>" : ""), entry.detail, open, entry.dim, error);
 		}
+		ShowAllErrors(allErrors, working, workingGlobals);
+		if (slotHeader != null) slotHeader.SetBuildStatus(savedBuildOk);
 
 		if (messageLabel != null)
 		{
@@ -1318,8 +1994,7 @@ public class BlockEditor : MonoBehaviour
 
 		bool slot = IsSlotFunction(Function);
 		string parameters = string.Join(", ", (Function.Parameters ?? new List<ParameterData>()).Select(p => $"{BlockLabels.TypeName(p.Type)} {p.Name}"));
-		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), Function.Name, parameters,
-			slot ? "슬롯 함수 · 이름과 반환 타입은 고정" : "페이지 함수 · 반환 타입을 고를 수 있음", !slot);
+		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), DisplayNameOf(Function), parameters, !slot);
 	}
 
 	// 반환 타입을 누르면 드롭다운으로 고른다. 고르면 고친 것으로 치고, 틀린 곳(return이 없는 길 등)은 저장할 때 컴파일이 알려 준다
@@ -1344,18 +2019,136 @@ public class BlockEditor : MonoBehaviour
 		{
 			int slot = SlotIndexOf(Function);
 			bool saved = savedFunctions.Any(f => f.Guid == Function.Guid);
-			where = slot >= 0 ? $"슬롯 {slot + 1}" : saved ? "페이지 함수" : "새 함수";
+			where = slot >= 0 ? $"슬롯 {KeyOf(slot)}" : saved ? "페이지 함수" : "새 함수";
 		}
-		return HasUnsavedChanges ? $"{where}, 저장하지 않은 변경 있음" : where;
+		return CurrentUnsaved ? $"{where}, 저장하지 않은 변경 있음" : where;
 	}
 
+	// 슬롯 번호(0~7)의 키 글자 Q W E R A S D F
+	static string KeyOf(int slot) => slot >= 0 && slot < SlotKeys.Length ? SlotKeys[slot] : (slot + 1).ToString();
+
+	// 화면에 보일 함수 이름 (#487). 실제 계정의 슬롯 함수는 슬롯 키(Q~F)가 이름이다. 데이터의 이름(slot1~slot8)은 서버가 검사하므로 그대로 두고 화면에서만 바꾼다
+	string DisplayNameOf(FunctionData function)
+	{
+		int slot = SlotIndexOf(function);
+		return slot >= 0 ? KeyOf(slot) : function.Name;
+	}
+
+	// 함수가 들어 있는 슬롯 번호(0~7). 슬롯에 없으면 -1
+	// 실제 계정은 서버가 보낸 슬롯, 임시 계정은 내 캐릭터의 장착(SlotLoadout). 임시 계정도 슬롯에 끼운 함수를 슬롯 함수로 다룬다 (#487)
 	int SlotIndexOf(FunctionData function)
 	{
-		IReadOnlyList<SlotLoadout.Entry> slots = server?.ReceivedSlots;
-		if (slots == null || function == null) return -1;
-		for (int i = 0; i < slots.Count; i++)
-			if (slots[i].Id == function.Guid) return i;
+		if (function == null) return -1;
+		if (server != null)
+		{
+			IReadOnlyList<SlotLoadout.Entry> slots = server.ReceivedSlots;
+			if (slots == null) return -1;
+			for (int i = 0; i < slots.Count; i++)
+				if (slots[i].Id == function.Guid) return i;
+			return -1;
+		}
+
+		NetworkIdentity localPlayer = NetworkClient.localPlayer;
+		if (localPlayer == null || !localPlayer.TryGetComponent(out SlotLoadout loadout)) return -1;
+		for (int i = 0; i < SlotLoadout.SlotCount; i++)
+		{
+			SlotLoadout.Entry entry = loadout.GetEntry(i);
+			if (!entry.IsEmpty && entry.Kind == SlotLoadout.EntryKind.UserFunction && entry.Id == function.Guid) return i;
+		}
 		return -1;
+	}
+
+	// 「남은/가진」 (#500) ------------------------------------------------------
+
+	// 가진 개수가 바뀌는 것을 받는 내 캐릭터의 진행도. 실제 계정만 있다 (BindServer)
+	PlayerProgress progressForCounts;
+	// 항목 ID → 지금 쓴 개수 (저장된 다른 함수 + 지금 고치는 함수·전역 변수). null이면 개수를 보지 않는다 (임시 계정)
+	Dictionary<string, int> usedCounts;
+
+	/// <summary>
+	/// 블록 하나의 「남은/가진」 개수 (#500). 개수가 없는 블록(내가 만든 함수 호출)이나 임시 계정이면 null.<br/>
+	/// 남은 개수 = 가진 개수 − 쓴 개수. 쓴 개수에는 저장하지 않은 작업본도 들어가므로, 화면에서 고친 그대로 바뀐다 (RefreshCounts).
+	/// 함수 탭 항목(FunctionItemView)과 문법 탭 칩(BlockView)이 부른다.
+	/// </summary>
+	public (int Remaining, int Owned)? CountOf(BlockData block)
+	{
+		IReadOnlyDictionary<string, int> owned = CurrentItemCounts();
+		string key = BlockUsageCounter.KeyOf(block);
+		if (owned == null || usedCounts == null || key == null) return null;
+		int have = owned.TryGetValue(key, out int count) ? count : 0;
+		int used = usedCounts.TryGetValue(key, out int u) ? u : 0;
+		return (have - used, have);
+	}
+
+	/// <summary>
+	/// 함수 탭·문법 탭에서 새 블록을 끌기 시작해도 되면 true. 남은 개수가 0 이하면 끌지 않고 위쪽 줄에 알린다 (#500, 사용자 결정 (가)).
+	/// </summary>
+	public bool CanDragNew(BlockData block)
+	{
+		(int Remaining, int Owned)? count = CountOf(block);
+		if (count == null || count.Value.Remaining > 0) return true;
+		// 영문 이름(thrust) 뒤에는 「이/가」를 고를 수 없어 조사 없이 적는다
+		SetMessage($"{ItemDisplayName(BlockUsageCounter.KeyOf(block))}: 남은 개수 없음", true);
+		Redraw();
+		return false;
+	}
+
+	// 쓴 개수를 다시 세고 함수 탭 항목과 문법 탭 칩의 숫자를 다시 쓴다. 블록을 바꿀 때마다(Redraw), 가진 개수가 바뀔 때 부른다
+	void RefreshCounts()
+	{
+		usedCounts = null;
+		if (CurrentItemCounts() != null && server.ReceivedSlots != null)
+		{
+			var slotGuids = server.ReceivedSlots.Where(e => e.Kind == SlotLoadout.EntryKind.UserFunction).Select(e => e.Id).ToList();
+			// 저장하지 않은 작업본(다른 페이지의 drafts, 전역 변수 globalsDraft)과 지금 고치는 내용까지 넣어 센다 (사용자 결정 (나))
+			// 화면에서 고친 그대로 숫자가 바뀌게 하기 위함. 서버는 다른 함수를 저장된 내용으로 보므로, 숫자가 괜찮아도
+			// 저장 순서에 따라 거부될 수 있다 (예: 다른 함수에서 뺀 것을 저장하기 전에 이 함수에 놓음). 그때는 저장 검사(FindCountShortage)가 안내한다
+			var functions = new Dictionary<string, FunctionData>();
+			foreach (FunctionData saved in savedFunctions) functions[saved.Guid] = saved;
+			foreach (FunctionData draft in drafts.Values) functions[draft.Guid] = draft;
+			if (!editingGlobals && Function != null) functions[Function.Guid] = Function;
+			GlobalVariablesData countedGlobals = editingGlobals ? globals : globalsDraft ?? CurrentGlobals();
+			usedCounts = BlockUsageCounter.Count(slotGuids, functions.Values, countedGlobals);
+		}
+		if (functionTabList != null)
+			foreach (FunctionItemView item in functionTabList.GetComponentsInChildren<FunctionItemView>()) item.RefreshCount();
+		if (palette != null)
+			foreach (BlockView chip in palette.GetComponentsInChildren<BlockView>()) chip.RefreshCount();
+	}
+
+	// 블록·함수의 가진 개수 (#500). 실제 계정만 있고, 임시 계정이면 null이어서 개수를 보지 않는다 (무엇이든 놓을 수 있음)
+	IReadOnlyDictionary<string, int> CurrentItemCounts()
+	{
+		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
+			return progress.ItemCounts;
+		return null;
+	}
+
+	// 저장하면 개수가 모자라는 항목 (#500). 서버의 저장 검사(FunctionExecutorNetwork.CheckItemCounts)와 같은 규칙으로 먼저 찾아 안내한다
+	// functionsAfter, globalsAfter: 저장한 뒤의 모든 함수와 전역 변수. 저장하기 전은 서버에 저장된 값(savedFunctions, CurrentGlobals)
+	ItemCountRules.Shortage? FindCountShortage(IEnumerable<FunctionData> functionsAfter, GlobalVariablesData globalsAfter)
+	{
+		IReadOnlyDictionary<string, int> owned = CurrentItemCounts();
+		if (owned == null || server.ReceivedSlots == null) return null;
+		var slotGuids = server.ReceivedSlots.Where(e => e.Kind == SlotLoadout.EntryKind.UserFunction).Select(e => e.Id).ToList();
+		Dictionary<string, int> before = BlockUsageCounter.Count(slotGuids, savedFunctions, CurrentGlobals());
+		Dictionary<string, int> after = BlockUsageCounter.Count(slotGuids, functionsAfter, globalsAfter);
+		return ItemCountRules.FindShortage(before, after, owned);
+	}
+
+	// 개수가 모자라 저장하지 않을 때의 안내. shortage가 없으면(서버만 걸림) 항목 없이 알린다
+	static string CountShortageMessage(ItemCountRules.Shortage? shortage)
+	{
+		if (shortage == null) return "개수가 모자라 저장하지 않음 (가진 개수보다 많이 씀)";
+		ItemCountRules.Shortage s = shortage.Value;
+		return $"개수가 모자라 저장하지 않음 ({ItemDisplayName(s.ItemId)} {s.Used}개 씀, {s.Owned}개 가짐)";
+	}
+
+	// 항목 ID를 화면 이름으로: 사전 정의 함수는 영문 이름(c.thrust → thrust), else if는 띄어 쓰고, 나머지 블록은 그대로 (If, Declare)
+	static string ItemDisplayName(string itemId)
+	{
+		if (itemId.Contains('.')) return BlockLabels.PredefinedFunctionName(itemId);
+		return itemId == ConditionalBranch.ElseIf.ToString() ? "Else If" : itemId;
 	}
 
 	// 함수 하나의 코드 영역 크기 (그 함수 + 그 함수가 부르는 함수들). 편집 중인 함수는 지금 내용으로 센다
@@ -1384,48 +2177,68 @@ public class BlockEditor : MonoBehaviour
 	// 블록 목록에서 쓸 해금 목록. null이면 걸러 내지 않고 모두 보여 준다 (임시 계정)
 	HashSet<string> unlockedForPalette;
 
+	// 해금한 스킬 트리 노드. 실제 계정만 있고, 임시 계정이면 null이어서 블록 목록·함수 탭에 모두 보여 준다
+	HashSet<string> CurrentUnlocked()
+	{
+		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
+			return new HashSet<string>(progress.Unlocked);
+		return null;
+	}
+
 	void BuildPalette()
 	{
-		unlockedForPalette = null;
-		if (server != null && NetworkClient.localPlayer != null && NetworkClient.localPlayer.TryGetComponent(out PlayerProgress progress))
-			unlockedForPalette = new HashSet<string>(progress.Unlocked);
+		unlockedForPalette = CurrentUnlocked();
 
 		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
 
-		foreach ((string title, Func<BlockData>[] blocks) in PaletteGroups)
+		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in PaletteGroups)
 		{
-			// 함수 분류: 함수 블록 자체를 해금하지 않았으면 분류째 뺀다
-			if (blocks == null && unlockedForPalette != null && !SkillTree.IsBlockUnlocked(BlockKind.Function, unlockedForPalette)) continue;
-
-			// 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476). 남은 블록이 없는 분류는 머리글도 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
-			IEnumerable<Func<BlockData>> candidates = (IEnumerable<Func<BlockData>>)blocks ?? FunctionTemplates();
-			if (blocks != null && unlockedForPalette != null)
-				candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
-			Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, query)).ToArray();
-			if (shown.Length == 0) continue;
+			// 소분류마다 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476, #487). 남은 블록이 없는 소분류는 줄째, 분류는 머리글째 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
+			var shownGroups = new List<(string Name, Func<BlockData>[] Blocks)>();
+			foreach ((string subName, Func<BlockData>[] blocks) in subgroups)
+			{
+				IEnumerable<Func<BlockData>> candidates = blocks;
+				if (unlockedForPalette != null)
+					candidates = candidates.Where(template => SkillTree.IsBlockUnlocked(template().Kind, unlockedForPalette));
+				Func<BlockData>[] shown = candidates.Where(template => MatchesPaletteSearch(template(), title, subName, query)).ToArray();
+				if (shown.Length > 0) shownGroups.Add((subName, shown));
+			}
+			if (shownGroups.Count == 0) continue;
 
 			if (headerPrefab != null)
 			{
 				ListHeaderView header = Instantiate(headerPrefab, palette);
 				// 분류 색 네모: 그 분류 블록의 색
-				header.Show(title, null, BlockLabels.ColorOf(shown[0]()));
+				header.Show(title, null, BlockLabels.ColorOf(shownGroups[0].Blocks[0]()));
 			}
-			// 분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로)
-			paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
-			foreach (Func<BlockData> template in shown) AddTemplate(template);
+			// 소분류마다 칩을 줄줄이 놓을 칸 (줄이 차면 다음 줄로). 맨 앞에 소분류 이름
+			foreach ((string subName, Func<BlockData>[] shown) in shownGroups)
+			{
+				paletteTarget = paletteGroupPrefab != null ? Instantiate(paletteGroupPrefab, palette) : palette;
+				// 소분류 글씨가 있는 줄은 내어쓰기: 칩이 넘쳐 다음 줄로 가도 글씨 아래가 아니라 첫 칩과 같은 자리에서 시작한다 (시안 6)
+				if (paletteTarget != palette && paletteTarget.TryGetComponent(out FlowLayoutGroup flow)) flow.HangingIndent = subName.Length > 0;
+				if (subName.Length > 0) AddSubgroupLabel(subName);
+				foreach (Func<BlockData> template in shown) AddTemplate(template);
+			}
 		}
 		paletteTarget = palette;
 	}
 
-	// 블록 목록 검색 (#476): 비어 있거나, 분류 이름·칩 이름·스킬의 화면 이름(검 찌르기)·고정 ID(c.thrust)에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
-	// 분류 이름이 맞으면 그 분류의 블록을 모두 보여 준다. 예: 「제어」 → If, For, While …
-	bool MatchesPaletteSearch(BlockData block, string groupTitle, string query)
+	// 칩 줄 맨 앞의 소분류 글씨 (#487). 블록 글자 프리팹을 쓰고 색만 회색으로. 클릭을 받지 않으므로 칩 끌기를 막지 않는다
+	// 글자 크기는 블록 글자와 같게 둔다. 픽셀 글꼴(Galmuri11)은 작게 줄이면 글자가 깨지기 때문
+	void AddSubgroupLabel(string name)
 	{
-		if (query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(PaletteNameOf(block), query)) return true;
-		if (block.Kind != BlockKind.Function || block.IsUserFunction) return false;
-		return PredefinedFunctionRegistry.TryGet(block.FunctionId, out PredefinedFunction function)
-			&& (ContainsText(function.Name, query) || ContainsText(function.Id, query));
+		TMP_Text label = CreateText(paletteTarget != null ? paletteTarget : palette);
+		label.text = name;
+		label.color = SubgroupLabelColor;
+		label.raycastTarget = false;
 	}
+
+	// 문법 탭 검색 (#476): 비어 있거나, 분류·소분류 이름, 칩 이름에 검색 글자가 들어 있으면 true (대소문자 구분 없음)
+	// 분류·소분류 이름이 맞으면 그 블록들을 모두 보여 준다. 예: 「제어」 → If, For, While …, 「반복」 → For, While, Break, Continue (#487)
+	// 스킬 이름 검색은 함수 탭이 한다 (#489, 문법 탭에는 스킬이 없음)
+	bool MatchesPaletteSearch(BlockData block, string groupTitle, string subgroupName, string query) =>
+		query.Length == 0 || ContainsText(groupTitle, query) || ContainsText(subgroupName, query) || ContainsText(PaletteNameOf(block), query);
 
 	static bool ContainsText(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -1450,54 +2263,110 @@ public class BlockEditor : MonoBehaviour
 		}
 	}
 
-	// 「함수」 분류의 견본들: C 스킬 등 사전 정의 함수와 내가 만든 함수 부르기. 둘 다 파라미터 수만큼 빈 값 칸을 가진 함수 블록
-	// 칩을 바로 만들지 않고 목록으로 돌려준다. 검색에 맞는 블록이 없으면 분류 머리글도 만들지 않기 위함 (#476)
-	List<Func<BlockData>> FunctionTemplates()
-	{
-		var templates = new List<Func<BlockData>>();
-		IReadOnlyList<PredefinedFunction> functions = PredefinedFunctionRegistry.All;
-		if (functions == null) Debug.LogWarning("[BlockEditor] 사전 정의 함수 목록이 비어 있어서 C 스킬 블록을 만들지 못함");
-		else
-		{
-			foreach (PredefinedFunction function in functions)
-			{
-				// 함수 하나에서 문제가 나도 나머지 블록은 만든다. 어느 함수인지 콘솔에 남긴다
-				try
-				{
-					if (function == null) continue;
-					string id = function.Id;
-					if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
-					// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
-					if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
-					// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
-					if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
-					int parameterCount = function.Parameters?.Count ?? 0;
-					templates.Add(() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
-				}
-				catch (Exception e)
-				{
-					Debug.LogError($"[BlockEditor] {function?.GetType().Name} 블록을 만들지 못함: {e}");
-				}
-			}
-		}
-
-		// 내가 만든 함수 부르기 (BlockData.CallUserFunction)
-		// 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않으므로 페이지 함수만 붙인다
-		foreach (FunctionData saved in PageFunctions())
-		{
-			string guid = saved.Guid;
-			int parameterCount = saved.Parameters?.Count ?? 0;
-			templates.Add(() => BlockData.CallUserFunction(guid, EmptySlots(parameterCount)));
-		}
-		return templates;
-	}
-
-	// 저장한 함수가 바뀌면 블록 목록의 「함수」 분류도 바뀌므로 다시 만든다
+	// 편집 화면을 열 때(해금이 바뀌었을 수 있음)와 검색 글자가 바뀔 때 문법 탭을 다시 만든다
 	void RebuildPalette()
 	{
 		if (!paletteBuilt || palette == null) return;
 		for (int i = palette.childCount - 1; i >= 0; i--) Destroy(palette.GetChild(i).gameObject);
 		BuildPalette();
+		// 함수 탭의 「내가 만든 함수」도 저장한 함수로 만들므로 함께 다시 만든다
+		if (rightTab == RightTab.Functions) RebuildFunctionTab();
+	}
+
+	// 함수 탭 (#489, 시안 6-12) ------------------------------------------------------
+
+	// 함수 탭 항목 하나: 영문 이름, 한글 이름, 원형, 끌면 만들 블록
+	readonly struct FunctionTabItem
+	{
+		public readonly string Name, KoreanName, Prototype;
+		public readonly Func<BlockData> Factory;
+
+		public FunctionTabItem(string name, string koreanName, string prototype, Func<BlockData> factory)
+		{
+			Name = name;
+			KoreanName = koreanName;
+			Prototype = prototype;
+			Factory = factory;
+		}
+	}
+
+	// 함수 탭: 구역 스킬 / 기본 함수 / 메모리 / 내가 만든 함수. 해금한 것만 보인다 (블록 목록과 같은 규칙, 서버 저장 검사와 같음)
+	// - 사전 정의 함수와 내가 만든 함수: 함수 블록(BlockKind.Function)을 해금해야 보인다. 스킬 트리에 노드가 있는 스킬은 그 노드도
+	// - malloc, free, wait: 사전 정의 함수가 아니라 각자의 블록이므로 그 블록 종류를 해금해야 보인다
+	void RebuildFunctionTab()
+	{
+		if (functionTabList == null || functionTabItemPrefab == null) return;
+		for (int i = functionTabList.childCount - 1; i >= 0; i--) Destroy(functionTabList.GetChild(i).gameObject);
+
+		HashSet<string> unlocked = CurrentUnlocked();
+		bool Unlocked(BlockKind kind) => unlocked == null || SkillTree.IsBlockUnlocked(kind, unlocked);
+		bool functionUnlocked = Unlocked(BlockKind.Function);
+
+		var skills = new List<FunctionTabItem>();
+		var basics = new List<FunctionTabItem>();
+		if (functionUnlocked && PredefinedFunctionRegistry.All != null)
+		{
+			foreach (PredefinedFunction function in PredefinedFunctionRegistry.All)
+			{
+				string id = function?.Id;
+				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
+				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
+				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
+				int parameterCount = function.Parameters?.Count ?? 0;
+				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
+					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
+				// C·Python 스킬과 공통 이동(dash 등)은 스킬, 나머지(get_bug, is_valid_target)는 기본 함수
+				bool skill = BlockReference.IsSkill(id);
+				(skill ? skills : basics).Add(item);
+			}
+		}
+		// wait 블록은 시간을 비워 둔다 (wait( 초);). 무엇을 적을지는 놓은 뒤 플레이어가 정한다
+		AddBuiltin(basics, () => BlockData.Wait(SlotData.EmptyValue()));
+
+		var memory = new List<FunctionTabItem>();
+		AddBuiltin(memory, () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)));
+		AddBuiltin(memory, () => BlockData.Free(SlotData.EmptyValue()));
+
+		// 내가 만든 함수: 페이지 함수만. 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않는다 (#470). 한글 이름은 없다
+		var mine = new List<FunctionTabItem>();
+		if (functionUnlocked)
+		{
+			foreach (FunctionData saved in PageFunctions())
+			{
+				string guid = saved.Guid;
+				int parameterCount = saved.Parameters?.Count ?? 0;
+				mine.Add(new FunctionTabItem(saved.Name, "", BlockReference.PrototypeOf(saved), () => BlockData.CallUserFunction(guid, EmptySlots(parameterCount))));
+			}
+		}
+
+		AddFunctionSection("스킬", skills);
+		AddFunctionSection("기본 함수", basics);
+		AddFunctionSection("메모리", memory);
+		AddFunctionSection("내가 만든 함수", mine);
+
+		// 함수처럼 보이는 블록(malloc, free, wait): 그 블록 종류를 해금했을 때만 넣는다
+		void AddBuiltin(List<FunctionTabItem> items, Func<BlockData> factory)
+		{
+			BlockKind kind = factory().Kind;
+			var builtin = BlockReference.BuiltinOf(kind);
+			if (!Unlocked(kind) || builtin == null) return;
+			items.Add(new FunctionTabItem(builtin.Value.Name, builtin.Value.KoreanName, builtin.Value.Prototype, factory));
+		}
+	}
+
+	// 함수 탭의 구역 하나: 머리글 아래에 항목들. 검색 칸이 비어 있지 않으면 맞는 항목만 남기고, 남은 항목이 없는 구역은 머리글도 만들지 않는다
+	// 검색: 구역 이름(메모리)이 맞으면 그 구역 전체, 아니면 한글 이름(휩쓸)이나 영문 이름(sweep)에 검색 글자가 든 항목 (대소문자 구분 없음, 블록 목록 검색과 같은 규칙)
+	void AddFunctionSection(string title, List<FunctionTabItem> items)
+	{
+		string query = functionSearch != null ? functionSearch.text.Trim() : "";
+		if (query.Length > 0 && !ContainsText(title, query))
+			items = items.Where(item => ContainsText(item.Name, query) || ContainsText(item.KoreanName, query)).ToList();
+		if (items.Count == 0) return;
+		if (headerPrefab != null) Instantiate(headerPrefab, functionTabList).Show(title, null); // 색 네모 없이 글자만 (시안 6-12)
+		// 제목은 한글 이름. 영문 이름은 원형에 들어 있으므로 따로 적지 않는다. 한글 이름이 없는 내가 만든 함수는 함수 이름
+		foreach (FunctionTabItem item in items)
+			Instantiate(functionTabItemPrefab, functionTabList).Show(this, string.IsNullOrEmpty(item.KoreanName) ? item.Name : item.KoreanName, item.Prototype, item.Factory);
 	}
 
 	void AddTemplate(Func<BlockData> template)
@@ -1517,14 +2386,33 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (topBar == null) return;
 
-		functionNameField = CreateField(topBar);
-		functionNameField.MinWidth = 60f;
-		functionNameField.SetBackground(null, Color.clear); // 견본처럼 이름만 보이게
-		functionNameField.transform.SetSiblingIndex(0); // 상태 글자(Message Label)가 위쪽 줄 안에 있으면 그 앞에
+		// 함수 이름은 함수 틀(「void 이름( ) {」)에만 보이고 거기서 고친다 (사용자 요청: 위쪽 줄과 두 번 보여 혼잡함).
+		// 함수 틀이 없는 화면이면 예전처럼 위쪽 줄 맨 앞에 둔다
+		if (functionFrame != null)
+		{
+			functionNameField = CreateField(topBar);
+			functionFrame.PlaceNameField((RectTransform)functionNameField.transform);
+			// 칸을 머리줄 높이만큼 키운다. 밑줄은 칸 아래 끝에 그려지고 글자는 칸 가운데에 있으므로, 칸이 높을수록 글자와 밑줄 사이가 벌어진다
+			// (칸 기본 높이 14로는 밑줄이 글자에 붙어 보였다)
+			if (functionNameField.TryGetComponent(out LayoutElement nameSize)) nameSize.minHeight = NameFieldHeight;
+		}
+		else
+		{
+			functionNameField = CreateField(topBar);
+			functionNameField.transform.SetSiblingIndex(0); // 상태 글자(Message Label)가 위쪽 줄 안에 있으면 그 앞에
+		}
+		functionNameField.MinWidth = 30f;
+		// 함수 틀의 다른 글자(반환 타입, 괄호)와 같은 크기, 굵게
+		if (functionNameField.TryGetComponent(out TMP_InputField nameInput))
+		{
+			nameInput.pointSize = 12f;
+			if (nameInput.textComponent != null) nameInput.textComponent.fontStyle = FontStyles.Bold;
+		}
+		SetNameFieldEditable(false);
 
-		// 동기·비동기 고르기 (FunctionData.IsAsync, function-data.md #132). 함수 이름 바로 뒤
+		// 동기·비동기 고르기 (FunctionData.IsAsync, function-data.md #132)
 		asyncButton = AddTopButton("동기", ToggleAsync, saveButtonPrefab);
-		asyncButton.transform.SetSiblingIndex(1);
+		asyncButton.transform.SetSiblingIndex(0);
 		// 일단 항상 숨긴다 (#470). 버튼과 ToggleAsync는 남겨 두어, 다시 보일 때 이 줄만 지우면 된다
 		asyncButton.gameObject.SetActive(false);
 		functionNameField.Edited += text =>
@@ -1542,15 +2430,23 @@ public class BlockEditor : MonoBehaviour
 					dirty = true;
 				}
 			}
-			functionNameField.Text = Function.Name;
+			functionNameField.Text = DisplayNameOf(Function);
 			Redraw();
 		};
 
 		if (functionList == null || functionItemPrefab == null) AddTopButton("새 함수", NewFunction); // 함수 목록이 없으면 위쪽 줄에
-		if (compileButtonPrefab != null) AddTopButton("컴파일", Compile, compileButtonPrefab);
-		AddTopButton("저장", SaveFunction, saveButtonPrefab);
+		AddTopButton("저장", Save, saveButtonPrefab);
 
 		infoText = infoLabel != null ? infoLabel : CreateText(topBar);
+	}
+
+	// 함수 이름 칸을 고칠 수 있게(페이지 함수) 또는 못 고치게(슬롯 함수, Global Variables) 한다.
+	// 고칠 수 있는 칸에만 청록 밑줄을 긋는다. 블록 안의 이름 칸(선언 이름)도 밑줄이라, 밑줄이 「여기를 고칠 수 있다」는 표시가 된다
+	void SetNameFieldEditable(bool editable)
+	{
+		if (functionNameField == null) return;
+		functionNameField.Interactable = editable;
+		functionNameField.SetBackground(editable ? nameFieldSprite : null, nameFieldColor);
 	}
 
 	Button AddTopButton(string label, Action onClick, Button prefab = null)
@@ -1564,28 +2460,32 @@ public class BlockEditor : MonoBehaviour
 	bool HasFunctionList => functionList != null && functionItemPrefab != null;
 
 	// 함수 목록에 한 줄을 더한다. 함수 목록 칸이 있으면 그곳에, 없으면 위쪽 줄에 버튼으로 (onClick이 null이면 누를 수 없는 줄)
-	void AddFunctionEntry(string prefix, string guid, string name, string detail, Action onClick, bool dim = false, bool error = false)
+	// onDelete가 있으면 줄 오른쪽에 지우기 버튼(×)을 보인다 (#494, 저장한 페이지 함수만)
+	void AddFunctionEntry(string prefix, string guid, string name, string detail, Action onClick, bool dim = false, Action onDelete = null)
 	{
 		if (HasFunctionList)
 		{
 			ListItemView item = Instantiate(functionItemPrefab, functionList);
 			item.SetBoxed(guid == GlobalsKey); // Global Variables는 상자로
+			item.SetDeleteAction(onDelete);
 			if (onClick != null) item.Button.onClick.AddListener(() => onClick());
 			item.Button.interactable = onClick != null;
+			if (guid != null && onClick != null) openActions[guid] = onClick; // 오류 창의 「블록 보기」가 다른 함수를 열 때
 			savedButtons.Add(item.gameObject);
-			functionItems.Add((item, prefix, guid, name, detail, dim, error));
+			functionItems.Add((item, prefix, guid, name, detail, dim));
 			return;
 		}
 		if (topBar != null && onClick != null) savedButtons.Add(AddTopButton(name, onClick).gameObject);
 	}
 
 	// 함수 목록의 머리글 (「슬롯」, 「페이지 2 / 5 +」). onAdd가 있으면 + 버튼을 보인다
-	void AddFunctionHeader(string title, Action onAdd)
+	ListHeaderView AddFunctionHeader(string title, Action onAdd)
 	{
-		if (!HasFunctionList || headerPrefab == null) return;
+		if (!HasFunctionList || headerPrefab == null) return null;
 		ListHeaderView header = Instantiate(headerPrefab, functionList);
 		header.Show(title, onAdd);
 		savedButtons.Add(header.gameObject);
+		return header;
 	}
 
 	// 저장한 함수를 다시 읽고, 위 줄 맨 뒤에 함수마다 불러오기 버튼을 만든다
@@ -1599,61 +2499,46 @@ public class BlockEditor : MonoBehaviour
 
 		savedFunctions = FunctionStorage.LoadAll();
 		listGlobals = CurrentGlobals();
+		RefreshBuildState();
 		ClearSavedButtons();
-		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => RequestOpen("Global Variables", OpenGlobals));
+		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => SwitchTo(OpenGlobals));
 
-		// 슬롯 1~8: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬은 이름만
+		// 슬롯 Q~F: 내 캐릭터의 장착(SlotLoadout.GetEntry). 함수면 눌러서 연다, C 스킬·빈 슬롯은 누를 수 없음
+		// 실제 계정과 같게 줄에는 슬롯 키만 보인다 (#487, 사용자 결정). 끼운 함수의 이름은 그 줄을 열면 함수 틀에 보인다
 		var equipped = new HashSet<string>();
-		AddFunctionHeader("슬롯", null);
+		slotHeader = AddFunctionHeader("슬롯", null);
 		SlotLoadout loadout = null;
 		NetworkIdentity localPlayer = NetworkClient.localPlayer;
 		if (localPlayer != null) localPlayer.TryGetComponent(out loadout);
 		for (int slot = 0; slot < SlotLoadout.SlotCount; slot++)
 		{
-			string number = (slot + 1).ToString();
-			string key = slot < SlotKeys.Length ? SlotKeys[slot] : "";
+			string key = KeyOf(slot);
 			SlotLoadout.Entry entry = loadout != null ? loadout.GetEntry(slot) : default;
-			if (loadout == null || entry.IsEmpty)
-			{
-				AddFunctionEntry(number, null, "비어 있음", key, null, true);
-				continue;
-			}
-			if (entry.Kind == SlotLoadout.EntryKind.Skill)
-			{
-				string skillName = SkillTable.TryGet(entry.Id, out SkillData skill) ? skill.DisplayName : entry.Id;
-				AddFunctionEntry(number, null, skillName, $"{key} 스킬", null, true);
-				continue;
-			}
-			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
+			// 빈 슬롯, C 스킬, 지워진 함수는 열 수 있는 함수가 없으므로 키만 보이고 누를 수 없다 (「비어 있음」 글자와 흐리게 하는 표시는 없음)
+			FunctionData slotFunction = loadout == null || entry.IsEmpty || entry.Kind == SlotLoadout.EntryKind.Skill
+				? null
+				: savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
 			if (slotFunction == null)
 			{
-				AddFunctionEntry(number, null, "(지워진 함수)", key, null, true);
+				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
 			equipped.Add(slotFunction.Guid);
 			string slotGuid = slotFunction.Guid;
-			string slotLabel = $"슬롯 {number} {slotFunction.Name}";
-			AddFunctionEntry(number, slotGuid, slotFunction.Name, key, () => RequestOpen(slotLabel, () =>
-			{
-				FunctionData loaded = FunctionStorage.Load(slotGuid);
-				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(slotFunction, listGlobals, savedFunctions));
+			// 작업본이 없으면 누를 때 파일에서 새로 읽어 연다 (오류 밑줄은 Redraw가 작업본으로 계산)
+			AddFunctionEntry("", slotGuid, key, key, () => SwitchTo(() => OpenPage(slotGuid, () => FunctionStorage.Load(slotGuid))));
 		}
 
 		// 페이지: 슬롯에 넣지 않은 저장한 함수. + 로 새 함수
 		List<FunctionData> pages = savedFunctions.Where(f => !equipped.Contains(f.Guid)).ToList();
 		AddFunctionHeader($"페이지 {pages.Count}", NewFunction);
-		AddUnsavedEntry();
+		AddUnsavedEntries();
 		foreach (FunctionData saved in pages)
 		{
 			string guid = saved.Guid;
-			// 누를 때 파일에서 새로 읽어 연다. 저장하지 않고 고친 내용이 섞이지 않게
-			string pageLabel = $"페이지 {saved.Name}";
-			AddFunctionEntry("-", guid, saved.Name, $"코드 {CodeSizeOf(saved)}", () => RequestOpen(pageLabel, () =>
-			{
-				FunctionData loaded = FunctionStorage.Load(guid);
-				if (loaded != null) Open(loaded);
-			}), false, FunctionChecker.HasErrors(saved, listGlobals, savedFunctions));
+			FunctionData page = saved;
+			AddFunctionEntry("-", guid, WorkingNameOf(saved), $"코드 {CodeSizeOf(saved)}", () => SwitchTo(() => OpenPage(guid, () => FunctionStorage.Load(guid))),
+				false, () => RequestDeletePage(page));
 		}
 		RebuildPalette();
 		Redraw();
@@ -1664,35 +2549,59 @@ public class BlockEditor : MonoBehaviour
 	{
 		savedFunctions = server.ReceivedFunctions?.ToList() ?? new List<FunctionData>();
 		listGlobals = CurrentGlobals();
+		RefreshBuildState();
 		ClearSavedButtons();
-		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => RequestOpen("Global Variables", OpenGlobals));
-		AddFunctionHeader("슬롯", null);
+		AddFunctionEntry("G", GlobalsKey, "Global Variables", "", () => SwitchTo(OpenGlobals));
+		slotHeader = AddFunctionHeader("슬롯", null);
 		for (int slot = 0; slot < SlotLoadout.SlotCount; slot++)
 		{
 			FunctionData function = SlotFunction(slot);
 			string key = slot < SlotKeys.Length ? SlotKeys[slot] : "";
+			// 슬롯 함수는 슬롯 키(Q~F)가 이름이다 (#487, 시안 6). 번호와 데이터의 이름(slot1~slot8)은 보이지 않는다
+			// 함수를 받지 못한 슬롯도 「비어 있음」 없이 키만 보인다 (누를 수는 없음)
 			if (function == null)
 			{
-				AddFunctionEntry((slot + 1).ToString(), null, "비어 있음", key, null, true);
+				AddFunctionEntry("", null, key, key, null);
 				continue;
 			}
-			string slotLabel = $"슬롯 {slot + 1} {function.Name}"; // 반복 변수 slot은 누를 때 이미 바뀌어 있으므로 지금 글자로 만들어 둔다
-			AddFunctionEntry((slot + 1).ToString(), function.Guid, function.Name, key, () => RequestOpen(slotLabel, () => Open(Copy(function))), false, FunctionChecker.HasErrors(function, listGlobals, savedFunctions));
+			FunctionData slotFunction = function; // 반복 변수는 누를 때 이미 바뀌어 있으므로 지금 값을 잡아 둔다
+			AddFunctionEntry("", function.Guid, key, key, () => SwitchTo(() => OpenPage(slotFunction.Guid, () => Copy(slotFunction))));
 		}
 		AddFunctionHeader($"페이지 {PageFunctions().Count()} / {ProgressRules.MaxPageFunctions}", NewFunction);
-		AddUnsavedEntry();
+		AddUnsavedEntries();
 		foreach (FunctionData function in PageFunctions())
 		{
 			FunctionData page = function;
-			string pageLabel = $"페이지 {page.Name}";
-			AddFunctionEntry("-", page.Guid, page.Name, $"코드 {CodeSizeOf(page)}", () => RequestOpen(pageLabel, () => Open(Copy(page))), false, FunctionChecker.HasErrors(page, listGlobals, savedFunctions));
+			AddFunctionEntry("-", page.Guid, WorkingNameOf(page), $"코드 {CodeSizeOf(page)}", () => SwitchTo(() => OpenPage(page.Guid, () => Copy(page))),
+				false, () => RequestDeletePage(page));
 		}
 		RebuildPalette();
 		Redraw();
 	}
 
-	// 다른 함수(GUID가 다른)가 이미 이 이름을 쓰면 true
-	bool NameTaken(string name, string guid) => savedFunctions.Any(f => f.Guid != guid && f.Name == name);
+	// 다른 함수(GUID가 다른)가 이미 이 이름을 쓰면 true. 저장하지 않은 작업본의 이름도 본다 (#494, 작업본 두 개가 같은 이름이 되지 않게)
+	bool NameTaken(string name, string guid) => WorkingFunctions().Any(f => f.Guid != guid && f.Name == name);
+
+	// 함수 목록에 보일 페이지 이름. 작업본에서 이름을 바꿨으면 바꾼 이름 (#494)
+	string WorkingNameOf(FunctionData saved) => drafts.TryGetValue(saved.Guid, out FunctionData draft) ? draft.Name : saved.Name;
+
+	// 작업본을 반영한 함수들: 저장된 함수 중 작업본이 있으면 작업본, 지금 연 함수는 지금 내용, 저장하지 않은 새 페이지도 들어 있다 (#494)
+	List<FunctionData> WorkingFunctions()
+	{
+		List<FunctionData> list = savedFunctions.Select(f => drafts.TryGetValue(f.Guid, out FunctionData draft) ? draft : f).ToList();
+		foreach (FunctionData draft in drafts.Values)
+			if (list.All(f => f.Guid != draft.Guid)) list.Add(draft);
+		if (!editingGlobals && Function != null)
+		{
+			int index = list.FindIndex(f => f.Guid == Function.Guid);
+			if (index >= 0) list[index] = Function;
+			else list.Add(Function);
+		}
+		return list;
+	}
+
+	// 작업본을 반영한 전역 변수: 고치는 중이면 지금 내용, 작업본이 있으면 작업본, 없으면 저장된 것 (#494)
+	GlobalVariablesData WorkingGlobals() => editingGlobals ? globals : globalsDraft ?? listGlobals;
 
 	// 겹치지 않는 이름: 새_함수, 새_함수2, 새_함수3 …
 	string UniqueName(string baseName)
@@ -1702,11 +2611,24 @@ public class BlockEditor : MonoBehaviour
 			if (!NameTaken(baseName + n, null)) return baseName + n;
 	}
 
-	// 아직 저장하지 않은 새 함수도 페이지 맨 위에 보인다 (지금 연 함수)
-	void AddUnsavedEntry()
+	// 아직 저장하지 않은 새 함수도 페이지 맨 위에 보인다: 지금 연 새 함수와 작업본으로 둔 새 페이지 (#494). 작업본 줄을 누르면 그 페이지를 다시 연다
+	void AddUnsavedEntries()
 	{
-		if (editingGlobals || Function == null || savedFunctions.Any(f => f.Guid == Function.Guid)) return;
-		AddFunctionEntry("-", Function.Guid, Function.Name, "저장 안 함", () => { });
+		foreach (FunctionData page in NewPages())
+		{
+			string guid = page.Guid;
+			bool current = !editingGlobals && Function != null && guid == Function.Guid;
+			AddFunctionEntry("-", guid, page.Name, "저장 안 함", current ? () => { } : () => SwitchTo(() => OpenPage(guid, () => null)));
+		}
+	}
+
+	// 저장하지 않은 새 페이지들: 작업본 중 저장된 함수에 없는 것, 그리고 지금 연 함수가 저장된 함수에 없으면 그것도
+	List<FunctionData> NewPages()
+	{
+		List<FunctionData> pages = drafts.Values.Where(d => savedFunctions.All(f => f.Guid != d.Guid)).ToList();
+		if (!editingGlobals && Function != null && savedFunctions.All(f => f.Guid != Function.Guid) && pages.All(p => p.Guid != Function.Guid))
+			pages.Add(Function);
+		return pages;
 	}
 
 	void ClearSavedButtons()
@@ -1717,20 +2639,22 @@ public class BlockEditor : MonoBehaviour
 		}
 		savedButtons.Clear();
 		functionItems.Clear();
+		openActions.Clear();
 	}
 
 	void NewFunction()
 	{
-		if (server != null && PageFunctions().Count() >= ProgressRules.MaxPageFunctions)
+		// 저장하지 않은 새 페이지도 센다. 저장할 때 개수 초과로 거부될 페이지를 미리 만들지 않게 (#494)
+		if (server != null && PageFunctions().Count() + NewPages().Count >= ProgressRules.MaxPageFunctions)
 		{
 			SetMessage($"함수는 {ProgressRules.MaxPageFunctions}개까지 더할 수 있음", true);
 			Redraw();
 			return;
 		}
-		RequestOpen("새 페이지", CreateNewPage, "만드시겠습니까");
+		SwitchTo(CreateNewPage);
 	}
 
-	// 새 페이지를 연다. 저장하기 전에도 저장하지 않은 것으로 쳐서, 다른 곳을 열거나 나가려 하면 먼저 묻는다 (사라지기 때문)
+	// 새 페이지를 연다. 저장하기 전에도 저장하지 않은 것으로 쳐서, 다른 곳을 열면 작업본으로 두고 나가려 하면 먼저 묻는다 (사라지기 때문)
 	void CreateNewPage()
 	{
 		SetMessage("");
@@ -1756,11 +2680,8 @@ public class BlockEditor : MonoBehaviour
 		return savedFunctions.Where(f => !slotGuids.Contains(f.Guid));
 	}
 
-	bool IsSlotFunction(FunctionData function)
-	{
-		if (server == null || function == null || server.ReceivedSlots == null) return false;
-		return server.ReceivedSlots.Any(e => e.Id == function.Guid);
-	}
+	// 슬롯 함수면 true: 이름(슬롯 키)과 반환 타입을 바꿀 수 없다. 임시 계정은 슬롯에 끼운 함수 (#487. 이름을 바꾸려면 장착대에서 슬롯을 비운 뒤)
+	bool IsSlotFunction(FunctionData function) => SlotIndexOf(function) >= 0;
 
 	// 서버가 보낸 함수를 그대로 고치면 저장하지 않은 내용이 목록에 섞이므로, 열 때마다 복사본을 연다
 	static FunctionData Copy(FunctionData function) =>

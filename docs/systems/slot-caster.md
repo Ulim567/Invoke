@@ -24,6 +24,8 @@
 
 ## 동작 규칙
 - 시전이 거부되면(쿨타임, 메모리 부족 등, `Cast`가 `null`) 시전 로그와 `CastRequested`를 내지 않는다. 거부 이유는 실행기가 `CastRejected`로 알린다 (#152).
+- 함수를 넣었지만 이 컴퓨터의 `SlotLoadout`이 실행할 함수로 만들지 못한 슬롯(컴파일 오류가 있는 블록 함수)도 서버에 시전을 부탁한다 (#506). 서버가 `CompileError`로 거부해야 HUD가 이유를 알리기 때문. 빈 슬롯만 부탁하지 않는다
+  - `SlotLoadout`은 만들지 못한 슬롯을 기억해 다시 만들지 않는다(`TryGetFunction`). 장착을 바꾸거나 `ReloadFunctions`·`SetEntries`를 부르면 다시 만든다. HUD가 매 프레임 `TryGetFunction`을 불러, 기억하지 않으면 매 프레임 콘솔 오류가 쌓였음
 - 대상 찾기(가까운 몬스터, 범위 안 몬스터)는 플레이어가 속한 장소 씬의 물리 세계(`gameObject.scene.GetPhysicsScene2D().OverlapCircle`)에 묻는다. `Physics2D`로 바로 찾으면 서버에서 장소 씬의 몬스터를 못 찾는다 (place-scenes.md, #125).
 - 입력 방식 (`CastMode`)
   - 스킬 표(c-skills.md)의 대상 지정 방식이 `Area`이면 범위.
@@ -74,7 +76,7 @@
   - 그 작업을 시전한 슬롯 키를 아직 누르고 있으면: 단일 고르기와 똑같이 ← →로 고르고, 떼면 고른 몬스터를 `ProvideTarget(작업 번호, 몬스터)`로 서버에 보낸다. 후보가 없으면 대상 없음(`FromBug(null)`).
   - 누르고 있지 않으면(이미 뗐음, 다른 슬롯을 고르는 중, 함수 안에서 따로 시전된 작업): 가장 가까운 몬스터를 바로 넣는다. 없으면 대상 없음.
 - 고르는 중에 경직·사망으로 취소되면 대상 없음을 넣는다. 기다리던 작업이 끝나면(취소, 실행 중단 공격) 고르기도 끝낸다.
-- 대상 없음이 들어가면 그 값을 받은 스킬이 `InvalidTarget`으로 실패한다 (function-executor.md).
+- 대상 없음이 들어가면 그 값을 받은 스킬이 `NoTarget`으로 실패한다 (function-executor.md, #504). 죽었거나 없어진 대상은 `InvalidTarget`.
 
 ### 급소공략 미니게임 (#161)
 - 입력 순서: 급소공략 슬롯을 누른 채 ← →로 대상 고르기 → Space(`MarkPressed`)로 미니게임 시작 → Space로 바늘 멈춤(판정) → 슬롯을 떼면 시전.

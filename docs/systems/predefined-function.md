@@ -55,7 +55,7 @@
 
 ### 실행 중단 공격, 슬롯 취소, Overflow 재시작 (#143)
 - 끊기는 경우 (자세한 규칙: `function-executor.md` 「끊기는 경우」)
-  - 실행 중단 공격: 그 캐릭터의 모든 `FunctionTask`가 끊김 (`FunctionExecutor.InterruptAll`)
+  - 실행 중단 공격: 그 캐릭터의 모든 `FunctionTask`가 끊김 (`FunctionExecutor.InterruptAll`). 사망·장소 이동도 같은 방법으로 끊고, 원인만 `InterruptCause.System`으로 다름 (#504)
   - 슬롯 취소: 그 슬롯에서 시전한 `FunctionTask`만 끊김 (`FunctionExecutor.Cancel`)
   - Overflow 재시작(C): 모든 `FunctionTask`가 끊긴 뒤 heap과 전역 변수가 처음으로 돌아감 (`FunctionExecutor.RestartProcess`)
 - 실행 중이던 function마다 `OnEnd` 대신 `OnCancel`이 한 번 불림. 세 경우 모두 같음. heap에 올리지 않은 오브젝트(예: 이펙트) 정리는 `OnCancel`에서
@@ -151,8 +151,8 @@ protected override void OnStart(FunctionContext context)
 | 이름 | 돌려주는 값 | 하는 일 |
 | --- | --- | --- |
 | `Malloc(FunctionContext context, object obj, int size)` | `int` | `obj`를 시전한 캐릭터의 heap `size`칸에 올리고 포인터를 돌려줌. heap이 모자라면 `HeapStorage.NullPointer`, 에러 없음 |
-| `Free(FunctionContext context, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false`. 오브젝트는 없애지 않음(삭제는 `HeapStorage.ObjectFreed`를 받은 쪽, #191) |
-| `TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError)` 후 `false` (C의 null 역참조) |
+| `Free(FunctionContext context, int pointer)` | `bool` | 포인터의 객체를 해제하고 heap 칸 반환. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError.For(heap, pointer))` 후 `false`(`NULL`이면 `NullPointerError`, 이미 해제한 포인터면 `FreedPointerError`, #504). 오브젝트는 없애지 않음(삭제는 `HeapStorage.ObjectFreed`를 받은 쪽, #191) |
+| `TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError.For(heap, pointer))` 후 `false` (C의 null 역참조). 에러 종류는 `Free`와 같음 (#504) |
 | `GetGlobalPointers<T>(FunctionContext context)` | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
 | `CountHeapObjects<T>(FunctionContext context)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
 
@@ -227,8 +227,13 @@ protected override void OnEnd(FunctionContext context)
     - `UnarmedError`: 맨손
     - `NoSummonedSwordError`: 소환검 없음
   - `Assets/_UL/Scripts/FunctionExecutor/Predefined/PointerErrors.cs`
-    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄. 플레이어의 `free` 블록은 이 에러 대신 실패 종류 `InvalidPointer`
-    - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
+    - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄. 플레이어의 `free` 블록은 이 에러 대신 실패 종류 `InvalidPointer`·`DoubleFree`
+      - `Message`: 「사용할 수 없는 포인터: N」
+      - `InvalidPointerError.For(HeapStorage heap, int pointer)` (static): 포인터에 맞는 하위 클래스를 만듦. heap 함수가 쓰므로 스킬은 직접 부르지 않아도 됨 (#504)
+    - `NullPointerError` (`InvalidPointerError` 상속, #504): 스킬에 `NULL`을 넘김. `Message` 「스킬에 NULL 포인터 전달」
+    - `FreedPointerError` (`InvalidPointerError` 상속, #504): 스킬에 이미 해제한 포인터를 넘김(`HeapStorage.WasFreed`). `Message` 「스킬에 이미 free한 포인터 전달」
+    - 포인터 에러인지 확인: `is InvalidPointerError`. 두 하위 클래스도 걸림
+    - 하위 클래스로 나눈 이유: 포인터 에러를 한꺼번에 확인하던 코드(박진우 `SwordPointerSimTest` 등)를 고치지 않기 위함
   - `Assets/_JW/Scripts/Python/ManaOrbs.cs` (#486)
     - `NoManaOrbError`: 쓸 수 있는 마나 구슬 없음. 구슬 스킬(발사, 난사, 폭발, 보호막)이 냄
 

@@ -57,6 +57,8 @@ public class HeapStorage
 	// 마지막으로 붙인 포인터 값. 1부터 하나씩 늘려 붙이고, 해제한 값은 최댓값에 닿기 전까지 다시 쓰지 않는다(NextPointer)
 	// 해제한 값을 바로 다시 쓰면, 해제 전에 스킬 코드가 들고 있던 포인터가 새 객체를 가리키게 되어 「해제한 포인터로 명령하면 스킬 오류」 규칙을 지킬 수 없다
 	int lastPointer = NullPointer;
+	// lastPointer가 최댓값에서 1로 한 번이라도 되돌아갔으면 true. 그 뒤로는 1 이상의 모든 값을 한 번은 준 값으로 본다(WasFreed)
+	bool pointerWrapped;
 
 	// 힙 칸 수를 세는 곳. 이 저장소를 가진 ProcessMemory다
 	readonly ProcessMemory memory;
@@ -130,11 +132,24 @@ public class HeapStorage
 	{
 		do
 		{
+			if (lastPointer == int.MaxValue) pointerWrapped = true;
 			lastPointer = lastPointer == int.MaxValue ? NullPointer + 1 : lastPointer + 1;
 		}
 		while (entries.ContainsKey(lastPointer));
 
 		return lastPointer;
+	}
+
+	/// <summary>
+	/// pointer가 이 heap이 malloc으로 준 적 있는 값인데 지금은 기록에 없으면 true. 이미 free한 포인터를 다시 쓸 때를 찾는 데 쓴다 (#504).<br/>
+	/// NullPointer, 준 적 없는 값, 아직 있는 객체(누수된 객체 포함)의 포인터이면 false다.
+	/// </summary>
+	// 포인터 값은 최댓값에 닿기 전까지 다시 쓰지 않으므로(NextPointer), 준 적 있는 값이 기록에 없으면 free한 것이다
+	// Clear(RestartProcess)로 지운 포인터도 true지만, 재시작은 작업을 모두 끊고 전역 변수도 처음 값으로 돌리므로 플레이어 함수가 그 값을 들고 있을 수 없다
+	public bool WasFreed(int pointer)
+	{
+		if (pointer <= NullPointer || entries.ContainsKey(pointer)) return false;
+		return pointerWrapped || pointer <= lastPointer;
 	}
 
 	/// <summary>

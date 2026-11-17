@@ -25,6 +25,8 @@ public class PlayerProgress : NetworkBehaviour
 	[SyncVar(hook = nameof(OnSyncVarChanged))] int money;
 	// 재료 ID → 개수. 0개인 재료는 넣지 않는다
 	readonly SyncDictionary<string, int> materials = new SyncDictionary<string, int>();
+	// 블록·함수의 항목 ID → 가진 개수 (#500, ItemCountRules). 0개인 항목은 넣지 않는다
+	readonly SyncDictionary<string, int> itemCounts = new SyncDictionary<string, int>();
 	readonly SyncList<string> unlocked = new SyncList<string>();
 
 #if UNITY_SERVER || UNITY_EDITOR
@@ -45,7 +47,14 @@ public class PlayerProgress : NetworkBehaviour
 	public IReadOnlyList<string> Unlocked => unlocked;
 
 	/// <summary>
-	/// [표시] 레벨, 경험치, 돈, 재료, 해금 목록 중 하나라도 바뀌었을 때. 값을 가진 곳(서버, 호스트, 소유 클라이언트)에서 불린다.
+	/// <summary>
+	/// 블록·함수의 항목 ID → 가진 개수 (#500). 0개인 항목은 없다. 항목 ID는 BlockUsageCounter.KeyOf와 같다.<br/>
+	/// 남은 개수 = 가진 개수 − BlockUsageCounter.Count로 센 개수. 「로그인 건너뛰기」 임시 계정은 개수를 쓰지 않는다.
+	/// </summary>
+	public IReadOnlyDictionary<string, int> ItemCounts => itemCounts;
+
+	/// <summary>
+	/// [표시] 레벨, 경험치, 돈, 재료, 블록·함수 개수, 해금 목록 중 하나라도 바뀌었을 때. 값을 가진 곳(서버, 호스트, 소유 클라이언트)에서 불린다.
 	/// </summary>
 	public event Action Changed;
 
@@ -66,9 +75,16 @@ public class PlayerProgress : NetworkBehaviour
 		return materialId != null && materials.TryGetValue(materialId, out int count) ? count : 0;
 	}
 
+	/// <summary>그 블록·함수 항목의 가진 개수 (#500). 없으면 0.</summary>
+	public int GetItemCount(string itemId)
+	{
+		return itemId != null && itemCounts.TryGetValue(itemId, out int count) ? count : 0;
+	}
+
 	void Awake()
 	{
 		materials.OnChange += (op, key, value) => OnSyncedCollectionChanged();
+		itemCounts.OnChange += (op, key, value) => OnSyncedCollectionChanged();
 		unlocked.OnChange += (op, index, value) => OnSyncedCollectionChanged();
 	}
 
@@ -108,6 +124,11 @@ public class PlayerProgress : NetworkBehaviour
 		foreach (KeyValuePair<string, int> pair in data.Materials)
 		{
 			if (pair.Value > 0) materials[pair.Key] = pair.Value;
+		}
+		itemCounts.Clear();
+		foreach (KeyValuePair<string, int> pair in data.ItemCounts)
+		{
+			if (pair.Value > 0) itemCounts[pair.Key] = Math.Min(pair.Value, ItemCountRules.MaxCount);
 		}
 		unlocked.Clear();
 		unlocked.AddRange(data.Unlocked);
@@ -167,9 +188,24 @@ public class PlayerProgress : NetworkBehaviour
 	}
 
 	/// <summary>
+	/// [서버] 블록·함수 항목의 가진 개수를 더한다 (#500). 0 이하는 무시하고, ItemCountRules.MaxCount에서 멈춘다.<br/>
+	/// 지금은 노드 해금(TryUnlock)이 지급할 때 쓴다. 상점과 잡몹 드랍도 이 함수로 준다.
+	/// </summary>
+	public void AddItem(string itemId, int count)
+	{
+		if (string.IsNullOrEmpty(itemId) || count <= 0 || !CanChange(nameof(AddItem))) return;
+		int newCount = Math.Min(GetItemCount(itemId) + count, ItemCountRules.MaxCount);
+		itemCounts[itemId] = newCount;
+#if UNITY_SERVER || UNITY_EDITOR
+		store?.SetItemCount(characterKey, itemId, newCount);
+#endif
+		Changed?.Invoke();
+	}
+
+	/// <summary>
 	/// [서버] 스킬 트리 노드를 해금한다. 노드 ID, 이미 해금함, 선행 조건(SkillTree.CanUnlock), 재료(노드의 Cost) 순서로 검사하고
-	/// 먼저 걸린 이유를 돌려준다. 통과하면 재료를 빼고 노드와 같이 열리는 노드(SkillTree.AutoUnlockedBy)를 해금 목록에 넣은 뒤
-	/// DB에 한 트랜잭션으로 쓴다. 다른 시스템은 이 함수가 아니라 소유 클라이언트의 RequestUnlock을 쓴다.
+	/// 먼저 걸린 이유를 돌려준다. 통과하면 재료를 빼고 노드와 같이 열리는 노드(SkillTree.AutoUnlockedBy)를 해금 목록에 넣고,
+	/// 연 노드마다 그 노드가 여는 블록·함수를 1개씩 준 뒤(ItemCountRules.KeysUnlockedBy, #500) DB에 한 트랜잭션으로 쓴다. 다른 시스템은 이 함수가 아니라 소유 클라이언트의 RequestUnlock을 쓴다.
 	/// </summary>
 	public UnlockResult TryUnlock(string nodeId)
 	{
@@ -197,16 +233,29 @@ public class PlayerProgress : NetworkBehaviour
 		var newNodes = new List<string> { nodeId };
 		newNodes.AddRange(autoNodes);
 
+		// 연 노드(같이 열린 노드 포함)마다 그 노드가 여는 블록·함수를 1개씩 준다. 두 노드가 같은 항목을 열면 2개
+		var newItemCounts = new Dictionary<string, int>();
+		foreach (string id in newNodes)
+		{
+			if (!SkillTree.TryGet(id, out SkillTreeNode opened)) continue;
+			foreach (string key in ItemCountRules.KeysUnlockedBy(opened))
+			{
+				int current = newItemCounts.TryGetValue(key, out int pending) ? pending : GetItemCount(key);
+				newItemCounts[key] = Math.Min(current + 1, ItemCountRules.MaxCount);
+			}
+		}
+
 		// DB에 먼저 쓰고, 성공한 뒤에 메모리를 바꾼다. 저장이 예외로 실패하면 메모리는 그대로여서
 		// 재료만 빠지거나 해금만 사라지는 불일치가 생기지 않는다
 #if UNITY_SERVER || UNITY_EDITOR
-		store?.SaveUnlock(characterKey, newNodes, newCounts);
+		store?.SaveUnlock(characterKey, newNodes, newCounts, newItemCounts);
 #endif
 		foreach (KeyValuePair<string, int> pair in newCounts)
 		{
 			if (pair.Value > 0) materials[pair.Key] = pair.Value;
 			else materials.Remove(pair.Key);
 		}
+		foreach (KeyValuePair<string, int> pair in newItemCounts) itemCounts[pair.Key] = pair.Value;
 		unlocked.AddRange(newNodes);
 		Changed?.Invoke();
 		return UnlockResult.Unlocked;

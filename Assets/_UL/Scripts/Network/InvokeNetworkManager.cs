@@ -334,7 +334,8 @@ public class InvokeNetworkManager : NetworkManager
 		// 이전 씬에서 시전한 함수가 새 씬에서 계속 실행되지 않도록 끊는다 (몬스터를 기다리던 작업, 이전 씬에 만들 검 등)
 		// 로비로 오면 끊는 대신 프로세스를 재시작하고 체력을 채운다. 소환검을 새 씬으로 옮기기(아래 MoveToScene) 전에 해야 검이 따라오지 않는다 (#435)
 		if (target.name == PlaceScenes.Lobby) ResetOnLobbyArrival(player);
-		else if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll();
+		// 원인은 System이다. 장소 이동으로 끊긴 함수는 실행 중단 알림을 띄우지 않는다 (#504)
+		else if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll(InterruptCause.System);
 
 		Scene previous = player.scene;
 

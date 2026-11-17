@@ -166,7 +166,7 @@ public class TestHoldMallocFunction : PredefinedFunction
 
 /// <summary>
 /// 힙 테스트용 free 함수. 시작할 때 전역 포인터 목록의 첫 TestSword를 free한다. 1틱짜리다.<br/>
-/// 전역 포인터 목록에 TestSword가 없으면 NullPointer를 free해서 InvalidPointerError를 낸다.
+/// 전역 포인터 목록에 TestSword가 없으면 NullPointer를 free해서 NullPointerError(InvalidPointerError의 하위 클래스)를 낸다.
 /// </summary>
 public class TestFreeFunction : PredefinedFunction
 {

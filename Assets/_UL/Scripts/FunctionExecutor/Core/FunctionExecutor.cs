@@ -119,7 +119,7 @@ public class FunctionExecutor : MonoBehaviour
 	/// 사전 정의 함수에 argument를 넘겨 시전한다. 슬롯에서 바로 시전할 때 플레이어가 고른 대상을 넘기는 데 쓴다.<br/>
 	/// 예: Cast(thrust, RuntimeValue.FromBug(몬스터)). 스킬은 함수 안에서 불렸을 때와 같이 TryGetArgument로 읽는다.<br/>
 	/// arguments는 Parameters 순서이고, 뒤쪽 파라미터는 비워도 된다(「값 없음」). argument가 없으면 Cast(function)과 같다.<br/>
-	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 InvalidTarget으로 끝난다.
+	/// 넘긴 대상이 쓸 수 없는 대상(대상 없음, 죽음, 없어짐)이면, 작업이 시작할 때 NoTarget(대상 없음) 또는 InvalidTarget(죽음, 없어짐)으로 끝난다.
 	/// </summary>
 	public FunctionTask Cast(PredefinedFunction function, params RuntimeValue[] arguments) => Cast(function, arguments, out _);
 
@@ -227,7 +227,7 @@ public class FunctionExecutor : MonoBehaviour
 		FunctionBlock copy = (FunctionBlock)function.Clone();
 		if (arguments != null) copy.SetArguments(arguments);
 
-		FunctionTask task = new FunctionTask(++lastTaskId, gameObject, memory, cooldowns, language, copy);
+		FunctionTask task = new FunctionTask(++lastTaskId, gameObject, memory, cooldowns, language, copy, SecondsPerTick);
 		pendingTasks.Add(task);
 		return task;
 	}
@@ -235,16 +235,23 @@ public class FunctionExecutor : MonoBehaviour
 	/// <summary>
 	/// 진행 중인 작업과 다음 틱을 기다리는 작업을 모두 끊는다. 실행 중단 공격에 맞았을 때 부른다.<br/>
 	/// 끊긴 작업은 EndReason이 Interrupted가 되고, 실행 중이던 함수들은 OnEnd 대신 OnCancel을 받으며 스택을 돌려준다.<br/>
-	/// 끊긴 작업도 다른 작업처럼 틱이 끝날 때 목록에서 빠지며 TaskEnded가 불린다.
+	/// 끊긴 작업도 다른 작업처럼 틱이 끝날 때 목록에서 빠지며 TaskEnded가 불린다.<br/>
+	/// 끊긴 원인(FunctionTask.InterruptCause)은 MonsterAttack이다. HUD가 실행 중단 알림을 띄운다 (#504).
 	/// </summary>
-	public void InterruptAll()
+	public void InterruptAll() => InterruptAll(InterruptCause.MonsterAttack);
+
+	/// <summary>
+	/// 진행 중인 작업과 다음 틱을 기다리는 작업을 모두 끊고, 끊긴 원인을 cause로 남긴다.<br/>
+	/// 사망, 장소 이동처럼 실행 중단 공격이 아닌 이유로 끊을 때 InterruptCause.System을 넘긴다. 그러면 HUD가 알리지 않는다 (#504).
+	/// </summary>
+	public void InterruptAll(InterruptCause cause)
 	{
 		// foreach 대신 번호로 돈다. OnCancel에서 Cast를 부르면 목록이 늘어나는데, foreach는 그때 오류를 내기 때문
 		// 늘어난 작업도 끊어야 하므로 Count를 매번 다시 읽는다
 		for (int i = 0; i < tasks.Count; i++)
-			tasks[i].Interrupt();
+			tasks[i].Interrupt(FunctionTaskEndReason.Interrupted, cause);
 		for (int i = 0; i < pendingTasks.Count; i++)
-			pendingTasks[i].Interrupt();
+			pendingTasks[i].Interrupt(FunctionTaskEndReason.Interrupted, cause);
 	}
 
 	/// <summary>
@@ -281,13 +288,13 @@ public class FunctionExecutor : MonoBehaviour
 	/// <summary>
 	/// 프로세스를 새로 시작한다(초기화). 진행 중인 작업을 모두 끊고, heap(소환검 포함)과 전역 변수를 비운 뒤, 전역 변수 파일(SetGlobalVariablesFile, 정하지 않았으면 저장한 파일)의 초기값으로 전역 변수를 다시 만든다.<br/>
 	/// 부르는 곳: 전역 변수 파일 저장(TrySaveGlobalVariables), 사망, 재부팅, 장소 이동(사냥터 ↔ 로비), 연습장 초기화. 접속 때는 이 컴포넌트가 전역 변수만 만든다.<br/>
-	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다.
+	/// 끊긴 작업은 InterruptAll과 같이 EndReason이 Interrupted가 되고, 틱이 끝날 때 TaskEnded가 불린다. 끊긴 원인은 System이라 HUD가 알리지 않는다 (#504).
 	/// </summary>
 	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서만 실행되도록 [Server]를 붙인다
 	public void RestartProcess()
 	{
 		// 작업을 먼저 끊는다. 끊기 전에 heap을 비우면, 이번 틱에 남은 작업이 사라진 객체의 포인터를 쓰게 되기 때문
-		InterruptAll();
+		InterruptAll(InterruptCause.System);
 		memory.Heap.Clear();
 		LoadGlobalVariables();
 	}
@@ -322,7 +329,11 @@ public class FunctionExecutor : MonoBehaviour
 	// 값을 바꾸는 함수다. Mirror를 붙일 때 서버에서 실행되도록 [Command]로 받는다
 	public bool TrySaveGlobalVariables(GlobalVariablesData file)
 	{
-		if (!CanUseGlobalVariables(file)) return false;
+		if (!CanUseGlobalVariables(file, out string error))
+		{
+			Debug.LogError($"전역 변수 파일을 저장할 수 없습니다: {error}");
+			return false;
+		}
 
 		GlobalVariablesStorage.Save(file);
 		// 저장한 파일로 초기화하도록 정한다. 접속 때 SetGlobalVariablesFile로 정한 예전 파일이 남아 있으면,
@@ -334,12 +345,29 @@ public class FunctionExecutor : MonoBehaviour
 
 	/// <summary>
 	/// 전역 변수 파일이 검사(칸 부족, 대상 타입, 직접 입력한 값이 아닌 초기값 등)를 통과하면 true. 저장하거나 반영하지는 않는다.<br/>
-	/// 거부 이유는 콘솔 오류로 남는다. 서버가 전역 변수를 DB에 저장하기 전에 쓴다(FunctionExecutorNetwork).
+	/// 콘솔에 남기지 않는다. 이유가 필요하면 CanUseGlobalVariables(file, out error)를 쓴다. 서버가 슬롯을 컴파일할 때 쓴다(FunctionExecutorNetwork, #506).
 	/// </summary>
-	public bool CanUseGlobalVariables(GlobalVariablesData file)
+	public bool CanUseGlobalVariables(GlobalVariablesData file) => CanUseGlobalVariables(file, out string _);
+
+	/// <summary>
+	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 error에 첫 번째 이유를 C 용어로 쓴 한국어 문장으로 돌려준다 (#504). 예: 같은 scope에서 재정의할 수 없음: x<br/>
+	/// 편집 화면이 Global Variables의 오류 카드에 이유를 보일 때 쓴다. 쓸 수 있으면 error는 null이다.
+	/// </summary>
+	public bool CanUseGlobalVariables(GlobalVariablesData file, out string error)
+	{
+		bool ok = CanUseGlobalVariables(file, out List<GlobalVariablesConverter.Failure> failures);
+		error = ok ? null : failures[0].Message;
+		return ok;
+	}
+
+	/// <summary>
+	/// CanUseGlobalVariables와 같은 검사. 쓸 수 없으면 찾은 오류를 모두(선언 번호, 칸 번호, 이유) 선언 순서대로 돌려준다 (#506). GlobalVariablesConverter.TryConvert와 같다.<br/>
+	/// 편집 화면이 Global Variables의 오류마다 카드를 만들고, 그 자리를 빨갛게 표시하고 깜빡일 때 쓴다.
+	/// </summary>
+	public bool CanUseGlobalVariables(GlobalVariablesData file, out List<GlobalVariablesConverter.Failure> failures)
 	{
 		if (file == null) throw new ArgumentNullException(nameof(file));
-		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _);
+		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _, out failures);
 	}
 
 	void Awake()

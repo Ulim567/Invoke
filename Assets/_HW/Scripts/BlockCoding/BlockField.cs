@@ -29,6 +29,7 @@ public class BlockField : MonoBehaviour
 	TMP_InputField input;
 	LayoutElement layout;
 	Color normalColor = Color.white;
+	Color placeholderColor = new Color(1, 1, 1, 0.35f); // 프리팹의 안내 글자 색. Setup에서 읽는다
 
 	/// <summary>칸에 보이는 글자. 넣어도 Edited는 불리지 않는다</summary>
 	public string Text
@@ -86,6 +87,16 @@ public class BlockField : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 안내 글자(Placeholder)의 색을 바꾼다. null이면 프리팹의 원래 색으로 되돌린다.
+	/// 블록을 끄는 동안 받을 수 있는 칸은 청록, 받을 수 없는 칸은 어둡게 보일 때 BlockValueSlot이 부른다 (#487).
+	/// </summary>
+	public void SetPlaceholderColor(Color? color)
+	{
+		Setup();
+		if (input.placeholder is TMP_Text placeholder) placeholder.color = color ?? placeholderColor;
+	}
+
+	/// <summary>
 	/// 잘못된 값이면 글자를 빨갛게 보여 준다.
 	/// </summary>
 	public void SetInvalid(bool invalid)
@@ -103,6 +114,7 @@ public class BlockField : MonoBehaviour
 		input = GetComponent<TMP_InputField>();
 		layout = GetComponent<LayoutElement>();
 		if (input.textComponent != null) normalColor = input.textComponent.color;
+		if (input.placeholder != null) placeholderColor = input.placeholder.color;
 		input.onValueChanged.AddListener(_ => Resize());
 		input.onEndEdit.AddListener(text => Edited?.Invoke(text));
 		Resize();

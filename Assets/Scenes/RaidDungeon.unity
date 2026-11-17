@@ -754,6 +754,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.6
   verticalFactor: 0.9
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &311066749
 SpriteRenderer:
   serializedVersion: 3
@@ -1123,6 +1125,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.7
   verticalFactor: 0.9
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &380190736
 SpriteRenderer:
   serializedVersion: 3
@@ -3552,7 +3556,7 @@ CompositeCollider2D:
   m_CompositeOperation: 0
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
-  m_GeometryType: 0
+  m_GeometryType: 1
   m_GenerationType: 0
   m_EdgeRadius: 0
   m_ColliderPaths:
@@ -9116,6 +9120,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.95
   verticalFactor: 0.95
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &923433694
 SpriteRenderer:
   serializedVersion: 3
@@ -9546,6 +9552,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.95
   verticalFactor: 0.95
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &1354034873
 SpriteRenderer:
   serializedVersion: 3
@@ -9765,6 +9773,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.8
   verticalFactor: 0.9
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &1637860313
 SpriteRenderer:
   serializedVersion: 3
@@ -9872,6 +9882,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.95
   verticalFactor: 0.95
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &1839688835
 SpriteRenderer:
   serializedVersion: 3
@@ -10071,6 +10083,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.95
   verticalFactor: 0.95
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &1865546071
 SpriteRenderer:
   serializedVersion: 3
@@ -10178,6 +10192,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Parallax
   factor: 0.45
   verticalFactor: 0.9
+  maxBottomY: -4.5
+  bottomCheckRange: 4
 --- !u!212 &1991434456
 SpriteRenderer:
   serializedVersion: 3

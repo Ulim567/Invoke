@@ -25,12 +25,13 @@ public enum FunctionFailure
 	TypeMismatch,
 	// 0으로 나누거나 0으로 나머지를 구했다 (int, float 모두)
 	DivideByZero,
-	// free 블록에 쓸 수 없는 포인터(해제한 포인터, 누수된 포인터)를 넣었다. NULL은 C처럼 아무 일도 하지 않으므로 실패가 아니다
+	// free 블록에 쓸 수 없는 포인터(누수된 포인터, 준 적 없는 값)를 넣었다. NULL은 C처럼 아무 일도 하지 않으므로 실패가 아니다
+	// 이미 free한 포인터는 DoubleFree로 따로 나눈다 (#504)
 	InvalidPointer,
 	// 반복문 밖에서 break, continue를 만났다. C에서는 compile error다
 	// 편집 화면이나 저장 검사가 막기 전까지 실행 중에 이 실패로 끝낸다. 저장 검사는 BlockData.HasJumpOutsideLoop로 찾는다
 	NotInLoop,
-	// 스킬에 넘긴 대상(Target)이 「대상 없음」이거나, 죽었거나, 오브젝트가 없어졌다
+	// 스킬에 넘긴 대상(Target)이 죽었거나, 오브젝트가 없어졌다. 「대상 없음」은 NoTarget으로 따로 나눈다 (#504)
 	// 변수에 담을 때가 아니라 스킬에 넘길 때 검사한다. C의 해제한 포인터도 쓰는 순간에 에러가 나는 것과 같다
 	InvalidTarget,
 	// 반환 타입이 있는 사용자 정의 함수가 return 없이 끝났거나, 값을 비운 return;을 만났다
@@ -38,6 +39,11 @@ public enum FunctionFailure
 	MissingReturn,
 	// array의 범위 밖 원소를 읽거나 썼다(음수 포함). 실제 C는 검사하지 않고 이웃 메모리를 건드리지만, 게임은 runtime error로 멈춘다
 	IndexOutOfRange,
+	// 스킬에 넘긴 대상(Target)이 「대상 없음」이다 (예: get_bug가 고를 몬스터를 찾지 못함, 처음 값을 비운 전역 Target) (#504)
+	// InvalidTarget과 나누는 이유: 플레이어가 고칠 곳이 다르기 때문. 대상 없음은 찾기 전에 확인할 일이고, 죽은 대상은 넘기기 전에 다시 확인할 일이다
+	NoTarget,
+	// free 블록에 이미 free한 포인터를 넣었다 (C의 double free) (#504)
+	DoubleFree,
 }
 
 /// <summary>

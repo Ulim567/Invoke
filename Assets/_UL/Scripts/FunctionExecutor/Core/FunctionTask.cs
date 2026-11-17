@@ -33,6 +33,18 @@ public enum FunctionTaskEndReason
 }
 
 /// <summary>
+/// Interrupted로 끝난 작업이 끊긴 원인. 화면이 실행 중단 공격만 알리고 나머지는 알리지 않을 때 쓴다 (#504).
+/// </summary>
+// 끝난 이유(FunctionTaskEndReason)에 값을 더하지 않고 원인을 따로 두는 이유: 끊는 처리(heap·쿨타임·프레임)는 원인과 상관없이 같고, 알림만 다르기 때문
+public enum InterruptCause
+{
+	// 몬스터 공격의 실행 중단 효과(FunctionExecutor.InterruptAll()). HUD가 알린다
+	MonsterAttack,
+	// 사망, 장소 이동, 프로세스 재시작(RestartProcess). 플레이어가 이미 화면 전환이나 사망으로 알고 있으므로 HUD가 알리지 않는다
+	System,
+}
+
+/// <summary>
 /// 시전한 함수 하나 = 작업 하나.<br/>
 /// 작업은 시전한 함수 블록의 복사본을 가지고, 실행기가 틱마다 그 블록을 1틱씩 실행시킨다.
 /// <para>
@@ -79,6 +91,11 @@ public class FunctionTask
 	public FunctionTaskState State { get; private set; } = FunctionTaskState.Running;
 	public FunctionTaskEndReason EndReason { get; private set; } = FunctionTaskEndReason.None;
 
+	/// <summary>
+	/// EndReason이 Interrupted일 때 끊긴 원인. 다른 끝난 이유에서는 뜻이 없다 (#504).
+	/// </summary>
+	public InterruptCause InterruptCause { get; private set; }
+
 	public bool IsEnded => State == FunctionTaskState.Ended;
 
 	/// <summary>
@@ -101,13 +118,13 @@ public class FunctionTask
 
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	// 실행기를 받지 않는다. 작업은 결과만 남기고, 실행기가 읽어서 처리하기 때문
-	internal FunctionTask(int id, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function)
+	internal FunctionTask(int id, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function, float secondsPerTick)
 	{
 		Id = id;
 		Caster = caster;
 		Name = function.Name;
 		this.function = function;
-		context = new FunctionContext(this, caster, memory, cooldowns, language);
+		context = new FunctionContext(this, caster, memory, cooldowns, language, secondsPerTick);
 	}
 
 	/// <summary>
@@ -179,10 +196,12 @@ public class FunctionTask
 
 	// 실행 도중에 작업을 끊는다. 실행 중단 공격(InterruptAll)은 Interrupted로, 플레이어의 취소(Cancel)는 Cancelled로 부른다
 	// 끊는 과정은 하나로 둔다. 끊은 이유에 따라 heap·쿨타임·프레임 처리가 달라지지 않게 하기 위함
-	internal void Interrupt(FunctionTaskEndReason reason = FunctionTaskEndReason.Interrupted)
+	// cause는 Interrupted일 때만 뜻이 있다(사망·장소 이동·재시작이면 System)
+	internal void Interrupt(FunctionTaskEndReason reason = FunctionTaskEndReason.Interrupted, InterruptCause cause = InterruptCause.MonsterAttack)
 	{
 		if (IsEnded) return;
 
+		InterruptCause = cause;
 		// 실행 중인 블록들이 안쪽까지 차례로 OnCancel을 받아 정리하게 한다
 		function.Cancel(context);
 		End(reason);

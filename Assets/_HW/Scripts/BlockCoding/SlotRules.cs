@@ -49,6 +49,8 @@ public static class SlotRules
 	public static Rule RuleOf(BlockData owner, int index, VariableType returnType, bool globals, Func<string, FunctionData> findUserFunction,
 		Func<string, VariableType> variableType = null)
 	{
+		// Python(#532)은 타입을 실행 중에 본다(TypeError). 편집 화면은 칸마다 타입을 막지 않는다
+		if (BlockLabels.IsPython) return new Rule { Expect = Expect.Any, LiteralOnly = globals };
 		switch (owner.Kind)
 		{
 			case BlockKind.Declare when index == 2:
@@ -95,6 +97,10 @@ public static class SlotRules
 	public static bool Fits(Rule rule, SlotData content, Func<string, FunctionData> findUserFunction, Func<string, VariableType> variableType = null)
 	{
 		if (content == null) return true;
+		// Python(#532): 값 칸에는 값을 내놓는 블록, 이름, 적은 값이 모두 들어간다. 전역 변수의 처음 값은 적은 값과 []만
+		if (BlockLabels.IsPython)
+			return content.Block == null ? !(rule.LiteralOnly && !string.IsNullOrEmpty(content.VariableName))
+				: !rule.LiteralOnly ? BlockData.CanBeValue(content.Block.Kind) : content.Block.Kind == BlockKind.ListNew;
 		if (content.Block != null) return FitsBlock(rule, content.Block, findUserFunction, variableType);
 		if (!string.IsNullOrEmpty(content.VariableName)) return FitsVariable(rule, variableType?.Invoke(content.VariableName));
 		if (string.IsNullOrEmpty(content.Literal)) return true;
@@ -112,6 +118,7 @@ public static class SlotRules
 	/// </summary>
 	public static bool FitsBlock(Rule rule, BlockData block, Func<string, FunctionData> findUserFunction, Func<string, VariableType> variableType = null)
 	{
+		if (BlockLabels.IsPython) return rule.LiteralOnly ? block.Kind == BlockKind.ListNew : BlockData.CanBeValue(block.Kind);
 		if (rule.LiteralOnly) return false;
 		switch (block.Kind)
 		{

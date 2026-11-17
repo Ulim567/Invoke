@@ -68,12 +68,27 @@ public static class VariableScopes
 	/// </summary>
 	public static Stack Start(FunctionData function, GlobalVariablesData globals)
 	{
+		if (BlockLabels.IsPython) return StartPython(function, globals);
 		var stack = new Stack();
 		foreach (BlockData declaration in globals?.Declarations ?? new List<BlockData>())
 			if (declaration != null) stack.Declare(DeclaredName(declaration), DeclaredType(declaration));
 		stack.Push();
 		foreach (ParameterData parameter in function?.Parameters ?? new List<ParameterData>())
 			if (parameter != null) stack.Declare(parameter.Name, parameter.Type);
+		return stack;
+	}
+
+	// Python(#532): 전역 변수(대입 블록의 이름), 파라미터, 함수 안 어디서든 대입하는 이름이 모두 보인다. Python에는 { } 범위가 없기 때문
+	// 타입은 적지 않으므로 null이다(칸 규칙이 막지 않음)
+	static Stack StartPython(FunctionData function, GlobalVariablesData globals)
+	{
+		var stack = new Stack();
+		foreach (BlockData assignment in globals?.Declarations ?? new List<BlockData>())
+			if (assignment != null && assignment.Kind == BlockKind.Assign && assignment.Slots.Count > 0)
+				stack.Declare(assignment.Slots[0]?.VariableName, null);
+		stack.Push();
+		if (function != null)
+			foreach (string name in function.PythonLocalNames()) stack.Declare(name, null);
 		return stack;
 	}
 
@@ -101,6 +116,8 @@ public static class VariableScopes
 	public static Dictionary<string, VariableType> VisibleAt(List<BlockData> blocks, Stack stack, BlockData target)
 	{
 		if (blocks == null || target == null) return null;
+		// Python(#532): 위치와 상관없이 함수 전체의 이름이 보인다
+		if (BlockLabels.IsPython) return ContainsAnywhere(blocks, target) ? stack.Snapshot() : null;
 		foreach (BlockData block in blocks)
 		{
 			if (block == null) continue;
@@ -119,6 +136,18 @@ public static class VariableScopes
 			stack.Declare(DeclaredName(block), DeclaredType(block));
 		}
 		return null;
+	}
+
+	// blocks 안(블록 영역, 칸에 끼운 블록까지)에 target이 있으면 true
+	static bool ContainsAnywhere(List<BlockData> blocks, BlockData target)
+	{
+		foreach (BlockData block in blocks)
+		{
+			if (block == null) continue;
+			if (ContainsInSlots(block, target)) return true;
+			if (block.InnerBlocks != null && ContainsAnywhere(block.InnerBlocks, target)) return true;
+		}
+		return false;
 	}
 
 	// block 자신이거나, block의 칸에 끼운 값 블록(그 안의 칸까지)이 target이면 true. 블록 영역(InnerBlocks)은 보지 않는다

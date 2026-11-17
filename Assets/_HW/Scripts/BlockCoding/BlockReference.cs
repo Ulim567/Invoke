@@ -93,6 +93,8 @@ public static class BlockReference
 	static readonly string[] FunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
+	// entries를 만든 때의 언어 (#532). 내 캐릭터 언어가 바뀌면(로그인한 캐릭터가 바뀜) 다시 만든다
+	static bool entriesArePython;
 
 	// Play 모드에 들어갈 때 도메인 다시 불러오기를 꺼 두었으므로, 스킬 트리 설명을 고친 뒤에도 지난 값이 남지 않게 static 값을 직접 비운다
 	[UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -105,7 +107,11 @@ public static class BlockReference
 	{
 		get
 		{
-			if (entries == null) entries = Build();
+			if (entries == null || entriesArePython != BlockLabels.IsPython)
+			{
+				entriesArePython = BlockLabels.IsPython;
+				entries = Build();
+			}
 			return entries;
 		}
 	}
@@ -160,6 +166,36 @@ public static class BlockReference
 		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5"))),
 	};
 
+	// Python 캐릭터의 문법 카드 (#532). 블록 목록(BlockEditor.PythonPaletteGroups)과 같은 블록
+	static readonly (string Name, string Category, Func<BlockData> Sample)[] PythonSyntaxRows =
+	{
+		("If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.If)),
+		("Elif", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.ElseIf)),
+		("Else", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.Else)),
+		("For", Category("제어", "반복"), () => BlockData.For("i", Int("0"), Int("10"))),
+		("While", Category("제어", "반복"), () => BlockData.While(SlotData.EmptyValue())),
+		("Break", Category("제어", "반복"), () => BlockData.Break()),
+		("Continue", Category("제어", "반복"), () => BlockData.Continue()),
+
+		("Assign", Category("변수", "변수"), () => BlockData.Assign("x", SlotData.EmptyValue())),
+		("Global", Category("변수", "변수"), () => BlockData.Global("x")),
+		("Del", Category("변수", "변수"), () => BlockData.Del("x")),
+		("[ ]", Category("변수", "리스트"), () => BlockData.ListNew()),
+		("Append", Category("변수", "리스트"), () => BlockData.ListAppend("items", SlotData.EmptyValue())),
+		("Pop", Category("변수", "리스트"), () => BlockData.ListPop("items")),
+		("Len", Category("변수", "리스트"), () => BlockData.ListLen(SlotData.EmptyValue())),
+		("List Get", Category("변수", "리스트"), () => BlockData.ArrayGet("items", SlotData.EmptyValue())),
+		("List Set", Category("변수", "리스트"), () => BlockData.ArraySet("items", SlotData.EmptyValue(), SlotData.EmptyValue())),
+
+		("Arithmetic", "값", () => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue())),
+		("Compare", "값", () => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue())),
+		("Logic", "값", () => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue())),
+		("Not", "값", () => BlockData.Not(SlotData.EmptyValue())),
+
+		("Return", "함수", () => BlockData.Return()),
+		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5"))),
+	};
+
 	// 카드 순서: 문법 블록(제어, 변수, 값, return) → 함수 탭과 같은 순서의 함수 카드(스킬, 기본 함수, 메모리) (#489)
 	static List<BlockReferenceEntry> Build()
 	{
@@ -169,7 +205,7 @@ public static class BlockReference
 		var builtinBasics = new List<BlockReferenceEntry>(); // wait: 기본 함수 중 get_bug, is_valid_target 뒤 (함수 탭과 같은 순서)
 		var memory = new List<BlockReferenceEntry>();
 
-		foreach ((string name, string category, Func<BlockData> sample) in SyntaxRows)
+		foreach ((string name, string category, Func<BlockData> sample) in BlockLabels.IsPython ? PythonSyntaxRows : SyntaxRows)
 		{
 			BlockData block = sample();
 			// 접힌 카드는 형식, 펼치면 해금 설명 카드와 같은 순서의 칸 (설명 표 ItemDescriptions)
@@ -326,11 +362,13 @@ public static class BlockReference
 			switch (parameter.Name)
 			{
 				case "target": args.Add("get_bug()"); break;
+				// Python 구슬 스킬(#532): 구슬을 담아 둔 variable
+				case "orb": args.Add("orb"); break;
 				case "sword": args.Add("summon_sword()"); break;
 				default: return null;
 			}
 		}
-		return $"{name}({string.Join(", ", args)});";
+		return BlockLabels.IsPython ? $"{name}({string.Join(", ", args)})" : $"{name}({string.Join(", ", args)});";
 	}
 
 	// 설명창 (#476) ------------------------------------------------------------
@@ -443,6 +481,7 @@ public static class BlockReference
 	{
 		[PredefinedFunctionIds.GetBug] = "버그 찾기",
 		[PredefinedFunctionIds.IsValidTarget] = "대상 확인",
+		[PredefinedFunctionIds.PyIsValidOrb] = "구슬 확인",
 	};
 
 	/// <summary>
@@ -482,13 +521,15 @@ public static class BlockReference
 		BlockKind.Malloc => ("malloc", "메모리 할당", "Sword* malloc(Sword);"),
 		// 파라미터 이름은 설명 표의 슬롯 이름(pointer, seconds)과 같게 둔다. 카드의 원형과 슬롯 줄이 같은 이름을 가리키게
 		BlockKind.Free => ("free", "메모리 해제", "void free(Sword* pointer);"),
-		BlockKind.Wait => ("wait", "기다리기", "void wait(float seconds);"),
+		BlockKind.Wait => ("wait", "기다리기", BlockLabels.IsPython ? "def wait(seconds)" : "void wait(float seconds);"),
 		_ => null,
 	};
 
 	// C 선언 모양의 함수 원형. 예: void thrust(Target target);
+	// Python 캐릭터(#532)는 「def orb_shot(target, orb)」처럼 타입 없이 보인다
 	static string Prototype(VariableType returnType, string name, IReadOnlyList<ParameterData> parameters)
 	{
+		if (BlockLabels.IsPython) return $"def {name}({(parameters == null ? "" : string.Join(", ", parameters.Select(p => p.Name)))})";
 		string returned = returnType == null || returnType.Kind == VariableTypeKind.Void ? "void" : TypeText(returnType);
 		string args = parameters == null ? "" : string.Join(", ", parameters.Select(p => $"{TypeText(p.Type)} {p.Name}"));
 		return $"{returned} {name}({args});";
@@ -510,8 +551,11 @@ public static class BlockReference
 	// 변수·파라미터 이름 색 (하늘색, VS Code와 같음). 핑크로 했다가 사용자가 바꿈
 	const string ParameterColor = "#9CDCFE";
 
-	static readonly HashSet<string> Keywords = new HashSet<string> { "if", "else", "for", "while", "break", "continue", "return" };
-	static readonly HashSet<string> PrimitiveWords = new HashSet<string> { "void", "int", "float", "bool", "char", "string", "array", "true", "false", "NULL" };
+	// Python 낱말(#532)도 함께 둔다. def·elif·in·global·del·and·or·not은 키워드, True·False·None·list는 기본 값·타입 색
+	static readonly HashSet<string> Keywords = new HashSet<string> { "if", "else", "for", "while", "break", "continue", "return",
+		"def", "elif", "in", "global", "del", "and", "or", "not", "pass" };
+	static readonly HashSet<string> PrimitiveWords = new HashSet<string> { "void", "int", "float", "bool", "char", "string", "array", "true", "false", "NULL",
+		"True", "False", "None", "list" };
 
 	/// <summary>
 	/// C 코드 글자(함수 원형 void skewer(Target target);, 문법 형식 if (조건) { 블록 })를 낱말마다 색을 나눈 리치 텍스트로 바꾼다 (#489, VS Code Dark+ 기준).

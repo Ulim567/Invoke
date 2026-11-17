@@ -269,6 +269,68 @@ public class BlockEditor : MonoBehaviour
 		}),
 	};
 
+	// Python 캐릭터의 블록 목록 (#532, 이우림). 선언·배열 만들기 대신 대입·global·del, 배열 대신 리스트 블록
+	// 원소 읽기·쓰기(list[i])는 C의 원소 읽기·쓰기 블록(ArrayGet, ArraySet)을 그대로 쓴다. 실행기가 리스트와 array를 값으로 나눈다
+	static readonly (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] PythonPaletteGroups =
+	{
+		("제어", new[]
+		{
+			("조건", new Func<BlockData>[]
+			{
+				() => BlockData.Conditional(ConditionalBranch.If),
+				() => BlockData.Conditional(ConditionalBranch.ElseIf),
+				() => BlockData.Conditional(ConditionalBranch.Else),
+			}),
+			("반복", new Func<BlockData>[]
+			{
+				() => BlockData.For("i", Int("0"), Int("10")),
+				() => BlockData.While(SlotData.EmptyValue()),
+				() => BlockData.Break(),
+				() => BlockData.Continue(),
+			}),
+		}),
+		("변수", new[]
+		{
+			("변수", new Func<BlockData>[]
+			{
+				// 대입의 왼쪽은 이름을 적는 칸이다. 새 이름을 적으면 그 이름의 변수가 생긴다
+				() => BlockData.Assign("x", SlotData.EmptyValue()),
+				() => BlockData.Global("x"),
+				() => BlockData.Del("x"),
+			}),
+			("리스트", new Func<BlockData>[]
+			{
+				() => BlockData.ListNew(),
+				() => BlockData.ListAppend("items", SlotData.EmptyValue()),
+				() => BlockData.ListPop("items"),
+				() => BlockData.ListLen(SlotData.EmptyValue()),
+				() => BlockData.ArrayGet("items", SlotData.EmptyValue()),
+				() => BlockData.ArraySet("items", SlotData.EmptyValue(), SlotData.EmptyValue()),
+			}),
+		}),
+		("값", new[]
+		{
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue()),
+				() => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue()),
+				() => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue()),
+				() => BlockData.Not(SlotData.EmptyValue()),
+			}),
+		}),
+		("함수", new[]
+		{
+			("", new Func<BlockData>[]
+			{
+				() => BlockData.Return(),
+			}),
+		}),
+	};
+
+	// 내 캐릭터 언어의 블록 목록 (#532)
+	static (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] CurrentPaletteGroups =>
+		BlockLabels.IsPython ? PythonPaletteGroups : PaletteGroups;
+
 	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
 	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
 
@@ -1007,7 +1069,7 @@ public class BlockEditor : MonoBehaviour
 		foreach (GlobalVariablesConverter.Failure failure in failures)
 		{
 			BlockData block = file.Declarations != null && failure.Index >= 0 && failure.Index < file.Declarations.Count ? file.Declarations[failure.Index] : null;
-			var found = new FunctionChecker.Error { Block = block, Code = block != null ? BlockLabels.TextOf(block) : "", Message = failure.Message };
+			var found = new FunctionChecker.Error { Block = block, Code = block != null ? BlockLabels.TextOf(block) : "", Message = (BlockLabels.IsPython ? "SyntaxError: " : "") + failure.Message };
 			if (block?.Slots != null && failure.Slot >= 0 && failure.Slot < block.Slots.Count && block.Slots[failure.Slot].Kind == SlotKind.Value)
 				found.Slots.Add((block, failure.Slot));
 			errors.Add(found);
@@ -1676,7 +1738,7 @@ public class BlockEditor : MonoBehaviour
 		// 문법 탭과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
 		// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
 		// 문법 탭에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
-		IEnumerable<string> categories = PaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
+		IEnumerable<string> categories = CurrentPaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
 		foreach (string category in categories)
 		{
 			List<BlockReferenceEntry> cards = found.Where(entry => entry.Group == category).ToList();
@@ -1996,6 +2058,12 @@ public class BlockEditor : MonoBehaviour
 		}
 
 		bool slot = IsSlotFunction(Function);
+		// Python(#532): def 이름(a, b): — 반환 타입과 파라미터 타입이 없다
+		if (BlockLabels.IsPython)
+		{
+			functionFrame.ShowPythonFunction(DisplayNameOf(Function), string.Join(", ", (Function.Parameters ?? new List<ParameterData>()).Select(p => p.Name)));
+			return;
+		}
 		string parameters = string.Join(", ", (Function.Parameters ?? new List<ParameterData>()).Select(p => $"{BlockLabels.TypeName(p.Type)} {p.Name}"));
 		functionFrame.ShowFunction(ReturnTypeName(Function.ReturnType), DisplayNameOf(Function), parameters, !slot);
 	}
@@ -2003,7 +2071,7 @@ public class BlockEditor : MonoBehaviour
 	// 반환 타입을 누르면 드롭다운으로 고른다. 고르면 고친 것으로 치고, 틀린 곳(return이 없는 길 등)은 저장할 때 컴파일이 알려 준다
 	void OpenReturnTypeDropdown()
 	{
-		if (editingGlobals || Function == null || IsSlotFunction(Function)) return;
+		if (editingGlobals || Function == null || IsSlotFunction(Function) || BlockLabels.IsPython) return;
 		string[] labels = ReturnKinds.Select(kind => ReturnTypeName(new VariableType(kind))).ToArray();
 		int current = Array.IndexOf(ReturnKinds, Function.ReturnType?.Kind ?? VariableTypeKind.Void);
 		ShowDropdown((RectTransform)functionFrame.ReturnButton.transform, labels, current, picked =>
@@ -2194,7 +2262,7 @@ public class BlockEditor : MonoBehaviour
 
 		string query = paletteSearch != null ? paletteSearch.text.Trim() : "";
 
-		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in PaletteGroups)
+		foreach ((string title, (string Name, Func<BlockData>[] Blocks)[] subgroups) in CurrentPaletteGroups)
 		{
 			// 소분류마다 해금한 블록 중 검색 글자에 맞는 것만 남긴다 (#476, #487). 남은 블록이 없는 소분류는 줄째, 분류는 머리글째 만들지 않는다 (머리글 색을 첫 블록으로 정하므로)
 			var shownGroups = new List<(string Name, Func<BlockData>[] Blocks)>();
@@ -2260,8 +2328,13 @@ public class BlockEditor : MonoBehaviour
 				return branch == nameof(ConditionalBranch.ElseIf) ? "Else If" : branch == nameof(ConditionalBranch.Else) ? "Else" : "If";
 			case BlockKind.Function: return FunctionNameOf(block);
 			case BlockKind.ArrayDeclare: return "Array";
-			case BlockKind.ArrayGet: return "Array Get";
-			case BlockKind.ArraySet: return "Array Set";
+			case BlockKind.ArrayGet: return BlockLabels.IsPython ? "List Get" : "Array Get";
+			case BlockKind.ArraySet: return BlockLabels.IsPython ? "List Set" : "Array Set";
+			// Python 블록 (#532)
+			case BlockKind.ListNew: return "[ ]";
+			case BlockKind.ListAppend: return "Append";
+			case BlockKind.ListPop: return "Pop";
+			case BlockKind.ListLen: return "Len";
 			default: return block.Kind.ToString();
 		}
 	}
@@ -2327,9 +2400,13 @@ public class BlockEditor : MonoBehaviour
 		// wait 블록은 시간을 비워 둔다 (wait( 초);). 무엇을 적을지는 놓은 뒤 플레이어가 정한다
 		AddBuiltin(basics, () => BlockData.Wait(SlotData.EmptyValue()));
 
+		// malloc·free는 C만 (#532). Python은 가비지 컬렉션 언어라 메모리를 직접 다루지 않는다
 		var memory = new List<FunctionTabItem>();
-		AddBuiltin(memory, () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)));
-		AddBuiltin(memory, () => BlockData.Free(SlotData.EmptyValue()));
+		if (!BlockLabels.IsPython)
+		{
+			AddBuiltin(memory, () => BlockData.Malloc(VariableType.StructOf(PredefinedStructs.Sword)));
+			AddBuiltin(memory, () => BlockData.Free(SlotData.EmptyValue()));
+		}
 
 		// 내가 만든 함수: 페이지 함수만. 슬롯 함수는 슬롯 키로 시전하는 함수라 다른 함수 안에서 부르지 않는다 (#470). 한글 이름은 없다
 		var mine = new List<FunctionTabItem>();

@@ -19,7 +19,16 @@ public static class BlockSlotText
 	/// 변수 이름으로 쓸 수 있는 글자면 true. 예: x, hp, enemy_count
 	/// </summary>
 	public static bool IsIdentifier(string text) =>
-		!string.IsNullOrEmpty(text) && Identifier.IsMatch(text) && text != "true" && text != "false";
+		!string.IsNullOrEmpty(text) && Identifier.IsMatch(text) && text != "true" && text != "false"
+		&& !(BlockLabels.IsPython && PythonKeywords.Contains(text));
+
+	// Python에서 변수 이름으로 쓸 수 없는 낱말 (#532). 값(True, False, None)과 블록 키워드
+	static readonly System.Collections.Generic.HashSet<string> PythonKeywords = new System.Collections.Generic.HashSet<string>
+	{
+		"True", "False", "None", "and", "or", "not", "if", "elif", "else", "for", "in", "while", "break", "continue",
+		"return", "def", "global", "del", "pass", "is", "lambda", "class", "import", "from", "as", "try", "except",
+		"finally", "raise", "with", "yield", "assert", "nonlocal", "async", "await",
+	};
 
 	// 함수 이름: 글자(한글 포함), 숫자, 밑줄만. 첫 글자는 숫자 불가
 	static readonly Regex FunctionNamePattern = new Regex(@"^[\p{L}_][\p{L}\p{N}_]*$");
@@ -41,6 +50,7 @@ public static class BlockSlotText
 		slot.VariableName = null;
 
 		if (text.Length == 0) return true;
+		if (BlockLabels.IsPython) return TryApplyPython(slot, text);
 
 		// 포인터를 비우는 값 (function-data.md #120: SlotData.FromNull과 같은 값)
 		if (text == "NULL")
@@ -76,6 +86,31 @@ public static class BlockSlotText
 		return false;
 	}
 
+	// Python의 적은 글자 (#532). True·False·None, 정수(int 범위를 넘어도 됨), 소수, 'abc'·"abc"(둘 다 문자열, Python에는 char가 없음), 이름
+	static bool TryApplyPython(SlotData slot, string text)
+	{
+		if (text == "True" || text == "False") return SetLiteral(slot, VariableTypeKind.Bool, text == "True" ? "true" : "false");
+		if (text == "None")
+		{
+			slot.Type = new VariableType(VariableTypeKind.None);
+			slot.Literal = SlotData.NoneLiteral;
+			return true;
+		}
+		if (System.Numerics.BigInteger.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out System.Numerics.BigInteger integer))
+			return SetLiteral(slot, VariableTypeKind.Int, integer.ToString(CultureInfo.InvariantCulture));
+		if (FloatNumber.IsMatch(text)
+			&& float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float floatValue))
+			return SetLiteral(slot, VariableTypeKind.Float, floatValue.ToString(CultureInfo.InvariantCulture));
+		if (text.Length >= 2 && (text[0] == '"' || text[0] == '\'') && text[text.Length - 1] == text[0])
+			return SetLiteral(slot, VariableTypeKind.String, text.Substring(1, text.Length - 2));
+		if (IsIdentifier(text))
+		{
+			slot.VariableName = text;
+			return true;
+		}
+		return false;
+	}
+
 	/// <summary>
 	/// 칸 데이터를 값 칸에 보여 줄 글자로. 블록을 끼운 칸이나 빈 칸은 빈 글자.
 	/// </summary>
@@ -84,6 +119,12 @@ public static class BlockSlotText
 		if (slot == null || slot.Block != null) return "";
 		if (!string.IsNullOrEmpty(slot.VariableName)) return slot.VariableName;
 		if (slot.Literal == null) return "";
+		// Python 모양 (#532): True·False·None
+		if (BlockLabels.IsPython)
+		{
+			if (slot.Type?.Kind == VariableTypeKind.Bool) return slot.Literal == "true" ? "True" : "False";
+			if (slot.Type?.Kind == VariableTypeKind.None) return "None";
+		}
 		if (slot.Literal == SlotData.NullLiteral && slot.Type?.Kind == VariableTypeKind.Pointer) return "NULL";
 
 		return slot.Type?.Kind switch

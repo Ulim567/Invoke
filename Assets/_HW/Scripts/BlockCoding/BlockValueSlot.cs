@@ -258,7 +258,8 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 			{
 				if (!editor.Fits(ownerBlock.Data, slotIndex, SlotData.FromVariable(variable.Key))) continue;
 				names.Add(variable.Key);
-				labels.Add($"{BlockLabels.TypeName(variable.Value)} {variable.Key}");
+				// Python(#532)은 타입을 적지 않으므로 이름만 보인다
+				labels.Add(variable.Value == null ? variable.Key : $"{BlockLabels.TypeName(variable.Value)} {variable.Key}");
 			}
 			if (names.Count == 0)
 			{
@@ -385,7 +386,8 @@ public class BlockValueSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 		string reason = null;
 		// 직접 적은 값만 받는 칸(전역 변수의 초기값, array 크기)은 보이는 변수인지와 상관없이 칸 규칙의 문장으로 알린다
 		bool literalOnly = editor.RuleOf(ownerBlock.Data, slotIndex).LiteralOnly;
-		if (valid && !literalOnly && !string.IsNullOrEmpty(Slot.VariableName) && !editor.VisibleVariables(ownerBlock.Data).ContainsKey(Slot.VariableName))
+		// Python(#532)은 없는 이름을 실행 중에 NameError로 알린다. 편집 화면이 막지 않는다
+		if (valid && !literalOnly && !BlockLabels.IsPython && !string.IsNullOrEmpty(Slot.VariableName) && !editor.VisibleVariables(ownerBlock.Data).ContainsKey(Slot.VariableName))
 			reason = FunctionChecker.UndeclaredMessage(Slot.VariableName);
 		else if (valid && !editor.Fits(ownerBlock.Data, slotIndex, Slot))
 			reason = editor.WrongValueMessage(ownerBlock.Data, slotIndex, Slot);

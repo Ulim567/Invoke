@@ -24,6 +24,8 @@ public static partial class ItemDescriptions
 	public static ItemDescription Get(string key)
 	{
 		if (string.IsNullOrEmpty(key)) return null;
+		// Python 캐릭터는 Python 표를 먼저 본다 (#532, ItemDescriptions.Python.cs)
+		if (IsPythonCharacter && PythonEntries.TryGetValue(key, out ItemDescription python)) return python;
 		if (Entries.TryGetValue(key, out ItemDescription found)) return found;
 		return SkillEntries.TryGetValue(key, out found) ? found : null;
 	}
@@ -45,6 +47,8 @@ public static partial class ItemDescriptions
 		["target"] = "몬스터 한 명입니다. get_bug()를 넣거나, get_bug()를 담아 둔 Target 변수를 넣습니다.",
 		["targets"] = "공격할 몬스터 여러 명입니다. 슬롯에서 시전하면 여러 명을 고르게 해 줍니다.",
 		["sword"] = "쓸 소환검의 포인터입니다. summon_sword()가 돌려준 값을 넣습니다.",
+		["orb"] = "쓸 마나 구슬입니다. orb_create()가 돌려준 값을 담아 둔 variable이나 list의 원소를 넣습니다.",
+		["orbs"] = "쓸 마나 구슬들을 담은 list입니다. 다 쓴 구슬은 건너뜁니다.",
 	};
 
 	static readonly Dictionary<string, ItemDescription> Entries = new Dictionary<string, ItemDescription>

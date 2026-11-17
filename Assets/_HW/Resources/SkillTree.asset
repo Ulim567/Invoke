@@ -485,3 +485,187 @@ MonoBehaviour:
       summary: "\uC18C\uD658\uAC80\uC744 \uD0C0\uACE0 \uC774\uB3D9\uD569\uB2C8\uB2E4."
       detail: "\uC18C\uD658\uAC80 \uC704\uC5D0 \uC62C\uB77C\uD0C0 \uC774\uB3D9\uD569\uB2C8\uB2E4. \uC4F8 \uC218 \uC788\uB294 \uC18C\uD658\uAC80\uC774 \uC5C6\uC73C\uBA74 \uC4F8 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
     note: 
+  - id: py.orb_create
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 1
+    cost: []
+    unlocksBlocks: 
+    note: "\uCC98\uC74C\uBD80\uD130"
+  - id: py.orb_shot
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 1
+    cost: []
+    unlocksBlocks: 
+    note: "\uCC98\uC74C\uBD80\uD130"
+  - id: py.orb_shield
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.orb_create
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.orb_barrage
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.orb_shot
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: py.orb_burst
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.orb_barrage
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 10
+    - materialId: boss_core
+      count: 1
+    unlocksBlocks: 
+    note: 
+  - id: py.magic_missile
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 2
+    unlocksBlocks: 
+    note: "\uC6D0\uC18C \uACC4\uC5F4\uC758 \uC2DC\uC791. \uC120\uD589 \uC5C6\uC774 \uC801\uC740 \uC7AC\uB8CC\uB85C \uB460"
+  - id: py.fireball
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.magic_missile
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.ice_spear
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.magic_missile
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.chain_lightning
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.fireball
+    - py.ice_spear
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    unlocksBlocks: 
+    note: 
+  - id: py.meteor
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.fireball
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 10
+    - materialId: boss_core
+      count: 1
+    unlocksBlocks: 
+    note: 
+  - id: py.blizzard
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.ice_spear
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    unlocksBlocks: 
+    note: 
+  - id: py.venom_mist
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.hex
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: py.hex
+    kind: 1
+    displayName: 
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 3
+    unlocksBlocks: 
+    note: "\uBCF4\uC870 \uACC4\uC5F4\uC758 \uC2DC\uC791. \uC120\uD589 \uC5C6\uC774 \uC7AC\uB8CC\uB9CC"
+  - id: py.snake_bind
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.hex
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 5
+    unlocksBlocks: 
+    note: 
+  - id: py.flash
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.hex
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 5
+    unlocksBlocks: 
+    note: 
+  - id: py.blink
+    kind: 1
+    displayName: 
+    prerequisites:
+    - common.double_jump
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 6
+    unlocksBlocks: 
+    note: 
+  - id: py.levitate
+    kind: 1
+    displayName: 
+    prerequisites:
+    - py.blink
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 8
+    unlocksBlocks: 
+    note: 

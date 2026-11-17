@@ -203,7 +203,7 @@ public class PlayerProgress : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// [서버] 스킬 트리 노드를 해금한다. 노드 ID, 이미 해금함, 선행 조건(SkillTree.CanUnlock), 재료(노드의 Cost) 순서로 검사하고
+	/// [서버] 스킬 트리 노드를 해금한다. 노드 ID(이 캐릭터 언어의 노드인지 포함, #523), 이미 해금함, 선행 조건(SkillTree.CanUnlock), 재료(노드의 Cost) 순서로 검사하고
 	/// 먼저 걸린 이유를 돌려준다. 통과하면 재료를 빼고 노드와 같이 열리는 노드(SkillTree.AutoUnlockedBy)를 해금 목록에 넣고,
 	/// 연 노드마다 그 노드가 여는 블록·함수를 1개씩 준 뒤(ItemCountRules.KeysUnlockedBy, #500) DB에 한 트랜잭션으로 쓴다. 다른 시스템은 이 함수가 아니라 소유 클라이언트의 RequestUnlock을 쓴다.
 	/// </summary>
@@ -211,6 +211,9 @@ public class PlayerProgress : NetworkBehaviour
 	{
 		if (!CanChange(nameof(TryUnlock))) return UnlockResult.NotAllowed;
 		if (!SkillTree.TryGet(nodeId, out SkillTreeNode node)) return UnlockResult.UnknownNode;
+		// 다른 언어 캐릭터의 노드는 이 캐릭터의 트리에 없는 노드로 본다 (C 캐릭터의 py.*, 파이썬 캐릭터의 c.*, #523)
+		string language = PlayerCharacter.LanguageOf(gameObject);
+		if (!SkillTree.IsFor(nodeId, language)) return UnlockResult.UnknownNode;
 		if (unlocked.Contains(nodeId)) return UnlockResult.AlreadyUnlocked;
 		if (!SkillTree.CanUnlock(nodeId, unlocked)) return UnlockResult.PrerequisiteMissing;
 
@@ -229,7 +232,7 @@ public class PlayerProgress : NetworkBehaviour
 
 		// 같이 열리는 노드는 방금 연 노드가 목록에 들어간 뒤에 구해야 한다 (예: 검 소환 → 해제)
 		var afterUnlock = new HashSet<string>(unlocked) { nodeId };
-		List<string> autoNodes = SkillTree.AutoUnlockedBy(afterUnlock);
+		List<string> autoNodes = SkillTree.AutoUnlockedBy(afterUnlock, language);
 		var newNodes = new List<string> { nodeId };
 		newNodes.AddRange(autoNodes);
 

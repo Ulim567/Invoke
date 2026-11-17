@@ -6,6 +6,7 @@ using System.Collections.Generic;
 /// <para>
 /// - 문법 노드: 1차 기획서 4.3 해금 요소. 순차 실행 → 변수 → 연산 → if문 → 논리 연산 → for문 → while문 → 함수 → list → Type 정의<br/>
 /// - 스킬 노드: 「C 캐릭터 - 1차」 2. 해금 구조, 3. 스킬트리<br/>
+/// - 파이썬 마법사 스킬 노드 (#523, 박진우): 구슬·원소·범위·보조·이동. 구슬 생성·구슬 발사가 처음부터. 대시·더블점프는 C와 같은 공통 노드<br/>
 /// - 재료 수는 전부 임시. bug_fragment(버그 조각, 잡몹), field_boss_core(사냥터 보스 코어), boss_core(레이드 보스 코어)<br/>
 /// - 박진우와 맞춤 (#91): 패링은 검 소환 없이 재료만으로, 검 소환은 보스 재료가 있어야 열림 (사냥터 보스가 없는 동안은 레이드 보스 코어)
 /// </para>
@@ -98,6 +99,32 @@ public static class SkillTreeDefaults
 			"저렙 구간에 연다. 레벨이 아직 없어서 선행 없이 적은 재료로 둠"));
 		nodes.Add(Skill(PredefinedFunctionIds.DoubleJump, 4, PredefinedFunctionIds.Dash));
 		nodes.Add(Skill(PredefinedFunctionIds.SwordRide, 8, PredefinedFunctionIds.DoubleJump, PredefinedFunctionIds.SummonSword));
+
+		// 파이썬 마법사 (#523, 박진우) ---------------------------------------------
+		// 구슬: 처음 슬롯 함수(orb_create, orb_shot)와 같은 둘이 처음부터 열려 있다
+		nodes.Add(Start(PredefinedFunctionIds.PyOrbCreate));
+		nodes.Add(Start(PredefinedFunctionIds.PyOrbShot));
+		nodes.Add(Skill(PredefinedFunctionIds.PyOrbShield, 4, PredefinedFunctionIds.PyOrbCreate));
+		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBarrage, 6, PredefinedFunctionIds.PyOrbShot));
+		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBurst, 10, 1, PredefinedFunctionIds.PyOrbBarrage));
+		// 원소: 체인 라이트닝은 파이어볼과 얼음 창을 둘 다 해금해야 열린다
+		nodes.Add(new SkillTreeNode(PredefinedFunctionIds.PyMagicMissile, SkillTreeNodeKind.Skill, null, null, false, Cost(2, 0), null,
+			"원소 계열의 시작. 선행 없이 적은 재료로 둠"));
+		nodes.Add(Skill(PredefinedFunctionIds.PyFireball, 4, PredefinedFunctionIds.PyMagicMissile));
+		nodes.Add(Skill(PredefinedFunctionIds.PyIceSpear, 4, PredefinedFunctionIds.PyMagicMissile));
+		nodes.Add(Skill(PredefinedFunctionIds.PyChainLightning, 8, PredefinedFunctionIds.PyFireball, PredefinedFunctionIds.PyIceSpear));
+		// 범위: 원소·보조의 다음 단계
+		nodes.Add(Skill(PredefinedFunctionIds.PyMeteor, 10, 1, PredefinedFunctionIds.PyFireball));
+		nodes.Add(Skill(PredefinedFunctionIds.PyBlizzard, 8, PredefinedFunctionIds.PyIceSpear));
+		nodes.Add(Skill(PredefinedFunctionIds.PyVenomMist, 6, PredefinedFunctionIds.PyHex));
+		// 보조
+		nodes.Add(new SkillTreeNode(PredefinedFunctionIds.PyHex, SkillTreeNodeKind.Skill, null, null, false, Cost(3, 0), null,
+			"보조 계열의 시작. 선행 없이 재료만"));
+		nodes.Add(Skill(PredefinedFunctionIds.PySnakeBind, 5, PredefinedFunctionIds.PyHex));
+		nodes.Add(Skill(PredefinedFunctionIds.PyFlash, 5, PredefinedFunctionIds.PyHex));
+		// 이동: 대시 → 더블점프(공통 노드) 다음
+		nodes.Add(Skill(PredefinedFunctionIds.PyBlink, 6, PredefinedFunctionIds.DoubleJump));
+		nodes.Add(Skill(PredefinedFunctionIds.PyLevitate, 8, PredefinedFunctionIds.PyBlink));
 		// 노드 설명은 여기에 적지 않는다. 설명 표(ItemDescriptions)가 노드 ID로 찾아 보여 준다
 		return nodes;
 	}

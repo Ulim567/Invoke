@@ -42,6 +42,9 @@ public class FunctionContext
 	// 블록이 따를 언어 규칙(기본값, 숫자 타입 변환). 언어 규칙 파일이 없으면 C 규칙만 가진 임시 규칙이다
 	internal LanguageRuleData Rule => language.Rule;
 
+	// 시전한 캐릭터의 언어 방식(#532). 작업을 만들 때 캐릭터 언어에서 한 번 정한다. 연산·조건·값 넘기기 규칙을 언어별로 고를 때 쓴다
+	internal LanguageFamily Family { get; }
+
 	// 1틱의 길이(초). 기다리기 블록이 적은 초를 틱 수로 바꿀 때 쓴다 (#502)
 	// 실행 문맥은 실행기를 모르므로, 실행기가 작업을 만들 때 값만 넘겨받는다
 	internal float SecondsPerTick { get; }
@@ -76,6 +79,7 @@ public class FunctionContext
 	{
 		this.task = task;
 		this.language = language;
+		Family = language != null ? language.Family : LanguageFamily.C;
 		Memory = memory;
 		Cooldowns = cooldowns;
 		Caster = caster;

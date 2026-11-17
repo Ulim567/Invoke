@@ -286,7 +286,7 @@ public class SlotLoadout : MonoBehaviour
 		// 실행할 수 없는 함수면 변환기가 콘솔 경고를 남긴다
 		// 캐릭터 언어의 규칙으로 바꾼다(#532, 이우림). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
 		LanguageRule language = GetComponent<LanguageRule>();
-		return FunctionDataConverter.TryConvert(data, owned, language != null ? language.Rule : null, out UserFunction function) ? function : null;
+		return FunctionDataConverter.TryConvert(data, owned, language != null ? language.Family : LanguageFamily.C, out UserFunction function) ? function : null;
 	}
 
 	void SaveAndNotify(int slot)

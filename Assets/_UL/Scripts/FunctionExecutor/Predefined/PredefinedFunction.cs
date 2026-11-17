@@ -154,8 +154,8 @@ public abstract class PredefinedFunction : FunctionBlock
 			return false;
 		}
 		// Python(#532)은 어떤 함수든 None을 돌려줄 수 있다. 예: 구슬이 5개라 만들지 못한 orb_create()
-		if (context.Rule.IsPython && ReturnValue.Value.IsNone) return true;
-		if (!NumericRules.TryConvertForStore(ReturnValue.Value, ReturnType, context.Rule, out RuntimeValue converted))
+		if (context.Family == LanguageFamily.Python && ReturnValue.Value.IsNone) return true;
+		if (!NumericRules.TryConvertForStore(ReturnValue.Value, ReturnType, context.Rule, context.Family, out RuntimeValue converted))
 		{
 			Debug.LogError($"{Name}: Return으로 넘긴 {ReturnValue.Value.Type?.Kind} 값을 반환 타입 {ReturnType.Kind}(으)로 바꿀 수 없습니다.");
 			context.RecordInternalError();

@@ -12,13 +12,25 @@
 // 언어마다 다른 규칙을 이 파일 한 곳에 모은다. 다른 언어를 더할 때 고칠 곳을 줄이기 위함
 internal static class NumericRules
 {
+	// 언어 방식을 받지 않는 모양: C 규칙으로 계산한다 (#532 전의 호출, 시험 코드). 실행기의 블록은 언어 방식을 받는 모양을 쓴다
+	public static bool TryCalculate(ArithmeticOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, out RuntimeValue result, out FunctionFailure failure) =>
+		TryCalculate(op, left, right, rule, LanguageFamily.C, out result, out failure);
+	public static bool TryConvertForStore(ValueBlock source, RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted) =>
+		TryConvertForStore(source, value, target, rule, LanguageFamily.C, out converted);
+	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted) =>
+		TryConvertForStore(value, target, rule, LanguageFamily.C, out converted);
+	public static bool TryCompare(CompareOperator op, ValueBlock leftSource, RuntimeValue left, ValueBlock rightSource, RuntimeValue right, LanguageRuleData rule, out bool result) =>
+		TryCompare(op, leftSource, left, rightSource, right, rule, LanguageFamily.C, out result);
+	public static bool TryCompare(CompareOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, out bool result) =>
+		TryCompare(op, left, right, rule, LanguageFamily.C, out result);
+
 	/// <summary>
 	/// left op right를 계산한다. 계산할 수 없으면 실패 종류를 failure에 담고 false를 돌려준다.
 	/// </summary>
-	public static bool TryCalculate(ArithmeticOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule,
+	public static bool TryCalculate(ArithmeticOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, LanguageFamily family,
 		out RuntimeValue result, out FunctionFailure failure)
 	{
-		if (rule.IsPython) return PythonRules.TryCalculate(op, left, right, out result, out failure);
+		if (family == LanguageFamily.Python) return PythonRules.TryCalculate(op, left, right, out result, out failure);
 
 		result = default;
 		failure = FunctionFailure.TypeMismatch;
@@ -42,19 +54,19 @@ internal static class NumericRules
 	/// value slot의 값을 target 타입의 변수·파라미터에 넣을 값으로 바꾼다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).<br/>
 	/// source는 그 값을 내놓은 value slot의 블록(원본)이다. target이 포인터이면 직접 입력한 0을 언어 규칙에 따라 NULL로 본다(C의 Sword* p = 0).
 	/// </summary>
-	public static bool TryConvertForStore(ValueBlock source, RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted)
+	public static bool TryConvertForStore(ValueBlock source, RuntimeValue value, VariableType target, LanguageRuleData rule, LanguageFamily family, out RuntimeValue converted)
 	{
 		if (target?.Kind == VariableTypeKind.Pointer) value = NullIfZeroLiteral(source, value, rule);
-		return TryConvertForStore(value, target, rule, out converted);
+		return TryConvertForStore(value, target, rule, family, out converted);
 	}
 
 	/// <summary>
 	/// value를 target 타입의 변수에 넣을 값으로 바꾼다. 바꿀 수 없으면 false를 돌려준다(TypeMismatch).<br/>
 	/// value slot에서 나오지 않은 값(스킬의 반환 값 등)에 쓴다. value slot의 값은 source를 받는 함수를 쓴다.
 	/// </summary>
-	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRuleData rule, out RuntimeValue converted)
+	public static bool TryConvertForStore(RuntimeValue value, VariableType target, LanguageRuleData rule, LanguageFamily family, out RuntimeValue converted)
 	{
-		if (rule.IsPython) return PythonRules.TryConvertForStore(value, target, out converted);
+		if (family == LanguageFamily.Python) return PythonRules.TryConvertForStore(value, target, out converted);
 
 		converted = value;
 		// Any(#532)는 어떤 값이든 받는다. Python 함수와 스킬의 「아무 값」 파라미터에만 쓰이고 C 변수에는 쓰이지 않는다
@@ -112,20 +124,20 @@ internal static class NumericRules
 	/// </summary>
 	// 포인터와 비교할 때만 바꾼다. 숫자끼리 비교하는 0(x == 0)은 그대로 0이어야 하기 때문
 	public static bool TryCompare(CompareOperator op, ValueBlock leftSource, RuntimeValue left, ValueBlock rightSource, RuntimeValue right,
-		LanguageRuleData rule, out bool result)
+		LanguageRuleData rule, LanguageFamily family, out bool result)
 	{
 		if (right.Type?.Kind == VariableTypeKind.Pointer) left = NullIfZeroLiteral(leftSource, left, rule);
 		if (left.Type?.Kind == VariableTypeKind.Pointer) right = NullIfZeroLiteral(rightSource, right, rule);
-		return TryCompare(op, left, right, rule, out result);
+		return TryCompare(op, left, right, rule, family, out result);
 	}
 
 	/// <summary>
 	/// left op right를 비교해 결과를 result에 담는다. 비교할 수 없는 타입이면 false를 돌려준다(TypeMismatch).
 	/// </summary>
 	// 타입이 섞이면 TryCalculate와 같은 규칙으로 맞춘 뒤 비교한다. C의 3 == 3.0처럼, 계산할 때와 같은 값으로 비교해야 하기 때문
-	public static bool TryCompare(CompareOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, out bool result)
+	public static bool TryCompare(CompareOperator op, RuntimeValue left, RuntimeValue right, LanguageRuleData rule, LanguageFamily family, out bool result)
 	{
-		if (rule.IsPython) return PythonRules.TryCompare(op, left, right, out result);
+		if (family == LanguageFamily.Python) return PythonRules.TryCompare(op, left, right, out result);
 
 		result = false;
 		VariableTypeKind leftKind = left.Type?.Kind ?? VariableTypeKind.Void;

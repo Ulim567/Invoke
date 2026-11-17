@@ -147,7 +147,7 @@ public class SlotEquipPanel : InputBlockingPanel
 				string guid = function.Guid;
 				string name = function.Name;
 				// 컴파일 오류가 있는 함수는 흐리게 「오류」로 보이고 넣을 수 없다 (FunctionChecker, 편집 화면의 컴파일과 같은 검사)
-				if (FunctionChecker.HasErrors(function, globals, saved, PlayerCharacter.LocalLanguage == CharacterLanguages.Python))
+				if (FunctionChecker.HasErrors(function, globals, saved, BlockLabels.Family))
 				{
 					CreateItem(functionList, name, "오류", functionTagColor, () =>
 					{
@@ -257,7 +257,7 @@ public class SlotEquipPanel : InputBlockingPanel
 		if (entry.Kind == SlotLoadout.EntryKind.Skill) return SkillName(entry.Id);
 		FunctionData function = FunctionStorage.Load(entry.Id);
 		if (function == null) return "(지워진 함수)";
-		return FunctionChecker.HasErrors(function, GlobalVariablesStorage.Load(), FunctionStorage.LoadAll(), PlayerCharacter.LocalLanguage == CharacterLanguages.Python) ?$"{function.Name} (오류)" : function.Name;
+		return FunctionChecker.HasErrors(function, GlobalVariablesStorage.Load(), FunctionStorage.LoadAll(), BlockLabels.Family) ?$"{function.Name} (오류)" : function.Name;
 	}
 
 	static string SkillName(string id) => SkillTable.TryGet(id, out SkillData data) ? data.DisplayName : id;

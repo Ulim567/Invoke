@@ -300,7 +300,7 @@ public class BlockEditor : MonoBehaviour
 			}),
 			("리스트", new Func<BlockData>[]
 			{
-				() => BlockData.ListNew(),
+				() => BlockData.ListNew("items"),
 				() => BlockData.ListAppend("items", SlotData.EmptyValue()),
 				() => BlockData.ListPop("items"),
 				() => BlockData.ListLen(SlotData.EmptyValue()),
@@ -328,8 +328,11 @@ public class BlockEditor : MonoBehaviour
 	};
 
 	// 내 캐릭터 언어의 블록 목록 (#532)
-	static (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] CurrentPaletteGroups =>
-		BlockLabels.IsPython ? PythonPaletteGroups : PaletteGroups;
+	static (string Title, (string Name, Func<BlockData>[] Blocks)[] Subgroups)[] CurrentPaletteGroups => BlockLabels.Family switch
+	{
+		LanguageFamily.Python => PythonPaletteGroups,
+		_ => PaletteGroups,
+	};
 
 	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
 	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
@@ -338,8 +341,8 @@ public class BlockEditor : MonoBehaviour
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
 	static readonly string[] PaletteFunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
-	// 내 캐릭터가 Python이면 true (#532, 이우림). 컴파일 검사·블록 표기를 Python 규칙으로 한다
-	static bool IsPythonCharacter => PlayerCharacter.LocalLanguage == CharacterLanguages.Python;
+	// 내 캐릭터의 언어 방식 (#532, 이우림). 컴파일 검사를 그 언어의 규칙으로 한다
+	static LanguageFamily CharacterFamily => BlockLabels.Family;
 
 	static SlotData Int(string value) => SlotData.FromLiteral(new VariableType(VariableTypeKind.Int), value);
 
@@ -1012,7 +1015,7 @@ public class BlockEditor : MonoBehaviour
 			FunctionData slotFunction = savedFunctions.FirstOrDefault(f => f.Guid == entry.Id);
 			if (slotFunction == null) continue; // 받지 못한 함수는 컴파일 오류가 아니다 (서버도 빌드에서 뺌)
 
-			List<List<FunctionData>> paths = SlotCompileChecker.FailedPaths(slotFunction, savedFunctions, globalsSaved, IsPythonCharacter);
+			List<List<FunctionData>> paths = SlotCompileChecker.FailedPaths(slotFunction, savedFunctions, globalsSaved, CharacterFamily);
 			if (paths.Count == 0) continue;
 			failedSlots.Add((slot, slotFunction.Guid));
 			foreach (List<FunctionData> path in paths)
@@ -1253,7 +1256,7 @@ public class BlockEditor : MonoBehaviour
 		var all = new Dictionary<string, List<FunctionChecker.Error>>();
 		foreach (FunctionData function in working)
 		{
-			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working, IsPythonCharacter);
+			List<FunctionChecker.Error> errors = FunctionChecker.Find(function, workingGlobals, working, CharacterFamily);
 			if (errors.Count > 0) all[function.Guid] = errors;
 		}
 		// Global Variables도 함수처럼 고칠 때마다 다시 검사한다 (#506). 저장할 때만 검사해 두면 고치거나 다른 페이지로 갈 때 지워져 오류가 사라져 보였기 때문
@@ -2325,13 +2328,15 @@ public class BlockEditor : MonoBehaviour
 		{
 			case BlockKind.Conditional:
 				string branch = block.Slots[0].Option;
-				return branch == nameof(ConditionalBranch.ElseIf) ? "Else If" : branch == nameof(ConditionalBranch.Else) ? "Else" : "If";
+				// Python은 else if를 elif로 쓴다 (#532)
+				if (branch == nameof(ConditionalBranch.ElseIf)) return BlockLabels.Family == LanguageFamily.Python ? "Elif" : "Else If";
+				return branch == nameof(ConditionalBranch.Else) ? "Else" : "If";
 			case BlockKind.Function: return FunctionNameOf(block);
 			case BlockKind.ArrayDeclare: return "Array";
 			case BlockKind.ArrayGet: return BlockLabels.IsPython ? "List Get" : "Array Get";
 			case BlockKind.ArraySet: return BlockLabels.IsPython ? "List Set" : "Array Set";
 			// Python 블록 (#532)
-			case BlockKind.ListNew: return "[ ]";
+			case BlockKind.ListNew: return "List";
 			case BlockKind.ListAppend: return "Append";
 			case BlockKind.ListPop: return "Pop";
 			case BlockKind.ListLen: return "Len";
@@ -2682,6 +2687,46 @@ public class BlockEditor : MonoBehaviour
 
 	// 작업본을 반영한 전역 변수: 고치는 중이면 지금 내용, 작업본이 있으면 작업본, 없으면 저장된 것 (#494)
 	GlobalVariablesData WorkingGlobals() => editingGlobals ? globals : globalsDraft ?? listGlobals;
+
+	/// <summary>
+	/// Python의 전역 변수 이름 (#532): Global Variables(저장하지 않은 작업본 포함)의 대입 블록과 리스트 만들기 블록의 이름. 적힌 순서대로.
+	/// global 블록의 이름 칸 ▾ 목록이 쓴다.
+	/// </summary>
+	public List<string> PythonGlobalNames()
+	{
+		var names = new List<string>();
+		foreach (BlockData block in WorkingGlobals()?.Declarations ?? new List<BlockData>())
+		{
+			if (block == null || (block.Kind != BlockKind.Assign && block.Kind != BlockKind.ListNew) || block.Slots.Count < 1) continue;
+			string name = block.Slots[0]?.VariableName;
+			if (!string.IsNullOrEmpty(name) && !names.Contains(name)) names.Add(name);
+		}
+		return names;
+	}
+
+	/// <summary>
+	/// Python에서 리스트일 수 있는 이름 (#532): 지금 함수나 Global Variables의 리스트 만들기 블록(name = [])의 이름, 지금 함수의 파라미터.
+	/// Python은 타입을 적지 않으므로 리스트를 만든 곳이 있는 이름을 리스트로 본다. 리스트 블록의 이름 칸 ▾ 목록이 쓴다.
+	/// </summary>
+	public HashSet<string> PythonListNames()
+	{
+		var names = new HashSet<string>();
+		void Collect(IEnumerable<BlockData> blocks)
+		{
+			foreach (BlockData block in blocks ?? Enumerable.Empty<BlockData>())
+				foreach (BlockData inner in block?.SelfAndInnerBlocks() ?? Enumerable.Empty<BlockData>())
+					if (inner.Kind == BlockKind.ListNew && inner.Slots.Count >= 1 && !string.IsNullOrEmpty(inner.Slots[0]?.VariableName))
+						names.Add(inner.Slots[0].VariableName);
+		}
+		Collect(WorkingGlobals()?.Declarations);
+		if (!editingGlobals && Function != null)
+		{
+			Collect(Function.Blocks);
+			foreach (ParameterData parameter in Function.Parameters ?? new List<ParameterData>())
+				if (!string.IsNullOrEmpty(parameter?.Name)) names.Add(parameter.Name);
+		}
+		return names;
+	}
 
 	// 겹치지 않는 이름: 새_함수, 새_함수2, 새_함수3 …
 	string UniqueName(string baseName)

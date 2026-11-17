@@ -42,7 +42,7 @@ public class LiteralValue : ValueBlock
 
 	protected override BlockResult Step(FunctionContext context)
 	{
-		if (!isValid && bigValue.HasValue && context.Rule.IsPython)
+		if (!isValid && bigValue.HasValue && context.Family == LanguageFamily.Python)
 		{
 			Result = bigValue.Value;
 			return BlockResult.Done;

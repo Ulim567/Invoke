@@ -31,7 +31,7 @@ public class ArithmeticBlock : ValueBlock
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
-		if (!NumericRules.TryCalculate(op, slots[0], slots[1], context.Rule, out RuntimeValue value, out FunctionFailure failure))
+		if (!NumericRules.TryCalculate(op, slots[0], slots[1], context.Rule, context.Family, out RuntimeValue value, out FunctionFailure failure))
 		{
 			context.RecordFailure(failure);
 			return BlockResult.Failed;

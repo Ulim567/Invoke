@@ -100,7 +100,7 @@ public static class SlotRules
 		// Python(#532): 값 칸에는 값을 내놓는 블록, 이름, 적은 값이 모두 들어간다. 전역 변수의 처음 값은 적은 값과 []만
 		if (BlockLabels.IsPython)
 			return content.Block == null ? !(rule.LiteralOnly && !string.IsNullOrEmpty(content.VariableName))
-				: !rule.LiteralOnly ? BlockData.CanBeValue(content.Block.Kind) : content.Block.Kind == BlockKind.ListNew;
+				: !rule.LiteralOnly && BlockData.CanBeValue(content.Block.Kind);
 		if (content.Block != null) return FitsBlock(rule, content.Block, findUserFunction, variableType);
 		if (!string.IsNullOrEmpty(content.VariableName)) return FitsVariable(rule, variableType?.Invoke(content.VariableName));
 		if (string.IsNullOrEmpty(content.Literal)) return true;
@@ -118,7 +118,7 @@ public static class SlotRules
 	/// </summary>
 	public static bool FitsBlock(Rule rule, BlockData block, Func<string, FunctionData> findUserFunction, Func<string, VariableType> variableType = null)
 	{
-		if (BlockLabels.IsPython) return rule.LiteralOnly ? block.Kind == BlockKind.ListNew : BlockData.CanBeValue(block.Kind);
+		if (BlockLabels.IsPython) return !rule.LiteralOnly && BlockData.CanBeValue(block.Kind);
 		if (rule.LiteralOnly) return false;
 		switch (block.Kind)
 		{

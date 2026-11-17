@@ -84,7 +84,7 @@ public static class VariableScopes
 	{
 		var stack = new Stack();
 		foreach (BlockData assignment in globals?.Declarations ?? new List<BlockData>())
-			if (assignment != null && assignment.Kind == BlockKind.Assign && assignment.Slots.Count > 0)
+			if (assignment != null && (assignment.Kind == BlockKind.Assign || assignment.Kind == BlockKind.ListNew) && assignment.Slots.Count > 0)
 				stack.Declare(assignment.Slots[0]?.VariableName, null);
 		stack.Push();
 		if (function != null)

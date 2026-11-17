@@ -93,8 +93,8 @@ public static class BlockReference
 	static readonly string[] FunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
-	// entries를 만든 때의 언어 (#532). 내 캐릭터 언어가 바뀌면(로그인한 캐릭터가 바뀜) 다시 만든다
-	static bool entriesArePython;
+	// entries를 만든 때의 언어 방식 (#532). 내 캐릭터 언어가 바뀌면(로그인한 캐릭터가 바뀜) 다시 만든다
+	static LanguageFamily entriesFamily;
 
 	// Play 모드에 들어갈 때 도메인 다시 불러오기를 꺼 두었으므로, 스킬 트리 설명을 고친 뒤에도 지난 값이 남지 않게 static 값을 직접 비운다
 	[UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -107,9 +107,9 @@ public static class BlockReference
 	{
 		get
 		{
-			if (entries == null || entriesArePython != BlockLabels.IsPython)
+			if (entries == null || entriesFamily != BlockLabels.Family)
 			{
-				entriesArePython = BlockLabels.IsPython;
+				entriesFamily = BlockLabels.Family;
 				entries = Build();
 			}
 			return entries;
@@ -180,7 +180,7 @@ public static class BlockReference
 		("Assign", Category("변수", "변수"), () => BlockData.Assign("x", SlotData.EmptyValue())),
 		("Global", Category("변수", "변수"), () => BlockData.Global("x")),
 		("Del", Category("변수", "변수"), () => BlockData.Del("x")),
-		("[ ]", Category("변수", "리스트"), () => BlockData.ListNew()),
+		("List", Category("변수", "리스트"), () => BlockData.ListNew("items")),
 		("Append", Category("변수", "리스트"), () => BlockData.ListAppend("items", SlotData.EmptyValue())),
 		("Pop", Category("변수", "리스트"), () => BlockData.ListPop("items")),
 		("Len", Category("변수", "리스트"), () => BlockData.ListLen(SlotData.EmptyValue())),
@@ -196,6 +196,13 @@ public static class BlockReference
 		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5"))),
 	};
 
+	// 언어 방식의 문법 카드 표 (#532)
+	static (string Name, string Category, Func<BlockData> Sample)[] SyntaxRowsOf(LanguageFamily family) => family switch
+	{
+		LanguageFamily.Python => PythonSyntaxRows,
+		_ => SyntaxRows,
+	};
+
 	// 카드 순서: 문법 블록(제어, 변수, 값, return) → 함수 탭과 같은 순서의 함수 카드(스킬, 기본 함수, 메모리) (#489)
 	static List<BlockReferenceEntry> Build()
 	{
@@ -205,7 +212,7 @@ public static class BlockReference
 		var builtinBasics = new List<BlockReferenceEntry>(); // wait: 기본 함수 중 get_bug, is_valid_target 뒤 (함수 탭과 같은 순서)
 		var memory = new List<BlockReferenceEntry>();
 
-		foreach ((string name, string category, Func<BlockData> sample) in BlockLabels.IsPython ? PythonSyntaxRows : SyntaxRows)
+		foreach ((string name, string category, Func<BlockData> sample) in SyntaxRowsOf(BlockLabels.Family))
 		{
 			BlockData block = sample();
 			// 접힌 카드는 형식, 펼치면 해금 설명 카드와 같은 순서의 칸 (설명 표 ItemDescriptions)

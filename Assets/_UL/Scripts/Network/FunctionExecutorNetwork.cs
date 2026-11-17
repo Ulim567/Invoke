@@ -886,7 +886,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		}
 
 		// 캐릭터 언어의 규칙으로 바꾼다(#532). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
-		if (!FunctionDataConverter.TryConvert(data, functions, language != null ? language.Rule : null, out UserFunction converted)) return null;
+		if (!FunctionDataConverter.TryConvert(data, functions, language != null ? language.Family : LanguageFamily.C, out UserFunction converted)) return null;
 		userFunctionOriginals[entry.Id] = converted;
 		return converted;
 	}
@@ -909,7 +909,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			slotGuids.Add(entry.Id);
 		}
 		// 캐릭터 언어의 규칙으로 컴파일한다 (#532). Python은 문법 오류만 찾는다
-		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals, language != null && language.Rule.IsPython);
+		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals, language != null ? language.Family : LanguageFamily.C);
 	}
 
 	void OnBuildSucceededChanged(bool oldValue, bool newValue) => BuildResultChanged?.Invoke();

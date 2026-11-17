@@ -7,8 +7,12 @@ using System.Collections.Generic;
 // C 표를 고치지 않고 따로 두는 이유: 같은 블록이라도 Python에서는 모양(;, { }, 선언 없음)과 규칙(대입이 곧 변수 만들기)이 달라 문장이 달라지기 때문
 public static partial class ItemDescriptions
 {
-	// 내 캐릭터가 Python이면 true. 설명 표는 화면(내 캐릭터)에서만 읽는다
-	static bool IsPythonCharacter => PlayerCharacter.LocalLanguage == CharacterLanguages.Python;
+	// 언어 방식마다 C 표보다 먼저 볼 표. 없으면 null (C). 설명 표는 화면(내 캐릭터)에서만 읽는다
+	static Dictionary<string, ItemDescription> EntriesOf(LanguageFamily family) => family switch
+	{
+		LanguageFamily.Python => PythonEntries,
+		_ => null,
+	};
 
 	static readonly Dictionary<string, ItemDescription> PythonEntries = new Dictionary<string, ItemDescription>
 	{
@@ -125,11 +129,13 @@ public static partial class ItemDescriptions
 		},
 		["ListNew"] = new ItemDescription
 		{
-			Format = "[]",
-			Summary = "빈 list를 만듭니다.",
+			Format = "list = []",
+			Summary = "빈 list를 만들어 이름에 담습니다.",
 			Purpose = "구슬이나 몬스터 여러 개를 한 variable에 모으고 싶을 때 씁니다.",
-			ExampleCode = "orbs = []",
-			Caution = "list는 heap에 만들어지고, 원소 하나마다 heap 1칸을 씁니다.",
+			ExampleCode = "orbs = []\norbs.append(orb_create())",
+			ExampleResult = "orbs에 구슬 하나가 담깁니다.",
+			Slots = new[] { "list : 빈 list를 담을 이름 | 이름" },
+			Caution = "list는 heap에 만들어지고, 원소 하나마다 heap 1칸을 씁니다. 이미 있는 list 이름에 다시 놓으면 빈 list로 바뀝니다. 빈 list인지는 len(list) == 0이나 not list로 확인합니다.",
 		},
 		["ListAppend"] = new ItemDescription
 		{

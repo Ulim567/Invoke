@@ -39,7 +39,7 @@ public class DeclareBlock : Block
 		RuntimeValue value;
 		if (initialValueOriginal != null)
 		{
-			if (!NumericRules.TryConvertForStore(initialValueOriginal, slots[0], type, rule, out value))
+			if (!NumericRules.TryConvertForStore(initialValueOriginal, slots[0], type, rule, context.Family, out value))
 			{
 				context.RecordFailure(FunctionFailure.TypeMismatch);
 				return BlockResult.Failed;

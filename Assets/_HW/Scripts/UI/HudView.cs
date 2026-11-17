@@ -229,8 +229,8 @@ public class HudView : MonoBehaviour
 	{
 		// 쿨타임 중에 누른 것은 덮개가 이미 보여 주므로 빨간 테두리를 띄우지 않는다
 		if (slot >= 0 && slot < SlotCount && reason != CastRejection.OnCooldown) rejectedUntil[slot] = Time.time + rejectFlashTime;
-		// Python 캐릭터는 컴파일 오류 거부를 SyntaxError로 보인다 (#532, 이우림)
-		ShowNotice(FailureNotice.ForRejection(reason, PlayerCharacter.LocalLanguage == CharacterLanguages.Python));
+		// 컴파일 오류 거부를 내 캐릭터 언어의 이름으로 보인다(Python은 SyntaxError, #532, 이우림)
+		ShowNotice(FailureNotice.ForRejection(reason, LanguageFamilies.Of(PlayerCharacter.LocalLanguage)));
 	}
 
 	// [내 화면] 내 작업이 끝남. 실행 중단, runtime error면 이유를 알린다 (#480)

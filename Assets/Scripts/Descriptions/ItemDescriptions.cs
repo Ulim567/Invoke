@@ -24,8 +24,9 @@ public static partial class ItemDescriptions
 	public static ItemDescription Get(string key)
 	{
 		if (string.IsNullOrEmpty(key)) return null;
-		// Python 캐릭터는 Python 표를 먼저 본다 (#532, ItemDescriptions.Python.cs)
-		if (IsPythonCharacter && PythonEntries.TryGetValue(key, out ItemDescription python)) return python;
+		// 내 캐릭터 언어의 표를 먼저 본다 (#532, ItemDescriptions.Python.cs)
+		Dictionary<string, ItemDescription> languageEntries = EntriesOf(LanguageFamilies.Of(PlayerCharacter.LocalLanguage));
+		if (languageEntries != null && languageEntries.TryGetValue(key, out ItemDescription byLanguage)) return byLanguage;
 		if (Entries.TryGetValue(key, out ItemDescription found)) return found;
 		return SkillEntries.TryGetValue(key, out found) ? found : null;
 	}

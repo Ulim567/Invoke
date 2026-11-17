@@ -4,17 +4,20 @@ using UnityEngine;
 /// <summary>
 /// 블록 데이터(BlockData)를 화면에 보여 줄 글자와 색으로 바꾼다. 보여 주기만 하고 데이터는 바꾸지 않는다.
 /// <para>
-/// 내 캐릭터 언어(IsPython)에 따라 C 모양 또는 Python 모양으로 보여 준다 (#532, function-data.md 「언어별 표시」).
+/// 내 캐릭터의 언어 방식(Family)에 따라 C 모양 또는 Python 모양으로 보여 준다 (#532, function-data.md 「언어별 표시」).
 /// Python은 ;가 없고 { } 대신 :, elif, and·or·not, True·False·None, for i in range(a, b):로 보인다.
 /// </para>
 /// </summary>
 public static class BlockLabels
 {
 	/// <summary>
-	/// 내 캐릭터가 Python이면 true (#532, 이우림). 편집 화면의 블록 글자, 칸 규칙, 블록 목록이 이 값으로 언어별 모양을 고른다.
-	/// 내 캐릭터가 없으면(서버, 시험) C.
+	/// 내 캐릭터의 언어 방식 (#532, 이우림). 편집 화면의 블록 글자, 칸 규칙, 블록 목록, 참고 카드가 이 값으로 언어별 모양을 고른다.
+	/// 캐릭터 언어(PlayerCharacter.LocalLanguage)에서 정한다. 실행기(LanguageRule.Family)와 같은 기준이다. 내 캐릭터가 없으면(서버, 시험) C.
 	/// </summary>
-	public static bool IsPython => PlayerCharacter.LocalLanguage == CharacterLanguages.Python;
+	public static LanguageFamily Family => LanguageFamilies.Of(PlayerCharacter.LocalLanguage);
+
+	// 지금 언어 방식이 Python이면 true. Python 갈래만 있는 곳(블록 글자 등)이 쓴다. 다른 언어가 생기면 그 곳을 Family의 switch로 바꾼다
+	internal static bool IsPython => Family == LanguageFamily.Python;
 
 	// 블록 분류별 색 (#487). 블록 바탕은 이 색을 연하게 섞어 칠하고(BlockView) 글자는 밝은색으로 쓰므로 밝은 색으로 둔다
 	// 분류 머리글의 색 네모, 참고 카드의 분류 태그는 이 색을 그대로 쓴다
@@ -139,7 +142,7 @@ public static class BlockLabels
 			case BlockKind.Del:
 				return $"del {Slot(block, 0)?.VariableName}";
 			case BlockKind.ListNew:
-				return "[]";
+				return $"{Slot(block, 0)?.VariableName} = []";
 			case BlockKind.ListAppend:
 				return $"{Slot(block, 0)?.VariableName}.append({Value(Slot(block, 1))})";
 			case BlockKind.ListPop:

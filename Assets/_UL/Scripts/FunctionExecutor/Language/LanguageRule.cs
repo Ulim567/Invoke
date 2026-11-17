@@ -17,6 +17,16 @@ public class LanguageRule : MonoBehaviour
 	// 언어 규칙 파일이 연결되지 않았을 때 기본값을 읽는 임시 규칙. 처음 값(C 기본값)만 가진다
 	LanguageRuleData fallbackRule;
 
+	// 시험이 정한 언어 방식. 정하지 않았으면 null이고, 캐릭터 언어를 따른다
+	LanguageFamily? familyForTest;
+
+	/// <summary>
+	/// 이 캐릭터의 언어 방식 (#532). 같은 오브젝트의 PlayerCharacter가 가진 캐릭터 언어로 정한다(없으면 C).
+	/// 실행기(변수·연산 규칙), 서버의 컴파일 검사, HUD 알림이 이 값으로 언어별 갈래를 고른다.
+	/// </summary>
+	// 언어 규칙 파일에 따로 적지 않는 이유: 서버가 캐릭터 프리팹을 고르고 편집 화면이 블록 모양을 고르는 기준도 캐릭터 언어라서, 두 곳에 적으면 어긋날 수 있기 때문
+	public LanguageFamily Family => familyForTest ?? LanguageFamilies.Of(PlayerCharacter.LanguageOf(gameObject));
+
 	/// <summary>
 	/// 블록이 따를 언어 규칙. 언어 규칙 파일이 없으면 처음 값(C 규칙)만 가진 임시 규칙이다.
 	/// </summary>
@@ -73,6 +83,9 @@ public class LanguageRule : MonoBehaviour
 
 	// 테스트가 코드로 만든 언어 규칙(예: LanguageRuleData.CreatePythonForTest)을 연결한다 (#532). 실행기의 Start보다 먼저(Awake에서) 부른다
 	internal void SetRuleDataForTest(LanguageRuleData rule) => ruleData = rule;
+
+	// 시험 오브젝트(PlayerCharacter가 없음)의 언어 방식을 정한다 (#532)
+	internal void SetFamilyForTest(LanguageFamily family) => familyForTest = family;
 
 	// 코드로 만든 ScriptableObject는 Unity가 저절로 지우지 않으므로 직접 지운다
 	void OnDestroy()

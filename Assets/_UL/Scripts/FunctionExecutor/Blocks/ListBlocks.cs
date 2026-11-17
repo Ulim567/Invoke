@@ -1,14 +1,30 @@
 /// <summary>
-/// 빈 리스트 블록 (Python, #532). 예: orbs = []. heap에 빈 리스트를 올리고 리스트 값을 내놓는다. 1틱을 쓴다.<br/>
-/// 빈 리스트는 heap 0칸이다. 원소를 넣을 때마다 1칸씩 는다.
+/// 리스트 만들기 블록 (Python, #532). 예: orbs = []. heap에 빈 리스트를 올리고 그 리스트를 이름에 담는다(대입과 같은 규칙). 1틱을 쓴다.
+/// <para>
+/// - 빈 리스트는 heap 0칸이다. 원소를 넣을 때마다 1칸씩 는다.<br/>
+/// - 이미 리스트를 담은 이름에 다시 놓으면 새 빈 리스트로 바뀐다. 예전 리스트는 가리키는 이름이 없으면 statement가 끝날 때 해제된다.<br/>
+/// - global로 적은 이름이면 전역 변수에 담는다. Global Variables에 없는 이름이면 NameError.
+/// </para>
 /// </summary>
-public class ListNewBlock : ValueBlock
+public class ListNewBlock : Block
 {
+	readonly string listName;
+
+	public ListNewBlock(string listName)
+	{
+		this.listName = listName;
+	}
+
 	protected override BlockResult Step(FunctionContext context)
 	{
-		// 0칸이라 heap이 모자라 실패하는 일은 없다. 이 작업의 임시 객체로 올라가고, 변수에 담지 않으면 statement가 끝날 때 해제된다
+		if (!context.TryGetPythonAssignTarget(listName, out VariableStore target))
+		{
+			context.RecordFailure(FunctionFailure.UndeclaredVariable);
+			return BlockResult.Failed;
+		}
+		// 0칸이라 heap이 모자라 실패하는 일은 없다. 이 작업의 임시 객체로 올라가지만 바로 이름에 담기므로 남는다
 		int pointer = context.Malloc(new ListStorage(), 0);
-		Result = RuntimeValue.FromList(pointer);
+		target.SetDynamic(listName, RuntimeValue.FromList(pointer));
 		return BlockResult.Done;
 	}
 }

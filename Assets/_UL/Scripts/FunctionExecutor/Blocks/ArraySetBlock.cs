@@ -53,7 +53,7 @@ public class ArraySetBlock : Block
 			context.RecordFailure(FunctionFailure.IndexOutOfRange);
 			return BlockResult.Failed;
 		}
-		if (!NumericRules.TryConvertForStore(valueOriginal, slots[1], array.ElementType, context.Rule, out RuntimeValue value))
+		if (!NumericRules.TryConvertForStore(valueOriginal, slots[1], array.ElementType, context.Rule, context.Family, out RuntimeValue value))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;

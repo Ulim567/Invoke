@@ -121,6 +121,8 @@ public class FunctionData
 			string name = block.Kind switch
 			{
 				BlockKind.Assign when block.Slots.Count >= 1 => block.Slots[0].VariableName,
+				// 리스트 만들기(name = [])도 대입이다
+				BlockKind.ListNew when block.Slots.Count >= 1 => block.Slots[0].VariableName,
 				BlockKind.For when block.Slots.Count >= 1 => block.Slots[0].Name,
 				// Python에서 del x도 x를 그 함수의 지역 이름으로 만든다
 				BlockKind.Del when block.Slots.Count >= 1 => block.Slots[0].VariableName,

@@ -16,15 +16,15 @@ public static class SlotCompileChecker
 	/// 서버(FunctionExecutorNetwork.Build)와 편집 화면(BlockEditor의 저장 뒤 Build 성공 알림)이 같은 규칙으로 쓴다. 전역 변수 파일 검사는 부르는 쪽이 한다.<br/>
 	/// ownedFunctions에 없는 GUID(받지 못한 함수)는 건너뛴다.
 	/// </summary>
-	// python: 캐릭터 언어가 Python이면 true. Python 규칙으로 검사한다 (#532, FunctionChecker.Find)
-	public static bool Compiles(IEnumerable<string> slotFunctionGuids, IReadOnlyList<FunctionData> ownedFunctions, GlobalVariablesData globals, bool python = false)
+	// family: 캐릭터의 언어 방식. 그 언어의 규칙으로 검사한다 (#532, FunctionChecker.Find)
+	public static bool Compiles(IEnumerable<string> slotFunctionGuids, IReadOnlyList<FunctionData> ownedFunctions, GlobalVariablesData globals, LanguageFamily family = LanguageFamily.C)
 	{
 		foreach (string guid in slotFunctionGuids)
 		{
 			FunctionData slotFunction = null;
 			foreach (FunctionData function in ownedFunctions)
 				if (function != null && function.Guid == guid) { slotFunction = function; break; }
-			if (slotFunction != null && !Compiles(slotFunction, ownedFunctions, globals, python)) return false;
+			if (slotFunction != null && !Compiles(slotFunction, ownedFunctions, globals, family)) return false;
 		}
 		return true;
 	}
@@ -35,12 +35,12 @@ public static class SlotCompileChecker
 	/// <param name="slotFunction">슬롯 함수</param>
 	/// <param name="ownedFunctions">캐릭터가 가진 모든 함수. 호출된 함수를 GUID로 찾고, 호출 블록의 파라미터 타입을 검사할 때 쓴다</param>
 	/// <param name="globals">전역 변수 선언. null이면 전역 변수가 없는 것으로 본다</param>
-	public static bool Compiles(FunctionData slotFunction, IReadOnlyList<FunctionData> ownedFunctions, GlobalVariablesData globals, bool python = false)
+	public static bool Compiles(FunctionData slotFunction, IReadOnlyList<FunctionData> ownedFunctions, GlobalVariablesData globals, LanguageFamily family = LanguageFamily.C)
 	{
 		if (slotFunction == null) return false;
 		foreach (FunctionData function in Reachable(slotFunction, ownedFunctions))
 		{
-			if (FunctionChecker.HasErrors(function, globals, ownedFunctions, python)) return false;
+			if (FunctionChecker.HasErrors(function, globals, ownedFunctions, family)) return false;
 		}
 		return true;
 	}
@@ -50,13 +50,13 @@ public static class SlotCompileChecker
 	/// 경로마다 맨 앞이 slotFunction, 맨 끝이 오류가 있는 함수다. 경로는 가장 짧은 하나다.<br/>
 	/// 편집 화면이 실패한 슬롯에 ✗를 붙이고, 오류 카드에 「슬롯 Q → aim → find」처럼 보일 때 쓴다.
 	/// </summary>
-	public static List<List<FunctionData>> FailedPaths(FunctionData slotFunction, IReadOnlyList<FunctionData> ownedFunctions, GlobalVariablesData globals, bool python = false)
+	public static List<List<FunctionData>> FailedPaths(FunctionData slotFunction, IReadOnlyList<FunctionData> ownedFunctions, GlobalVariablesData globals, LanguageFamily family = LanguageFamily.C)
 	{
 		var paths = new List<List<FunctionData>>();
 		if (slotFunction == null) return paths;
 		foreach (FunctionData function in Walk(slotFunction, ownedFunctions, out Dictionary<string, FunctionData> callers))
 		{
-			if (!FunctionChecker.HasErrors(function, globals, ownedFunctions, python)) continue;
+			if (!FunctionChecker.HasErrors(function, globals, ownedFunctions, family)) continue;
 			// 부른 함수를 거슬러 올라가 슬롯 함수까지 잇는다
 			var path = new List<FunctionData> { function };
 			while (callers.TryGetValue(path[0].Guid, out FunctionData caller)) path.Insert(0, caller);

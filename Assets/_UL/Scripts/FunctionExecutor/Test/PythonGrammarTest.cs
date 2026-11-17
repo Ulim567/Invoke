@@ -40,6 +40,8 @@ public class PythonGrammarTest : MonoBehaviour
 		stats.AddBonus(StatType.MemorySize, 190);
 		LanguageRule language = go.AddComponent<LanguageRule>();
 		language.SetRuleDataForTest(LanguageRuleData.CreatePythonForTest());
+		// 시험 오브젝트에는 PlayerCharacter가 없어 캐릭터 언어로 정할 수 없으므로 언어 방식을 직접 정한다
+		language.SetFamilyForTest(LanguageFamily.Python);
 		go.AddComponent<FunctionExecutor>();
 		go.AddComponent<FunctionExecutorLogger>();
 		go.AddComponent<PythonGrammarTest>();
@@ -57,15 +59,15 @@ public class PythonGrammarTest : MonoBehaviour
 		rule = GetComponent<LanguageRule>().Rule;
 		executor.TaskEnded += OnTaskEnded;
 
-		Check("언어 방식 Python", rule.IsPython);
+		Check("언어 방식 Python", GetComponent<LanguageRule>().Family == LanguageFamily.Python);
 		Check("가비지 컬렉션 켜짐", memory.Heap.CollectsGarbage);
 
 		// 전역 변수 파일: r1 … r30 = 0, g = 7, items = [], full = [] (33개)
 		GlobalVariablesData globals = new GlobalVariablesData();
 		for (int i = 1; i <= 30; i++) globals.Declarations.Add(BlockData.Assign("r" + i, L(0)));
 		globals.Declarations.Add(BlockData.Assign("g", L(7)));
-		globals.Declarations.Add(BlockData.Assign("items", SlotData.FromBlock(BlockData.ListNew())));
-		globals.Declarations.Add(BlockData.Assign("full", SlotData.FromBlock(BlockData.ListNew())));
+		globals.Declarations.Add(BlockData.ListNew("items"));
+		globals.Declarations.Add(BlockData.ListNew("full"));
 		Check("전역 변수 파일 검사 통과", executor.CanUseGlobalVariables(globals, out string globalsError), globalsError);
 		executor.SetGlobalVariablesFile(globals);
 		executor.RestartProcess();
@@ -107,7 +109,7 @@ public class PythonGrammarTest : MonoBehaviour
 
 		// 프레임 크기: a = 1; b = 2; global r6; r6 = 3 → 1 + 지역 이름 2(a, b) = 3
 		FunctionData frame = Data("Frame", BlockData.Assign("a", L(1)), BlockData.Assign("b", L(2)), BlockData.Global("r6"), BlockData.Assign("r6", L(3)));
-		Check("프레임 크기 = 1 + 대입하는 지역 이름 수(global 제외)", FunctionDataConverter.TryConvert(frame, Array.Empty<FunctionData>(), rule, out UserFunction converted)
+		Check("프레임 크기 = 1 + 대입하는 지역 이름 수(global 제외)", FunctionDataConverter.TryConvert(frame, Array.Empty<FunctionData>(), LanguageFamily.Python, out UserFunction converted)
 			&& converted.FrameSize == 3, $"실제 {converted?.FrameSize}");
 
 		// for i in range(0, 4): r7 = r7 + i (global r7) → 6, for 뒤에도 i 남음 → r8 = 3
@@ -177,7 +179,7 @@ public class PythonGrammarTest : MonoBehaviour
 				Check("함수가 끝나면 지역 리스트가 해제됨 (heap 0칸)", memory.HeapUsed == 0, $"실제 {memory.HeapUsed}");
 			}),
 			BlockData.Global("r20"), BlockData.Global("r21"), BlockData.Global("r22"),
-			BlockData.Assign("lst", SlotData.FromBlock(BlockData.ListNew())),
+			BlockData.ListNew("lst"),
 			BlockData.ListAppend("lst", L(1)),
 			BlockData.ListAppend("lst", S("x")),
 			BlockData.Assign("r20", SlotData.FromBlock(BlockData.ListLen(V("lst")))),
@@ -186,7 +188,7 @@ public class PythonGrammarTest : MonoBehaviour
 			BlockData.Assign("r22", SlotData.FromBlock(BlockData.ListPop("lst", L(0)))));
 
 		Run("PopEmpty", Fails(FunctionFailure.IndexOutOfRange),
-			BlockData.Assign("e", SlotData.FromBlock(BlockData.ListNew())), BlockData.Assign("v", SlotData.FromBlock(BlockData.ListPop("e"))));
+			BlockData.ListNew("e"), BlockData.Assign("v", SlotData.FromBlock(BlockData.ListPop("e"))));
 		Run("NotAList", Fails(FunctionFailure.TypeMismatch), BlockData.Assign("n", L(3)), BlockData.ListAppend("n", L(1)));
 
 		// 전역 리스트 items에 append 두 번 → 끝나도 남음(heap 2칸)
@@ -238,7 +240,7 @@ public class PythonGrammarTest : MonoBehaviour
 		while (queue.Count > 0)
 		{
 			(FunctionData data, FunctionData[] owned, Action<FunctionTask> expect) = queue.Dequeue();
-			if (!FunctionDataConverter.TryConvert(data, owned, rule, out UserFunction function))
+			if (!FunctionDataConverter.TryConvert(data, owned, LanguageFamily.Python, out UserFunction function))
 			{
 				Check($"{data.Name}: 변환", false);
 				continue;

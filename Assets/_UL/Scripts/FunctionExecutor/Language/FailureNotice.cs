@@ -24,16 +24,20 @@ public static class FailureNotice
 	/// 시전 거부 rejection의 알림 문장. NotEnoughMemory, CompileError만 알리고, 그 밖의 거부면 null.
 	/// </summary>
 	// 다른 거부를 알리지 않는 이유: 쿨타임은 슬롯 덮개, 공격할 수 없는 장소는 무채색 슬롯처럼 화면이 이미 보여 준다. 메모리 부족과 컴파일 오류는 슬롯에서 원인을 알 수 없다
-	public static string ForRejection(CastRejection rejection) => ForRejection(rejection, false);
+	public static string ForRejection(CastRejection rejection) => ForRejection(rejection, LanguageFamily.C);
 
 	/// <summary>
-	/// ForRejection과 같고, python이 true이면 컴파일 오류 거부를 Python 이름(SyntaxError)으로 보인다 (#532).
+	/// ForRejection과 같고, 컴파일 오류 거부를 시전자 언어 family의 이름으로 보인다(Python은 SyntaxError, #532).
 	/// </summary>
-	public static string ForRejection(CastRejection rejection, bool python)
+	public static string ForRejection(CastRejection rejection, LanguageFamily family)
 	{
 		if (rejection == CastRejection.NotEnoughMemory) return $"{RejectedLabel} NotEnoughMemory\n남은 메모리가 함수 크기보다 적음";
 		if (rejection == CastRejection.CompileError)
-			return python ? $"{RejectedLabel} SyntaxError\n문법 오류가 있는 함수" : $"{RejectedLabel} CompileError\n컴파일 오류가 있는 함수";
+			return family switch
+			{
+				LanguageFamily.Python => $"{RejectedLabel} SyntaxError\n문법 오류가 있는 함수",
+				_ => $"{RejectedLabel} CompileError\n컴파일 오류가 있는 함수",
+			};
 		return null;
 	}
 
@@ -61,8 +65,16 @@ public static class FailureNotice
 		if (info.Failure == FunctionFailure.SkillFailed && !string.IsNullOrEmpty(info.ErrorName))
 			return $"{RuntimeLabel} {info.ErrorName}\n{info.ErrorMessage}";
 
-		string name = info.IsPython ? PythonName(info.Failure) : info.Failure.ToString();
-		string description = info.IsPython ? DescribePython(info.Failure) : Describe(info.Failure);
+		string name = info.Family switch
+		{
+			LanguageFamily.Python => PythonName(info.Failure),
+			_ => info.Failure.ToString(),
+		};
+		string description = info.Family switch
+		{
+			LanguageFamily.Python => DescribePython(info.Failure),
+			_ => Describe(info.Failure),
+		};
 		return description != null ? $"{RuntimeLabel} {name}\n{description}" : $"{RuntimeLabel} {name}";
 	}
 

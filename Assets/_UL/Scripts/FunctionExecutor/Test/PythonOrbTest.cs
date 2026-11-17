@@ -39,6 +39,8 @@ public class PythonOrbTest : MonoBehaviour
 		stats.AddBonus(StatType.MemorySize, 90);
 		LanguageRule language = go.AddComponent<LanguageRule>();
 		language.SetRuleDataForTest(LanguageRuleData.CreatePythonForTest());
+		// 시험 오브젝트에는 PlayerCharacter가 없어 캐릭터 언어로 정할 수 없으므로 언어 방식을 직접 정한다
+		language.SetFamilyForTest(LanguageFamily.Python);
 		go.AddComponent<FunctionExecutor>();
 		go.AddComponent<FunctionExecutorLogger>();
 		go.AddComponent<ManaOrbs>();
@@ -62,7 +64,7 @@ public class PythonOrbTest : MonoBehaviour
 		// 전역 변수 파일: o = None, keep = [], r1 … r5 = 0
 		GlobalVariablesData globals = new GlobalVariablesData();
 		globals.Declarations.Add(BlockData.Assign("o", SlotData.FromNone()));
-		globals.Declarations.Add(BlockData.Assign("keep", SlotData.FromBlock(BlockData.ListNew())));
+		globals.Declarations.Add(BlockData.ListNew("keep"));
 		for (int i = 1; i <= 5; i++) globals.Declarations.Add(BlockData.Assign("r" + i, L(0)));
 		executor.SetGlobalVariablesFile(globals);
 		executor.RestartProcess();
@@ -107,7 +109,7 @@ public class PythonOrbTest : MonoBehaviour
 
 		// 구슬이 아닌 원소가 든 리스트 → TypeError
 		Run("BurstBad", task => Check("BurstBad: TypeError(TypeMismatch)", task.Failure == FunctionFailure.TypeMismatch, $"실제 {task.EndReason}, {task.Failure}"),
-			BlockData.Assign("bad", SlotData.FromBlock(BlockData.ListNew())),
+			BlockData.ListNew("bad"),
 			BlockData.ListAppend("bad", L(1)),
 			BlockData.CallPredefinedFunction(PredefinedFunctionIds.PyOrbBurst, V("bad")));
 
@@ -130,7 +132,7 @@ public class PythonOrbTest : MonoBehaviour
 				Check("쓸 수 있는 구슬 0개", orbs.Count == 0, $"실제 {orbs.Count}");
 			}),
 			BlockData.Global("r4"), BlockData.Global("r5"),
-			BlockData.Assign("lst", SlotData.FromBlock(BlockData.ListNew())),
+			BlockData.ListNew("lst"),
 			loop,
 			BlockData.Assign("r4", SlotData.FromBlock(BlockData.Compare(SlotData.FromBlock(BlockData.ArrayGet("lst", L(5))), CompareOperator.Equal, SlotData.FromNone()))),
 			BlockData.Assign("r5", L(5)));
@@ -155,7 +157,7 @@ public class PythonOrbTest : MonoBehaviour
 		while (queue.Count > 0)
 		{
 			FunctionData data = queue.Dequeue();
-			if (!FunctionDataConverter.TryConvert(data, Array.Empty<FunctionData>(), rule, out UserFunction function))
+			if (!FunctionDataConverter.TryConvert(data, Array.Empty<FunctionData>(), LanguageFamily.Python, out UserFunction function))
 			{
 				Check($"{data.Name}: 변환", false);
 				continue;

@@ -66,7 +66,7 @@ public class ForBlock : LoopBlock
 		RuntimeValue end = endSlot[0];
 		endSlot = null;
 		indexScope.TryGet(indexName, out RuntimeValue index);
-		if (!NumericRules.TryCompare(CompareOperator.Less, null, index, endOriginal, end, context.Rule, out loop))
+		if (!NumericRules.TryCompare(CompareOperator.Less, null, index, endOriginal, end, context.Rule, context.Family, out loop))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;
@@ -140,7 +140,7 @@ public class ForBlock : LoopBlock
 		indexScope.OpenScope();
 		openedScope = true;
 
-		if (!NumericRules.TryConvertForStore(startOriginal, startSlot[0], Int, rule, out RuntimeValue start))
+		if (!NumericRules.TryConvertForStore(startOriginal, startSlot[0], Int, rule, context.Family, out RuntimeValue start))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return false;

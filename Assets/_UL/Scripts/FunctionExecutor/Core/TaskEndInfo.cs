@@ -17,8 +17,8 @@ public struct TaskEndInfo
 	public string ErrorName;
 	public string ErrorMessage;
 	public InterruptCause InterruptCause;
-	// 시전자 캐릭터의 언어 방식이 Python이면 true (#532). HUD가 실패 이름을 Python 이름(NameError 등)으로 보인다
-	public bool IsPython;
+	// 시전자 캐릭터의 언어 방식 (#532). HUD가 실패 이름을 그 언어의 이름(Python의 NameError 등)으로 보인다
+	public LanguageFamily Family;
 
 	/// <summary>
 	/// 끝난 작업 task에서 알릴 값을 모은다. 분류는 시전자 캐릭터의 언어 language가 정한다(없으면 RuntimeError).
@@ -26,7 +26,7 @@ public struct TaskEndInfo
 	public static TaskEndInfo From(FunctionTask task, LanguageRule language)
 	{
 		var info = new TaskEndInfo { EndReason = task.EndReason, InterruptCause = task.InterruptCause, ErrorName = "", ErrorMessage = "",
-			IsPython = language != null && language.Rule.IsPython };
+			Family = language != null ? language.Family : LanguageFamily.C };
 		if (task.Failure is FunctionFailure failure)
 		{
 			info.Failure = failure;

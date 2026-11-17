@@ -135,7 +135,7 @@ public class UserFunction : FunctionBlock
 			context.RecordFailure(FunctionFailure.MissingReturn);
 			return false;
 		}
-		if (!NumericRules.TryConvertForStore(returnSource, returnSource.Result, returnType, context.Rule, out RuntimeValue converted))
+		if (!NumericRules.TryConvertForStore(returnSource, returnSource.Result, returnType, context.Rule, context.Family, out RuntimeValue converted))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return false;

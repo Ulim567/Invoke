@@ -109,19 +109,6 @@ public enum StringEquality
 }
 
 /// <summary>
-/// 언어 방식. 변수를 만드는 방법, 변수 범위, 연산·조건 규칙, None 처리를 이 값 하나로 나눈다 (#532).
-/// </summary>
-// 칸을 여러 개(변수 방식, 연산 방식 등)로 나누지 않는 이유: Python 규칙은 서로 묶여 있어 일부만 켜면 뜻이 맞지 않기 때문
-// FunctionFailure와 같은 이유로, 새 방식은 맨 끝에만 추가한다
-public enum LanguageFamily
-{
-	// 선언으로 변수를 만들고 타입이 고정된다. { } 하나가 범위 하나다
-	C,
-	// 대입이 곧 변수 만들기이고 타입은 값이 가진다. 범위는 함수 하나다. 함수 안에서 대입하는 이름은 global로 적지 않으면 지역 변수다
-	Python,
-}
-
-/// <summary>
 /// 캐릭터 언어 하나의 규칙 파일. 실패 종류마다 실행기가 무엇을 할지와 그 실패의 분류(실패 처리 표), 초기값을 비운 변수의 기본값, 숫자 타입 변환 규칙을 정한다.
 /// <para>
 /// 사용법<br/>
@@ -179,21 +166,6 @@ public class LanguageRuleData : ScriptableObject
 	[Header("heap")]
 	[SerializeField, Tooltip("도달할 수 없게 된 heap 객체를 누수로 남기지 않고 바로 해제하는지(가비지 컬렉션). C는 하지 않는다. Python은 한다")]
 	bool garbageCollected = false;
-
-	// 처음 값은 C다. 이미 만든 파일도 Unity가 새 칸을 읽을 때 이 값을 넣으므로, Python 파일은 Inspector에서 바꾼다
-	[Header("언어 방식 (#532)")]
-	[SerializeField, Tooltip("변수 규칙(선언·대입, 범위), 연산·조건 규칙, None 처리. C 또는 Python")]
-	LanguageFamily family = LanguageFamily.C;
-
-	/// <summary>
-	/// 언어 방식. Python이면 대입이 곧 변수 만들기이고, 범위는 함수 하나이며, Python의 연산·조건 규칙을 따른다 (#532).
-	/// </summary>
-	public LanguageFamily Family => family;
-
-	/// <summary>
-	/// 언어 방식이 Python이면 true.
-	/// </summary>
-	public bool IsPython => family == LanguageFamily.Python;
 
 	/// <summary>
 	/// 숫자 타입이 섞일 때 값을 바꾸는 규칙. 연산 블록, 선언 블록, 대입 블록이 따른다.
@@ -296,11 +268,12 @@ public class LanguageRuleData : ScriptableObject
 	}
 
 	// 테스트 코드가 C가 아닌 언어 규칙을 확인할 때 쓴다. 게임 코드는 Project 창에서 만든 언어 규칙 파일을 쓴다
-	// 테스트용 Python 규칙 (#532). 사용자가 Inspector에서 고칠 LanguageRule_Python.asset과 같은 값으로 만든다:
-	// 언어 방식 Python, 가비지 컬렉션, 모든 실패 EndTask(Overflow도 RecursionError로 그 작업만), 문법 오류만 CompileError
+	// 테스트용 Python 규칙 파일 (#532). 사용자가 Inspector에서 고칠 LanguageRule_Python.asset과 같은 값으로 만든다:
+	// 가비지 컬렉션, 모든 실패 EndTask(Overflow도 RecursionError로 그 작업만), 문법 오류만 CompileError
+	// 언어 방식(Python)은 규칙 파일이 아니라 캐릭터 언어가 정한다. 시험은 LanguageRule.SetFamilyForTest로 정한다
 	internal static LanguageRuleData CreatePythonForTest()
 	{
-		LanguageRuleData rule = CreateForTest(NumericConversion.WideningOnly, true, false, StringEquality.ByContent, true, LanguageFamily.Python, true);
+		LanguageRuleData rule = CreateForTest(NumericConversion.WideningOnly, true, false, StringEquality.ByContent, true, true);
 		foreach (FunctionFailure failure in Enum.GetValues(typeof(FunctionFailure)))
 		{
 			bool compile = failure == FunctionFailure.InvalidLiteral || failure == FunctionFailure.NotInLoop
@@ -312,10 +285,9 @@ public class LanguageRuleData : ScriptableObject
 
 	internal static LanguageRuleData CreateForTest(NumericConversion conversion, bool allowFloatModulo,
 		bool zeroIsNull = true, StringEquality stringEquality = StringEquality.Disallowed, bool allowShadowing = true,
-		LanguageFamily family = LanguageFamily.C, bool garbageCollected = false)
+		bool garbageCollected = false)
 	{
 		LanguageRuleData rule = CreateInstance<LanguageRuleData>();
-		rule.family = family;
 		rule.garbageCollected = garbageCollected;
 		rule.numericConversion = conversion;
 		rule.allowFloatModulo = allowFloatModulo;

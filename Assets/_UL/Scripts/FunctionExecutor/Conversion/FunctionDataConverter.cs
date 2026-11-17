@@ -27,18 +27,18 @@ using UnityEngine;
 public static class FunctionDataConverter
 {
 	public static bool TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, out UserFunction function) =>
-		TryConvert(data, ownedFunctions, null, out function);
+		TryConvert(data, ownedFunctions, LanguageFamily.C, out function);
 
 	/// <summary>
-	/// 캐릭터 언어 규칙 rule을 따라 바꾼다 (#532). rule이 null이거나 C이면 위의 TryConvert와 같다.<br/>
+	/// 캐릭터의 언어 방식 family(LanguageRule.Family)를 따라 바꾼다 (#532). C이면 위의 TryConvert와 같다.<br/>
 	/// Python이면 파라미터·반환 타입이 없고, 프레임 크기는 1 + 지역 이름 수(FunctionData.PythonLocalNames)이며, global·del·리스트 블록을 바꾼다.
 	/// </summary>
-	public static bool TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, LanguageRuleData rule, out UserFunction function)
+	public static bool TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family, out UserFunction function)
 	{
 		if (data == null) throw new ArgumentNullException(nameof(data));
 		if (ownedFunctions == null) throw new ArgumentNullException(nameof(ownedFunctions));
 
-		function = new Conversion(data, ownedFunctions, rule != null && rule.IsPython).ConvertFunction(data);
+		function = new Conversion(data, ownedFunctions, family).ConvertFunction(data);
 		return function != null;
 	}
 
@@ -66,9 +66,9 @@ public static class FunctionDataConverter
 		// Python 규칙으로 바꾸는지 (#532). 한 번의 변환에서 바꾸는 함수는 모두 같은 캐릭터의 것이라 같은 언어다
 		readonly bool python;
 
-		public Conversion(FunctionData root, IEnumerable<FunctionData> ownedFunctions, bool python)
+		public Conversion(FunctionData root, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family)
 		{
-			this.python = python;
+			python = family == LanguageFamily.Python;
 			// 바꾸는 함수가 목록에 없어도 자기 자신을 부를 수 있게 먼저 넣는다
 			if (root.Guid != null) functionsByGuid[root.Guid] = root;
 			foreach (FunctionData owned in ownedFunctions)
@@ -379,6 +379,11 @@ public static class FunctionDataConverter
 				// 꺼낸 값은 버린다. 칸: 리스트 변수, index(비우면 맨 끝)
 				case BlockKind.ListPop when python && block.Slots.Count >= 1:
 					return ConvertListPop(data, block);
+
+				// 칸: 리스트 이름
+				case BlockKind.ListNew when python && block.Slots.Count >= 1:
+					if (string.IsNullOrEmpty(block.Slots[0].VariableName)) return Reject(data, "리스트 만들기 블록의 이름 칸이 비어 있습니다.");
+					return new ListNewBlock(block.Slots[0].VariableName);
 			}
 
 			return Reject(data, $"{block.Kind} 블록은 아직 실행할 수 없습니다.");
@@ -556,10 +561,6 @@ public static class FunctionDataConverter
 				}
 
 				// Python 리스트 블록(#532)
-				// 칸: 없음
-				case BlockKind.ListNew when python:
-					return new ListNewBlock();
-
 				// 칸: 리스트 변수, index(비우면 맨 끝)
 				case BlockKind.ListPop when python && block.Slots.Count >= 1:
 					return ConvertListPop(data, block);

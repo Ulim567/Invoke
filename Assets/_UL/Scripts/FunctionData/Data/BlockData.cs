@@ -36,7 +36,7 @@ public enum BlockKind
 	Global,
 	// del x. 이름 x를 지운다. 지운 뒤 읽으면 NameError
 	Del,
-	// [] 빈 리스트. 값 칸에 끼운다
+	// 리스트 만들기: name = []. 빈 리스트를 만들어 이름에 담는 statement (C의 배열 만들기와 짝)
 	ListNew,
 	// list.append(값)
 	ListAppend,
@@ -121,7 +121,7 @@ public class BlockData
 	{
 		BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not
 			or BlockKind.Malloc or BlockKind.Function or BlockKind.ArrayGet
-			or BlockKind.ListNew or BlockKind.ListPop or BlockKind.ListLen => true,
+			or BlockKind.ListPop or BlockKind.ListLen => true,
 		_ => false,
 	};
 
@@ -335,10 +335,11 @@ public class BlockData
 		Create(BlockKind.Del, SlotData.VariableOnly(variableName));
 
 	/// <summary>
-	/// 빈 리스트 블록 (Python, #532). 예: []. 값 칸에 끼운다
+	/// 리스트 만들기 블록 (Python, #532). 예: orbs = []. 빈 리스트를 만들어 이름에 담는다. 칸: 이름(변수 칸)
 	/// </summary>
-	public static BlockData ListNew() =>
-		Create(BlockKind.ListNew);
+	// 값 블록 []로 두지 않는 이유: 빈 리스트가 쓸모 있는 곳은 이름에 담아 모을 때뿐이라, 조건·연산 칸에 끼워지지 않게 하기 위함 (이우림 결정 11/18)
+	public static BlockData ListNew(string listName) =>
+		Create(BlockKind.ListNew, SlotData.VariableOnly(listName));
 
 	/// <summary>
 	/// append 블록 (Python, #532). 예: orbs.append(o). 칸: 리스트 변수, 넣을 값

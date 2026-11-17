@@ -32,14 +32,14 @@ public static class FunctionChecker
 	/// ownedFunctions는 캐릭터가 가진 함수들로, 사용자 정의 함수 블록의 파라미터·반환 타입을 찾을 때 쓴다 (null이면 그 칸은 타입을 검사하지 않음).
 	/// </summary>
 	public static List<Error> Find(FunctionData function, GlobalVariablesData globals = null, IEnumerable<FunctionData> ownedFunctions = null) =>
-		Find(function, globals, ownedFunctions, false);
+		Find(function, globals, ownedFunctions, LanguageFamily.C);
 
 	/// <summary>
-	/// 캐릭터 언어에 맞춰 검사한다 (#532). python이 false이면 위의 Find와 같다(C).<br/>
+	/// 캐릭터의 언어 방식 family에 맞춰 검사한다 (#532). C이면 위의 Find와 같다.<br/>
 	/// Python은 실행 전에 찾는 잘못이 문법 오류뿐이다: 비어 있는 값 칸, 반복문 밖의 break·continue, 이름 없는 global, 지운 함수 호출.
 	/// 없는 변수·타입이 맞지 않는 값은 실행 중에 NameError·TypeError로 난다(runtime error). 문장 앞에 Python 오류 이름을 붙인다(SyntaxError: …).
 	/// </summary>
-	public static List<Error> Find(FunctionData function, GlobalVariablesData globals, IEnumerable<FunctionData> ownedFunctions, bool python)
+	public static List<Error> Find(FunctionData function, GlobalVariablesData globals, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family)
 	{
 		var errors = new List<Error>();
 		if (function == null || function.Blocks == null) return errors;
@@ -50,10 +50,12 @@ public static class FunctionChecker
 			function.Guid == guid ? function : owned?.FirstOrDefault(f => f != null && f.Guid == guid);
 		var context = new SlotContext { ReturnType = function.ReturnType, FindUserFunction = owned != null ? (System.Func<string, FunctionData>)FindUserFunction : null };
 
-		if (python)
+		// 언어마다 검사가 다르다. 갈래가 없는 언어는 C 검사를 따른다
+		switch (family)
 		{
-			WalkPython(function.Blocks, 0, context, errors);
-			return errors;
+			case LanguageFamily.Python:
+				WalkPython(function.Blocks, 0, context, errors);
+				return errors;
 		}
 
 		// 쓸 수 있는 변수: C처럼 위에서 선언했고 그 자리에서 보이는 것만 (전역 변수, 파라미터, 바깥·같은 { }의 선언, for의 i) (#474 5단계)
@@ -75,8 +77,8 @@ public static class FunctionChecker
 		Find(function, globals, ownedFunctions).Count > 0;
 
 	/// <summary>오류가 하나라도 있으면 true. 캐릭터 언어에 맞춰 검사한다 (#532)</summary>
-	public static bool HasErrors(FunctionData function, GlobalVariablesData globals, IEnumerable<FunctionData> ownedFunctions, bool python) =>
-		Find(function, globals, ownedFunctions, python).Count > 0;
+	public static bool HasErrors(FunctionData function, GlobalVariablesData globals, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family) =>
+		Find(function, globals, ownedFunctions, family).Count > 0;
 
 	// Python 오류 문장 앞에 붙이는 이름 (#532, 이우림 결정 11/18: 「SyntaxError: 명사형 문장」)
 	const string SyntaxErrorPrefix = "SyntaxError: ";

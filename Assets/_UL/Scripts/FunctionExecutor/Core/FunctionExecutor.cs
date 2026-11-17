@@ -366,6 +366,8 @@ public class FunctionExecutor : MonoBehaviour
 	void Start()
 	{
 		memory.Heap.SetRunningLocalPointers(GetRunningLocalPointers);
+		// 가비지 컬렉션을 하는 언어(Python)는 도달할 수 없는 객체를 누수로 남기지 않는다
+		memory.Heap.CollectsGarbage = language.Rule.GarbageCollected;
 		LoadGlobalVariables();
 	}
 

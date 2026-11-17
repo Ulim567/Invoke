@@ -1,0 +1,127 @@
+using System;
+using Mirror;
+using UnityEngine;
+
+/// <summary>
+/// 마나 구슬 하나 (heap 객체). 파이썬 마법사의 구슬 생성(py.orb_create)이 heap에 올리고, 구슬 스킬이 Free로 쓴다.
+/// 화면의 구슬 그림은 ManaOrbView가 개수(ManaOrbs.Count)만 보고 그린다. 이 객체는 값이 없는 표식이다.
+/// </summary>
+public class ManaOrb { }
+
+/// <summary>
+/// 쓸 수 있는 마나 구슬이 없어서 구슬이 필요한 스킬을 쓸 수 없다.
+/// </summary>
+public class NoManaOrbError : SkillError
+{
+	// HUD 알림에 그대로 보인다(#480). 일어난 현상만 짧게 적는다
+	public override string Message => "쓸 수 있는 마나 구슬이 없음";
+}
+
+/// <summary>
+/// 파이썬 마법사의 마나 구슬 개수와 자리를 관리하는 컴포넌트. 파이썬 플레이어 프리팹에 ProcessMemory와 함께 붙인다.
+/// <para>
+/// - 구슬 하나 = heap 객체(ManaOrb) 하나. 올리고 내리는 일은 스킬(PredefinedFunction.Malloc / Free)이 한다. 이 컴포넌트는 개수와 자리만 맡는다.<br/>
+/// - 최대 MaxCount(5)개. 구슬 생성 스킬이 CanCreate를 보고 만든다.<br/>
+/// - 개수는 heap에서 센다 (HeapStorage.CountObjects). 구슬 생성 스킬은 Malloc 뒤에 Refresh를 부르고, 해제·영역 비우기는 heap 이벤트로 받는다.<br/>
+/// - Python은 가비지 컬렉션(LanguageRuleData.GarbageCollected)이라 끊긴 구슬 생성의 구슬은 누수되지 않고 바로 사라진다.<br/>
+/// - 네트워크: 개수는 [SyncVar]로 클라이언트에 보낸다. 클라이언트의 Count는 서버가 보낸 값이고, Changed가 모든 화면에서 불린다 (구슬 그림, HUD).<br/>
+/// - 구슬 자리(OrbPosition)는 캐릭터 위치·방향으로 계산해서 서버(구슬을 쏘는 스킬)와 각 화면(ManaOrbView)이 같은 자리를 쓴다.
+/// </para>
+/// </summary>
+[RequireComponent(typeof(ProcessMemory))]
+public class ManaOrbs : NetworkBehaviour
+{
+	/// <summary>마나 구슬 최대 개수</summary>
+	public const int MaxCount = 5;
+
+	[Header("구슬 자리: 머리 위 반원")]
+	[Tooltip("반원 가운데가 머리 꼭대기(콜라이더 윗변)에서 올라간 높이 (유닛)")]
+	[SerializeField] float arcAboveHead = 0.35f;
+	[Tooltip("반원 반지름 (유닛)")]
+	[SerializeField, Min(0f)] float arcRadius = 0.9f;
+	[Tooltip("구슬 사이 각도 (도). 가운데 구슬은 바로 위, 양옆으로 이만큼씩 벌어진다")]
+	[SerializeField, Range(0f, 60f)] float arcAngleStep = 32f;
+
+	ProcessMemory memory;
+	Collider2D body;
+
+	// [서버 → 클라이언트] 구슬 개수. 서버만 바꾼다 (Refresh)
+	[SyncVar(hook = nameof(OnSyncedCount))] int syncedCount;
+	// 서버(Host, 네트워크 없는 테스트)가 마지막으로 알린 개수. 바뀔 때만 Changed를 내기 위함
+	int lastCount;
+
+	// 클라이언트로만 접속한 화면이면 true. 이때 heap은 비어 있어 서버가 보낸 개수를 쓴다
+	static bool IsClientOnly => NetworkClient.active && !NetworkServer.active;
+
+	/// <summary>지금 가진 마나 구슬 수. 클라이언트에서는 서버가 보낸 값이다.</summary>
+	public int Count => IsClientOnly || memory == null || memory.Heap == null ? syncedCount : memory.Heap.CountObjects<ManaOrb>();
+
+	/// <summary>더 만들 수 있으면 true (최대 5개).</summary>
+	public bool CanCreate => Count < MaxCount;
+
+	/// <summary>[표시] 구슬 개수가 바뀌었을 때 (바뀐 뒤 개수). 구슬 그림(ManaOrbView), HUD가 다시 그린다. 모든 화면에서 불린다.</summary>
+	public event Action<int> Changed;
+
+	void Awake()
+	{
+		memory = GetComponent<ProcessMemory>();
+		body = GetComponent<Collider2D>();
+	}
+
+	// heap은 ProcessMemory.Awake에서 만들어지므로 Start에서 구독한다 (컴포넌트 순서와 상관없게)
+	void Start()
+	{
+		if (IsClientOnly) return;
+		memory.Heap.ObjectFreed += OnHeapObjectGone;
+		memory.Heap.ObjectCleared += OnHeapObjectGone;
+		memory.Heap.ObjectLeaked += OnHeapObjectGone;
+	}
+
+	void OnDestroy()
+	{
+		if (memory == null || memory.Heap == null) return;
+		memory.Heap.ObjectFreed -= OnHeapObjectGone;
+		memory.Heap.ObjectCleared -= OnHeapObjectGone;
+		memory.Heap.ObjectLeaked -= OnHeapObjectGone;
+	}
+
+	void OnHeapObjectGone(object obj)
+	{
+		if (obj is ManaOrb) Refresh();
+	}
+
+	/// <summary>
+	/// [서버] heap의 구슬 수를 다시 세어 알린다. 구슬 생성 스킬이 Malloc에 성공한 뒤 부른다 (heap은 올릴 때 이벤트를 내지 않기 때문).<br/>
+	/// 해제·영역 비우기는 이 컴포넌트가 heap 이벤트를 받아 스스로 부른다. 개수가 그대로면 아무 일도 없다.
+	/// </summary>
+	public void Refresh()
+	{
+		if (IsClientOnly) return;
+		int count = memory.Heap.CountObjects<ManaOrb>();
+		if (count == lastCount) return;
+		lastCount = count;
+		if (NetworkServer.active) syncedCount = count;
+		Changed?.Invoke(count);
+	}
+
+	// [클라이언트] 서버가 보낸 개수가 바뀜. 서버·Host는 Refresh에서 이미 알렸다
+	void OnSyncedCount(int _, int count)
+	{
+		if (isServer) return;
+		Changed?.Invoke(count);
+	}
+
+	/// <summary>
+	/// index번째 구슬의 월드 자리 (0부터, 먼저 만든 구슬이 0). count는 지금 구슬 수.<br/>
+	/// 머리 위 반원에 고르게 놓는다. 서버의 구슬 스킬(쏘는 자리)과 각 화면의 ManaOrbView(그림 자리)가 같이 쓴다.
+	/// </summary>
+	public Vector2 OrbPosition(int index, int count)
+	{
+		Bounds b = body != null ? body.bounds : new Bounds(transform.position + Vector3.up, Vector3.one * 2f);
+		Vector2 center = new Vector2(b.center.x, b.max.y + arcAboveHead - arcRadius);
+		// 가운데가 90도(바로 위). 구슬이 늘면 양옆으로 벌어진다
+		float angle = 90f + (index - (Mathf.Max(1, count) - 1) * 0.5f) * arcAngleStep;
+		float rad = angle * Mathf.Deg2Rad;
+		return center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * arcRadius;
+	}
+}

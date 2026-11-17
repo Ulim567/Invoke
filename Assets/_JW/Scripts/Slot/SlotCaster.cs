@@ -288,7 +288,7 @@ public class SlotCaster : NetworkBehaviour
 			int max = MaxMarkCount();
 			if (marked.Count >= max)
 			{
-				Debug.Log($"[SlotCaster] 더 찍을 수 없음 (최대 {max}명 = 쓸 수 있는 소환검 개수)");
+				Debug.Log($"[SlotCaster] 더 찍을 수 없음 (최대 {max}명 = 쓸 수 있는 소환검·마나 구슬 개수)");
 				return;
 			}
 			marked.Add(target);
@@ -488,10 +488,14 @@ public class SlotCaster : NetworkBehaviour
 
 	void NotifyTargetChanged() => TargetChanged?.Invoke(CurrentTarget);
 
-	// 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수
+	// 찍을 수 있는 최대 인원 = 쓸 수 있는 소환검 개수. 파이썬 마법사의 스킬(py.*)은 마나 구슬 개수
 	// SummonedSwords(#99)의 사용 가능한 개수를 읽는다. 없으면 TempSwordState(이우림, 테스트용), 그것도 없으면 제한 없음
 	int MaxMarkCount()
 	{
+		if (TryGetSlotFunction(selectingSlot, out FunctionBlock function) && function is PredefinedFunction predefined
+			&& predefined.Id.StartsWith("py.") && TryGetComponent(out ManaOrbs orbs))
+			return orbs.Count;
+
 		SummonedSwords summoned = GetComponent<SummonedSwords>();
 		if (summoned != null) return summoned.ReadyCount;
 		TempSwordState temp = GetComponent<TempSwordState>();

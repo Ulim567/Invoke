@@ -27,6 +27,9 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	[Tooltip("에디터에서만 동작. 켜면 Host·Client로 시작할 때 로그인과 캐릭터 고르기를 건너뛰고, DB를 쓰지 않는 임시 계정의 C 캐릭터로 바로 들어간다. 로그인을 테스트할 때만 끈다.")]
 	[SerializeField] bool skipLoginInEditor = true;
 
+	[Tooltip("에디터에서만 동작. 로그인을 건너뛸 때 들어갈 임시 캐릭터의 언어 (CharacterLanguages). 파이썬 마법사를 테스트하려면 Python. 모르는 언어면 C")]
+	[SerializeField] string skipLoginLanguage = CharacterLanguages.C;
+
 	/// <summary>서버를 이 인자와 함께 실행하면 테스트용 진행도 넣기(ProgressTestData)를 받는다. 예: ./Invoke.x86_64 -allowTestProgressData</summary>
 	public const string AllowTestProgressDataArg = "-allowTestProgressData";
 
@@ -113,7 +116,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 #if UNITY_EDITOR
 		if (request.skipLogin)
 		{
-			accountServer.AcceptTemporary(conn);
+			accountServer.AcceptTemporary(conn, skipLoginLanguage);
 			ServerAccept(conn);
 			return;
 		}
@@ -289,7 +292,8 @@ public class InvokeAuthenticator : NetworkAuthenticator
 
 		ClientAccept();
 		// 로그인 건너뛰기는 캐릭터 고르기도 건너뛴다
-		if (skippingLogin) RequestEnter(CharacterLanguages.C);
+		// 임시 계정의 캐릭터 언어는 서버가 정해 보낸다 (에디터 설정 skipLoginLanguage). 없으면 C
+		if (skippingLogin) RequestEnter(result.characters != null && result.characters.Length > 0 ? result.characters[0].language : CharacterLanguages.C);
 	}
 
 	void OnCreateCharacterResult(CreateCharacterResultMessage result)

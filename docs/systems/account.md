@@ -16,7 +16,7 @@
   - 진행도 저장: [progress-store.md](progress-store.md). 캐릭터 key(`AccountSession.CharacterKey`) 기준
   - 닉네임 머리 위 표시, 캐릭터 바꾸기, 비밀번호 찾기·변경, 계정 삭제
   - 조작한 요청 막기: 보안 작업 때
-  - 캐릭터 언어에 따른 플레이어 프리팹 선택: Java 캐릭터가 생길 때. 지금은 모든 캐릭터가 `Base` NetworkManager의 Player Prefab
+  - 플레이어 생성: 언어에 맞는 프리팹 고르기와 생성은 `InvokeNetworkManager` (「캐릭터 언어별 플레이어 프리팹」)
   - 꾸민 화면(Canvas): 임혜원 이슈 (「맞춘 결과」)
 
 ## 동작 규칙
@@ -71,11 +71,20 @@
 
 ### 로그인 건너뛰기 (에디터)
 - `InvokeAuthenticator`의 `Skip Login In Editor` (기본 켜짐)
-- 동작: Host 버튼으로 시작하면 로그인·캐릭터 고르기 없이 임시 계정의 C 캐릭터로 들어감
+- 동작: Host 버튼으로 시작하면 로그인·캐릭터 고르기 없이 임시 계정의 캐릭터로 들어감
+  - 캐릭터 언어: `InvokeAuthenticator`의 `Skip Login Language` (기본 `C`, #486). 서버가 임시 캐릭터를 이 언어로 만들어 보내고 클라이언트가 그 언어로 들어감. 모르는 언어면 C
+  - 파이썬 마법사 테스트: Play 중에만 `Python`으로 바꿈 (`Python`인 채로 `Base`를 저장하면 모든 에디터 테스트가 마법사로 들어감)
   - 임시 계정: DB 안 씀, 닉네임 `Editor{connId}`, `AccountSession.IsTemporary` true
   - 로그인·회원가입 버튼으로 접속하면 건너뛰지 않음
 - 빌드: 무시 (에디터 코드만)
 - 로그인 테스트: Play 중에만 끔 (끈 채로 `Base`를 저장하면 Host만으로 들어갈 수 없음)
+
+### 캐릭터 언어별 플레이어 프리팹 (#486)
+- 서버(`InvokeNetworkManager`)가 로비에 플레이어를 만들 때 `AccountSession.Language`로 프리팹을 고름
+- `Base` NetworkManager의 `Character Prefabs` 목록: 언어 이름 → 프리팹. 지금은 `Python` → `Assets/_JW/Python/Player_Python.prefab`
+- 목록에 없는 언어(C 등): 원래 Player Prefab(공용 `Player.prefab`)
+- 목록에 넣은 프리팹은 `Registered Spawnable Prefabs`에도 넣어야 클라이언트가 만들 수 있음
+- 이 컴퓨터 캐릭터의 언어를 화면에서 알 때: 플레이어의 `PlayerCharacter`(박진우, [python-skills.md](python-skills.md))
 
 ### 전송 암호화
 - 구성: `Base` NetworkManager의 Transport = `EncryptionTransport` (Inner = `KcpTransport`, 포트 7777), `EncryptionKeySetup`이 설정
@@ -115,7 +124,7 @@
   - 언어 카드: `Languages` 순서 (C, Java, Python). 카드마다 상태 (`CharacterState`)
     - 보유 중 (`Owned`): 캐릭터를 만들어 둔 언어
     - 미보유 (`NotOwned`): 만들 수 있지만 아직 만들지 않은 언어
-    - 준비 중 (`Locked`): 서버가 만들 수 없는 언어 (`CharacterLanguages.Shown`에만 있고 `All`에 없음). 지금은 Java, Python. 카드 누를 수 없음
+    - 준비 중 (`Locked`): 서버가 만들 수 없는 언어 (`CharacterLanguages.Shown`에만 있고 `All`에 없음). 지금은 Java. 카드 누를 수 없음 (Python은 #486부터 만들 수 있음)
   - 선택 (`SelectedLanguage`): 언제나 하나. 카드를 누르면 `Select`. 준비 중인 언어는 선택 불가
     - 로그인했을 때: 화면 순서에서 보유한 첫 캐릭터, 없으면 C
     - 응답을 기다리는 동안: 선택 바꾸기 무시
@@ -213,7 +222,7 @@
 | `AccountFailure.ToMessage()` | - | 실패 이유의 한국어 문장 |
 | `AccountRules` | `LoginIdMinLength`(4), `LoginIdMaxLength`(16), `PasswordMinLength`(8), `PasswordMaxLength`(64), `NicknameMinLength`(2), `NicknameMaxLength`(10) | 입력칸 글자 수 제한에 사용 |
 | `AccountRules.CheckLoginId(string)`, `CheckPassword(string)`, `CheckNickname(string)` | 돌려주는 값: `AccountFailure` (통과하면 `None`) | 서버와 같은 규칙. 화면이 보내기 전에 먼저 검사할 때 사용 |
-| `CharacterLanguages` | `C`, `Java`, `Python`, `All`, `Shown`, `IsKnown(string)` | 언어 이름 상수. `All`: 서버가 만들 수 있는 언어 (지금은 C 하나). `Shown`: 캐릭터 화면에 보여 줄 언어 (C, Java, Python) |
+| `CharacterLanguages` | `C`, `Java`, `Python`, `All`, `Shown`, `IsKnown(string)` | 언어 이름 상수. `All`: 서버가 만들 수 있는 언어 (C, Python. #486). `Shown`: 캐릭터 화면에 보여 줄 언어 (C, Java, Python) |
 
 ### `AccountSession` (서버)
 
@@ -226,6 +235,7 @@
 | `IsTemporary` | `bool` | 에디터 로그인 건너뛰기의 임시 계정. DB에 없음 → 진행도 저장하지 않음 |
 | `IsKicked` | `bool` | 같은 계정이 다른 곳에서 로그인해 곧 끊길 연결. 플레이어는 이미 제거됨 |
 | `HasEntered` | `bool` | 들어가기 성공 여부 |
+| `Language` | `string` | 들어간 캐릭터의 언어(`CharacterLanguages`). 들어가기 전에는 `null`. 임시 계정은 `Skip Login Language`. 서버가 이 값으로 플레이어 프리팹을 고름 (#486) |
 | `CharacterKey` | `string` | 들어간 캐릭터의 key. 들어가기 전에는 `null`. 진행도 저장의 기준 ([progress-store.md](progress-store.md)) |
 | `LoadedProgress` | `CharacterProgressData` | 들어가기 때 DB에서 불러온 진행도. 플레이어를 만든 직후 `AccountServer.ApplyProgress`가 넣고 비움. 임시 계정은 `null` (#205) |
 | `Nickname` | `string` | 계정의 닉네임. 로그인할 때부터 있음 |

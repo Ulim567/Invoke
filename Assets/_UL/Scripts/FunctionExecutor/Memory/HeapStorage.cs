@@ -79,6 +79,12 @@ public class HeapStorage
 	/// </summary>
 	public event Action<object> ObjectFreed;
 
+	/// <summary>
+	/// true면 도달할 수 없게 된 객체를 누수로 남기지 않고 바로 해제한다(가비지 컬렉션). 해제된 객체는 Free와 같이 ObjectFreed로 알린다.<br/>
+	/// 캐릭터 언어의 언어 규칙(LanguageRuleData.GarbageCollected)을 실행기가 넣는다. Python 캐릭터가 켠다. 처음 값은 false(C).
+	/// </summary>
+	public bool CollectsGarbage { get; internal set; }
+
 	// ProcessMemory만 만든다
 	internal HeapStorage(ProcessMemory memory)
 	{
@@ -260,11 +266,18 @@ public class HeapStorage
 	internal void SetRunningLocalPointers(Func<IEnumerable<int>> provider) => runningLocalPointers = provider;
 
 	// 누수 판단. 루트 집합의 어디에도 포인터가 없는 객체를 누수로 표시한다(실제 C의 누수 검사, Java GC와 같은 도달 가능성 검사)
+	// CollectsGarbage가 켜진 언어(Python)는 표시하는 대신 바로 해제한다
 	void MarkUnreachableAsLeaked()
 	{
 		HashSet<int> reachable = new HashSet<int>(globalPointers);
 		reachable.UnionWith(GetTaskLocalPointers());
 		reachable.UnionWith(GetPlayerGlobalPointers());
+
+		if (CollectsGarbage)
+		{
+			CollectUnreachable(reachable);
+			return;
+		}
 
 		List<object> leakedObjects = null;
 		foreach (KeyValuePair<int, HeapEntry> pair in entries)
@@ -281,6 +294,30 @@ public class HeapStorage
 		if (leakedObjects == null) return;
 		foreach (object obj in leakedObjects)
 			ObjectLeaked?.Invoke(obj);
+	}
+
+	// 가비지 컬렉션: 도달할 수 없는 객체를 힙에서 지우고 칸을 돌려준다. 누수 표시는 남기지 않는다
+	void CollectUnreachable(HashSet<int> reachable)
+	{
+		List<int> unreachable = null;
+		foreach (KeyValuePair<int, HeapEntry> pair in entries)
+		{
+			if (pair.Value.IsLeaked || reachable.Contains(pair.Key)) continue;
+			(unreachable ??= new List<int>()).Add(pair.Key);
+		}
+		if (unreachable == null) return;
+
+		List<object> freedObjects = new List<object>(unreachable.Count);
+		foreach (int pointer in unreachable)
+		{
+			HeapEntry entry = entries[pointer];
+			entries.Remove(pointer);
+			memory.ReleaseHeap(entry.Size);
+			freedObjects.Add(entry.Obj);
+		}
+		// 이벤트는 다 지운 뒤에 알린다 (Free, Clear와 같은 이유)
+		foreach (object obj in freedObjects)
+			ObjectFreed?.Invoke(obj);
 	}
 
 	/// <summary>

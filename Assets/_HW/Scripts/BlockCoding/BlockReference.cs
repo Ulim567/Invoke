@@ -80,7 +80,7 @@ public class BlockReferenceEntry
 public static class BlockReference
 {
 	// 블록 목록에 나오는 사전 정의 함수의 고정 ID 앞부분 (BlockEditor.PaletteFunctionPrefixes와 같다)
-	static readonly string[] FunctionPrefixes = { "c.", "common.", "input.", "game." };
+	static readonly string[] FunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
 
@@ -385,6 +385,8 @@ public static class BlockReference
 		{
 			string id = function?.Id;
 			if (id == null || !FunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+			// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
+			if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 			list.Add(FunctionEntry(function));
 		}
 		return list;

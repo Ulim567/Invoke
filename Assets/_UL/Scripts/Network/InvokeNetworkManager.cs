@@ -38,6 +38,29 @@ public class InvokeNetworkManager : NetworkManager
 	// PlaceOnGround의 레이캐스트 결과. 가장 가까운 땅 하나만 쓴다
 	static readonly RaycastHit2D[] groundHits = new RaycastHit2D[1];
 
+	/// <summary>캐릭터 언어 하나의 플레이어 프리팹.</summary>
+	[Serializable]
+	struct CharacterPrefab
+	{
+		[Tooltip("캐릭터 언어 이름 (CharacterLanguages). 예: Python")]
+		public string language;
+		[Tooltip("그 언어 캐릭터의 플레이어 프리팹. Registered Spawnable Prefabs에도 넣어야 한다")]
+		public GameObject prefab;
+	}
+
+	[Header("캐릭터 언어별 플레이어 프리팹")]
+	[Tooltip("여기에 없는 언어는 Player Prefab(C 캐릭터)을 쓴다. 넣은 프리팹은 Registered Spawnable Prefabs에도 넣는다")]
+	[SerializeField] List<CharacterPrefab> characterPrefabs = new List<CharacterPrefab>();
+
+	// 그 연결이 들어간 캐릭터 언어의 플레이어 프리팹. 목록에 없으면 Player Prefab
+	GameObject PlayerPrefabFor(NetworkConnectionToClient conn)
+	{
+		string language = conn.authenticationData is AccountSession session ? session.Language : null;
+		foreach (CharacterPrefab entry in characterPrefabs)
+			if (entry.prefab != null && entry.language == language) return entry.prefab;
+		return playerPrefab;
+	}
+
 	/// <summary>
 	/// [서버] SpawnPlayer가 플레이어 오브젝트를 만든 직후, 연결에 붙이기(AddPlayerForConnection) 전에 불린다 (연결, 플레이어).<br/>
 	/// InvokeAuthenticator가 받아서 DB에서 불러온 진행도를 넣는다.
@@ -195,11 +218,13 @@ public class InvokeNetworkManager : NetworkManager
 
 		// 플레이어를 만드는 곳은 여기 하나다 (코드 작성 규칙 3)
 		Scene lobby = placeScenes[PlaceScenes.Lobby];
-		GameObject player = Instantiate(playerPrefab, FindStartPosition(lobby), Quaternion.identity);
+		// 캐릭터 언어에 맞는 프리팹으로 만든다 (C는 Player Prefab, Python은 Character Prefabs에 넣은 프리팹)
+		GameObject prefab = PlayerPrefabFor(conn);
+		GameObject player = Instantiate(prefab, FindStartPosition(lobby), Quaternion.identity);
 		// 플레이어 콜라이더의 크기를 알아야 땅 위의 높이를 정할 수 있으므로, 만든 뒤에 땅 위로 옮긴다
 		player.transform.position = PlaceOnGround(lobby, player.transform.position, player);
 		// 여러 플레이어를 Hierarchy에서 구분하기 위해 연결 번호를 붙인다
-		player.name = $"{playerPrefab.name} [connId={conn.connectionId}]";
+		player.name = $"{prefab.name} [connId={conn.connectionId}]";
 		// 부활할 때 부활 목적지로 옮긴다 (#310). 플레이어가 없어지면 이벤트도 함께 사라지므로 떼지 않는다
 		if (player.TryGetComponent(out PlayerHealth health)) health.RespawnDue += () => OnPlayerRespawnDue(conn, player, health);
 

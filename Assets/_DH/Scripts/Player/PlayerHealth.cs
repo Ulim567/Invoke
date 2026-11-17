@@ -210,6 +210,8 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	public void TakeDamage(int damage)
 	{
 		if (damage <= 0 || IsDead || IsInvincible) return;
+		// 보호막(마나 구슬 보호막 등)이 이 피해를 막으면 체력·경직·무적 모두 그대로다
+		if (IsBlocked(damage)) return;
 
 		float now = Time.time;
 		Hp = Mathf.Max(Hp - damage, 0);
@@ -223,6 +225,21 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 		// 죽는 공격이면 피격 모션·깜빡임 대신 사망 모션만 재생한다
 		if (Hp == 0) Die();
 		else PlayHitEffect(damage);
+	}
+
+	/// <summary>
+	/// [로직] 피해를 받기 직전에 묻는다 (들어올 피해량). 받은 쪽 하나라도 true를 돌려주면 그 피해를 받지 않는다.<br/>
+	/// 보호막(파이썬 마법사의 구슬 보호막, OrbShield)이 받아서 막는다. 피해 판정을 하는 서버(Host, 네트워크 없는 테스트)에서만 불린다.
+	/// </summary>
+	public event Func<int, bool> DamageBlocking;
+
+	// 받은 쪽을 차례로 물어, 처음 막겠다고 한 곳에서 멈춘다 (보호막 하나만 쓰이게)
+	bool IsBlocked(int damage)
+	{
+		if (DamageBlocking == null) return false;
+		foreach (Delegate ask in DamageBlocking.GetInvocationList())
+			if (((Func<int, bool>)ask)(damage)) return true;
+		return false;
 	}
 
 	/// <summary>

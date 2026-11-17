@@ -11,6 +11,7 @@ public enum StatusType
 	Stun,  // 기절: 행동 불가
 	Blind, // 실명: 이 대상의 공격이 빗나감
 	Slow,  // 이속 감소: 이동 속도 감소
+	Poison, // 중독: 도트 데미지. 다시 걸면 겹쳐서(최대 3번) 더 아프다 (파이썬 마법사). 저장·전송 값이 바뀌지 않게 새 종류는 맨 끝에 더한다
 }
 
 /// <summary>
@@ -27,6 +28,12 @@ public static class StatusDefaults
 	public const float SlowDuration = 3f;
 	/// <summary>이속 감소 중 이동 속도 배율 (0.5 = 50% 감소)</summary>
 	public const float SlowMultiplier = 0.5f;
+	public const float PoisonDuration = 6f;
+	public const float PoisonInterval = 1f;
+	/// <summary>중독 1겹의 틱 데미지. 겹친 수만큼 곱한다</summary>
+	public const int PoisonDamage = 3;
+	/// <summary>중독이 겹치는 최대 수</summary>
+	public const int PoisonMaxStacks = 3;
 
 	public static float DurationOf(StatusType type) => type switch
 	{
@@ -35,6 +42,7 @@ public static class StatusDefaults
 		StatusType.Stun => StunDuration,
 		StatusType.Blind => BlindDuration,
 		StatusType.Slow => SlowDuration,
+		StatusType.Poison => PoisonDuration,
 		_ => 0f,
 	};
 }
@@ -45,6 +53,7 @@ public static class StatusDefaults
 /// - 상태는 이 컴포넌트만 바꾼다 (코드 작성 규칙 2). 다른 스크립트는 Apply, Clear를 부르고 Has, IsStunned 등을 읽는다.<br/>
 /// - 같은 상태를 다시 걸면 지속 시간만 새로 시작한다 (겹치지 않음).<br/>
 /// - 출혈: 걸려 있는 동안 BleedInterval마다 BleedDamage를 DamageCalculator를 거쳐 같은 오브젝트의 IDamageable.TakeDamage로 준다.<br/>
+/// - 중독: 걸려 있는 동안 PoisonInterval마다 PoisonDamage × 겹친 수를 준다. 다시 걸면 지속 시간이 새로 시작하고 한 겹 더 쌓인다 (최대 PoisonMaxStacks). 풀리면 겹친 수는 0이 된다.<br/>
 /// - 표식: DamageTarget.FromMonster가 읽어서 DamageCalculator가 데미지 +100%를 자동으로 붙인다.<br/>
 /// - 기절·이속 감소·실명: 값만 공개한다. 몬스터 AI·공격이 읽어서 반응한다 (김도훈 「몬스터가 상태 이상에 반응하고 죽으면 드롭하기」).<br/>
 /// - 대상이 죽으면 모든 상태를 지운다.<br/>
@@ -63,6 +72,11 @@ public class StatusEffects : NetworkBehaviour
 	float bleedBonusRate;
 	// [서버] 지금 출혈을 건 플레이어 (#484). 출혈 데미지를 이 플레이어의 피해로 넘겨, 몬스터가 처치 보상을 정할 때 센다. 출혈이 풀리면 null로
 	GameObject bleedSource;
+	float nextPoisonTime;
+	// 지금 중독이 겹친 수 (서버). 중독이 풀리면 0으로
+	int poisonStacks;
+	// [서버] 지금 중독을 건 플레이어. 출혈의 bleedSource와 같은 쓰임 (#484)
+	GameObject poisonSource;
 
 	IDamageable damageable;
 	Monster monster;
@@ -75,6 +89,12 @@ public class StatusEffects : NetworkBehaviour
 
 	/// <summary>[로직] 출혈 데미지를 줬을 때 (준 데미지).</summary>
 	public event Action<int> BleedTicked;
+
+	/// <summary>[로직] 중독 데미지를 줬을 때 (준 데미지).</summary>
+	public event Action<int> PoisonTicked;
+
+	/// <summary>지금 중독이 겹친 수 (0 = 중독 아님). 서버(Host)에서만 맞는 값이다.</summary>
+	public int PoisonStacks => Has(StatusType.Poison) ? poisonStacks : 0;
 
 	/// <summary>기절 중이면 true. 몬스터 AI가 이 동안 멈춘다.</summary>
 	public bool IsStunned => Has(StatusType.Stun);
@@ -146,8 +166,8 @@ public class StatusEffects : NetworkBehaviour
 	public void Apply(StatusType type) => Apply(type, StatusDefaults.DurationOf(type));
 
 	/// <summary>
-	/// 상태를 기본 지속 시간으로 걸고, 건 플레이어(source)를 기억한다 (#484). 지금은 출혈만 source를 쓴다:
-	/// 출혈 데미지를 source의 피해로 넘겨 몬스터의 처치 보상 순위에 센다. 다시 걸면 마지막으로 건 플레이어로 바뀐다.
+	/// 상태를 기본 지속 시간으로 걸고, 건 플레이어(source)를 기억한다 (#484). 출혈과 중독이 source를 쓴다:
+	/// 도트 데미지를 source의 피해로 넘겨 몬스터의 처치 보상 순위에 센다. 다시 걸면 마지막으로 건 플레이어로 바뀐다.
 	/// </summary>
 	public void Apply(StatusType type, GameObject source) => Apply(type, StatusDefaults.DurationOf(type), source);
 
@@ -164,6 +184,14 @@ public class StatusEffects : NetworkBehaviour
 		bool wasBleeding = Has(StatusType.Bleed);
 		// 건 사람을 모르고 다시 걸면 기억한 사람을 그대로 둔다 (출혈 시간을 늘린 사람이 없으므로)
 		if (type == StatusType.Bleed && (source != null || !wasBleeding)) bleedSource = source;
+		if (type == StatusType.Poison)
+		{
+			bool wasPoisoned = Has(StatusType.Poison);
+			if (source != null || !wasPoisoned) poisonSource = source;
+			// 새로 걸면 1겹부터, 걸린 채 다시 걸면 한 겹 더. 새로 걸면 한 간격 뒤에 첫 데미지
+			poisonStacks = wasPoisoned ? Mathf.Min(poisonStacks + 1, StatusDefaults.PoisonMaxStacks) : 1;
+			if (!wasPoisoned) nextPoisonTime = Time.time + StatusDefaults.PoisonInterval;
+		}
 		endTimes[type] = Time.time + duration;
 		if (NetworkServer.active) syncedEnds[type] = NetworkTime.time + duration;
 		// 출혈을 새로 걸면 한 간격 뒤에 첫 데미지. 이미 출혈 중이면 데미지 간격은 그대로 둔다
@@ -208,6 +236,11 @@ public class StatusEffects : NetworkBehaviour
 			bleedBonusRate = 0f;
 			bleedSource = null;
 		}
+		if (type == StatusType.Poison)
+		{
+			poisonStacks = 0;
+			poisonSource = null;
+		}
 		if (endTimes.Remove(type))
 		{
 			if (NetworkServer.active) syncedEnds.Remove(type);
@@ -224,7 +257,7 @@ public class StatusEffects : NetworkBehaviour
 
 	/// <summary>
 	/// target(또는 부모)에 붙은 StatusEffects로 상태를 건다. 스킬이 맞은 대상에 쓴다.
-	/// StatusEffects가 없는 대상이면 false. 출혈을 거는 스킬은 source에 시전자를 넘긴다 (#484, Apply(type, source)).
+	/// StatusEffects가 없는 대상이면 false. 출혈·중독을 거는 스킬은 source에 시전자를 넘긴다 (#484, Apply(type, source)).
 	/// </summary>
 	public static bool TryApply(GameObject target, StatusType type, GameObject source = null)
 	{
@@ -250,6 +283,16 @@ public class StatusEffects : NetworkBehaviour
 			}
 		}
 
+		// 중독 데미지도 출혈과 같은 방식으로 끝나는 시각 전까지만 준다
+		if (endTimes.TryGetValue(StatusType.Poison, out float poisonEnd))
+		{
+			while (nextPoisonTime <= poisonEnd && Time.time >= nextPoisonTime)
+			{
+				nextPoisonTime += StatusDefaults.PoisonInterval;
+				PoisonTick();
+			}
+		}
+
 		// 시간이 다 된 상태를 푼다
 		List<StatusType> expired = null;
 		foreach (KeyValuePair<StatusType, float> pair in endTimes)
@@ -268,5 +311,15 @@ public class StatusEffects : NetworkBehaviour
 		int damage = DamageCalculator.Calculate(request).Damage;
 		damageable.TakeDamage(damage, bleedSource);
 		BleedTicked?.Invoke(damage);
+	}
+
+	// 중독도 스킬 공격이 아니라서 표식 2배와 처형을 받지 않는다. 겹친 수만큼 아프다
+	void PoisonTick()
+	{
+		if (damageable == null || (monster != null && monster.IsDead)) return;
+		DamageRequest request = DamageRequest.Flat(StatusDefaults.PoisonDamage * Mathf.Max(1, poisonStacks));
+		int damage = DamageCalculator.Calculate(request).Damage;
+		damageable.TakeDamage(damage, poisonSource);
+		PoisonTicked?.Invoke(damage);
 	}
 }

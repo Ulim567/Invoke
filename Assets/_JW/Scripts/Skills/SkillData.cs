@@ -9,6 +9,11 @@ public enum SkillFamily
 	Slash,    // 휘두르기
 	Summon,   // 소환
 	Movement, // 이동
+	// 파이썬 마법사 (docs/systems/python-skills.md). 저장 값이 바뀌지 않게 새 계열은 맨 끝에 더한다
+	Element,  // 원소 (매직 미사일, 파이어볼, 얼음 창, 체인 라이트닝)
+	Zone,     // 범위 (메테오, 블리자드, 독 안개)
+	Orb,      // 구슬 (구슬 생성, 발사, 난사, 폭발, 보호막)
+	Curse,    // 보조 (저주, 뱀 속박, 섬광)
 }
 
 /// <summary>
@@ -53,7 +58,7 @@ public class SkillData
 	[SerializeField, Min(0)] int localVariableCount;
 	[Tooltip("heap 사용량 (칸). 검기, 패링, 이동 계열이 Malloc할 때 쓴다. 검 소환은 이 값 대신 Sword struct 크기(PredefinedStructs)를 쓴다 (#220)")]
 	[SerializeField, Min(0)] int heapSize;
-	[Tooltip("범위 스킬(Area)의 반경 (유닛). 캐릭터 주변 이 거리 안의 몬스터가 대상이 된다. 다른 방식은 쓰지 않는다")]
+	[Tooltip("범위 스킬(Area)의 반경 (유닛). 캐릭터 주변 이 거리 안의 몬스터가 대상이 된다. 파이썬 마법사의 폭발·범위 마법(파이어볼, 메테오, 블리자드, 독 안개)은 대상 자리 둘레의 반경으로 쓴다")]
 	[SerializeField, Min(0f)] float areaRadius = 4f;
 
 	[Header("필요 조건")]

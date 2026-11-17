@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>
 /// [표시] 상태 이상 아이콘 하나 (StatusIcon 프리팹). StatusIconView가 만들고 없앤다.
 /// Sprites는 StatusType 순서(출혈, 표식, 기절, 실명, 이속 감소)로 넣는다. 그림은 임혜원 #114 (_HW/Effects/StatusIcons).
+/// 여기 없는 상태(중독)는 Assets/_JW/Resources/StatusIcons/{상태 이름}.png를 쓴다.
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer))]
 public class StatusIcon : MonoBehaviour
@@ -19,6 +20,9 @@ public class StatusIcon : MonoBehaviour
 		Type = type;
 		int index = (int)type;
 		SpriteRenderer sprite = GetComponent<SpriteRenderer>();
-		sprite.sprite = index < sprites.Length ? sprites[index] : null;
+		Sprite icon = index < sprites.Length ? sprites[index] : null;
+		// 프리팹에 넣지 않은 새 상태(중독 등)는 Resources/StatusIcons/{상태 이름} 그림을 쓴다
+		if (icon == null) icon = Resources.Load<Sprite>($"StatusIcons/{type}");
+		sprite.sprite = icon;
 	}
 }

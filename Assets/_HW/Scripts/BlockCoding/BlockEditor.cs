@@ -228,7 +228,7 @@ public class BlockEditor : MonoBehaviour
 
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
-	static readonly string[] PaletteFunctionPrefixes = { "c.", "common.", "input.", "game." };
+	static readonly string[] PaletteFunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static SlotData Int(string value) => SlotData.FromLiteral(new VariableType(VariableTypeKind.Int), value);
 
@@ -1467,6 +1467,8 @@ public class BlockEditor : MonoBehaviour
 					if (function == null) continue;
 					string id = function.Id;
 					if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+					// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
+					if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 					// 스킬 트리에 노드가 있는 스킬은 해금한 것만 (노드가 없는 input.* 등은 늘 보임)
 					if (unlockedForPalette != null && SkillTree.TryGet(id, out _) && !unlockedForPalette.Contains(id)) continue;
 					int parameterCount = function.Parameters?.Count ?? 0;

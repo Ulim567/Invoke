@@ -325,3 +325,224 @@ MonoBehaviour:
     needsSummonedSword: 1
     usableUnarmed: 1
     note: "\uC18C\uD658\uAC80\uC744 \uD0C0\uACE0 \uC774\uB3D9. \uC4F8 \uC218 \uC788\uB294 \uC18C\uD658\uAC80\uC774 \uC5C6\uC73C\uBA74 \uBD88\uAC00"
+  - id: py.magic_missile
+    displayName: "\uB9E4\uC9C1 \uBBF8\uC0AC\uC77C"
+    family: 5
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 30
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uB9C8\uBC95\uD0C4\uC744 \uC3F4 \uCC98\uC74C \uB2FF\uC740 \uC801 \uD55C \uBA85 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.fireball
+    displayName: "\uD30C\uC774\uC5B4\uBCFC"
+    family: 5
+    targeting: 0
+    damageMultiplier: 1.2
+    tickCount: 30
+    cooldownTicks: 50
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 2
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uCC98\uC74C \uB2FF\uC740 \uC801 + \uBC18\uACBD \uC548 \uB2E4\uB978 \uC801\uC5D0\uAC8C \uC808\uBC18 (\uD3ED\uBC1C) (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.ice_spear
+    displayName: "\uC5BC\uC74C \uCC3D"
+    family: 5
+    targeting: 2
+    damageMultiplier: 0.8
+    tickCount: 30
+    cooldownTicks: 50
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uAD00\uD1B5, \uB9DE\uC740 \uC801 \uC774\uC18D \uAC10\uC18C (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.chain_lightning
+    displayName: "\uCCB4\uC778 \uB77C\uC774\uD2B8\uB2DD"
+    family: 5
+    targeting: 0
+    damageMultiplier: 1
+    tickCount: 30
+    cooldownTicks: 100
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uBC14\uB85C \uB2FF\uC74C, \uAC00\uAE4C\uC6B4 \uC801\uC73C\uB85C 2\uBC88 \uD290 (0.6\uBC30) (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.meteor
+    displayName: "\uBA54\uD14C\uC624"
+    family: 6
+    targeting: 0
+    damageMultiplier: 2
+    tickCount: 40
+    cooldownTicks: 150
+    localVariableCount: 0
+    heapSize: 2
+    areaRadius: 3
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uB300\uC0C1 \uC790\uB9AC\uC5D0 0.4\uCD08 \uB4A4 \uB5A8\uC5B4\uC838 \uBC18\uACBD \uC548 \uBAA8\uB450 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.blizzard
+    displayName: "\uBE14\uB9AC\uC790\uB4DC"
+    family: 6
+    targeting: 0
+    damageMultiplier: 0.4
+    tickCount: 50
+    cooldownTicks: 200
+    localVariableCount: 0
+    heapSize: 2
+    areaRadius: 3
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uB300\uC0C1 \uC790\uB9AC\uC5D0 \uAE54\uB9BC, 10\uD2F1\uB9C8\uB2E4 \uBC18\uACBD \uC548 \uBAA8\uB450 + \uC774\uC18D \uAC10\uC18C (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.venom_mist
+    displayName: "\uB3C5 \uC548\uAC1C"
+    family: 6
+    targeting: 0
+    damageMultiplier: 0.2
+    tickCount: 40
+    cooldownTicks: 200
+    localVariableCount: 0
+    heapSize: 2
+    areaRadius: 3
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uB300\uC0C1 \uC790\uB9AC\uC5D0 \uAE54\uB9BC, 10\uD2F1\uB9C8\uB2E4 \uC57D\uD55C \uB370\uBBF8\uC9C0 + \uC911\uB3C5 \uD55C \uACB9 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.orb_create
+    displayName: "\uAD6C\uC2AC \uC0DD\uC131"
+    family: 7
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 30
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 2
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uB9C8\uB098 \uAD6C\uC2AC \uD558\uB098\uB97C heap\uC5D0 \uB9CC\uB4E0\uB2E4 (heap \uD06C\uAE30 = \uAD6C\uC2AC \uD06C\uAE30, \uCD5C\uB300 5\uAC1C) (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.orb_shot
+    displayName: "\uAD6C\uC2AC \uBC1C\uC0AC"
+    family: 7
+    targeting: 0
+    damageMultiplier: 1.8
+    tickCount: 30
+    cooldownTicks: 0
+    localVariableCount: 0
+    heapSize: 0
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uAD6C\uC2AC 1\uAC1C\uB97C \uC368\uC11C \uC3DC\uB2E4. \uB9E4\uC9C1 \uBBF8\uC0AC\uC77C\uBCF4\uB2E4 \uC148 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.orb_barrage
+    displayName: "\uAD6C\uC2AC \uB09C\uC0AC"
+    family: 7
+    targeting: 3
+    damageMultiplier: 1.2
+    tickCount: 40
+    cooldownTicks: 100
+    localVariableCount: 0
+    heapSize: 0
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uAD6C\uC2AC\uC744 \uBAA8\uB450 \uC368\uC11C \uACE0\uB978 \uB300\uC0C1\uB4E4\uC5D0\uAC8C \uD558\uB098\uC529 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.orb_burst
+    displayName: "\uAD6C\uC2AC \uD3ED\uBC1C"
+    family: 7
+    targeting: 4
+    damageMultiplier: 1.2
+    tickCount: 30
+    cooldownTicks: 100
+    localVariableCount: 0
+    heapSize: 0
+    areaRadius: 4
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uAD6C\uC2AC\uC744 \uBAA8\uB450 \uD130\uB728\uB824 \uB458\uB808 \uBAA8\uB450. \uBC30\uC728 \xD7 \uAD6C\uC2AC \uC218 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.orb_shield
+    displayName: "\uAD6C\uC2AC \uBCF4\uD638\uB9C9"
+    family: 7
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 30
+    cooldownTicks: 100
+    localVariableCount: 0
+    heapSize: 0
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uAD6C\uC2AC 1\uAC1C\uB97C \uC368\uC11C 10\uCD08 \uB3D9\uC548 \uB2E4\uC74C \uD53C\uD574 \uD55C \uBC88\uC744 \uB9C9\uC74C (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.hex
+    displayName: "\uC800\uC8FC"
+    family: 8
+    targeting: 0
+    damageMultiplier: 0.3
+    tickCount: 30
+    cooldownTicks: 100
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uC57D\uD55C \uB370\uBBF8\uC9C0 + \uD45C\uC2DD (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.snake_bind
+    displayName: "\uBC40 \uC18D\uBC15"
+    family: 8
+    targeting: 0
+    damageMultiplier: 0.3
+    tickCount: 30
+    cooldownTicks: 150
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uC57D\uD55C \uB370\uBBF8\uC9C0 + \uAE30\uC808 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.flash
+    displayName: "\uC12C\uAD11"
+    family: 8
+    targeting: 4
+    damageMultiplier: 0
+    tickCount: 30
+    cooldownTicks: 200
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 5
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uB458\uB808 \uBAA8\uB450 \uC2E4\uBA85. \uB370\uBBF8\uC9C0 \uC5C6\uC74C (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.blink
+    displayName: "\uBE14\uB9C1\uD06C"
+    family: 4
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 15
+    cooldownTicks: 100
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "\uBC14\uB77C\uBCF4\uB294 \uCABD\uC73C\uB85C 5\uCE78 \uC21C\uAC04\uC774\uB3D9 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"
+  - id: py.levitate
+    displayName: "\uACF5\uC911 \uBD80\uC591"
+    family: 4
+    targeting: 6
+    damageMultiplier: 1
+    tickCount: 20
+    cooldownTicks: 300
+    localVariableCount: 0
+    heapSize: 1
+    areaRadius: 0
+    needsSummonedSword: 0
+    usableUnarmed: 1
+    note: "6\uCD08 \uB3D9\uC548 \uB5A0\uB2E4\uB2D8 (\uC218\uCE58 \uC804\uBD80 \uC784\uC2DC)"

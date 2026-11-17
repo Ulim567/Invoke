@@ -19,7 +19,7 @@
 
 ### 고정 ID
 - 형식: `분류.영어_이름` (소문자, 밑줄)
-  - 분류: `c`(C 스킬), `common`(세 캐릭터 공통 function), `input`(입력 function), `game`(게임 상태를 묻는 function, #474), `test`(테스트용 function)
+  - 분류: `c`(C 스킬), `py`(Python 스킬, 파이썬 마법사, #486), `common`(세 캐릭터 공통 function), `input`(입력 function), `game`(게임 상태를 묻는 function, #474), `test`(테스트용 function)
   - 예: `c.thrust`, `common.dash`, `input.get_position`, `test.function_a`
 - 한 번 정한 ID: 바꾸기, 지우기 금지 (예전에 저장한 함수 데이터가 그 function을 찾지 못함)
 - 같은 ID 두 개: 금지
@@ -229,6 +229,8 @@ protected override void OnEnd(FunctionContext context)
   - `Assets/_UL/Scripts/FunctionExecutor/Predefined/PointerErrors.cs`
     - `InvalidPointerError`: 쓸 수 없는 포인터. `Pointer`에 그 포인터 값. heap 함수(`Free`, `TryGetHeapObject`)가 냄. 플레이어의 `free` 블록은 이 에러 대신 실패 종류 `InvalidPointer`
     - 「해제한 포인터 사용 시 패널티」가 정해지면 이 클래스를 상속해 종류를 나눔
+  - `Assets/_JW/Scripts/Python/ManaOrbs.cs` (#486)
+    - `NoManaOrbError`: 쓸 수 있는 마나 구슬 없음. 구슬 스킬(발사, 난사, 폭발, 보호막)이 냄
 
 ### `InputFunction` (입력 함수 만들기, #131)
 

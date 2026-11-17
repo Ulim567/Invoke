@@ -1,3 +1,5 @@
+// ProgressStore가 서버·에디터에서만 컴파일되므로, 이 시험도 같은 조건에서만 컴파일한다 (Windows 클라이언트 빌드 실패 방지)
+#if UNITY_SERVER || UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -211,3 +213,4 @@ public class SaveAllTest : MonoBehaviour
 
 	static void Log(string message) => Debug.Log($"[SaveAllTest] {message}");
 }
+#endif

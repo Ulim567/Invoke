@@ -157,6 +157,13 @@ public class PlaceTravelClient : MonoBehaviour
 			inputBlocked = false;
 			return;
 		}
+		// 「캐릭터 선택」(#570)은 접속을 둔 채 플레이어만 없앤다. 다음 캐릭터가 들어올 때도 데이터를 다 받을 때까지 로딩 화면으로 막기 위해 처음 접속한 상태로 되돌린다
+		// 장소 이동은 플레이어를 없애지 않으므로 여기에 걸리지 않는다
+		if (dataReady && NetworkClient.localPlayer == null)
+		{
+			dataReady = false;
+			inputBlocked = false;
+		}
 		if (dataReady) return;
 
 		// 접속 직후: 서버가 로컬 플레이어를 만들고 그 플레이어의 함수 데이터를 다 받을 때까지 로딩 화면으로 게임을 막는다

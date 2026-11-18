@@ -7,7 +7,7 @@ using UnityEngine;
 /// <summary>
 /// 캐릭터의 진행도를 DB(SQLite)에 저장하고 읽는 곳. 서버에서만 쓴다.
 /// <para>
-/// - 진행도 테이블 7개(CharacterProgress, CharacterMaterials, CharacterItemCounts, CharacterUnlocks, CharacterSlots, CharacterFunctions, CharacterGlobals)만 다룬다. 계정·캐릭터는 AccountStore가 다룬다.<br/>
+/// - 진행도 테이블 8개(CharacterProgress, CharacterMaterials, CharacterItemCounts, CharacterUnlocks, CharacterSlots, CharacterFunctions, CharacterGlobals, CharacterShopOffers)만 다룬다. 계정·캐릭터는 AccountStore가 다룬다.<br/>
 /// - AccountStore가 연 SQLite 연결을 함께 쓴다. 그래야 캐릭터를 만들 때 Characters row와 진행도 처음 row를 한 트랜잭션으로 넣을 수 있다.<br/>
 /// - 부르는 곳은 AccountStore, AccountServer, PlayerProgress, FunctionExecutorNetwork뿐이다. 다른 시스템은 PlayerProgress를 부른다.
 /// </para>
@@ -109,6 +109,23 @@ public class ProgressStore
 		public string Json { get; set; }
 	}
 
+	// 상점 칸 (#534). 캐릭터마다 칸 8개(ShopRules.SlotCount). 구매·새로고침 때만 바뀐다 (상점을 열 때는 바뀌지 않음)
+	[Table("CharacterShopOffers")]
+	class ShopOfferRow
+	{
+		[PrimaryKey, AutoIncrement]
+		public int Id { get; set; }
+		[Indexed(Name = "CharacterShopSlot", Order = 1, Unique = true)]
+		public string CharacterKey { get; set; }
+		// 칸 번호 0~7 (0~3 문법 블록, 4~7 함수)
+		[Indexed(Name = "CharacterShopSlot", Order = 2, Unique = true)]
+		public int SlotIndex { get; set; }
+		// 항목 ID (가진 개수와 같은 ID). 빈 글자면 빈 칸
+		public string ItemId { get; set; }
+		// 가격 "재료ID:개수"를 쉼표로 이은 글자 (ShopPrices.ToText). 재료가 늘어도 column을 늘리지 않게 글자 하나로 둔다
+		public string Price { get; set; }
+	}
+
 	/// <summary>AccountStore가 DB를 열 때 만든다. 테이블이 없으면 만든다.</summary>
 	internal ProgressStore(SQLiteConnection db)
 	{
@@ -120,6 +137,7 @@ public class ProgressStore
 		db.CreateTable<SlotRow>();
 		db.CreateTable<FunctionRow>();
 		db.CreateTable<GlobalsRow>();
+		db.CreateTable<ShopOfferRow>();
 	}
 
 	/// <summary>
@@ -195,7 +213,7 @@ public class ProgressStore
 	}
 
 	/// <summary>
-	/// 캐릭터의 진행도를 테이블 7개에서 읽어 돌려준다. 「들어가기」 때 서버가 부른다.<br/>
+	/// 캐릭터의 진행도를 테이블 8개에서 읽어 돌려준다. 「들어가기」 때 서버가 부른다.<br/>
 	/// 진행도 row가 없는 캐릭터(이 기능 전에 만든 캐릭터)는 새 캐릭터와 같은 처음 row를 넣은 뒤 돌려준다.<br/>
 	/// 개수 row가 없는 캐릭터(#500 전에 만든 캐릭터, 개수를 비운 테스트 진행도)는 처음 개수를 넣은 뒤 돌려준다.<br/>
 	/// 그 언어의 처음 해금이 빠진 캐릭터(#523 전에 만든 파이썬 캐릭터)는 빠진 노드를 넣은 뒤 돌려준다.<br/>
@@ -251,11 +269,31 @@ public class ProgressStore
 		else if (globals != null)
 			Debug.LogWarning($"[ProgressStore] 전역 변수 JSON을 읽을 수 없어 전역 변수 없음으로 봅니다 (캐릭터 {characterKey})");
 
+		data.ShopOffers = LoadShopOffers(characterKey);
 		return data;
 	}
 
+	// 상점 칸 8개를 칸 번호 순서로 읽는다 (#534). 하나라도 빠졌으면 빈 목록을 돌려주고, 상점을 열 때 서버가 8칸을 새로 뽑는다
+	List<ShopOffer> LoadShopOffers(string characterKey)
+	{
+		var offers = new ShopOffer?[ShopRules.SlotCount];
+		foreach (ShopOfferRow row in db.Table<ShopOfferRow>().Where(r => r.CharacterKey == characterKey))
+		{
+			if (row.SlotIndex < 0 || row.SlotIndex >= offers.Length) continue;
+			offers[row.SlotIndex] = new ShopOffer(row.ItemId, ShopPrices.FromText(row.Price));
+		}
+		var list = new List<ShopOffer>();
+		foreach (ShopOffer? offer in offers)
+		{
+			if (offer == null) return new List<ShopOffer>();
+			list.Add(offer.Value);
+		}
+		return list;
+	}
+
 	/// <summary>
-	/// [테스트용] 캐릭터의 진행도 테이블 7개를 data로 모두 바꾼다. 한 트랜잭션이므로 예전 값이 섞여 남지 않는다.<br/>
+	/// [테스트용] 캐릭터의 진행도 테이블 8개를 data로 모두 바꾼다. 한 트랜잭션이므로 예전 값이 섞여 남지 않는다.<br/>
+	/// 상점 칸(#534)은 지우기만 한다. 다음에 상점을 열 때 서버가 바뀐 해금 목록으로 새로 뽑는다.<br/>
 	/// 개수(ItemCounts)를 비우면 처음 개수를 넣는다. 개수는 ItemCountRules.MaxCount에서 멈춘다.<br/>
 	/// 슬롯은 8개에 맞춘다. 슬롯의 함수가 data.Functions에 없으면 새 캐릭터와 같은 슬롯 함수를 만든다.<br/>
 	/// 페이지 함수(슬롯에 걸리지 않은 함수)는 ProgressRules.MaxPageFunctions개까지만 넣고, GUID가 없는 함수는 건너뛴다.
@@ -264,7 +302,7 @@ public class ProgressStore
 	{
 		db.RunInTransaction(() =>
 		{
-			foreach (string table in new[] { "CharacterProgress", "CharacterMaterials", "CharacterItemCounts", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals" })
+			foreach (string table in new[] { "CharacterProgress", "CharacterMaterials", "CharacterItemCounts", "CharacterUnlocks", "CharacterSlots", "CharacterFunctions", "CharacterGlobals", "CharacterShopOffers" })
 				db.Execute($"DELETE FROM {table} WHERE CharacterKey = ?", characterKey);
 
 			db.Insert(new ProgressRow { CharacterKey = characterKey, Level = Math.Max(1, data.Level), Exp = Math.Max(0, data.Exp), Money = Math.Max(0, data.Money) });
@@ -373,6 +411,31 @@ public class ProgressStore
 			if (itemCounts != null)
 			{
 				foreach (KeyValuePair<string, int> pair in itemCounts) WriteItemCount(characterKey, pair.Key, pair.Value);
+			}
+		});
+	}
+
+	/// <summary>
+	/// 상점의 구매·새로고침·처음 칸을 한 트랜잭션으로 쓴다 (#534). 재료만 빠지고 칸이 안 바뀌는 일이 없게 하기 위함이다.<br/>
+	/// materialCounts: 바뀐 재료의 새 개수(뺀 뒤의 개수). itemCounts: 바뀐 블록·함수의 새 가진 개수. offers: 칸 번호 → 새 상품.
+	/// 바뀌지 않는 것은 null.
+	/// </summary>
+	public void SaveShop(string characterKey, IReadOnlyDictionary<string, int> materialCounts, IReadOnlyDictionary<string, int> itemCounts,
+		IReadOnlyDictionary<int, ShopOffer> offers)
+	{
+		db.RunInTransaction(() =>
+		{
+			if (materialCounts != null)
+			{
+				foreach (KeyValuePair<string, int> pair in materialCounts) WriteMaterialCount(characterKey, pair.Key, pair.Value);
+			}
+			if (itemCounts != null)
+			{
+				foreach (KeyValuePair<string, int> pair in itemCounts) WriteItemCount(characterKey, pair.Key, pair.Value);
+			}
+			if (offers != null)
+			{
+				foreach (KeyValuePair<int, ShopOffer> pair in offers) WriteShopOffer(characterKey, pair.Key, pair.Value);
 			}
 		});
 	}
@@ -498,6 +561,22 @@ public class ProgressStore
 		else
 		{
 			row.Count = count;
+			db.Update(row);
+		}
+	}
+
+	// 상점 칸 하나를 넣거나 덮어쓴다. 트랜잭션 안에서 부른다
+	void WriteShopOffer(string characterKey, int slot, ShopOffer offer)
+	{
+		ShopOfferRow row = db.Table<ShopOfferRow>().Where(r => r.CharacterKey == characterKey && r.SlotIndex == slot).FirstOrDefault();
+		if (row == null)
+		{
+			db.Insert(new ShopOfferRow { CharacterKey = characterKey, SlotIndex = slot, ItemId = offer.ItemId ?? "", Price = offer.PriceText });
+		}
+		else
+		{
+			row.ItemId = offer.ItemId ?? "";
+			row.Price = offer.PriceText;
 			db.Update(row);
 		}
 	}

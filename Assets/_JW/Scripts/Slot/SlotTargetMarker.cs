@@ -120,8 +120,13 @@ public class SlotTargetMarker : MonoBehaviour
 		else if (targetReticle != null) targetReticle.gameObject.SetActive(false);
 	}
 
-	static void Place(SpriteRenderer reticle, GameObject obj, float s)
+	void Place(SpriteRenderer reticle, GameObject obj, float s)
 	{
+		// 조준점은 처음 만들 때의 장소 씬에 들어간다. 호스트에서는 장소를 옮겨도 그 씬이 남아 있고,
+		// HostPlaceVisibility가 내 캐릭터가 없는 장소 씬의 그림을 끄므로 조준점도 함께 꺼진다. 그래서 놓을 때마다 플레이어의 씬으로 옮긴다
+		if (gameObject.scene.IsValid() && reticle.gameObject.scene != gameObject.scene)
+			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(reticle.gameObject, gameObject.scene);
+
 		Collider2D col = obj.GetComponentInChildren<Collider2D>();
 		Vector3 center = col != null ? (Vector3)(Vector2)col.bounds.center : obj.transform.position;
 		reticle.transform.position = new Vector3(center.x, center.y, reticle.transform.position.z);

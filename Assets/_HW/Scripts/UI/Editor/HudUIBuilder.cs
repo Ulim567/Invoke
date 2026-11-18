@@ -110,6 +110,7 @@ public static class HudUIBuilder
 		TMP_Text place = Text(root, "Place", "> 사냥터", 12, Color.white);
 		place.fontStyle = FontStyles.Bold;
 		Place(place.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(14, -38), new Vector2(200, 18));
+		BuildAcquireFeed(canvasObject, root);
 
 		BuildNameTags(root);
 		BuildRaidParty(root);
@@ -363,6 +364,64 @@ public static class HudUIBuilder
 		image.sprite = first;
 		Layout(icon.gameObject, 16, 16);
 		return icon.gameObject;
+	}
+
+	// 획득 표시 (시안 8-5, 이우림): 장소 이름 바로 아래의 정해진 크기 영역(AcquireFeed). 받은 경험치·재료·블록을 한 줄씩 쌓는다 (AcquireFeedView)
+	// - 줄 모양은 왼쪽 아래 알림 목록과 같다 (바탕 hud_gauge, 안쪽 여백 6·3, 글자 7, 높이 약 14). 줄 앞에 드랍 아이콘 8×8 (경험치는 아이콘 없음)
+	//   바탕만 알림보다 어둡고 덜 비친다: 화면 위쪽은 밝은 하늘이 많아, 알림과 같은 반투명 70%로는 상자가 흐리게 떠 보이기 때문 (이우림 11/19)
+	//   아이콘 8×8: 글자 높이(약 8)와 같고, 16×16 픽셀 그림을 정확히 반으로 줄여 화면(640×360의 2배)에서 픽셀이 고르게 보인다
+	// - 쌓는 방향은 알림 목록과 반대로 위 → 아래 (이우림 11/19): 새 줄이 장소 이름 바로 아래(영역 맨 위)에 나타나 아래 줄들을 밀어 내린다.
+	//   영역 아래쪽에 닿은 줄은 RectMask2D가 흐리게 잘라 낸다 (흐려지는 높이는 AcquireFeedView가 정함)
+	static void BuildAcquireFeed(GameObject canvasObject, RectTransform root)
+	{
+		// 영역: 줄 4개(줄 높이 약 14, 간격 1)가 들어가는 높이. 아래쪽 줄은 흐려지므로 또렷이 보이는 것은 위 3줄쯤이다
+		RectTransform feed = NewUI("AcquireFeed", root);
+		Place(feed, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12, -58), new Vector2(150, 60));
+		feed.gameObject.AddComponent<RectMask2D>();
+
+		// 위 기준 목록. 줄이 늘면 아래로 자란다. AcquireFeedView가 세로 위치를 움직여 새 줄이 부드럽게 밀어 내리게 한다
+		RectTransform content = NewUI("Content", feed);
+		content.anchorMin = new Vector2(0, 1);
+		content.anchorMax = new Vector2(1, 1);
+		content.pivot = new Vector2(0, 1);
+		content.sizeDelta = Vector2.zero;
+		content.anchoredPosition = Vector2.zero;
+		VerticalLayoutGroup contentLayout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+		contentLayout.spacing = 1;
+		contentLayout.childAlignment = TextAnchor.UpperLeft;
+		contentLayout.childControlWidth = contentLayout.childControlHeight = true;
+		contentLayout.childForceExpandWidth = contentLayout.childForceExpandHeight = false;
+		content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+		// 줄 견본: 바탕 + [아이콘] + 글자. 크기는 글자에 맞춘다
+		RectTransform row = NewUI("RowTemplate", content);
+		Image rowImage = SetImage(row.gameObject, "hud_gauge");
+		rowImage.color = new Color(0.7f, 0.7f, 0.7f, 0.85f); // 바탕을 70% 밝기로 어둡게, 85%로 덜 비치게
+		rowImage.raycastTarget = false;
+		HorizontalLayoutGroup rowLayout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+		rowLayout.padding = new RectOffset(6, 6, 3, 3); // 알림 상자(NoticeTemplate)와 같은 여백
+		rowLayout.spacing = 3;
+		rowLayout.childAlignment = TextAnchor.MiddleLeft;
+		rowLayout.childControlWidth = rowLayout.childControlHeight = true;
+		rowLayout.childForceExpandWidth = rowLayout.childForceExpandHeight = false;
+		row.gameObject.AddComponent<CanvasGroup>(); // 시간이 다 된 줄을 제자리에서 흐리게 할 때 쓴다
+
+		RectTransform icon = NewUI("Icon", row);
+		Image iconImage = icon.gameObject.AddComponent<Image>();
+		iconImage.raycastTarget = false;
+		iconImage.preserveAspect = true;
+		Layout(icon.gameObject, 8, 8);
+
+		// 글자 크기는 줄이 글자에 맞춘다 (알림 상자의 글자와 같음). 아이콘이 없는 경험치 줄도 글자 높이가 아이콘과 같아 줄 높이가 같다
+		Text(row, "Text", "", 7, Color.white);
+		row.gameObject.SetActive(false);
+
+		AcquireFeedView view = canvasObject.AddComponent<AcquireFeedView>();
+		var so = new SerializedObject(view);
+		Set(so, "panel", feed.gameObject);
+		Set(so, "content", content);
+		Set(so, "rowTemplate", row.gameObject);
+		so.ApplyModifiedPropertiesWithoutUndo();
 	}
 
 	// 머리 위 닉네임 이름표 (#362): 화면 전체 크기 영역 + 이름표 8개 (작은 어두운 바탕 + 글자)

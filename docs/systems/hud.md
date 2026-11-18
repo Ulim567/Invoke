@@ -19,6 +19,7 @@
 | 왼쪽 위 띠 | 설정(Esc) · Lv · 버그 조각 · 보스 코어. 재료 앞에 재료 그림 16×16 (#431, 박진우의 `material_{ID}.png` 첫 장) | `PlayerProgress.Level`, `GetMaterialCount("bug_fragment" / "boss_core")` |
 | Lv 바로 옆 | 경험치 바 40×5 (김도훈 `ExpBarView`). 경험치가 늘면 연한 막대(EFFFD9)가 바로 차고 0.3초 뒤 연두 막대(9BE15D, 메이플스토리 경험치 바 색)가 서서히 따라 찬다. 레벨업하면 끝까지 찬 뒤 0부터 다시. 최대 레벨은 가득. 접속 직후 1초와 경험치가 줄었을 때는 바로 맞춤. 레이드에서는 Lv와 같이 숨김 | `PlayerProgress.Exp`, `Level`, `LevelRules.ExpToNext` |
 | 그 아래 | 「> 사냥터 1」 지금 장소 이름 | 내 캐릭터가 있는 씬 이름 (`PlaceScenes` 상수 → 한글. 사냥터는 1~3, #518) |
+| 장소 이름 아래 | 획득 표시 (시안 8-5): 받은 경험치·재료·블록을 한 줄씩 쌓음. 아래 「획득 표시」 | `MonsterReward.LocalRewardReceived` (김도훈) |
 | 아래 가운데 | HP 막대·숫자. 닳으면 흰 잔상이 0.3초 남았다가 줄어든다 (#431, 몬스터·보스 체력 바와 같은 방식. 회복은 바로) | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
 | | 슬롯 8칸 Q W E R A S D F | 아래 「슬롯 상태」 |
@@ -73,6 +74,28 @@
 
 - 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 사망·장소 이동·재시작으로 끊긴 작업(원인 `System`, #504), 개발자 책임(`InternalError`), 실행 중에 난 compile error(시전 전에 빌드가 `CompileError` 거부로 잡음, #506)
 
+### 획득 표시 (시안 8-5, `AcquireFeedView`, 이우림)
+- 줄: 왼쪽 아래 알림 목록과 같은 크기의 상자(바탕 `hud_gauge`, 안쪽 여백 6·3, 글자 7, 높이 약 14) 안에 아이콘 8×8 + 글
+  - 바탕은 알림보다 어둡고 덜 비침(색 70% 밝기, 불투명도 85%). 화면 위쪽은 밝은 하늘이 많아 알림과 같은 반투명 70%로는 상자가 흐리게 떠 보이기 때문 (이우림 11/19)
+  - 경험치: 아이콘 없이 `EX +50`
+  - 재료: `버그 조각 x3`, `보스 코어 x1`. 아이콘은 드랍될 때 날아오는 그림 (`Resources/MaterialDrops/{재료 ID}` 프리팹의 `SpriteRenderer` 그림, material-drop.md). 16×16 그림을 반으로 줄여 픽셀이 고르게 보임
+  - 블록·함수: `If 블록 x1`, `검 찌르기 함수 x1`. 이름은 `ShopItemInfo.DisplayNameOf`(상점과 같은 이름), 낱말은 `ShopItemInfo.IsSyntaxItem`이면 「블록」, 아니면 「함수」. 아이콘은 블록 드랍 그림(`item_block`)
+  - 「×」 대신 「x」: HUD 글꼴(Galmuri)에 없는 글자
+  - 돈은 보이지 않음 (`MonsterReward`의 돈은 임시 값, 이우림 결정 11/19)
+- 영역: 장소 이름 바로 아래(왼쪽에서 12, 위에서 58)의 정해진 크기 영역 `AcquireFeed`(150×60, 줄 4개). 줄이 하나도 없으면 숨김
+- 쌓기: 왼쪽 아래 알림 목록을 위아래로 뒤집은 방식 (위 → 아래, 이우림 11/19). 목록 `Content`는 위 기준이라 새 줄은 장소 이름 바로 아래(영역 맨 위)에 나타나 아래 줄들을 부드럽게 밀어 내림(`Rise Sharpness`)
+  - 새 줄은 위에서 내려오는 동안 서서히 나타남. 내려오기 전 자리가 장소 이름과 겹치기 때문
+  - 영역 아래쪽 20(`Fade Height`, 시작할 때 마스크에 넣음)은 `RectMask2D` 경계가 흐려, 밀려 내려간 줄이 아래로 갈수록 흐려지며 사라짐
+  - 줄마다 3초(`Row Time`) 뒤 빠짐. 마지막 0.4초(`Row Fade Time`)는 제자리에서 흐려짐
+  - 줄은 최대 6개(`Max Rows`). 넘치면 가장 오래된 줄부터 뺌
+- 차례로 띄우기: 한 마리를 잡아 여러 가지(경험치, 버그 조각, 블록)를 받아도 한꺼번에 띄우지 않고 0.15초(`Row Interval`) 간격으로 한 줄씩 띄움. 하나씩 따라 올라오게 하기 위함
+- 합치기: 바로 앞 줄과 같은 것(같은 재료, 같은 블록, 경험치)이면 새 줄을 만들지 않고 개수를 더하고 3초를 다시 셈. 아직 띄우지 않고 기다리는 것끼리도 같은 것은 합침
+- 모아 두기: 아래 경우에 받은 것은 띄우지 않고 종류별로 합쳐 두었다가, 다시 띄울 수 있게 되면 차례로 띄움
+  - 레이드 던전 안 (`PlayerPlace.Mine`이 `RaidDungeon`): 결과 화면(`RaidResultView`)이 보상 줄을 보여 주므로, 레이드를 마치고 로비에 도착한 뒤 보임 (이우림 결정 11/19)
+  - 로딩 화면이 덮은 동안 (`LoadingScreen.Showing`), HUD가 숨은 동안, 서버가 아직 장소를 정하지 않았을 때
+- 내 캐릭터가 바뀌거나 없어지면 떠 있던 줄과 모아 둔 것을 지움
+- 구조는 `HudUIBuilder`가 만듦(`BuildAcquireFeed`). `AcquireFeedView`는 HudCanvas 최상위(`HudView`와 같은 오브젝트)에 붙음
+
 - 아래 띠 (#431): 띠 전체를 칠하지 않는다 (바닥을 너무 가림). 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자(`hud_band_fade`)
 
 ## 다른 시스템이 쓰는 것
@@ -85,6 +108,7 @@
 
 ## 맞춘 결과
 - 이우림이 고친 것 (#480): `HudView`에 실패 알림, `HudUIBuilder`에 알림 칸(`Notice`). HUD 프리팹은 메뉴로 다시 만듦
+- 이우림이 고친 것 (획득 표시, 시안 8-5): `HudUIBuilder`에 장소 이름 아래 `AcquireFeed`와 `AcquireFeedView`(`Assets/_UL/Scripts/Progress/UI`). `HudView`는 그대로. HUD 프리팹은 메뉴로 다시 만듦
 - 김도훈이 고친 것 (경험치 바): `HudUIBuilder`에 Lv 옆 `ExpBar`(+`ExpBarView`, `Assets/_DH/Scripts/UI`)와 레이드에서 숨기기. `HudView`는 그대로. HUD 프리팹은 메뉴로 다시 만듦
 - 소환검 개수(`SummonedSwordHud`, 박진우)와 체력 바(`TempHealthBar`, 김도훈)의 임시 표시는 이 HUD가 대신할 예정. 그때 각자 끈다
 

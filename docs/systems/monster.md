@@ -188,7 +188,7 @@
   - 블록·함수 드롭: 받는 플레이어마다 `Item Chance`로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목 중 무작위로 `Item Count`개의 가진 개수를 1씩 늘린다 (`PlayerProgress.AddItem`, 이우림 #500)
     - 쓸 수 있는 항목: 그 플레이어 캐릭터 언어의 처음 항목(`ItemCountRules.Initial(언어)`의 키, `PlayerCharacter.LanguageOf`. C는 thrust, sword_throw, get_bug 등, Python은 py.* 등. 처음 항목을 C 것으로만 센 탓에 Python 마법사가 C 블록을 받던 문제를 고침, #550) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
     - 여러 개면 하나씩 따로 고른다 (같은 항목이 겹칠 수 있음). 항목당 최대 99개에서 멈춘다(`ItemCountRules.MaxCount`)
-    - 화면에는 무엇인지 알리지 않고 「블록 ×N」으로만 알린다(`LocalRewardReceived`의 블록 수). 무엇을 받았는지는 블록 편집 화면의 「남은/가진」 개수로 확인한다
+    - 획득 표시(시안 8-5, [hud.md](hud.md) 「획득 표시」)에 받은 항목의 이름까지 알린다. `LocalRewardReceived`가 받은 항목 ID를 받은 수만큼 넘긴다(서버는 `[TargetRpc]`로 항목 ID 배열을 보냄)
     - 받으면 버그 조각처럼 블록 아이콘(`item_block`, 주황 코드 블록)이 튀어 올라 내 캐릭터로 날아온다. 아이콘은 무엇을 받았든 같고, 받은 수만큼 띄운다. `RewardEffectPlayed`의 재료 목록 끝에 (`MonsterReward.ItemDropIconId`, 받은 수) 한 줄을 붙여서 `MaterialDropView`(박진우)가 그대로 띄우게 한다. 진짜 재료가 아니라 가방에는 들어가지 않고, `LocalRewardReceived`의 재료 목록에는 붙지 않는다
     - 아이콘 프리팹: `Assets/_DH/Resources/MaterialDrops/item_block.prefab`. 그림 `Assets/_DH/Sprites/material_item_block.png`(16×16 8장)를 고친 뒤 메뉴 Invoke → DH → 블록 드롭 프리팹 만들기를 누른다
   - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`, `AddItem`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
@@ -382,7 +382,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `LocalRewardReceived` (static event) | `int` 경험치, `IReadOnlyList<MaterialDrop>` 재료, `int` 블록·함수 수 | - | [연출] 내 캐릭터가 어떤 몬스터에게서든 보상을 받았을 때. 획득 표시(시안 8-5)처럼 몬스터와 상관없이 받는 화면이 쓴다. 블록·함수는 수만 넘긴다(「블록 ×N」). 받은 플레이어의 화면에서만. 재료 목록은 이벤트 안에서만 읽는다 |
+| `LocalRewardReceived` (static event) | `int` 경험치, `IReadOnlyList<MaterialDrop>` 재료, `IReadOnlyList<string>` 받은 블록·함수의 항목 ID | - | [연출] 내 캐릭터가 어떤 몬스터에게서든 보상을 받았을 때. 획득 표시(시안 8-5, `AcquireFeedView`)가 쓴다. 항목 ID는 받은 수만큼 들어 있다(같은 항목 두 번이면 두 번). 돈은 넘기지 않는다(임시 값). 받은 플레이어의 화면에서만. 두 목록은 이벤트 안에서만 읽는다 |
 | `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 내 캐릭터가 보상을 받았을 때. 받은 플레이어의 화면(호스트 포함)에서만 불린다 (`[TargetRpc]`, #404). 받은 플레이어 = 그 화면의 내 캐릭터. 네트워크 없는 테스트는 받은 플레이어마다 그 자리에서. "+경험치" 글자, 재료가 날아오는 연출에 쓴다. 블록·함수를 받았으면 재료 목록 끝에 (`ItemDropIconId` = `item_block`, 받은 수) 한 줄이 붙는다(연출용, 진짜 재료 아님). 재료 목록은 이벤트 안에서만 읽는다. 몬스터는 0.5초 뒤 없어지므로 띄운 그림을 몬스터 자식으로 두지 않는다 |
 
 | Inspector 값 | 설명 |

@@ -256,6 +256,8 @@ public class AccountView : MonoBehaviour
 			Clear(field);
 			SetPasswordVisible(field, false);
 		}
+		// 아이디·닉네임도 비운다. 한 컴퓨터를 여러 사람이 번갈아 쓸 때 로그아웃한 뒤 앞 사람의 아이디가 보이지 않게
+		foreach (TMP_InputField field in new[] { loginId, signUpId, signUpNickname }) Clear(field);
 
 		string selected = flow.SelectedLanguage;
 		CharacterState state = flow.GetCharacterState(selected);

@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// <para>
 /// - Goal이 가리킬 곳을 정하면(TutorialView가 쪽마다 정함), 내 장소에서 그 오브젝트를 찾아 머리 위에 주황 ▼ 마커를 통통 띄우고, 그 위에 이름표(예: 「연습장」)를 붙인다.<br/>
 /// - 그 곳이 화면 밖이면 화면 가장자리에 그쪽을 가리키는 화살표를 띄우고, 화살표 옆에 같은 이름표를 붙인다.<br/>
-/// - 오브젝트는 0.4초마다 다시 찾는다 (가장 가까운 것). 내 장소와 같은 이름의 씬에 있는 것만 본다 (호스트는 다른 장소 씬도 열려 있음).<br/>
+/// - 오브젝트는 0.4초마다 다시 찾는다 (가장 가까운 것). 내 장소에 있는 것만 본다 (TutorialTracker.InMyPlace: 호스트는 내 캐릭터가 있는 씬, 클라이언트는 장소 씬과 서버가 만든 오브젝트).<br/>
 /// - 그림은 코드로 만든다 (에셋 없음, 16 PPU 픽셀). 서버(화면 없음)에서는 만들지 않는다.
 /// </para>
 /// </summary>
@@ -226,6 +226,7 @@ public class TutorialGuide : MonoBehaviour
 		TutorialGoal.ToLobby => "로비 출구",
 		TutorialGoal.EditorTerminal => "편집 터미널",
 		TutorialGoal.EquipStation => "장착대",
+		TutorialGoal.ShopStation => "상점",
 		TutorialGoal.Dummy => "허수아비",
 		_ => "",
 	};
@@ -261,6 +262,8 @@ public class TutorialGuide : MonoBehaviour
 				return place == PlaceScenes.TrainingRoom ? EditorTerminal(place, me) : null;
 			case TutorialGoal.EquipStation:
 				return place == PlaceScenes.TrainingRoom ? EquipStation(place, me) : null;
+			case TutorialGoal.ShopStation:
+				return place == PlaceScenes.Lobby ? ShopStation(place, me) : null;
 			case TutorialGoal.Dummy:
 				return place == PlaceScenes.TrainingRoom ? Dummy(place, me) : null;
 			default:
@@ -282,10 +285,14 @@ public class TutorialGuide : MonoBehaviour
 	static Transform EquipStation(string place, Vector3 me)
 		=> Nearest(FindObjectsByType<PanelStation>(FindObjectsSortMode.None), place, me, s => s.name.Contains("Equip"));
 
+	// 상점: 로비의 PanelStation 중 이름에 Shop이 들어간 것 (씬 오브젝트 ShopStation)
+	static Transform ShopStation(string place, Vector3 me)
+		=> Nearest(FindObjectsByType<PanelStation>(FindObjectsSortMode.None), place, me, s => s.name.Contains("Shop"));
+
 	static Transform Dummy(string place, Vector3 me)
 		=> Nearest(FindObjectsByType<Monster>(FindObjectsSortMode.None), place, me, m => m.IsInvulnerable);
 
-	// 내 장소와 같은 이름의 씬에 있는 것 중 가장 가까운 것
+	// 내 장소에 있는 것 중 가장 가까운 것
 	static Transform Nearest<T>(T[] list, string place, Vector3 me, Func<T, bool> filter) where T : Component
 	{
 		Transform best = null;
@@ -293,7 +300,7 @@ public class TutorialGuide : MonoBehaviour
 		for (int i = 0; i < list.Length; i++)
 		{
 			T item = list[i];
-			if (item.gameObject.scene.name != place) continue;
+			if (!TutorialTracker.InMyPlace(item.gameObject, place)) continue;
 			if (filter != null && !filter(item)) continue;
 			float distance = (item.transform.position - me).sqrMagnitude;
 			if (distance >= bestDistance) continue;

@@ -17,6 +17,8 @@ public enum TutorialTask
 	OpenLevelUp,
 	/// <summary>장착대(SlotEquipPanel)를 염. 실제 계정은 장착대가 없어 이 일이 있는 쪽을 건너뛴다</summary>
 	OpenEquip,
+	/// <summary>로비의 상점 창(ShopPanel)을 엶</summary>
+	OpenShop,
 }
 
 /// <summary>그 쪽에서 화면에 가리켜 줄 곳. 실제로 어느 오브젝트인지는 TutorialGuide가 내 장소를 보고 찾는다.</summary>
@@ -37,6 +39,8 @@ public enum TutorialGoal
 	RaidDoor,
 	/// <summary>연습장의 스킬 장착대</summary>
 	EquipStation,
+	/// <summary>로비의 상점 자리</summary>
+	ShopStation,
 }
 
 /// <summary>
@@ -121,8 +125,12 @@ public static class TutorialScript
 		Page.Do("[확인] 1번 키와 2번 키를 눌러 업그레이드를 확인하세요.", TutorialGoal.None,
 			TutorialTask.OpenSkillTree, TutorialTask.OpenLevelUp),
 
-		// 8쪽
-		Page.Talk("[경고] 현재 강력한 버그가 감지됩니다.\n동료와 함께 이동을 권장합니다.", TutorialGoal.RaidDoor),
+		// 7-3쪽: 로비의 상점. 열기만 한다 (사는 것까지 시키지 않음)
+		// TODO(김도훈): 대사를 적는다
+		Page.Do("[안내] 상점에서는 다양한 스킬과 함수를 구매할 수 있습니다.", TutorialGoal.ShopStation, TutorialTask.OpenShop),
+
+		// 8쪽: 레이드 문을 가리키고 2초 뒤 저절로 넘어감
+		new Page("[경고] 현재 강력한 버그가 감지됩니다.\n동료와 함께 이동을 권장합니다.", TutorialGoal.RaidDoor, false, 2f, Array.Empty<TutorialTask>()),
 
 		// 9쪽
 		// 마지막 쪽은 잠깐 보여 준 뒤 저절로 끝난다 (Enter로도 바로 끝남)
@@ -145,6 +153,7 @@ public static class TutorialScript
 		TutorialTask.OpenSkillTree => "1 : 스킬 트리 확인",
 		TutorialTask.OpenLevelUp => "2 : 레벨업 확인",
 		TutorialTask.OpenEquip => "장착대 접속: 앞에서 위 방향키",
+		TutorialTask.OpenShop => "상점 접속: 앞에서 위 방향키",
 		_ => "",
 	};
 

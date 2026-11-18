@@ -45,6 +45,8 @@ public class TutorialView : MonoBehaviour
 	string key;
 	bool finished = true;
 	float nextAt = -1f;
+	// HUD와 함께 꺼진 때 (-1 = 꺼진 적 없음). 다시 켜지면 꺼져 있던 시간만큼 넘어가는 시간을 미룬다
+	float hiddenAt = -1f;
 
 	void Awake()
 	{
@@ -85,10 +87,13 @@ public class TutorialView : MonoBehaviour
 	void OnEnable()
 	{
 		if (tracker != null) tracker.Signaled += OnSignaled;
+		if (hiddenAt >= 0f && nextAt >= 0f) nextAt += Time.unscaledTime - hiddenAt;
+		hiddenAt = -1f;
 	}
 
 	void OnDisable()
 	{
+		hiddenAt = Time.unscaledTime;
 		if (tracker != null) tracker.Signaled -= OnSignaled;
 		ShowGuides(false);
 	}
@@ -119,7 +124,9 @@ public class TutorialView : MonoBehaviour
 
 		if (finished) { SetVisible(false); return; }
 
-		if (nextAt >= 0f && Time.unscaledTime >= nextAt) GoNext();
+		// 창(상점처럼 HUD를 남기는 창 포함)이 열려 있는 동안은 시간으로 넘어가지 않는다. 닫으면 남은 시간부터 다시 센다
+		if (nextAt >= 0f && InputBlockingPanel.AnyOpen) nextAt += Time.unscaledDeltaTime;
+		else if (nextAt >= 0f && Time.unscaledTime >= nextAt) GoNext();
 		else if (!InputBlockingPanel.AnyOpen && GameInput.UI.SubmitPressed) GoNext();
 
 		bool visible = !finished && PlayerPlace.Mine != PlaceScenes.RaidDungeon;

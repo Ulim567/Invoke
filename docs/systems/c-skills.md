@@ -199,7 +199,8 @@
   - 사용 가능한 소환검이 모두 대상 둘레에 고르게 나뉘어 돈다 (`SummonedSwords.Dance`, `Dancing` 상태).
   - `CSwordDance.HitIntervalTicks`(임시 6틱)마다, 대상 가운데에서 2.5칸 안의 검마다 한 번씩 공격력 × 표 배율(0.5) + 출혈(`StatusEffects.TryApply(Bleed)`). 20틱이면 검 하나당 대략 3번.
   - 스킬이 끝나거나 끊기면 `EndDance`로 검이 곁으로 돌아온다. 대상이 죽으면 더 베지 않는다.
-- 소환 계열 데미지는 `SummonDamage.Deal`(공격력 × 표 배율 → `TakeDamage` → `SkillEffectEvents.Hit`)을 함께 쓴다.
+- 소환 계열 데미지는 `SummonDamage.Deal`(공격력 × 표 배율 → `TakeDamage` → `SkillEffectEvents.Hit`)을 함께 쓴다. 첫 인자는 데미지를 주는 스킬(`DataDrivenSkill`, #538에서 스킬 ID 대신)이다.
+- 자세 (#538, 이우림 추가, stance.md): 모든 스킬 데미지 자리가 `BonusRate`에 `StanceDamageBonus(caster)`(모든 스킬 + 그 스킬 계열 추가분)를 더하고, `TakeDamage` 뒤에 `NotifyDamageDealt(caster, 데미지)`를 부른다(맞힐 때마다 자세의 회복, 시전 한 번에 처음 한 번 자해). 새 스킬이 데미지를 주면 같은 두 가지를 넣는다. 계열 규칙(홀수·짝수·피보나치)은 표의 `family` 값으로 정해지므로 표의 계열이 맞아야 한다
 - 슬롯에서 전장 휩쓸기: 여러 명 선택으로 찍은 대상을 `RequestCast(슬롯, 대상 배열)`로 서버에 보내 시전한다 (slot-caster.md, #238).
 
 ### 패링 (#245)

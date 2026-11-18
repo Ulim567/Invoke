@@ -17,7 +17,7 @@ public static class ItemCountRules
 	/// - C: thrust 1, sword_throw 1, get_bug 2<br/>
 	/// - Python (#532, 임시): py.magic_missile 1, py.hex 1, get_bug 2<br/>
 	/// 처음 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)가 쓰는 개수와 같아서, 처음 남은 개수는 모두 0이다.<br/>
-	/// 예외: 출력 함수(C printf, Python print)는 1개 더 준다(남은 개수 1, #536).
+	/// 예외: 출력 함수(C printf, Python print)는 1개 더 준다(남은 개수 1, #536). C는 자세 함수 init_stance·get_stance도 1개씩 준다(#538).
 	/// </summary>
 	// 숫자를 직접 적지 않고 처음 슬롯 함수를 세어 만드는 이유: 처음 슬롯 함수를 바꿔도 처음 개수가 저절로 맞아,
 	// 슬롯 함수가 가진 것보다 많이 쓰는 캐릭터가 생기지 않게 하기 위함 (기획: 튜토리얼을 마치면 남는 개수 0)
@@ -37,8 +37,24 @@ public static class ItemCountRules
 		string print = PrintFunctionOf(language);
 		counts.TryGetValue(print, out int used);
 		counts[print] = used + InitialPrintCount;
+
+		// 자세 함수(#538)도 해금 노드가 없어 1개씩 준다 (이우림 결정 11/18). 스킬 트리에서 등장하는 시점은 나중에 정한다
+		foreach (string stance in StanceFunctionsOf(language))
+		{
+			counts.TryGetValue(stance, out int stanceUsed);
+			counts[stance] = stanceUsed + InitialStanceCount;
+		}
 		return counts;
 	}
+
+	/// <summary>새 캐릭터가 받는 자세 함수(init_stance, get_stance) 개수 (#538). 함수마다 이만큼.</summary>
+	public const int InitialStanceCount = 1;
+
+	/// <summary>캐릭터 언어의 자세 함수 고정 ID들 (#538). C는 init_stance·get_stance, Python은 아직 없음(빈 목록).</summary>
+	public static string[] StanceFunctionsOf(string language) =>
+		LanguageFamilies.Of(language) == LanguageFamily.Python
+			? System.Array.Empty<string>()
+			: new[] { PredefinedFunctionIds.InitStance, PredefinedFunctionIds.GetStance };
 
 	/// <summary>새 캐릭터가 슬롯 함수에 쓰는 것과 따로 받는 출력 함수 개수 (#536).</summary>
 	public const int InitialPrintCount = 1;

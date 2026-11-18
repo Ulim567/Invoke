@@ -205,11 +205,14 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 	}
 
 	/// <summary>
-	/// damage만큼 체력을 줄인다. 0 이하이거나, 죽었거나, 경직·무적 중이면 무시한다. 체력이 0이 되면 사망한다.
+	/// damage만큼 체력을 줄인다. 0 이하이거나, 죽었거나, 경직·무적 중이면 무시한다. 체력이 0이 되면 사망한다.<br/>
+	/// 자세(PlayerStance, #538)가 있으면 받는 피해 증감을 먼저 적용한다 (C: 3의 배수 +10%).
 	/// </summary>
 	public void TakeDamage(int damage)
 	{
 		if (damage <= 0 || IsDead || IsInvincible) return;
+		// 보호막이 묻기 전에 적용한다. 보호막이 실제로 들어올 피해량을 보게 하기 위함 (자세가 붙지 않은 프리팹이면 증감 없음)
+		if (TryGetComponent(out PlayerStance stance)) damage = stance.ApplyReceivedDamage(damage);
 		// 보호막(마나 구슬 보호막 등)이 이 피해를 막으면 체력·경직·무적 모두 그대로다
 		if (IsBlocked(damage)) return;
 
@@ -225,6 +228,37 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
 		// 죽는 공격이면 피격 모션·깜빡임 대신 사망 모션만 재생한다
 		if (Hp == 0) Die();
 		else PlayHitEffect(damage);
+	}
+
+	/// <summary>
+	/// [서버] 자해로 체력을 줄인다 (#538, 이우림). 자세의 자해(소수: 데미지를 준 스킬마다 최대 체력의 2%)가 부른다.<br/>
+	/// 일반 피격(TakeDamage)과 달리 경직·무적을 일으키지 않고, 무적 중에도 깎고, 피격 연출(HitEffectPlayed)과 보호막(DamageBlocking)·받는 피해 증감을 거치지 않는다.
+	/// 체력이 0이 되면 일반 피격과 같이 사망한다. 0 이하이거나 죽었으면 무시한다.
+	/// </summary>
+	// 경직·무적을 걸지 않는 이유: 0.3초 경직 동안 시전이 막히고, 몬스터에게 맞은 직후의 자해가 무시되기 때문 (기획)
+	public void TakeSelfDamage(int damage)
+	{
+		if (!IsAuthority() || damage <= 0 || IsDead) return;
+
+		Hp = Mathf.Max(Hp - damage, 0);
+		SyncState();
+		Damaged?.Invoke(damage);
+		ShowHp();
+
+		if (Hp == 0) Die();
+	}
+
+	/// <summary>
+	/// [서버] 체력을 amount만큼 회복한다 (#538, 이우림). 자세의 회복(40~60: 스킬이 준 데미지의 5%)이 부른다.<br/>
+	/// 최대 체력을 넘지 않는다. 0 이하이거나 죽었으면 무시한다. 클라이언트 체력 바는 [SyncVar]로 맞춰진다.
+	/// </summary>
+	public void Heal(int amount)
+	{
+		if (!IsAuthority() || amount <= 0 || IsDead || Hp >= MaxHp) return;
+
+		Hp = Mathf.Min(Hp + amount, MaxHp);
+		SyncState();
+		ShowHp();
 	}
 
 	/// <summary>

@@ -36,6 +36,10 @@
 | `VitalStrikeMinigame` | +200% (2.0) | 미니게임 성공 | 급소공략 |
 | `CritDeepThrust` | +150% (1.5) | 치명타 | 검 깊이찌르기 (`CritBonusRate`에 넣는다) |
 
+- 자세 (#538, stance.md): 때린 플레이어의 자세 추가분을 `BonusRate`에 더한다. 몬스터 공격에는 붙지 않는다
+  - 스킬: 모든 스킬 추가분 + 스킬 계열(표의 `Family`) 추가분. `DataDrivenSkill.StanceDamageBonus(caster)` = `PlayerStance.DamageBonusOf(caster, Data.Family)`. 스킬 데미지 자리 모두(`ThrustSkills`, `SlashSkills`, `ThrowSkills`, `SummonDamage`, Python `MagicSkill.Deal`)
+  - 출혈·중독 도트: 건 플레이어의 지금 자세의 모든 스킬 추가분만(`DamageBonusOf(source)`, 계열 없음)
+
 ## 다른 시스템이 쓰는 것
 
 `DamageCalculator`는 static 클래스다. 오브젝트에 붙이지 않고 바로 부른다.

@@ -64,6 +64,7 @@
   - 레이드 중인 파티원의 요청: 출구가 없어 보내는 클라이언트 코드는 없음. 받으면 그 장소로 옮기고 파티원 이탈로 봄
 - 서버의 이동 순서 (`TravelPlayer`)
   1. `FunctionExecutor.InterruptAll(InterruptCause.System)`: 실행 중인 함수 모두 중단. HUD에 실행 중단 알림을 띄우지 않음 (#504) (이전 장소에서 시전한 작업이 새 장소에서 이어지지 않도록)
+     - 이어서 `PlayerStance.Clear()`: 자세 없앰 (#538, stance.md). 기획은 「전투 장소에 들어가면」이지만 로비에서는 시전할 수 없어 모든 이동에서 없앰
      - 갈 곳이 로비면 대신 로비 도착 처리 (#435): `FunctionExecutor.RestartProcess()`(작업 끊기, heap·소환검 비우기, 전역 변수 초기값) → `PlayerHealth.RestoreFullHp()`. 소환검을 옮기기 전에 해서 로비로는 검이 따라오지 않는다. 로비에서 다른 장소로 갈 때는 지금처럼 검이 따라간다
   2. 클라이언트에 이전 씬 `SceneMessage(UnloadAdditive)` (호스트 제외)
   3. `PutPlayerInScene`: 서버의 플레이어를 새 씬으로 이동, 클라이언트에 새 씬 `SceneMessage(LoadAdditive)`

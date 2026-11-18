@@ -20,6 +20,7 @@
   - 처음 건 뒤 `BleedInterval`(1초)마다 `BleedDamage`(5)를 준다. 지속 5초면 5번, 총 25.
   - 출혈 중에 다시 걸면 지속 시간만 늘어나고 데미지 간격은 그대로다.
   - 출혈 배율 (#172): `AmplifyBleed(bonusRate)`를 부르면 지금 출혈이 풀릴 때까지 틱 데미지에 `BonusRate`를 더한다 (상처 가르기 +100% → 10). 겹치지 않고 큰 값 하나. 출혈이 풀리면(시간·`Clear`·죽음) 없어진다.
+  - 자세 (#538, stance.md): 출혈·중독 틱 데미지에 건 플레이어(`bleedSource`, `poisonSource`)의 지금 자세의 모든 스킬 추가분을 더한다. 계열 추가분(찌르기 등)은 스킬 정보가 없어 빼고, 자해·회복은 없음 (스킬 시전이 아님)
   - 데미지는 `DamageCalculator.Calculate(DamageRequest.Flat(BleedDamage))`를 거쳐 같은 오브젝트의 `IDamageable.TakeDamage(int, GameObject attacker)`로 준다.
   - 출혈을 건 플레이어 (#484): 출혈 데미지의 `attacker`는 출혈을 건 플레이어다. 몬스터가 처치 보상을 정할 때 그 플레이어의 피해로 센다 (`monster.md`).
     - 출혈 중에 다른 플레이어가 다시 걸면: 마지막으로 건 플레이어 (지속 시간도 그 사람 기준으로 다시 시작하기 때문)

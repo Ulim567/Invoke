@@ -337,6 +337,9 @@ public class InvokeNetworkManager : NetworkManager
 		if (target.name == PlaceScenes.Lobby) ResetOnLobbyArrival(player);
 		// 원인은 System이다. 장소 이동으로 끊긴 함수는 실행 중단 알림을 띄우지 않는다 (#504)
 		else if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll(InterruptCause.System);
+		// 장소를 옮기면 자세를 없앤다 (#538). 기획은 「전투 장소에 들어가면」이지만, 시전할 수 없는 로비에서는 자세를 쓸 일이 없어 모든 이동에서 없앤다
+		// 작업을 끊은 뒤에 하는 이유: 끊긴 init_stance가 마지막 틱에 자세를 다시 정하지 않게 하기 위함
+		if (player.TryGetComponent(out PlayerStance stance)) stance.Clear();
 
 		Scene previous = player.scene;
 

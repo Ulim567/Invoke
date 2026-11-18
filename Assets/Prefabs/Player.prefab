@@ -45,6 +45,7 @@ GameObject:
   - component: {fileID: 5657045320687703192}
   - component: {fileID: 640899364796495694}
   - component: {fileID: -8803756257136009029}
+  - component: {fileID: 7940108879056456931}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -793,3 +794,15 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+--- !u!114 &7940108879056456931
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 25db10a911969264e81a274589646c92, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerStance

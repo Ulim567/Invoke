@@ -90,6 +90,27 @@ public abstract class DataDrivenSkill : PredefinedFunction
 
 	// 필요 조건을 통과해 시작했는지. 시작하지 못한 스킬은 Ended를 내지 않는다
 	bool started;
+	// 이 시전이 데미지를 이미 줬는지 (#538). 자세의 자해를 시전 한 번에 한 번만 걸려고 기록한다. 실행하는 것은 언제나 복사본이라 시전마다 새로 false다
+	bool dealtDamage;
+
+	/// <summary>
+	/// 시전자의 지금 자세가 이 스킬에 주는 데미지 추가분 (#538, 이우림). 모든 스킬 추가분 + 이 스킬 계열(표의 Family) 추가분. 데미지를 계산하기 전에 BonusRate에 더한다.
+	/// </summary>
+	internal float StanceDamageBonus(GameObject caster) =>
+		PlayerStance.DamageBonusOf(caster, Data != null ? Data.Family : (SkillFamily?)null);
+
+	/// <summary>
+	/// 몬스터에게 데미지를 준 뒤 부른다 (#538, 이우림). 시전자의 자세에 알려, 자세에 회복이 있으면 준 데미지의 일부를 회복하고,
+	/// 자해가 있으면 시전 한 번에 처음 한 번만 체력을 깎는다.<br/>
+	/// damage가 0 이하이면 데미지를 준 것으로 세지 않는다. 출혈·중독 도트는 스킬 시전이 아니므로 부르지 않는다.
+	/// </summary>
+	internal void NotifyDamageDealt(GameObject caster, int damage)
+	{
+		if (damage <= 0 || caster == null) return;
+		bool first = !dealtDamage;
+		dealtDamage = true;
+		if (caster.TryGetComponent(out PlayerStance stance)) stance.NotifySkillDealtDamage(damage, first);
+	}
 
 	// 필요 조건 검사와 연출 event(SkillEffectEvents)를 빼먹지 않도록 OnStart·OnEnd·OnCancel은 여기서 닫고,
 	// 스킬은 OnSkillStart·OnSkillEnd·OnSkillCancel을 덮어쓴다

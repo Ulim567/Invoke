@@ -106,8 +106,11 @@ public abstract class MagicSkill : DataDrivenSkill
 		PlayerStats stats = caster.GetComponent<PlayerStats>();
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = (Data != null ? Data.DamageMultiplier : 1f) * scale;
-		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
+		// 자세(#538)의 데미지 추가분을 조건 배율에 더한다. 지금 Python은 자세 규칙이 없어 0이다. 규칙이 생기면 이 자리가 그대로 쓴다
+		DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = StanceDamageBonus(caster) };
+		DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
+		NotifyDamageDealt(caster, result.Damage);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, point, result);
 		return result;
 	}

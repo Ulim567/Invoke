@@ -287,6 +287,18 @@ protected override void OnEnd(FunctionContext context)
   - 같은 틱에 실패한 작업도 실패 전에 출력한 글은 보임
 - 클래스 위치: `Assets/_UL/Scripts/FunctionExecutor/Predefined/Game/PrintFunctions.cs`. 공통 부분은 `PrintFunction`, 값 모양만 언어마다(`Format`)
 
+### 자세 function (#538)
+- 자세 숫자를 정하고 읽음 (stance.md). 스킬이 아니라 기본 function. 스킬 트리 노드가 없어 늘 보이고, 슬롯에 넣을 수 없음(`SlotLoadout.IsEquippableSkill`). 스킬이 아니므로 자세의 자해·회복을 일으키지 않음
+- 지금 C만. 동작은 공통 클래스(`InitStanceFunction`, `GetStanceFunction`)에 있고 언어마다 고정 ID·이름만 정함. Python 기획이 정해지면 하위 클래스 하나씩 더함
+
+| 고정 ID | 클래스 | 파라미터 | 반환 타입 | 하는 일 |
+| --- | --- | --- | --- | --- |
+| `c.init_stance` | `CInitStance` | 없음 | `int` | 자세를 1~100 무작위로 다시 정하고 그 숫자를 돌려줌(`PlayerStance.Roll`). `TickCount` 125(2.5초), 마지막 tick에 정함(도중에 끊기면 자세 그대로). `CooldownTicks` 150(3초) |
+| `c.get_stance` | `CGetStance` | 없음 | `int` | 지금 자세 숫자. 없으면 0. `TickCount` 1 |
+
+- 클래스 위치: `Assets/_UL/Scripts/FunctionExecutor/Predefined/Game/StanceFunctions.cs`
+- `PlayerStance`가 없는 캐릭터면 콘솔 오류를 내고 0을 돌려줌
+
 ```csharp
 // GetBug의 실행 단계
 protected override void OnStart(FunctionContext context) => RequestInput(context, VariableType.TargetOf(TargetKind.Bug));

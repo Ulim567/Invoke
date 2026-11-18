@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 스킬 트리 화면. 문법·스킬 탭, 노드와 선행 선, 고른 노드의 설명, 「해금」 버튼. 로비 스킬 트리 창(SkillTreePanel) 안에 둔다.
+/// 스킬 트리 화면. 문법·스킬 탭, 노드와 선행 선, 고른 노드의 설명, 「해금」 버튼. 스킬 트리 창(SkillTreePanel, Base 씬의 SkillTreeCanvas) 안에 둔다.
 /// <para>
 /// - 노드·선·계열 이름은 프리팹(Node Prefab, Line Prefab, Lane Label Prefab)에서 만들고 지우는 일은 ClearTree 한 곳에서 한다 (CLAUDE.md 코드 작성 규칙 3, 4).<br/>
 ///   탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 두고 칸에 넣는다.<br/>

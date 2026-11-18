@@ -253,7 +253,7 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 	}
 
 	// 블록 그림 -----------------------------------------------------------------
-	// 편집 화면의 블록(BlockView)은 편집 화면 없이 만들 수 없어서(로비 스킬 트리), 같은 색·모양의 그림만 따로 그린다.
+	// 편집 화면의 블록(BlockView)은 편집 화면 없이 만들 수 없어서(스킬 트리), 같은 색·모양의 그림만 따로 그린다.
 	// 문장 블록은 한 줄, 값 블록은 알약, ㄷ자 블록(if, for, while)은 머리줄 + 안쪽 자리 + 아래 막대. 글자는 블록 목록과 같은 한 줄 글자(BlockLabels.TextOf)
 
 	void BuildPicture(BlockReferenceEntry entry)

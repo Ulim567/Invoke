@@ -1,9 +1,10 @@
-# 파이썬 마법사 작업 인수인계 (2026-11-17 갱신)
+# 파이썬 마법사 작업 인수인계 (2026-11-18 갱신)
 
 ## 기본 정보
 - 프로젝트: Invoke (Unity 6000.6.0f1, URP 2D, Mirror). 저장소 `Ulim567/Invoke`, 기준 브랜치 `dev`
 - 로컬: `/Users/losecow/Desktop/GameDev/Invoke` (device_bash에서는 `$HOME/mnt/Invoke`)
-- 이슈 #486, PR #520으로 dev에 들어감 (2026-11-17). 다음 작업은 새 이슈·새 브랜치(`git switch -c feature/#N origin/dev`)
+- dev에 들어간 PR: #520(마법사 본체, #486), #522(인수인계·발판 테스트, #521), #525(스킬 트리, #523), #531(소개 글·HUD 구슬, #527), #542(스킬 설명·상점 가격, #539)
+- 다음 작업은 새 이슈·새 브랜치(`git switch -c "feature/#N" origin/dev`). zsh에서는 브랜치 이름에 따옴표
 - 사용자: 박진우 (GitHub `Losecow`). **답변은 항상 한국어 반말.** 코드·명령어·경로만 영어
 - 규칙: **Claude는 git 작업 안 함** (읽기 전용 `git --no-optional-locks`만). 커밋·merge·push는 사용자가 하고, Claude는 명령어와 PR 글(음슴체, Claude 서명 줄 없음)을 줌
 - 올리기 전 확인: GitHub dev가 바뀌었으면 겹치는 파일을 미리 3-way로 합쳐 보고, 충돌·의미상 어긋남(새 enum 값, 새 규칙 등)을 먼저 찾음
@@ -44,19 +45,24 @@
 - 사용자가 메뉴를 한 번 돌려서 프리팹·애니메이션·SkillTable 줄·Player_Python이 만들어져 있음
 
 ## 상태
-- PR #520으로 dev에 들어감 (2026-11-17). 컴파일 통과(경고만, 원래 있던 FindObjectsByType 경고)
-- 마법사 처음 슬롯·개수: `slot1` = `orb_create();`, `slot2` = `orb_shot(GetBug());`, 개수 py.orb_create 1, py.orb_shot 1, get_bug 1. 나머지 py.* 15개는 개수 0이라 실제 계정은 함수에 넣어 저장할 수 없음 (#500). 임시 계정(로그인 건너뛰기)은 개수를 안 써서 다 쓸 수 있음
-- Host 테스트: Base 씬 NetworkManager의 Skip Login Language를 Python으로(저장 안 함) → Play → Host
+- 컴파일 통과(경고만, 원래 있던 FindObjectsByType 경고)
+- 구슬 방식 (#533, 이우림 Python 문법 맞추기): `orb = orb_create()`가 구슬(Orb)을 돌려주고, 구슬 스킬에 넘김 — `orb_shot(target, orb)`, `orb_shield(orb)`, `orb_barrage(targets, orbs)`, `orb_burst(orbs)`
+  - 쓴 구슬은 빨간 「다 쓴 구슬」로 남고 다시 쓰면 `UsedManaOrbError`. `is_valid_orb(orb)`로 확인. 변수·list에 담지 않은 구슬은 바로 사라짐(가비지 컬렉션)
+  - 구슬이 5개(다 쓴 구슬 포함)면 `orb_create()`는 None, heap이 모자라면 MemoryError
+- 처음 슬롯·개수 (#533, #548 확정): `slot1` = `magic_missile(get_bug())`, `slot2` = `hex(get_bug())`. 처음부터 열린 노드도 순차 실행·매직 미사일·저주
+- 스킬 트리 (#523, #533·#548): 구슬 생성은 변수 문법 다음, 구슬 난사는 list 문법 다음. 표는 skill-tree.md 「스킬 노드 (파이썬 마법사)」
+- 자세 (#546, 이우림): Python 자세 규칙 `PythonStanceRule`, `py.init_stance`·`py.get_stance`. 계열별 데미지·쿨타임·상태 이상 시간이 바뀜 (stance.md)
+- 스킬 설명 41개 (#539): `Assets/Scripts/Descriptions/ItemDescriptions.Skills.cs`. 수치가 바뀌면 문장도 같이 고침
+- 상점 (#539): Epic(구슬 폭발, 메테오 등)만 보스 코어 1. shop.md
+- Host 테스트: Base 씬 NetworkManager의 Skip Login Language를 Python으로(저장 안 함) → Play → Host. 임시 계정은 개수를 안 써서 모든 py.* 스킬을 쓸 수 있음
 
 ## 남은 일
-1. **파이썬 스킬 트리** (다음 작업): py.* 노드를 만들어 해금하면 개수를 받게 함. 스킬 트리 코드·화면은 임혜원(`_HW/Scripts/SkillTree`)이라 같이 정함. 트리를 언어별로 나눌지, 처음 노드(StartingNodes)를 언어별로 둘지도 정해야 함
-2. 캐릭터 선택 화면 소개(`_HW/Scripts/UI/AccountView.cs` IntroOf)와 Python 컨셉 아트. #486으로 실제 계정에서도 Python 카드가 열림
-3. HUD 구슬 개수
-4. 마법사 SimTest(`[XxxTest] 전체 통과` 형식): 구슬 최대 5개, 가비지 컬렉션(끊긴 구슬 생성 누수 없음), 보호막 한 번 막기, 중독 겹침, 공중 부양 타이머
-5. 몬스터 드롭 후보 언어별: 김도훈 `MonsterReward`가 `ItemCountRules.Initial()`(C)을 씀 → `Initial(언어)`. PR #520에 적어 둠
-6. 기획 문서에 중독 추가
-7. 그림
+1. 마법사 SimTest(`[XxxTest] 전체 통과` 형식, #533 구슬 방식 기준): 구슬 최대 5개(다 쓴 구슬 포함), 담지 않은 구슬은 사라짐, 다 쓴 구슬 → UsedManaOrbError, is_valid_orb, 구슬 보호막 한 번 막기, 중독 겹침, 공중 부양 타이머(RideDuration 6초)
+2. 몬스터 드롭 후보 언어별: 김도훈 `MonsterReward`가 `ItemCountRules.Initial()`(C)을 씀 → `Initial(언어)`. PR #520에 적어 둠, 아직 안 고쳐짐
+3. 기획 문서에 중독 추가
+4. 그림
    - 아쉬운 아이콘: `py.chain_lightning`(지그재그), `py.blink`(어두움). 게임에서 보고 다시 뽑을지 정함
-   - 검사(C) 이펙트 시안: 7개 중 3개(Thrust_Flash, Skewer_Flash, SwordWave)만 받음(`invoke pixelab/c_effects/`, PixelLab 그대로). SwordWave_Wide, Mark_Flash, Dance_Slash, Parry_Flash는 크레딧이 없어 못 만듦(저장도 안 돼서 다시 만들어야 함). `_HW/Effects`라 비교 후 혜원과 정하기
+   - 검사(C) 이펙트 시안: 7개 중 3개(Thrust_Flash, Skewer_Flash, SwordWave)만 받음(`invoke pixelab/c_effects/`, PixelLab 그대로). SwordWave_Wide, Mark_Flash, Dance_Slash, Parry_Flash는 크레딧이 없어 못 만듦. `_HW/Effects`라 비교 후 혜원과 정하기
    - PixelLab 크레딧 소진. 대안으로 pixelfx(github.com/patch-gg/pixelfx, MIT, v0.3.1, PNG+JSON 시트) 세팅 요청 받음: 저장소 `.claude/skills/pixelfx`에 스킬, 고정 버전, Unity 가져오기 메뉴, 서드파티 고지, Patch Pixel 폰트는 쓰지 않음
+5. 파이썬 캐릭터 컨셉 아트 (캐릭터 선택 화면은 지금 글자 「Py」)
 - 임시 파일: `Library/pyw_bundle.tar`, `Library/pyw_x/`, `Library/pyw_list.txt` (git 대상 아님, 지워도 됨)

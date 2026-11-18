@@ -97,6 +97,12 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<string, int> CooldownStarted;
 
 	/// <summary>
+	/// 출력 함수(printf, print)가 글 한 줄을 출력했을 때 불린다 (작업, 출력 글) (#536). 출력한 틱에 불린다.<br/>
+	/// 멀티플레이에서 서버가 출력 글을 시전한 사람의 화면에 보낼 때 쓴다(FunctionExecutorNetwork.OwnOutput).
+	/// </summary>
+	public event Action<FunctionTask, string> Output;
+
+	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
 	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
 	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
@@ -438,6 +444,9 @@ public class FunctionExecutor : MonoBehaviour
 		foreach (FunctionTask task in GetTickOrder())
 		{
 			FunctionFailure? failure = task.Step();
+			// 출력은 실패를 처리하기 전에 알린다. 같은 틱에 실패한 함수라도 실패 직전에 출력한 값은 플레이어가 봐야 원인을 찾을 수 있기 때문 (#536)
+			foreach (string text in task.TakeOutputs())
+				Output?.Invoke(task, text);
 			// 프로세스를 새로 시작했으면 이 작업이 남긴 입력·비동기 시전 요청은 버린다. 새로 시작한 프로세스에 죽은 프로세스의 작업이 생기지 않게 하기 위함
 			// 이 틱에 남은 작업은 이미 끊겨서 Step이 진행하지 않는다
 			if (failure.HasValue && HandleFailure(task, failure.Value)) continue;

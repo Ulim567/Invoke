@@ -261,6 +261,16 @@ public static partial class ItemDescriptions
 			Returns = "True 또는 False",
 			Caution = "다 쓴 구슬도 variable에는 그대로 남으므로 None과 비교해서는 알 수 없습니다. 다 쓴 구슬, None, 구슬이 아닌 값은 False입니다.",
 		},
+		[PredefinedFunctionIds.PyPrint] = new ItemDescription
+		{
+			Format = "print(value)",
+			Summary = "값 하나를 화면 왼쪽 아래에 출력합니다.",
+			Purpose = "화면에 보이지 않는 값(variable, function이 돌려준 값)을 확인할 때 씁니다.",
+			ExampleCode = "n = 3\nprint(n)",
+			ExampleResult = "Q 슬롯에서 쓰면 화면 왼쪽 아래에 [Q] n = 3이 3초 동안 보입니다.",
+			Slots = new[] { "value : 출력할 값 | 아무 값" },
+			Caution = "variable이나 expression을 넣으면 n = 3처럼 이름과 값이 함께 보이고, 값을 직접 적으면 값만 보입니다. list는 [1, 2]처럼 원소까지 보입니다. 출력은 최대 5줄까지 쌓이고, 내 화면에만 보입니다.",
+		},
 
 		// 문법 노드 (스킬 트리의 문법 탭) ----------------------------------------------
 		["syntax.variable"] = new ItemDescription { Summary = "값에 이름을 붙여 담아 두고 다시 씁니다. global, del도 씁니다." },

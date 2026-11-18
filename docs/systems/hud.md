@@ -22,7 +22,7 @@
 | 아래 가운데 | HP 막대·숫자. 닳으면 흰 잔상이 0.3초 남았다가 줄어든다 (#431, 몬스터·보스 체력 바와 같은 방식. 회복은 바로) | `PlayerHealth.Hp`, `MaxHp` |
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
 | | 슬롯 8칸 Q W E R A S D F | 아래 「슬롯 상태」 |
-| 왼쪽 아래 띠 위 | 실패 알림 3초 (#480). 아래 「실패 알림」 | `FunctionExecutorNetwork.CastRejected`, `OwnTaskEnded` |
+| 왼쪽 아래 띠 위 | 알림 목록: 오류와 출력을 최대 5개, 알림마다 3초 (#480, #536). 아래 「알림 목록」 | `FunctionExecutorNetwork.CastRejected`, `OwnTaskEnded`, `OwnOutput` |
 | 오른쪽 아래 | 스킬 트리(1) · 레벨업(2) 바로가기. 아이콘 자리에 숫자 키 | 누르거나 숫자 1·2를 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비에 있을 때만, 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게, 키도 안 먹음). 숫자 키는 HUD의 `UIShortcut` On Shortcut 1·2 (#431, player-input.md)라 다른 창이 열려 있으면 반응하지 않음 |
 
 ### 슬롯 상태
@@ -43,17 +43,32 @@
 - 창(`InputBlockingPanel`을 물려받은 로비 입구, 스킬 트리, 편집, 장착, 레이드 방)은 ESC로 닫힌다. 로비 입구 창은 Enter로 들어간다. 창마다 바꾸려면 `OnCancelKey()` / `OnSubmitKey()`를 덮어쓴다
 - 시안의 버프·디버프 칸은 아직 기획 전이라 넣지 않음
 
-### 실패 알림 (#480)
-- 모양: 두 줄, 왼쪽 정렬. 첫 줄 `[분류] 이름`(분류 글자만 빨강), 둘째 줄 현상 설명. 예: `[Runtime Error] UnarmedError` / `손에 검이 없음`
-- 자리: 왼쪽 아래 띠 바로 위(왼쪽에서 12, 아래에서 64). 바탕(`hud_gauge`)은 글자 크기에 맞춤
-- 시간: 3초(`HudView` Inspector의 `Notice Time`). 새 알림이 오면 이전 알림을 덮어씀
-- 문장: `FailureNotice`(이우림, [function-executor.md](function-executor.md))가 만들고, HUD는 받은 문장을 띄우기만 함
+### 알림 목록 (#480, #536)
+- 목록: 오류 알림과 출력 알림을 한 목록에 최대 5개(`HudView` Inspector의 `Max Notices`) 쌓음. 새 알림은 맨 아래, 넘치면 가장 오래된 알림부터 뺌
+- 시간: 알림마다 나타난 뒤 3초(`Notice Time`)가 지나면 빠짐. 마지막 0.4초(`Notice Fade Time`)는 제자리에서 흐려짐(상자의 `CanvasGroup`)
+- 영역: 왼쪽 아래 띠 바로 위(왼쪽에서 12, 아래에서 64)의 정해진 크기 영역 `Notices`(150×110, 너비는 `HudView` Inspector의 `Notice Area Width`로 시작할 때 정함). 알림이 하나도 없으면 숨김
+  - 영역 밖은 `RectMask2D`가 잘라 냄. 영역 위쪽 45만큼(`HudView` Inspector의 `Notice Fade Height`, 시작할 때 마스크에 넣음)은 경계가 흐려(softness) 밀려 올라간 알림이 위로 갈수록 흐려지며 사라짐
+  - softness는 위아래에 함께 걸리므로, 마스크 아래 경계를 같은 만큼 영역 밖으로 내려(padding 음수) 아래쪽은 흐려지지 않게 함
+- 쌓기: 영역 안의 목록 `Content`(`VerticalLayoutGroup`, 간격 1, 아래 기준)에 알림마다 상자 하나. 맨 아래가 가장 새 알림
+  - 새 알림이 오면 목록을 늘어난 높이(붙이기 전과 후의 목록 높이 차이)만큼 내렸다가 부드럽게 0으로 되돌림(`Notice Rise Sharpness`). 그래서 위 알림들이 처음 자리에서 그대로 밀려 올라감. 다시 쓰는 상자의 이전 글 크기로 재지 않도록 글을 넣은 직후 글자 크기를 다시 계산함
+  - 상자는 견본 `NoticeTemplate`(바탕 `hud_gauge` 반투명 70%, `CanvasGroup`, 글자)을 `HudView`가 복사해 쓰고, 빠진 상자는 다시 씀
+  - 새 상자를 붙인 그 자리에서 목록을 내린 위치까지 적용함. 다음 프레임까지 미루면 그 사이 한 번 그려질 때 위 알림들이 먼저 튀어 올랐다가 내려와, 아래로 내려가는 것처럼 보였음
+  - 최대 너비: 글이 영역 너비(150에서 상자 안쪽 여백을 뺀 너비)보다 넓으면 그 너비에서 줄을 바꿈. 짧은 글은 줄바꿈 없이 글자 길이에 맞춤(글자의 `LayoutElement.preferredWidth`)
+  - 구조는 `HudUIBuilder`가 만듦. 바꾸면 메뉴 「Invoke → UI → 게임 HUD 만들기」로 프리팹을 다시 만듦
+- 같은 알림 합치기: 바로 앞 알림과 글이 같으면 새로 쌓지 않고 첫 줄 끝에 `(x4)`처럼 횟수를 붙이고 3초를 다시 셈. 반복문 안의 실패처럼 같은 오류가 이어질 때 목록이 같은 줄로 차지 않게 함. 값이 매번 다른 출력은 합쳐지지 않음
+- 오류 알림: 두 줄, 왼쪽 정렬. 첫 줄 `[분류] 이름`(분류 글자만 빨강), 둘째 줄 `슬롯 > 함수 이름 : 현상 설명`(`슬롯 > 함수 이름`만 하늘색 `#5EB7F2`, Inspector의 `Notice Location Color`). 예: `[Runtime Error] UnarmedError` / `Q > slot1 : 손에 검이 없음`
+  - 「·」, 「—」를 쓰지 않는 이유: HUD 글꼴(Galmuri)에 없어 빈칸으로 보임
+  - 슬롯·함수 이름 (#536): 끝난 작업은 `TaskEndInfo.Slot`, `FunctionName`. 시전 거부는 HUD가 슬롯 내용에서 찾음(스킬을 바로 넣었으면 스킬 이름, 함수를 넣었으면 그 함수 이름). 슬롯이 없는 작업은 함수 이름만
+  - 문장: `FailureNotice`(이우림, [function-executor.md](function-executor.md))가 만들고, 슬롯·함수 이름은 HUD가 둘째 줄 앞에 붙임
+- 출력 알림 (#536): 한 줄. `[Q] n = 3`(`[Q]`만 청록, Inspector의 `Output Label Color`). 슬롯이 없는 작업은 `[함수 이름] …`. 출력 글은 `printf`·`print`가 만든 것(predefined-function.md 「출력 function」)
+- 플레이어가 정한 글(출력 값, 함수 이름)은 `<noparse>`로 감싸 TMP 서식으로 읽히지 않게 함
 
 | 알리는 것 | 받는 곳 |
 | --- | --- |
 | 시전 거부 중 `NotEnoughMemory`, `CompileError`(빌드 실패, 문장 `[Cast Rejected] CompileError` / `컴파일 오류가 있는 함수`, #506)만 (그 밖의 거부는 슬롯 덮개·빨간 테두리·무채색이 이미 보여 줌) | `CastRejected` → `FailureNotice.ForRejection` |
 | 몬스터의 실행 중단 공격으로 끊긴 내 작업(`Interrupted`, 원인 `MonsterAttack`). 문장 `[Interrupted] 실행 중단 공격` / `함수가 모두 멈춤` (#504) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
 | runtime error로 분류된 실패(스킬 에러 포함). Python 캐릭터는 Python 이름(NameError, TypeError 등, #532) | `OwnTaskEnded` → `FailureNotice.ForTaskEnd` |
+| 내 작업의 출력 (#536) | `OwnOutput` |
 
 - 알리지 않는 것: 정상 종료, 취소(`Cancelled`), 사망·장소 이동·재시작으로 끊긴 작업(원인 `System`, #504), 개발자 책임(`InternalError`), 실행 중에 난 compile error(시전 전에 빌드가 `CompileError` 거부로 잡음, #506)
 

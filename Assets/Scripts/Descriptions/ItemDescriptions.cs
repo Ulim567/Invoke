@@ -363,6 +363,16 @@ public static partial class ItemDescriptions
 			Slots = new[] { "target : 확인할 대상 | Target" },
 			Caution = "true이면 그 대상을 스킬에 넘겨도 대상 때문에 runtime error가 발생하지 않습니다. Target은 pointer가 아니므로 NULL과 비교하지 않고 이 함수로 확인합니다.",
 		},
+		[PredefinedFunctionIds.Printf] = new ItemDescription
+		{
+			Summary = "값 하나를 화면 왼쪽 아래에 출력합니다.",
+			Purpose = "화면에 보이지 않는 값(variable, function이 돌려준 값)을 확인할 때 씁니다.",
+			Example = "예를 들면, variable에 담긴 값을 확인할 수 있습니다.",
+			ExampleCode = "int n = 3; printf(n);",
+			ExampleResult = "Q 슬롯에서 쓰면 화면 왼쪽 아래에 [Q] n = 3이 3초 동안 보입니다.",
+			Slots = new[] { "value : 출력할 값 | 아무 값" },
+			Caution = "variable이나 expression을 넣으면 n = 3처럼 이름과 값이 함께 보이고, 값을 직접 적으면 값만 보입니다. 출력은 최대 5줄까지 쌓이고, 내 화면에만 보입니다.",
+		},
 
 		// type ----------------------------------------------------------------
 		// 아직 화면에 보이지 않는다. 해금 설명 카드(다음 이슈)가 type 노드를 해금할 때 보여 준다

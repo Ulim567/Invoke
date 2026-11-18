@@ -14,7 +14,29 @@ public static class BlockLabels
 	/// 내 캐릭터의 언어 방식 (#532, 이우림). 편집 화면의 블록 글자, 칸 규칙, 블록 목록, 참고 카드가 이 값으로 언어별 모양을 고른다.
 	/// 캐릭터 언어(PlayerCharacter.LocalLanguage)에서 정한다. 실행기(LanguageRule.Family)와 같은 기준이다. 내 캐릭터가 없으면(서버, 시험) C.
 	/// </summary>
-	public static LanguageFamily Family => LanguageFamilies.Of(PlayerCharacter.LocalLanguage);
+	public static LanguageFamily Family => familyOverride ?? LanguageFamilies.Of(PlayerCharacter.LocalLanguage);
+
+	// SlotTextOf가 글자를 만드는 동안만 정해 두는 언어 방식 (#536). 그 밖에는 null이라 내 캐릭터 언어를 따른다
+	// 따로 두는 이유: 서버는 시전한 캐릭터의 언어로 글자를 만들어야 하는데, 서버의 내 캐릭터 언어(LocalLanguage)는 그 캐릭터와 다를 수 있기 때문
+	static LanguageFamily? familyOverride;
+
+	/// <summary>
+	/// value slot 하나를 family 언어 모양의 한 줄 글자로. 예: 변수 n → "n", 연산 블록 → "x + 1". 비어 있으면 빈 글자.<br/>
+	/// 실행기 변환(FunctionDataConverter)이 출력 함수의 「n = 3」 앞부분을 만들 때 쓴다 (#536).
+	/// </summary>
+	public static string SlotTextOf(SlotData slot, LanguageFamily family)
+	{
+		LanguageFamily? previous = familyOverride;
+		familyOverride = family;
+		try
+		{
+			return Value(slot).Trim();
+		}
+		finally
+		{
+			familyOverride = previous;
+		}
+	}
 
 	// 지금 언어 방식이 Python이면 true. Python 갈래만 있는 곳(블록 글자 등)이 쓴다. 다른 언어가 생기면 그 곳을 Family의 switch로 바꾼다
 	internal static bool IsPython => Family == LanguageFamily.Python;

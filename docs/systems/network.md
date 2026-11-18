@@ -171,7 +171,8 @@ void CmdPickUp()
 | `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음), `CannotAct`(시전자가 죽었거나 경직 중, #310), `InNoCastPlace`(시전자가 공격할 수 없는 장소에 있음, #313), `CompileError`(빌드 실패, `NoFunction`보다 먼저 봄, #506) |
 | `TaskStarted` (event) | `int` 작업 번호, `int` 슬롯(비동기 작업 -1), `string` 함수 이름 | - | [연출] 작업이 진행 시작. 모든 클라이언트. 시전 모션 |
 | `TaskEnded` (event) | `int` 작업 번호, `FunctionTaskEndReason` | - | [로직] 작업이 끝남. 모든 클라이언트. 시작 전에 끊긴 작업은 이것만 |
-| `OwnTaskEnded` (event) | `int` 작업 번호, `TaskEndInfo` | - | [표시] 내 작업이 끝남. 소유 클라이언트에만, `TaskEnded`보다 먼저. `TaskEndInfo`: 끝난 이유, 실패 종류·분류(`Failed`일 때), 시전자의 언어 방식(#532), 스킬 에러 클래스 이름·`Message`(`SkillFailed`일 때). HUD 알림 문장은 `FailureNotice.ForTaskEnd` (#480, [function-executor.md](function-executor.md)) |
+| `OwnTaskEnded` (event) | `int` 작업 번호, `TaskEndInfo` | - | [표시] 내 작업이 끝남. 소유 클라이언트에만, `TaskEnded`보다 먼저. `TaskEndInfo`: 끝난 이유, 실패 종류·분류(`Failed`일 때), 시전자의 언어 방식(#532), 스킬 에러 클래스 이름·`Message`(`SkillFailed`일 때), 슬롯 번호·함수 이름(#536). HUD 알림 문장은 `FailureNotice.ForTaskEnd` (#480, [function-executor.md](function-executor.md)) |
+| `OwnOutput` (event) | `int` 슬롯(슬롯에서 시전하지 않은 작업은 -1), `string` 작업의 함수 이름, `string` 출력 글 | - | [표시] 내 작업의 출력 함수(`printf`, `print`)가 출력함. 소유 클라이언트에만(`[TargetRpc]`). HUD 알림 목록이 `[Q] n = 3`으로 보임 (#536, [predefined-function.md](predefined-function.md) 「출력 function」) |
 | `InputRequested` (event) | `int` 작업 번호, `string` 입력 함수 ID, `int` 슬롯(비동기 작업 -1) | - | [로직] 이 플레이어의 작업이 입력을 기다림. 소유 클라이언트에만. 이 안에서 바로 `ProvideTarget`을 불러도 됨 |
 | `IsDataReady` | - | `bool` | 서버가 이 플레이어의 함수 데이터를 처음 다 받아 시전 준비가 됨. 로딩 화면이 기다림 |
 | `DataReady` (event) | - | - | [표시] `IsDataReady`가 true가 될 때 한 번. 소유 클라이언트(호스트 포함) |

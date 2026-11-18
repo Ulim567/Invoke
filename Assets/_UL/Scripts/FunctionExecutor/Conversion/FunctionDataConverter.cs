@@ -337,7 +337,7 @@ public static class FunctionDataConverter
 				// 칸: 파라미터 수만큼의 값. 반환 값은 버리지만, Return 누락과 반환 타입 불일치는 expression에서처럼 실패한다
 				case BlockKind.Function:
 					return TryConvertCall(data, block, out FunctionBlock function, out ValueBlock[] arguments)
-						? new CallBlock(function, arguments)
+						? new CallBlock(function, arguments, ArgumentTextsOf(function, block))
 						: null;
 
 				// 칸: 돌려줄 값(비워도 됨). 반환 타입에 맞는지와 return 누락은 실행 중에 함수가 끝날 때 본다
@@ -444,6 +444,24 @@ public static class FunctionDataConverter
 			return true;
 		}
 
+		// 출력 함수에 넘길 argument 칸의 글 (#536). 변수와 expression은 편집 화면에 보이는 글 그대로(예: n, x + 1), 값을 직접 적은 칸과 비운 칸은 null
+		// 출력 함수만 만드는 이유: 다른 함수는 이 글을 쓰지 않으므로, 함수를 바꿀 때마다 글을 만들 필요가 없기 때문
+		// 값을 직접 적은 칸을 빼는 이유: printf(5)가 「5 = 5」로 보이지 않게 하기 위함
+		string[] ArgumentTextsOf(FunctionBlock function, BlockData block)
+		{
+			if (!(function is PrintFunction)) return null;
+
+			LanguageFamily family = python ? LanguageFamily.Python : LanguageFamily.C;
+			string[] texts = new string[block.Slots.Count];
+			for (int i = 0; i < texts.Length; i++)
+			{
+				SlotData slot = block.Slots[i];
+				if (slot.Block == null && slot.VariableName == null) continue;
+				texts[i] = BlockLabels.SlotTextOf(slot, family);
+			}
+			return texts;
+		}
+
 		// 함수 블록이 GUID로 부르는 사용자 정의 함수를 찾아 바꾼다. 부른 함수를 바꿀 수 없으면 그 함수 이름으로 콘솔 경고가 남는다
 		bool TryFindUserFunction(FunctionData data, BlockData block, out FunctionBlock function)
 		{
@@ -548,7 +566,7 @@ public static class FunctionDataConverter
 					VariableType returnType = function.ReturnType;
 					// Python(#532)은 모든 함수가 값을 돌려준다. 돌려줄 값이 없는 함수(void 스킬)는 None이다(CallBlock)
 					if (python && returnType.Kind == VariableTypeKind.Void)
-						return function.IsAsync ? Reject<ValueBlock>(data, $"{function.Name}은(는) 비동기 함수라 expression으로 쓸 수 없습니다.") : new CallBlock(function, arguments);
+						return function.IsAsync ? Reject<ValueBlock>(data, $"{function.Name}은(는) 비동기 함수라 expression으로 쓸 수 없습니다.") : new CallBlock(function, arguments, ArgumentTextsOf(function, block));
 					if (returnType.Kind == VariableTypeKind.Void)
 						return Reject<ValueBlock>(data, $"{function.Name}은(는) 값을 돌려주지 않으므로 expression으로 쓸 수 없습니다.");
 					if (!RuntimeValue.IsSupportedType(returnType) || returnType.Kind == VariableTypeKind.Array)

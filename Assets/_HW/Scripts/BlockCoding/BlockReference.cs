@@ -273,8 +273,10 @@ public static class BlockReference
 	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬, Python 스킬(#486), 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수
 	// BlockEditor.RebuildFunctionTab도 이 함수로 나눈다 (두 곳이 어긋나지 않게)
 	// py.is_valid_orb는 py.로 시작하지만 스킬이 아니라 기본 함수다 (#532, 이우림). is_valid_target과 같은 구역에 둔다
+	// 출력 함수(c.printf, py.print, #536)도 c.·py.로 시작하지만 기본 함수다
 	internal static bool IsSkill(string id) =>
 		id != PredefinedFunctionIds.PyIsValidOrb
+		&& id != PredefinedFunctionIds.Printf && id != PredefinedFunctionIds.PyPrint
 		&& (id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("py.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal));
 
 	static BlockReferenceEntry FunctionEntry(PredefinedFunction function)
@@ -489,6 +491,8 @@ public static class BlockReference
 		[PredefinedFunctionIds.GetBug] = "버그 찾기",
 		[PredefinedFunctionIds.IsValidTarget] = "대상 확인",
 		[PredefinedFunctionIds.PyIsValidOrb] = "구슬 확인",
+		[PredefinedFunctionIds.Printf] = "출력",
+		[PredefinedFunctionIds.PyPrint] = "출력",
 	};
 
 	/// <summary>

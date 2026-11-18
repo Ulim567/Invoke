@@ -203,6 +203,23 @@ public class FunctionContext
 		return taken;
 	}
 
+	// 출력 함수(printf, print)가 요청한 출력 글 (#536). 실행기가 Step 다음에 꺼내 가서 FunctionExecutor.Output으로 알린다
+	// 화면에 바로 보내지 않고 기록만 하는 이유: 비동기 시전 요청과 같이, 실행 문맥이 실행기와 네트워크를 거꾸로 부르지 않게 하기 위함
+	readonly List<string> outputs = new List<string>();
+
+	// 출력 글 한 줄을 기록한다
+	internal void RequestOutput(string text) => outputs.Add(text);
+
+	// 쌓인 출력 글을 꺼내고 비운다. 출력이 없는 틱이 대부분이므로, 없으면 빈 배열을 돌려준다
+	internal IReadOnlyList<string> TakeOutputs()
+	{
+		if (outputs.Count == 0) return System.Array.Empty<string>();
+
+		string[] taken = outputs.ToArray();
+		outputs.Clear();
+		return taken;
+	}
+
 	// 입력을 요청한 사전 정의 함수(입력 함수). 요청이 없거나 값을 꺼내 갔으면 null이다
 	// 동기 함수는 한 작업 안에서 하나씩만 실행되므로, 한 작업에 요청은 언제나 하나뿐이다
 	internal PredefinedFunction InputRequester { get; private set; }

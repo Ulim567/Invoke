@@ -236,6 +236,8 @@ public class SlotLoadout : MonoBehaviour
 		if (skillId == PredefinedFunctionIds.DoubleJump) return false;
 		// is_valid_orb는 값을 돌려주기만 하는 함수라 슬롯에 넣지 않는다 (#532, 이우림). is_valid_target(game.)과 같다
 		if (skillId == PredefinedFunctionIds.PyIsValidOrb) return false;
+		// 출력 함수(#536)도 슬롯에 넣지 않는다. 슬롯에서 바로 쓰면 출력할 값을 넘길 수 없기 때문
+		if (skillId == PredefinedFunctionIds.Printf || skillId == PredefinedFunctionIds.PyPrint) return false;
 		return PredefinedFunctionRegistry.TryGet(skillId, out _);
 	}
 

@@ -154,6 +154,14 @@ public static class BlockReference
 
 	static string Category(string group, string subgroup) => group + CategorySeparator + subgroup;
 
+	/// <summary>분류 태그의 뒤 단계 (「스킬 > 찌르기」 → 찌르기). 한 단계뿐이면(값, 함수) 빈 글자. 참고 탭이 소구분을 나눌 때 쓴다 (#578)</summary>
+	internal static string SubgroupOf(string category)
+	{
+		if (string.IsNullOrEmpty(category)) return "";
+		int split = category.IndexOf(CategorySeparator, StringComparison.Ordinal);
+		return split < 0 ? "" : category.Substring(split + CategorySeparator.Length);
+	}
+
 	static bool Contains(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
 

@@ -141,7 +141,24 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 		snappedFor = screenPerUnit;
 		foreach (KeyValuePair<TMP_Text, float> pair in baseSizes)
 			if (pair.Key != null) pair.Key.fontSize = SnappedSize(pair.Value, screenPerUnit);
+		KeepUsageLabelsWhole();
 		return true;
+	}
+
+	// 「사용 방법 [블록 탭] 에서 코드로 끌어다 놓기」 줄 (#578): 「사용 방법」 글자와 탭 칩이 글자 너비보다 좁아지지 않게 한다.
+	// 좁은 곳(참고 탭)에서 줄 배치가 두 칸을 글자보다 좁게 줄여 칩이 「사용 방법」 글자를 덮었다 (사용자 피드백). 남는 너비가 모자라면 뒤 글이 줄을 바꾼다
+	void KeepUsageLabelsWhole()
+	{
+		if (usageRow == null) return;
+		Transform label = usageRow.transform.Find("Label");
+		if (label != null && label.TryGetComponent(out TMP_Text labelText)) KeepWhole(labelText);
+		if (usageTab != null) KeepWhole(usageTab);
+	}
+
+	static void KeepWhole(TMP_Text text)
+	{
+		if (!text.TryGetComponent(out LayoutElement element)) element = text.gameObject.AddComponent<LayoutElement>();
+		element.minWidth = text.GetPreferredValues(text.text).x;
 	}
 
 	static float SnappedSize(float size, float screenPerUnit)
@@ -220,6 +237,7 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 
 		hasUsage = !string.IsNullOrEmpty(entry.UsageTab);
 		if (usageTab != null) usageTab.text = entry.UsageTab ?? "";
+		KeepUsageLabelsWhole();
 		if (usageText != null) usageText.text = $"<noparse>{entry.UsageText ?? ""}</noparse>";
 
 		string more = BuildExpanded(entry);
@@ -337,12 +355,15 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 	void ToggleDetails()
 	{
 		// 참고 탭처럼 카드가 여럿 늘어선 곳에서는 하나만 펼친다 (#489 참고 카드와 같은 규칙)
-		if (!expanded && transform.parent != null)
+		KeepInView(() =>
 		{
-			foreach (Transform sibling in transform.parent)
-				if (sibling != transform && sibling.TryGetComponent(out ItemCardView other) && other.expanded) other.SetExpanded(false);
-		}
-		SetExpanded(!expanded);
+			if (!expanded && transform.parent != null)
+			{
+				foreach (Transform sibling in transform.parent)
+					if (sibling != transform && sibling.TryGetComponent(out ItemCardView other) && other.expanded) other.SetExpanded(false);
+			}
+			SetExpanded(!expanded);
+		});
 	}
 
 	void SetExpanded(bool value)
@@ -369,7 +390,10 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 	// 접힌 카드의 모양: 이름 한 줄 (글자는 펼친 카드보다 작게, 위아래 여백도 줄여 목록처럼 훑어보게)
 	// RectOffset은 static readonly로 두면 MonoBehaviour를 만드는 중에 만들어져 Unity가 막는다 (set_left 예외, 박진우). 쓸 때마다 새로 만든다
 	static RectOffset ClosedPadding => new RectOffset(9, 9, 5, 6);
-	const float ClosedTitleSize = 9f;
+	// 참고 탭 카드의 이름·분류 칩 글자 (#578, 사용자 요청: 너무 큼). 펼쳐도 같은 크기로 두어 이름 줄이 바뀌어 보이지 않게 한다
+	const float ClosedTitleSize = 7f;
+	const float ClosedTagSize = 4.5f;
+	static RectOffset ClosedTagPadding => new RectOffset(4, 4, 1, 2);
 	const string ToggleColor = "#5EF2D6";
 	GameObject summaryLabel;
 
@@ -404,12 +428,55 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 	void ToggleOpen()
 	{
 		bool next = !open;
-		if (next && transform.parent != null)
+		KeepInView(() =>
 		{
-			foreach (Transform sibling in transform.parent)
-				if (sibling != transform && sibling.TryGetComponent(out ItemCardView other) && other.collapsible && other.open) other.SetOpen(false);
-		}
-		SetOpen(next);
+			if (next && transform.parent != null)
+			{
+				foreach (Transform sibling in transform.parent)
+					if (sibling != transform && sibling.TryGetComponent(out ItemCardView other) && other.collapsible && other.open) other.SetOpen(false);
+			}
+			SetOpen(next);
+		});
+	}
+
+	// 보던 자리 지키기 (#578) ------------------------------------------------------------------
+	// 참고 탭에서 카드를 펼치면 위쪽에 펼쳐 있던 긴 카드가 접히면서 목록이 당겨져, 누른 카드가 화면 밖으로 나갔다 (사용자 피드백).
+	// 그래서 누른 카드의 위 끝이 누르기 전과 같은 높이에 있도록 목록(ScrollRect의 Content)을 옮긴다. 참고 탭 카드(collapsible)에만
+
+	void KeepInView(Action change)
+	{
+		ScrollRect scroll = collapsible ? GetComponentInParent<ScrollRect>() : null;
+		if (scroll == null || scroll.content == null) { change(); return; }
+		float before = TopInViewport(scroll);
+		change();
+		// 접히고 펼친 카드의 높이를 바로 반영해 자리를 구한다
+		LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+		ShiftTo(scroll, before);
+		if (isActiveAndEnabled) StartCoroutine(ShiftNextFrame(scroll, before));
+	}
+
+	// 글자 크기 맞추기(LateUpdate)가 끝난 뒤 높이가 조금 바뀔 수 있어 다음 프레임에 한 번 더 맞춘다
+	System.Collections.IEnumerator ShiftNextFrame(ScrollRect scroll, float top)
+	{
+		yield return null;
+		if (scroll == null) yield break;
+		LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+		ShiftTo(scroll, top);
+	}
+
+	void ShiftTo(ScrollRect scroll, float top)
+	{
+		scroll.StopMovement();
+		float shift = top - TopInViewport(scroll);
+		// Content를 위로 올리면(anchoredPosition.y가 커지면) 이 카드도 그만큼 올라간다
+		if (Mathf.Abs(shift) > 0.01f) scroll.content.anchoredPosition += new Vector2(0f, shift);
+	}
+
+	float TopInViewport(ScrollRect scroll)
+	{
+		RectTransform viewport = scroll.viewport != null ? scroll.viewport : (RectTransform)scroll.transform;
+		var rect = (RectTransform)transform;
+		return viewport.InverseTransformPoint(rect.TransformPoint(new Vector3(0f, rect.rect.yMax, 0f))).y;
 	}
 
 	void SetOpen(bool value)
@@ -429,12 +496,23 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 			openSpacing = column.spacing;
 			if (titleText != null) openTitleSize = baseSizes.TryGetValue(titleText, out float size) ? size : titleText.fontSize;
 		}
-		column.padding = closed ? ClosedPadding : openPadding;
+		// 참고 탭 카드(collapsible)는 펼쳐도 이름 줄의 자리·글자 크기를 접힌 때와 같게 둔다 (#578, 사용자 요청). 아래 여백만 펼친 카드 값
+		RectOffset closedPadding = ClosedPadding;
+		column.padding = closed ? closedPadding
+			: collapsible ? new RectOffset(closedPadding.left, closedPadding.right, closedPadding.top, openPadding.bottom)
+			: openPadding;
 		column.spacing = closed ? 3f : openSpacing;
 		if (titleText != null && openTitleSize > 0)
 		{
-			baseSizes[titleText] = closed ? ClosedTitleSize : openTitleSize;
+			baseSizes[titleText] = closed || collapsible ? ClosedTitleSize : openTitleSize;
 			if (snappedFor > 0) titleText.fontSize = SnappedSize(baseSizes[titleText], snappedFor);
+		}
+		// 분류 칩도 참고 탭 카드에서는 작게
+		if (collapsible && categoryText != null)
+		{
+			baseSizes[categoryText] = ClosedTagSize;
+			if (snappedFor > 0) categoryText.fontSize = SnappedSize(ClosedTagSize, snappedFor);
+			if (categoryTag != null && categoryTag.TryGetComponent(out HorizontalLayoutGroup chip)) chip.padding = ClosedTagPadding;
 		}
 	}
 

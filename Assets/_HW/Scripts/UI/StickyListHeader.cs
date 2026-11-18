@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// - 사용법: Attach로 붙이고, 목록을 다시 만들 때 Clear()로 비운 뒤 머리글을 만들 때마다 Mark(머리글, 대구분, 소구분)로 알려 준다.<br/>
 /// - 보이는 영역 위로 지나간 마지막 머리글을 찾아 「대구분 > 소구분」(예: 스킬 > 찌르기)을 맨 위 머리글에 적는다.
 ///   아무 머리글도 지나가지 않았으면(목록 맨 위) 숨긴다. 목록의 머리글이 그대로 보이기 때문.<br/>
-/// - 맨 위 머리글은 목록 머리글과 같은 프리팹(ListHeader)을 스크롤 보이는 영역(Viewport)의 자식으로 만든다. 목록(Content)을 비워도 지워지지 않는다.
+/// - 맨 위 머리글은 목록 머리글과 같은 프리팹(ListHeader)을 ScrollRect 오브젝트의 자식(보이는 영역 Viewport 바깥)으로 만든다. 목록(Content)을 비워도 지워지지 않는다.
 /// </para>
 /// </summary>
 public class StickyListHeader : MonoBehaviour
@@ -22,7 +22,7 @@ public class StickyListHeader : MonoBehaviour
 	}
 
 	const string Separator = " > "; // 분류 태그와 같은 표기 (「·」는 Galmuri11 글꼴에 없음)
-	const float TopBleed = 2f;      // 고정 머리글을 보이는 영역 위로 더 올려 그리는 양 (AlignTo)
+	const float TopCover = 4f;      // 고정 머리글을 보이는 영역 위로 더 올려 그리는 양 (AlignTo). 편집 화면의 검색 칸 아래 끝과 목록 위 끝 사이의 틈(4)
 
 	readonly List<Marker> markers = new List<Marker>();
 	ScrollRect scroll;
@@ -61,8 +61,9 @@ public class StickyListHeader : MonoBehaviour
 
 	void CreatePinned(ListHeaderView prefab, Action<ListHeaderView> style)
 	{
-		RectTransform viewport = scroll.viewport != null ? scroll.viewport : (RectTransform)scroll.transform;
-		pinned = Instantiate(prefab, viewport);
+		// 보이는 영역(Viewport)이 아니라 그 바깥(ScrollRect 오브젝트)에 둔다. Viewport의 RectMask2D가 게임 글꼴(Galmuri11, Bitmap 셰이더) 글자를 칸 경계에서 잘라 내지 못해,
+		// 위로 걸친 줄의 글자가 보이는 영역 위 틈(검색 칸과의 사이)에 비쳤다 (사용자 확인, 화면을 찍어 원인 확인). 바깥에 두면 그 틈까지 덮을 수 있다
+		pinned = Instantiate(prefab, scroll.transform);
 		pinned.name = "StickyHeader";
 		style?.Invoke(pinned);
 
@@ -74,7 +75,7 @@ public class StickyListHeader : MonoBehaviour
 		rect.pivot = new Vector2(0f, 1f);
 		rect.anchoredPosition = Vector2.zero;
 		rect.sizeDelta = new Vector2(0f, pinnedHeight);
-		rect.SetAsLastSibling(); // 목록(Content)보다 위에 그린다
+		rect.SetAsLastSibling(); // 보이는 영역(목록)보다 위에 그린다
 
 		// 띠가 클릭을 받아, 띠 아래에 가려진 항목이 눌리거나 끌리지 않게 한다. 휠 스크롤은 부모의 ScrollRect로 올라간다
 		if (pinned.TryGetComponent(out Image band)) band.raycastTarget = true;
@@ -113,14 +114,16 @@ public class StickyListHeader : MonoBehaviour
 	// 고정 머리글의 왼쪽 끝과 너비를 목록 머리글(target)과 같게 한다. 목록 안쪽 여백·스크롤 막대 자리를 따로 셈하지 않아도 같은 상자가 된다
 	void AlignTo(RectTransform target, RectTransform viewport)
 	{
+		var parent = (RectTransform)pinned.transform.parent;
 		target.GetWorldCorners(corners);
-		float left = viewport.InverseTransformPoint(corners[0]).x;
-		float right = viewport.InverseTransformPoint(corners[2]).x;
+		float left = parent.InverseTransformPoint(corners[0]).x;
+		float right = parent.InverseTransformPoint(corners[2]).x;
+		viewport.GetWorldCorners(corners);
+		float top = parent.InverseTransformPoint(corners[1]).y;
 		var rect = (RectTransform)pinned.transform;
-		// 위로 TopBleed만큼 더 올려 그린다. 캔버스 배율 때문에 위 끝이 화면 픽셀과 어긋나면, 보이는 영역 맨 위 1픽셀 줄에 지나가는 항목 글자가 비쳤다 (사용자 확인).
-		// 보이는 영역 밖은 RectMask2D가 잘라 내므로 더 올려도 화면에는 보이지 않는다
-		var position = new Vector2(left - viewport.rect.xMin, TopBleed);
-		var size = new Vector2(right - left, pinnedHeight + TopBleed);
+		// 보이는 영역 위 끝에서 TopCover만큼 더 올려, 검색 칸과의 틈에 비치는 글자까지 덮는다
+		var position = new Vector2(left - parent.rect.xMin, top - parent.rect.yMax + TopCover);
+		var size = new Vector2(right - left, pinnedHeight + TopCover);
 		if (rect.anchoredPosition != position) rect.anchoredPosition = position;
 		if (rect.sizeDelta != size) rect.sizeDelta = size;
 	}

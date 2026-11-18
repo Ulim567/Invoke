@@ -30,7 +30,7 @@
 ## 1차 표 (11/8)
 | 곳 | 소리 |
 | --- | --- |
-| BGM 로비·사냥터·연습장 | `hunting_bgm` |
+| BGM 로비·사냥터(1·2·3)·연습장 | `hunting_bgm` (사냥터2·3 줄은 임혜원이 추가, 김도훈 허락 11/18) |
 | BGM 레이드 던전 | `boss_bgm` |
 | Gateway 내려찍기(패킷 낙하·때리기) | `boss_attack_3` |
 | Gateway 패킷 던지기 | `packet_attack` |

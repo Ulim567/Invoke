@@ -80,6 +80,8 @@ public class AccountScreen : MonoBehaviour
 		password = "";
 		passwordConfirm = "";
 
+		// 로그아웃 (#570): 에디터 Host는 서버도 꺼지므로 CanLogout이 false라 그리지 않는다
+		if (flow.CanLogout && GUILayout.Button("< 로그아웃")) flow.Logout();
 		GUILayout.Label("> 캐릭터");
 		GUILayout.Label($"닉네임: {flow.Nickname}");
 

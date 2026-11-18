@@ -3,7 +3,7 @@
 - 담당자: 임혜원
 
 ## 하는 일
-- 플레이어가 전체·BGM·효과음 음량을 바꾸고, 로그아웃하거나 레이드를 포기하는 창 (#292, 우림이 시안 8-2, 8-4).
+- 플레이어가 전체·BGM·효과음 음량을 바꾸고, 캐릭터 화면으로 돌아가거나(#570) 로그아웃하거나 레이드를 포기하는 창 (#292, 우림이 시안 8-2, 8-4).
 - 값은 `GameSettings`(static)가 갖고 저장·적용한다. 화면은 `SettingsView`가 그린다 (코드 작성 규칙 1).
 - 하지 않는 일
   - BGM·효과음 재생: 소리를 내는 쪽이 AudioSource의 Output을 아래 Mixer 그룹으로 둔다.
@@ -12,9 +12,11 @@
 - 여는 법: HUD 왼쪽 위 「설정」 버튼이나 Esc (`HudView.SettingsRequested`, 다른 창이 열려 있지 않을 때). 닫는 법: 「돌아가기」, Esc.
 - 창(`SettingsView`)은 `InputBlockingPanel`: 열린 동안 내 캐릭터의 Player·Attack 맵을 끈다. 화면 전체를 어둡게 덮고, 뒤의 HUD는 숨기지 않는다 (`HidesHud` false).
 - 키: 방향키 위·아래로 줄 고르기, 왼쪽·오른쪽으로 음량 10%씩, Enter로 버튼 누르기 (EventSystem 이동). 열 때 「돌아가기」를 고른다.
-- 아래 버튼
-  - 로비·사냥터·연습장: 「로그아웃」. `SettingsView.LogoutRequested`를 알린다. 받는 쪽이 없으면 버튼이 꺼진다 (로그아웃은 아직 계정 쪽에 없음, account.md)
+- 아래 버튼: 「돌아가기」 아래 한 줄에 왼쪽 「캐릭터 선택」, 오른쪽 「로그아웃」(레이드 던전에서는 「레이드 포기」)이 반씩 나란히 (#570)
+  - 「캐릭터 선택」 (#570): `SettingsView.CharacterSelectRequested`를 알린다. 계정 쪽(`AccountFlow`)이 받아 접속은 둔 채 캐릭터 화면으로 돌아간다 (account.md). 받는 쪽이 없거나 레이드 던전에서는 꺼진다. 에디터 Host에서도 켜진다
+  - 로비·사냥터·연습장: 「로그아웃」. `SettingsView.LogoutRequested`를 알린다. 받는 쪽이 없으면 버튼이 꺼진다 (에디터 Host는 꺼짐, account.md)
   - 레이드 던전 (내 캐릭터의 `PlayerPublicInfo.Place`가 `PlaceScenes.RaidDungeon`일 때, #362): 「레이드 포기」. `RaidParties.RequestGiveUp()` (place-scenes.md)
+  - 방향키: 돌아가기 ↓ 캐릭터 선택, 캐릭터 선택 ← → 로그아웃. 꺼진 버튼은 건너뛴다
 - `SettingsCanvas` 프리팹(`Assets/_HW/UI/Settings`)은 **Base 씬**에 둔다. Base 씬은 계속 떠 있어서 로비·사냥터·레이드 어디서나 열 수 있다. 정렬 순서 40 (편집 화면 10, 레이드 결과 30보다 위).
 - 프리팹은 메뉴 Invoke → UI → 설정 화면 만들기(`SettingsUIBuilder`, 에디터 전용)가 만든다. 여러 번 눌러도 된다.
 - 음량
@@ -37,6 +39,7 @@
 | `GameSettings.MasterVolume`, `BgmVolume`, `SfxVolume` | - | `float` (0~1) | 지금 음량. 읽기만 한다 |
 | `GameSettings.ShowConsoleOutput` | - | `bool` | HUD 콘솔 출력(출력·오류 알림)을 띄우는지 (#536). `HudView`가 읽는다. 바꾸는 것은 `SetShowConsoleOutput(bool)` |
 | `SettingsView.LogoutRequested` (static event) | - | - | [표시] 설정 창의 「로그아웃」. 계정 쪽이 받아서 접속을 끊고 로그인 화면으로 돌아간다 |
+| `SettingsView.CharacterSelectRequested` (static event) | - | - | [표시] 설정 창의 「캐릭터 선택」 (#570). 계정 쪽이 받아서 접속은 둔 채 캐릭터 화면으로 돌아간다. 받는 쪽이 없으면 버튼이 꺼진다 |
 | `GameSettings.Changed` (event) | - | - | [표시] 값이 바뀌었을 때 |
 
 ## 맞춘 결과

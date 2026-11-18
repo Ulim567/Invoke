@@ -22,7 +22,9 @@ public static class DoorSignBuilder
 	const string KeySpritePath = "Assets/_HW/UI/Sign/sign_key.png";
 	const float FloorTop = -4f;
 	const float GateHeight = 3f;       // 문 그림 높이 (48픽셀)
-	const float SignAboveGate = 1.8f;  // 문 위 끝에서 안내판까지. 캐릭터(3.75칸)와 머리 위 이름표보다 위
+	// 문 위 끝에서 안내판 가운데까지. 문 앞에 선 캐릭터(콜라이더 2.5칸)의 이름표 윗변(바닥에서 약 3.4칸)에 겹치지 않는 가장 낮은 높이.
+	// 예전 1.8은 캐릭터를 3.75칸으로 보던 때 값이라 안내판이 너무 높이 떠서 사냥터 로비 문에서는 화면 위에 잘렸다 (임혜원 11/18)
+	const float SignAboveGate = 0.9f;
 	const float SignFontSize = 4.4f;   // Galmuri11이 11픽셀쯤으로 보이는 크기
 
 	// 로비 중간 바닥에 놓을 문 X (사냥터, 연습장, 레이드 순서)
@@ -59,6 +61,21 @@ public static class DoorSignBuilder
 			foreach (PlaceExit exit in Object.FindObjectsByType<PlaceExit>(FindObjectsInactive.Include, FindObjectsSortMode.None))
 			{
 				MakeSign(exit, MoveText("로비"), font, pill, keyIcon);
+				signs++;
+			}
+			// 창을 여는 자리 (PanelStation): 연습장 편집 터미널·장착대, 로비 상점. 문처럼 한 줄 안내판 (임혜원 11/18).
+			// 예전에는 마름모 위에 2배로 키운 ↑ 키(Key Scale 2)가 떠서 너무 크고 캐릭터 이름표에 겹쳤다
+			foreach (PanelStation station in Object.FindObjectsByType<PanelStation>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+			{
+				string text = station.name switch
+				{
+					"EditorTerminal" => "코드 편집",
+					"EquipStation" => "슬롯 장착",
+					"ShopStation" => "상점",
+					_ => null,
+				};
+				if (text == null) continue;
+				MakeSign(station, text, font, pill, keyIcon, true);
 				signs++;
 			}
 
@@ -112,7 +129,9 @@ public static class DoorSignBuilder
 
 	// 문 아래에 한 줄 안내판 Sign(바탕 + ↑ 키 + 글씨)을 만들거나 고치고 PlaceInteractable.sign에 넣는다
 	// 모양: 다른 게임의 상호작용 안내처럼 「[↑] 사냥터로 이동」 한 줄. 높이 13픽셀, 캐릭터 머리·이름표보다 위(문 위 끝 + 1.8칸)
-	static void MakeSign(PlaceInteractable door, string text, TMP_FontAsset font, Sprite pillSprite, Sprite keySprite)
+	// fromSpriteBottom: 창을 여는 자리용. 그림 기준점이 바닥이 아니라 가운데라서, 그림 아래 끝(= 바닥)에서 높이를 잰다.
+	// 기준점에서 재면 책상 높이만큼 더 떠서 너무 높았다 (임혜원 11/18)
+	static void MakeSign(PlaceInteractable door, string text, TMP_FontAsset font, Sprite pillSprite, Sprite keySprite, bool fromSpriteBottom = false)
 	{
 		const float Px = 1f / 16f;
 		Transform signTransform = Child(door.transform, "Sign");
@@ -121,7 +140,10 @@ public static class DoorSignBuilder
 		sign.SetActive(true);
 		Vector3 lossy = door.transform.lossyScale;
 		signTransform.localScale = new Vector3(1f / Mathf.Max(0.0001f, Mathf.Abs(lossy.x)), 1f / Mathf.Max(0.0001f, Mathf.Abs(lossy.y)), 1f);
-		signTransform.localPosition = new Vector3(0f, (GateHeight + SignAboveGate) / Mathf.Max(0.0001f, Mathf.Abs(lossy.y)), 0f);
+		float signHeight = GateHeight + SignAboveGate;
+		if (fromSpriteBottom && door.TryGetComponent(out SpriteRenderer stationRenderer) && stationRenderer.sprite != null)
+			signHeight -= door.transform.position.y - stationRenderer.bounds.min.y;
+		signTransform.localPosition = new Vector3(0f, signHeight / Mathf.Max(0.0001f, Mathf.Abs(lossy.y)), 0f);
 		// 예전에 만든 바탕 오브젝트 정리 (이름이 바뀜)
 		Transform oldBack = signTransform.Find("Back");
 		if (oldBack != null) Undo.DestroyObjectImmediate(oldBack.gameObject);

@@ -367,7 +367,8 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 	float openTitleSize;
 
 	// 접힌 카드의 모양: 이름 한 줄 (글자는 펼친 카드보다 작게, 위아래 여백도 줄여 목록처럼 훑어보게)
-	static readonly RectOffset ClosedPadding = new RectOffset(9, 9, 5, 6);
+	// RectOffset은 static readonly로 두면 MonoBehaviour를 만드는 중에 만들어져 Unity가 막는다 (set_left 예외, 박진우). 쓸 때마다 새로 만든다
+	static RectOffset ClosedPadding => new RectOffset(9, 9, 5, 6);
 	const float ClosedTitleSize = 9f;
 	const string ToggleColor = "#5EF2D6";
 	GameObject summaryLabel;

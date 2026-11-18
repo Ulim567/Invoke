@@ -10,8 +10,9 @@ using UnityEngine;
 ///   그 플레이어가 죽었거나 몬스터의 씬을 떠났으면 다음 순위. 받을 수 있는 플레이어가 없으면 아무도 받지 않는다.<br/>
 ///   Whole Scene을 켜면(레이드 보스) 같은 씬의 플레이어 모두에게 준다. 죽어서 관전 중인 파티원도 받는다.<br/>
 /// - 재료는 몬스터가 죽을 때 한 번 굴린다. 확률(Chance) 1이면 반드시 나온다.<br/>
-/// - 블록·함수 드롭: 받는 플레이어마다 Item Chance로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목(해금한 스킬 트리 노드가 여는 항목 + 처음 항목) 중
+/// - 블록·함수 드롭: 받는 플레이어마다 Item Chance로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목(해금한 스킬 트리 노드가 여는 항목 + 그 캐릭터 언어의 처음 항목) 중
 ///   무작위로 Item Count개(하나씩 따로 고름)의 가진 개수를 1씩 늘린다 (ItemCountRules, 이우림 #500). 화면에는 「블록 ×N」으로만 알리고, 무엇인지는 블록 편집 화면에서 확인한다.<br/>
+///   받은 블록·함수는 재료처럼 블록 아이콘(ItemDropIconId)이 날아와 보인다. 아이콘은 무엇을 받았든 같다.<br/>
 /// - 값은 PlayerProgress(이우림)의 AddExp, AddMoney, AddMaterial, AddItem으로만 바꾼다. PlayerProgress가 없는 플레이어(테스트용 프리팹)는 건너뛴다.<br/>
 /// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다. 판정은 몬스터가 속한 씬의 물리 세계에 한다.<br/>
 /// - 연출 이벤트(RewardEffectPlayed)는 [TargetRpc]로 받은 플레이어의 화면(호스트 포함)에서만 불린다 (#404). 몬스터는 Despawn Delay(0.5초) 뒤에 없어지므로,
@@ -73,14 +74,23 @@ public class MonsterReward : NetworkBehaviour
 	// 블록·함수 드롭 후보 (받는 플레이어마다 다시 채움)
 	static readonly List<string> itemPool = new List<string>(32);
 	static readonly HashSet<string> itemPoolSet = new HashSet<string>();
-	// 새 캐릭터 처음 항목 (ItemCountRules.Initial의 키). 처음 한 번만 센다
-	static string[] initialItems;
+	// 새 캐릭터 처음 항목 (ItemCountRules.Initial의 키). 캐릭터 언어마다 다르므로(C: thrust…, Python: py.*) 언어별로 한 번씩만 센다
+	static readonly Dictionary<string, string[]> initialItemsByLanguage = new Dictionary<string, string[]>(2);
 
 	Monster monster;
 	// 이번에 나온 재료. 받는 플레이어 모두에게 같은 것을 준다
 	readonly List<MaterialDrop> rolled = new List<MaterialDrop>(4);
 	// 클라이언트가 받은 재료 (TargetRewardEffect). 이벤트 안에서만 읽는다
 	readonly List<MaterialDrop> received = new List<MaterialDrop>(4);
+	// RewardEffectPlayed에 넘기는 목록: 재료 + 블록·함수 아이콘 한 줄 (EffectDrops). 이벤트 안에서만 읽는다
+	readonly List<MaterialDrop> effectDrops = new List<MaterialDrop>(5);
+
+	/// <summary>
+	/// 블록·함수 드롭을 재료처럼 날아오게 보여 줄 때 쓰는 아이콘 ID. 진짜 재료가 아니어서 가방(PlayerProgress)에는 들어가지 않는다.<br/>
+	/// 블록·함수가 나오면 RewardEffectPlayed의 재료 목록 끝에 (이 ID, 받은 수) 한 줄이 붙는다. MaterialDropView가 Resources/MaterialDrops/item_block 아이콘으로 띄운다.
+	/// LocalRewardReceived의 재료 목록에는 붙지 않는다 (블록 수는 따로 넘긴다).
+	/// </summary>
+	public const string ItemDropIconId = "item_block";
 
 	/// <summary>
 	/// [연출] 내 캐릭터가 보상을 받았을 때. (받은 플레이어, 경험치, 돈, 받은 재료 목록)을 넘긴다. "+경험치" 글자, 재료가 날아오는 연출에 쓴다.<br/>
@@ -100,7 +110,7 @@ public class MonsterReward : NetworkBehaviour
 	static void ResetStatics()
 	{
 		LocalRewardReceived = null;
-		initialItems = null;
+		initialItemsByLanguage.Clear();
 	}
 
 	void Awake()
@@ -194,11 +204,14 @@ public class MonsterReward : NetworkBehaviour
 	{
 		itemPool.Clear();
 		itemPoolSet.Clear();
-		if (initialItems == null)
+		// 처음 항목은 그 플레이어의 캐릭터 언어 것만 (Python 마법사가 C 항목을 받던 문제)
+		string language = PlayerCharacter.LanguageOf(player.gameObject);
+		if (!initialItemsByLanguage.TryGetValue(language, out string[] initialItems))
 		{
-			var initial = ItemCountRules.Initial();
+			var initial = ItemCountRules.Initial(language);
 			initialItems = new string[initial.Count];
 			initial.Keys.CopyTo(initialItems, 0);
+			initialItemsByLanguage[language] = initialItems;
 		}
 		for (int i = 0; i < initialItems.Length; i++) AddToPool(initialItems[i]);
 
@@ -221,7 +234,7 @@ public class MonsterReward : NetworkBehaviour
 	{
 		if (!NetworkServer.active)
 		{
-			RewardEffectPlayed?.Invoke(player, exp, money, rolled);
+			RewardEffectPlayed?.Invoke(player, exp, money, EffectDrops(rolled, items));
 			LocalRewardReceived?.Invoke(exp, rolled, items);
 			return;
 		}
@@ -249,8 +262,18 @@ public class MonsterReward : NetworkBehaviour
 		received.Clear();
 		int n = ids != null && counts != null ? Mathf.Min(ids.Length, counts.Length) : 0;
 		for (int i = 0; i < n; i++) received.Add(new MaterialDrop { materialId = ids[i], count = counts[i], chance = 1f });
-		RewardEffectPlayed?.Invoke(receiver, expGained, moneyGained, received);
+		RewardEffectPlayed?.Invoke(receiver, expGained, moneyGained, EffectDrops(received, items));
 		LocalRewardReceived?.Invoke(expGained, received, items);
+	}
+
+	// 연출용 재료 목록. 블록·함수를 받았으면 재료 뒤에 아이콘(ItemDropIconId) 한 줄을 붙여, 버그 조각처럼 날아오게 한다
+	IReadOnlyList<MaterialDrop> EffectDrops(List<MaterialDrop> materials, int items)
+	{
+		if (items <= 0) return materials;
+		effectDrops.Clear();
+		effectDrops.AddRange(materials);
+		effectDrops.Add(new MaterialDrop { materialId = ItemDropIconId, count = items, chance = 1f });
+		return effectDrops;
 	}
 
 	static bool IsAuthority() => NetworkServer.active || !NetworkClient.active;

@@ -405,7 +405,7 @@
 - 장착 화면 배치: 위 슬롯 카드 8개(`SlotCardView`: 키 배지, 이름, 고른 칸은 금색 테두리), 아래 왼쪽 「내 함수」, 오른쪽 「C 스킬」(3열, 색 띠로 C 스킬·공통 이동 구분), 맨 아래 줄(고른 칸, 코드 영역, 안내, 「칸 비우기」)
 
 ### 저장·불러오기 (임시 계정, 이 컴퓨터 파일)
-- 저장: `FunctionDataJson.ToJson`을 그대로 `Application.persistentDataPath/Functions/{GUID}.json`에 쓴다. 같은 GUID면 덮어씀
+- 저장: `FunctionDataJson.ToJson`을 그대로 `Application.persistentDataPath/Local/{내 캐릭터 언어}/Functions/{GUID}.json`에 쓴다 (`LocalSaveFolder`, #570: 캐릭터 언어마다 따로). 같은 GUID면 덮어씀
 - 불러오기: 위쪽 줄의 함수 버튼을 누르면 파일에서 새로 읽어 연다. 작업본이 있으면 작업본을 연다 (#494). `function.Blocks`, `InnerBlocks`, `Slots[칸 번호].Block`을 따라가며 블록 UI를 만든다.
 - 위쪽 줄 표시: 블록 수(`FunctionData.CountBlocks`), 코드 영역 크기(`CodeSizeCalculator.Calculate`, 저장한 함수 + 지금 함수)
 

@@ -60,6 +60,16 @@ public class Monster : MonoBehaviour, IDamageable
 	public bool IsDead => Hp <= 0;
 
 	/// <summary>
+	/// [서버] 마지막 피해에 때린 쪽이 있었으면 true (TakeDamage(int, GameObject)의 attacker). 밀려나기 방향을 정할 때 AI가 읽는다.
+	/// </summary>
+	public bool HasLastAttackerX { get; private set; }
+
+	/// <summary>
+	/// [서버] 마지막 피해를 준 쪽의 X 위치. HasLastAttackerX가 false면 쓰지 않는다.
+	/// </summary>
+	public float LastAttackerX { get; private set; }
+
+	/// <summary>
 	/// [로직] 데미지를 받았을 때 불린다. 받은 데미지를 넘긴다. 보스 페이즈 전환처럼 체력에 따라 바뀌는 로직에 쓴다.
 	/// Invulnerable이면 체력은 그대로지만 똑같이 불린다.
 	/// </summary>
@@ -140,11 +150,16 @@ public class Monster : MonoBehaviour, IDamageable
 
 	/// <summary>
 	/// [서버] TakeDamage(damage)와 같고, 체력을 실제로 줄인 양을 attacker의 누적 피해량에 더한다 (#484).
-	/// MonsterReward가 이 기록으로 처치 보상을 받을 사람을 정한다. attacker가 null이거나 Invulnerable이면 기록하지 않는다.
+	/// MonsterReward가 이 기록으로 처치 보상을 받을 사람을 정한다. attacker가 null이거나 Invulnerable이면 기록하지 않는다.<br/>
+	/// attacker의 X 위치는 LastAttackerX로 남긴다 (밀려나기 방향).
 	/// </summary>
 	public void TakeDamage(int damage, GameObject attacker)
 	{
 		if (damage <= 0 || IsDead) return;
+
+		// Damaged를 받은 AI가 밀려날 방향을 정할 수 있게 먼저 기억한다
+		HasLastAttackerX = attacker != null;
+		if (HasLastAttackerX) LastAttackerX = attacker.transform.position.x;
 
 		// 허수아비는 체력을 그대로 두지만, 데미지 숫자를 띄울 수 있게 이벤트는 똑같이 부른다
 		if (!invulnerable)

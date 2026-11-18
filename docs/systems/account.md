@@ -10,11 +10,12 @@
 - 전송 암호화: `EncryptionTransport`, 서버 키 자동 생성, 클라이언트의 서버 키 지문 확인
 - 화면용 묶음 (`AccountFlow`): 화면 상태·안내 문장·버튼 함수를 한 컴포넌트에. 화면은 이것만 사용
 - 임시 화면: OnGUI 로그인·회원가입·캐릭터 화면 (`AccountScreen`, `AccountFlow`를 그리기만 함). `NetworkManagerHUD` 대체
-- 로그아웃 (#349): 설정 창의 「로그아웃」(`SettingsView.LogoutRequested`)을 `AccountFlow`가 받아 접속을 끊고 로그인 화면으로
+- 로그아웃 (#349): 설정 창의 「로그아웃」(`SettingsView.LogoutRequested`)을 `AccountFlow`가 받아 접속을 끊고 로그인 화면으로. 캐릭터 화면 왼쪽 위 「< 로그아웃」도 같음 (#570)
+- 캐릭터 화면으로 돌아가기 (#570): 설정 창의 「캐릭터 선택」(`SettingsView.CharacterSelectRequested`)을 `AccountFlow`가 받아, 접속은 둔 채 플레이어만 없애고 캐릭터 화면으로
 - 에디터 전용 로그인 건너뛰기
 - 하지 않는 일
   - 진행도 저장: [progress-store.md](progress-store.md). 캐릭터 key(`AccountSession.CharacterKey`) 기준
-  - 닉네임 머리 위 표시, 캐릭터 바꾸기, 비밀번호 찾기·변경, 계정 삭제
+  - 닉네임 머리 위 표시, 비밀번호 찾기·변경, 계정 삭제
   - 조작한 요청 막기: 보안 작업 때
   - 플레이어 생성: 언어에 맞는 프리팹 고르기와 생성은 `InvokeNetworkManager` (「캐릭터 언어별 플레이어 프리팹」)
   - 꾸민 화면(Canvas): 임혜원 이슈 (「맞춘 결과」)
@@ -32,6 +33,10 @@
 4. 들어가기: 클라이언트 → 서버 `EnterGameRequest { language }` → 서버 → 클라이언트 `EnterGameResultMessage { failure }`
    - 성공: 서버가 `InvokeNetworkManager.SpawnPlayer(conn)`로 로비에 플레이어 생성 (장소 씬을 다 불러온 뒤)
    - 받을 수 없는 요청 (이미 들어감, 임시 계정의 만들기, 쫓겨난 연결): 결과 `RequestNotAllowed` (무시하면 화면이 결과를 기다리며 멈춤)
+5. 캐릭터 화면으로 돌아가기 (#570): 클라이언트 → 서버 `LeaveGameRequest` → 서버 → 클라이언트 `LeaveGameResultMessage { failure, characters }`
+   - 성공: 서버가 `AccountSession.Leave()`로 들어가기 전 상태로 되돌린 뒤 `InvokeNetworkManager.ReturnToCharacters(conn)`로 플레이어 제거. 접속·인증은 유지 → 다시 「들어가기」 가능
+   - 받을 수 없는 요청 (들어가지 않음, 쫓겨난 연결, 플레이어를 아직 만들지 않음, 서버가 알린 이동을 기다리는 중): 결과 `RequestNotAllowed`
+     - 이동을 기다리는 중에 막는 이유: 플레이어를 없애면 클라이언트의 로딩 화면이 이동 끝(`TravelEndedMessage`)을 받지 못해 걷히지 않음
 - 플레이어 생성 시점: 들어가기 성공 뒤
   - `InvokeNetworkManager.Awake`에서 `autoCreatePlayer`를 끔 (Inspector 값 무시). 접속 직후에는 Ready만
   - `OnServerAddPlayer`: 경고 로그만. 플레이어는 `SpawnPlayer`로만 생성
@@ -75,6 +80,9 @@
   - 캐릭터 언어: `InvokeAuthenticator`의 `Skip Login Language` (기본 `C`, #486). 서버가 임시 캐릭터를 이 언어로 만들어 보내고 클라이언트가 그 언어로 들어감. 모르는 언어면 C
   - 파이썬 마법사 테스트: Play 중에만 `Python`으로 바꿈 (`Python`인 채로 `Base`를 저장하면 모든 에디터 테스트가 마법사로 들어감)
   - 임시 계정: DB 안 씀, 닉네임 `Editor{connId}`, `AccountSession.IsTemporary` true
+  - 캐릭터 바꾸기 (#570): 게임 중 설정 창 「캐릭터 선택」으로 돌아가면, 임시 계정은 만들 수 있는 언어(`CharacterLanguages.All`: C, Python)를 모두 「보유 중」으로 받음 → 다른 언어 캐릭터로 다시 들어가 시험 가능. 처음 Host로 시작할 때는 지금처럼 `Skip Login Language` 캐릭터로 바로 들어감
+  - 로컬 저장 (#570): 임시 계정의 슬롯 장착·함수·전역 변수 파일은 캐릭터 언어 폴더마다 따로 (`persistentDataPath/Local/C`, `Local/Python`, `LocalSaveFolder`). 캐릭터를 바꿔도 스킬이 섞이지 않음
+    - 예전 위치(`persistentDataPath` 바로 아래 `SlotLoadout.json`, `Functions/`, `GlobalVariables.json`)는 더 읽지 않음
   - 로그인·회원가입 버튼으로 접속하면 건너뛰지 않음
 - 빌드: 무시 (에디터 코드만)
 - 로그인 테스트: Play 중에만 끔 (끈 채로 `Base`를 저장하면 Host만으로 들어갈 수 없음)
@@ -141,12 +149,24 @@
 - 로그아웃 (#349)
   - 설정 창(`SettingsView`)은 「로그아웃」을 누르면 `LogoutRequested`(static event)만 알림. 받는 쪽이 없으면 버튼이 꺼짐
   - `AccountFlow`는 `CanLogout`이 true인 동안에만 `LogoutRequested`를 받음 → `CanLogout`이 false이면 버튼이 꺼짐
-  - `CanLogout`: 게임에 들어간 상태(`Page` = `Hidden`)이고, 클라이언트가 켜져 있고, 이 컴퓨터가 서버를 켜지 않았을 때
+  - `CanLogout`: 게임에 들어간 상태(`Page` = `Hidden`)나 캐릭터 화면(`Characters`, #570)이고, 응답을 기다리는 중이 아니고, 클라이언트가 켜져 있고, 이 컴퓨터가 서버를 켜지 않았을 때
     - 서버를 켠 컴퓨터(에디터 Host)가 로그아웃하면 서버도 꺼져 다른 접속자가 모두 끊기므로 버튼을 막음
+  - 캐릭터 화면 (#570): 왼쪽 위 「< 로그아웃」 링크가 `AccountFlow.Logout()`을 부름. `CanLogout`이 false이면(에디터 Host) 화면이 버튼을 숨김. ESC에는 연결하지 않음 (실수로 로그아웃되지 않게)
   - `Logout()`: `NetworkManager.StopClient()`로 접속을 끊음. 끊은 뒤 닉네임·캐릭터 목록을 비우고 로그인 화면으로. 팝업 없음 (스스로 끊은 것이므로)
   - 서버 쪽: 따로 하는 일 없음. 접속이 끊기면 `InvokeNetworkManager.OnServerDisconnect`가 접속 중 계정 목록, 플레이어 등을 정리
   - 클라이언트 쪽 플레이어(`SlotLoadout` 포함)는 접속이 끊길 때 함께 사라짐. 다시 들어가면 새로 받음
   - 레이드 중에는 같은 버튼이 「레이드 포기」(`RaidParties.RequestGiveUp()`)가 되어 로그아웃은 나오지 않음
+- 캐릭터 화면으로 돌아가기 (#570)
+  - 설정 창(`SettingsView`)은 「캐릭터 선택」을 누르면 `CharacterSelectRequested`(static event)만 알림. 받는 쪽이 없으면 버튼이 꺼짐
+  - `AccountFlow`는 `CanReturnToCharacters`가 true인 동안에만 `CharacterSelectRequested`를 받음
+  - `CanReturnToCharacters`: 게임에 들어간 상태(`Page` = `Hidden`)이고, 접속 중이고, 응답을 기다리는 중이 아닐 때
+    - 에디터 Host도 true: 접속을 끊지 않으므로 서버가 꺼지지 않음 (로그아웃과 다름)
+  - `ReturnToCharacters()`: 서버에 요청 → 결과를 받으면 캐릭터 목록을 새로 받고 `Characters`로. 방금 플레이한 캐릭터를 고른 채로 돌아감
+    - 실패: 게임 화면에 남음. 경고 로그만
+  - 서버 쪽 정리: `InvokeNetworkManager.DespawnPlayer`와 같음 (레이드 방·파티 이탈, 연습장 내리기, 이동 정리). 소환검은 플레이어와 함께 사라짐
+  - 클라이언트의 장소 씬: 서버가 플레이어가 있던 씬을 내리라고 알림 (`SceneMessage` `UnloadAdditive`, `TravelPlayer`와 같음). 호스트는 서버와 씬을 같이 쓰므로 알리지 않음
+  - 진행도: 값이 바뀔 때마다 DB에 저장했으므로 돌아갈 때 따로 저장하지 않음
+  - 레이드 중: 설정 창이 「캐릭터 선택」 버튼을 끔. 로그아웃처럼 「레이드 포기」로 먼저 나옴
 - 접속이 끊김
   - 캐릭터 화면·게임 중: 팝업 (`PopupMessage` = 쫓겨난 이유 또는 「서버와 연결이 끊겼습니다.」), 로그인 화면으로. 확인 → `ClosePopup()`
   - 로그인·회원가입 중 접속 실패: 「서버에 접속하지 못했습니다.」, 서버 주소 칸 강조
@@ -179,14 +199,16 @@
 | `ServerAddress` | - | `string` (읽기·쓰기) | 서버 주소 칸의 값. 쓰면 다음 접속에 사용 |
 | `CanEditServerAddress` | - | `bool` | 서버 주소 칸을 보여 줄지 (접속 전에만 true) |
 | `CanStartHost` | - | `bool` | 에디터 전용 Host 버튼을 보여 줄지 (빌드에서는 늘 false) |
-| `CanLogout` | - | `bool` | 로그아웃할 수 있는지. 게임에 들어갔고 이 컴퓨터가 서버를 켜지 않았을 때만 true (에디터 Host는 false) |
+| `CanLogout` | - | `bool` | 로그아웃할 수 있는지. 게임 중이나 캐릭터 화면(#570)이고, 응답을 기다리는 중이 아니고, 이 컴퓨터가 서버를 켜지 않았을 때만 true (에디터 Host는 false). 캐릭터 화면은 false이면 로그아웃 버튼을 숨김 |
+| `CanReturnToCharacters` | - | `bool` | 캐릭터 화면으로 돌아갈 수 있는지 (#570). 게임에 들어갔고 응답을 기다리는 중이 아닐 때 true (에디터 Host도 true) |
 | `ShowLogin()`, `ShowSignUp()` | - | - | 로그인·회원가입 화면 바꾸기 (링크). 로그인한 뒤에는 무시 |
 | `Login(string loginId, string password)` | 아이디, 비밀번호 | - | 로그인 버튼. 접속 전이면 먼저 접속. 성공하면 `Characters` |
 | `SignUp(string loginId, string password, string passwordConfirm, string nickname)` | 아이디, 비밀번호, 비밀번호 확인, 닉네임 | - | 가입하기 버튼. 먼저 검사 → 통과하면 전송. 성공하면 바로 로그인, `Characters` |
 | `Select(string language)` | 언어 | - | 언어 카드. 그 언어 선택. 준비 중인 언어, 응답 기다리는 중이면 무시 |
 | `Confirm()` | - | - | 오른쪽 아래 버튼. 보유 중이면 들어가기(성공하면 `Hidden`, 서버가 로비에 플레이어 생성), 미보유면 만들기 |
 | `ClosePopup()` | - | - | 팝업의 확인 버튼 |
-| `Logout()` | - | - | 접속을 끊고 로그인 화면으로 (팝업 없음). `CanLogout`이 false이면 무시. `SettingsView.LogoutRequested`를 `AccountFlow`가 받아 부르므로 화면이 직접 부를 필요 없음 |
+| `Logout()` | - | - | 접속을 끊고 로그인 화면으로 (팝업 없음). `CanLogout`이 false이면 무시. 게임 중: `SettingsView.LogoutRequested`를 `AccountFlow`가 받아 부르므로 화면이 직접 부를 필요 없음. 캐릭터 화면: 「< 로그아웃」 버튼이 직접 부름 (#570) |
+| `ReturnToCharacters()` | - | - | 접속은 둔 채 게임에서 나와 캐릭터 화면으로 (#570). 성공하면 `Characters`. `CanReturnToCharacters`가 false이면 무시. `SettingsView.CharacterSelectRequested`를 `AccountFlow`가 받아 부르므로 화면이 직접 부를 필요 없음 |
 | `StartHost()` | - | - | 에디터 전용 Host 버튼. `Skip Login In Editor`가 켜져 있으면 로그인을 건너뜀 |
 | `PasswordMismatchMessage` | - | `string` 상수 | 「비밀번호가 서로 다릅니다.」 |
 - 입력 중인 글자(아이디, 비밀번호 등)는 화면이 들고 있다가 버튼을 누를 때 넘김
@@ -203,10 +225,12 @@
 | `RequestSignUp(string loginId, string password, string nickname)` | 아이디, 비밀번호, 닉네임 | `bool` | 회원가입 요청. 닉네임은 계정의 닉네임. 성공하면 바로 로그인. 그 밖은 `RequestLogin`과 같음 |
 | `RequestCreateCharacter(string language)` | 언어(`CharacterLanguages`) | `bool` | 캐릭터 만들기 요청. 로그인 전이면 경고 로그, 무시. 결과: `CreateCharacterResultReceived` |
 | `RequestEnter(string language)` | 언어(`CharacterLanguages`) | `bool` | 그 언어의 캐릭터로 들어가기 요청. 로그인 전이면 경고 로그, 무시. 결과: `EnterGameResultReceived` |
+| `RequestLeave()` | - | `bool` | 게임에서 나와 캐릭터 화면으로 돌아가기 요청 (#570). 로그인 전이면 경고 로그, 무시. 결과: `LeaveGameResultReceived` |
 | `RequestProgressTestData(string language, string json)` | 언어, 진행도 JSON | `bool` | [테스트용] 캐릭터 화면에서 그 언어 캐릭터의 진행도를 JSON으로 모두 바꾸기 요청. `ProgressTestData`가 부름. 결과: `ProgressTestDataResultReceived` (#205) |
 | `AuthResultReceived` | `AccountAuthResult` | - | event. 로그인·회원가입 결과. 성공이면 이 이벤트 다음에 인증 완료 |
 | `CreateCharacterResultReceived` | `CreateCharacterResultMessage` | - | event. 캐릭터 만들기 결과 |
 | `EnterGameResultReceived` | `EnterGameResultMessage` | - | event. 들어가기 결과. 성공이면 이어서 서버가 로비에 플레이어 생성 |
+| `LeaveGameResultReceived` | `LeaveGameResultMessage` | - | event. 캐릭터 화면으로 돌아가기 결과. 성공이면 서버가 플레이어를 없앰 (#570) |
 | `Kicked` | `AccountFailure` | - | event. 서버가 곧 끊는다는 알림 (예: `LoggedInElsewhere`). 실제 끊김은 0.5초 뒤 |
 - 접속이 끊긴 것: 이벤트 없음. `NetworkClient.active`가 false로 바뀌는 것으로 확인
 
@@ -218,6 +242,7 @@
 | `AccountAuthResult` | `failure`, `nickname`, `characters`, `Success` | 로그인·회원가입 결과. 성공이면 계정 닉네임과 캐릭터 목록 (없으면 빈 배열 또는 `null`) |
 | `CreateCharacterResultMessage` | `failure`, `characters`, `Success` | 캐릭터 만들기 결과와 지금 캐릭터 목록 |
 | `EnterGameResultMessage` | `failure`, `Success` | 들어가기 결과 |
+| `LeaveGameResultMessage` | `failure`, `characters`, `Success` | 캐릭터 화면으로 돌아가기 결과와 지금 캐릭터 목록 (#570) |
 | `AccountFailure` | `None`, `InvalidLoginId`, `InvalidPassword`, `InvalidNickname`, `LoginIdTaken`, `WrongLoginOrPassword`, `UnknownLanguage`, `LanguageTaken`, `NicknameTaken`, `LoggedInElsewhere`, `CharacterNotFound`, `RequestNotAllowed` | 실패 이유. 새 값은 맨 뒤에만 추가 (메시지로 숫자가 오가므로) |
 | `AccountFailure.ToMessage()` | - | 실패 이유의 한국어 문장 |
 | `AccountRules` | `LoginIdMinLength`(4), `LoginIdMaxLength`(16), `PasswordMinLength`(8), `PasswordMaxLength`(64), `NicknameMinLength`(2), `NicknameMaxLength`(10) | 입력칸 글자 수 제한에 사용 |
@@ -234,7 +259,7 @@
 | `LoginId` | `string` | 아이디 (소문자) |
 | `IsTemporary` | `bool` | 에디터 로그인 건너뛰기의 임시 계정. DB에 없음 → 진행도 저장하지 않음 |
 | `IsKicked` | `bool` | 같은 계정이 다른 곳에서 로그인해 곧 끊길 연결. 플레이어는 이미 제거됨 |
-| `HasEntered` | `bool` | 들어가기 성공 여부 |
+| `HasEntered` | `bool` | 들어가기 성공 여부. 캐릭터 화면으로 돌아가면(`Leave()`, #570) 다시 false |
 | `Language` | `string` | 들어간 캐릭터의 언어(`CharacterLanguages`). 들어가기 전에는 `null`. 임시 계정은 `Skip Login Language`. 서버가 이 값으로 플레이어 프리팹을 고름 (#486) |
 | `CharacterKey` | `string` | 들어간 캐릭터의 key. 들어가기 전에는 `null`. 진행도 저장의 기준 ([progress-store.md](progress-store.md)) |
 | `LoadedProgress` | `CharacterProgressData` | 들어가기 때 DB에서 불러온 진행도. 플레이어를 만든 직후 `AccountServer.ApplyProgress`가 넣고 비움. 임시 계정은 `null` (#205) |

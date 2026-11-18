@@ -6,14 +6,15 @@ using UnityEngine;
 /// <summary>
 /// 만든 함수를 이 컴퓨터의 파일로 저장하고 불러온다. 서버 저장이 생기기 전까지 쓰는 임시 저장소.
 /// <para>
-/// - 저장 위치: Application.persistentDataPath/Functions/{GUID}.json (맥: ~/Library/Application Support/회사이름/Invoke/Functions)<br/>
+/// - 저장 위치: Application.persistentDataPath/Local/{내 캐릭터 언어}/Functions/{GUID}.json (LocalSaveFolder, #570). 캐릭터 언어마다 함수가 따로다<br/>
 /// - 형식: FunctionDataJson.ToJson 그대로 (function-data.md 「저장 형식」). 따로 바꾸지 않는다.<br/>
 /// - 서버 저장은 「만든 함수를 서버로 보내 검사·저장하기」(이우림)에서 이 클래스를 바꾸거나 대신한다.
 /// </para>
 /// </summary>
 public static class FunctionStorage
 {
-	static string Folder => Path.Combine(Application.persistentDataPath, "Functions");
+	// 내 캐릭터 언어의 폴더 안 (#570). Host에서 C·Python을 바꿔 가며 시험해도 함수가 섞이지 않게 하기 위함
+	static string Folder => Path.Combine(LocalSaveFolder.Current, "Functions");
 
 	/// <summary>
 	/// 함수 하나를 저장한다. 같은 GUID의 함수가 있으면 덮어쓴다.

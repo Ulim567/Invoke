@@ -324,7 +324,7 @@ public static class BlockReference
 	/// - 순서는 참고 탭과 같다. 내 캐릭터 언어에 없는 블록은 빠진다 (Python의 선언 등).
 	/// </para>
 	/// </summary>
-	/// <param name="revealed">규칙 노드의 내용을 보여 줄지. 스킬 트리 설명 칸은 해금 여부를, 해금 직후 카드는 true를 넘긴다</param>
+	/// <param name="revealed">규칙 노드의 내용을 보여 줄지. 스킬 트리는 해금한 노드에만 카드를 띄우므로(#562) 지금은 모두 true</param>
 	public static List<BlockReferenceEntry> EntriesUnlockedBy(SkillTreeNode node, bool revealed = true)
 	{
 		var result = new List<BlockReferenceEntry>();

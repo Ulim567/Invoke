@@ -205,6 +205,31 @@ public class InvokeNetworkManager : NetworkManager
 		RaidParties.OnMemberGone(conn);
 	}
 
+	/// <summary>
+	/// [서버] 지금 그 연결의 플레이어를 없애고 캐릭터 화면으로 돌려보내도 되는지 (#570).<br/>
+	/// 플레이어를 아직 만들지 않았거나(장소 씬을 기다리는 중), 서버가 알린 이동(레이드 시작·끝, 부활해 로비로)을 기다리는 중이면 false.
+	/// </summary>
+	// 이동을 기다리는 중에 없애면 클라이언트의 로딩 화면이 이동 끝(TravelEndedMessage)을 받지 못해 걷히지 않으므로 막는다
+	public bool CanReturnToCharacters(NetworkConnectionToClient conn) =>
+		conn.identity != null && !ServerTravel.IsWaiting(conn) && !RaidParties.IsWaitingForTravel(conn);
+
+	/// <summary>
+	/// 서버에서 그 연결의 플레이어를 접속은 둔 채 없애고, 클라이언트에 불러온 장소 씬을 내리라고 알린다 (#570). 서버에서만 부른다.<br/>
+	/// InvokeAuthenticator가 「캐릭터 화면으로 돌아가기」에 성공한 연결에 대해 부른다. 레이드·연습장·이동 정리는 DespawnPlayer가 한다.
+	/// </summary>
+	public void ReturnToCharacters(NetworkConnectionToClient conn)
+	{
+		if (conn.identity == null) return;
+		Scene current = conn.identity.gameObject.scene;
+
+		// 클라이언트는 알린 씬을 쌓아 두기만 하므로, 캐릭터 화면 뒤에 장소의 바닥과 오브젝트가 남지 않도록 내리라고 알린다 (TravelPlayer와 같음)
+		// 호스트의 클라이언트는 서버와 씬을 같이 쓰므로 알리지 않는다 (서버는 그 씬을 계속 돌려야 함)
+		if (!(conn is LocalConnectionToClient))
+			conn.Send(new SceneMessage { sceneName = current.name, sceneOperation = SceneOperation.UnloadAdditive });
+
+		DespawnPlayer(conn);
+	}
+
 	IEnumerator SpawnPlayerInLobby(NetworkConnectionToClient conn)
 	{
 		// 서버가 켜지자마자 접속하면 장소 씬을 아직 불러오는 중일 수 있으므로 기다린다

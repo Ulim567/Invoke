@@ -33,7 +33,7 @@ public class AccountSession
 	// 플레이어는 장소 씬을 불러온 뒤에 만들어지므로(InvokeNetworkManager.SpawnPlayer), 그때까지 여기에 둔다
 	public CharacterProgressData LoadedProgress { get; private set; }
 
-	/// <summary>캐릭터를 골라 게임에 들어갔으면 true. 한 연결은 한 번만 들어갈 수 있다.</summary>
+	/// <summary>캐릭터를 골라 게임에 들어갔으면 true. 들어간 동안은 다시 들어갈 수 없고, Leave로 캐릭터 화면에 돌아가면 다시 들어갈 수 있다.</summary>
 	public bool HasEntered => CharacterKey != null;
 
 	/// <summary>같은 계정이 다른 곳에서 로그인해 곧 끊길 연결이면 true. 끊길 때까지 캐릭터 요청을 받지 않는다.</summary>
@@ -53,6 +53,17 @@ public class AccountSession
 		CharacterKey = characterKey;
 		Language = language;
 		LoadedProgress = progress;
+	}
+
+	/// <summary>
+	/// 게임에서 나와 캐릭터 화면으로 돌아갈 때 AccountServer가 부른다 (#570). 들어가기 전 상태로 되돌려 다시 「들어가기」를 받을 수 있게 한다.
+	/// 진행도는 값이 바뀔 때마다 DB에 저장했으므로 여기서 저장할 것은 없다.
+	/// </summary>
+	public void Leave()
+	{
+		CharacterKey = null;
+		Language = null;
+		LoadedProgress = null;
 	}
 
 	/// <summary>불러온 진행도를 플레이어에 넣은 뒤 AccountServer가 부른다. 이후 값은 플레이어의 컴포넌트가 가진다.</summary>

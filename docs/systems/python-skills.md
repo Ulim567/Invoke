@@ -58,8 +58,13 @@
 - **캐릭터 언어**: `PlayerCharacter.LocalLanguage`, `SkillPrefixOf`, `CanUse`. 블록 편집기·블록 설명·장착 화면이 이것으로 내 언어의 스킬만 보여 준다.
 - 스킬 계열 `SkillFamily.Element, Zone, Orb, Curse` 추가. 모션은 `SkillMotionTable`에서 전부 Cast.
 
+## 테스트
+| 이름 | 확인하는 것 |
+| --- | --- |
+| `PythonOrbTest` | (이우림 #532) 네트워크 없이 구슬 규칙: orb_create가 Orb를 돌려줌, 담지 않은 구슬 해제, 다 쓴 구슬·is_valid_orb, NoManaOrbError, UsedManaOrbError, TypeError, del, 다 쓴 구슬도 5개에 듦. Play 중 `PythonOrbTest.Spawn(기본 능력치 경로)` |
+| `PythonWizardSimTest` | (#551) Test_JW의 PythonWizardTest. Test_JW NetworkManager의 Player Prefab을 `Player_Python`으로 잠깐 바꾸고(씬 저장 안 함) 켜고 Play → Host (약 12초). 실제 마법사 프리팹으로: 캐릭터 언어 Python·가비지 컬렉션 켜짐, 전역 리스트에 담은 구슬 2개와 머리 위 그림 2개(HUD가 있으면 「마나 구슬 2/5」. 레벨 1 메모리 10칸에는 리스트와 구슬 3개가 안 들어감), 구슬 값 없이 바로 시전한 구슬 발사가 먼저 만든 구슬을 써서 몬스터를 맞힘, 구슬 보호막이 첫 피해만 막음, 중독 3겹에서 멈춤, 공중 부양 6초 뒤 내려옴(경직이 풀린 뒤 시전). 근처(12칸)에 몬스터가 없으면 구슬 발사·중독은 건너뜀. 자세는 0으로 두고 봄. 「[PythonTest] 전체 통과」면 통과. 평소에는 꺼 둔다 |
+
 ## 남은 일
-- Unity에서 컴파일·동작 확인, SimTest 작성
 - ~~파이썬용 스킬 트리~~ (#523, skill-tree.md 「스킬 노드 (파이썬 마법사)」), ~~새 캐릭터의 처음 슬롯~~ (#520, progress-store.md), 캐릭터 선택 화면 설명, HUD 구슬 개수
 - 이펙트·아이콘 그림 교체 (지금은 코드로 그린 임시 그림. `Assets/_JW/Effects/Magic/`의 같은 이름 파일을 바꾸고 메뉴를 다시 누르면 됨)
 - 캐릭터 원본: PixelLab https://www.pixellab.ai/create-character/554a2c03-c766-41c6-b9f3-4c3f7445d523 (East 방향, 96×96 프레임의 (16,16)부터 64×64가 본체)

@@ -117,7 +117,7 @@ public class FallingPacket : MonoBehaviour
 		{
 			Collider2D hit = hits[i];
 			GameObject owner = hit.attachedRigidbody != null ? hit.attachedRigidbody.gameObject : hit.gameObject;
-			if (struck.Add(owner)) MonsterAttackResolver.Apply(attack, hit);
+			if (struck.Add(owner)) MonsterAttackResolver.Apply(attack, hit, transform.position);
 		}
 	}
 

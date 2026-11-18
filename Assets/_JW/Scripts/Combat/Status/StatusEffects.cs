@@ -268,6 +268,19 @@ public class StatusEffects : NetworkBehaviour
 		return true;
 	}
 
+	/// <summary>
+	/// TryApply와 같고, 지속 시간만 기본 지속 시간 × (1 + durationRate)로 건다 (#546, 이우림).
+	/// 시전자의 자세가 지속 시간을 늘릴 때 쓴다. 예: Python 7의 배수(+0.3)이면 표식 5초 → 6.5초. durationRate가 0이면 TryApply와 같다.
+	/// </summary>
+	public static bool TryApply(GameObject target, StatusType type, GameObject source, float durationRate)
+	{
+		if (target == null) return false;
+		StatusEffects effects = target.GetComponentInParent<StatusEffects>();
+		if (effects == null) return false;
+		effects.Apply(type, StatusDefaults.DurationOf(type) * (1f + durationRate), source);
+		return true;
+	}
+
 	void Update()
 	{
 		// 출혈 데미지와 만료는 서버만 한다. 클라이언트는 서버가 목록에서 지우면 StatusRemoved를 받는다

@@ -34,12 +34,13 @@ public class CooldownTracker
 	/// </summary>
 	public event Action<string, int> CooldownStarted;
 
-	// 시전자의 자세가 주는 쿨타임 증감(-0.15면 15% 짧게, #538). 없으면 증감 없음
+	// 시전자의 자세가 끝난 스킬에 주는 쿨타임 증감(-0.15면 15% 짧게, #538). 없으면 증감 없음
+	// 스킬을 받는 이유: Python 7의 배수처럼 계열마다 증감이 다를 수 있기 때문 (#546)
 	// 능력치(PlayerStats)에 넣지 않고 따로 받는 이유: 능력치의 쿨타임 감소는 0~1로 잘려 쿨타임 증가(5의 배수 +10%)를 표현할 수 없고,
 	// 자세처럼 자주 바뀌는 값을 능력치에 넣었다 빼면 능력치를 보여 주는 화면에 섞이기 때문
-	readonly Func<float> getStanceCooldownRate;
+	readonly Func<PredefinedFunction, float> getStanceCooldownRate;
 
-	public CooldownTracker(PlayerStats stats, Func<int> getCurrentTick, Func<float> getStanceCooldownRate = null)
+	public CooldownTracker(PlayerStats stats, Func<int> getCurrentTick, Func<PredefinedFunction, float> getStanceCooldownRate = null)
 	{
 		this.stats = stats;
 		this.getCurrentTick = getCurrentTick;
@@ -131,7 +132,7 @@ public class CooldownTracker
 		if (cooldown <= 0) return;
 
 		// 능력치의 쿨타임 감소를 적용한 뒤 자세의 증감을 곱한다 (#538). 예: 자세 15는 3의 배수 -15% + 5의 배수 +10% = 0.95배
-		float rate = getStanceCooldownRate != null ? getStanceCooldownRate() : 0f;
+		float rate = getStanceCooldownRate != null ? getStanceCooldownRate(skill) : 0f;
 		// 공격 속도(ApplyAttackSpeed)와 같게 반올림해서 틱 수로 맞춘다
 		cooldown = Mathf.Max(0, Mathf.RoundToInt(stats.ApplyCooldownReduction(cooldown) * (1f + rate)));
 		int endTick = getCurrentTick() + cooldown;

@@ -23,7 +23,7 @@
 | 새 캐릭터 처음 값 | 레벨 1, 경험치 0, 돈 0, 재료·페이지 함수·전역 변수 없음 |
 | 새 캐릭터 처음 해금 | `SkillTree.StartingNodes(언어)` + `SkillTree.AutoUnlockedBy(목록, 언어)` (#523). C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 매직 미사일, 저주(#532, 임시. 스킬 트리 이슈에서 다시 정함). 처음 해금이 빠진 캐릭터는 `Load`가 빠진 노드를 넣음 (#523 전에 만든 파이썬 캐릭터) |
 | 블록·함수 개수 (#500) | 가진 개수만큼만 함수에 놓을 수 있음. DB는 가진 개수만 저장. 블록을 놓거나 지워도 가진 개수는 그대로이고, 남은 개수 = 가진 개수 − 함수에서 센 개수(`BlockUsageCounter`, `function-data.md` 「개수 세기 규칙」). 항목 하나당 최대 `ItemCountRules.MaxCount`(99) |
-| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수 + 출력 함수 1개 (`ItemCountRules.Initial(언어)`). C: thrust 1, sword_throw 1, get_bug 2, printf 1. Python(#532, 임시): py.magic_missile 1, py.hex 1, get_bug 2, print 1. 처음 남은 개수는 출력 함수 1개, 나머지 0 (기획의 「튜토리얼을 마친 상태」). 출력 함수만 더 주는 이유: 해금 노드가 없고, 화면에 보이지 않는 값을 볼 유일한 방법이라서 (#536). C는 자세 함수 init_stance·get_stance도 1개씩 더 줌(`InitialStanceCount`, 해금 노드가 없음, #538) |
+| 새 캐릭터 처음 개수 | 처음 슬롯 함수가 쓰는 개수 + 출력 함수 1개 (`ItemCountRules.Initial(언어)`). C: thrust 1, sword_throw 1, get_bug 2, printf 1. Python(#532, 임시): py.magic_missile 1, py.hex 1, get_bug 2, print 1. 처음 남은 개수는 출력 함수 1개, 나머지 0 (기획의 「튜토리얼을 마친 상태」). 출력 함수만 더 주는 이유: 해금 노드가 없고, 화면에 보이지 않는 값을 볼 유일한 방법이라서 (#536). 자세 함수 init_stance·get_stance도 1개씩 더 줌(`InitialStanceCount`, 해금 노드가 없음, C #538, Python #546) |
 | 해금할 때 지급 | 연 노드(같이 열린 노드 포함)마다 그 노드가 여는 블록·함수 1개씩 (`ItemCountRules.KeysUnlockedBy`) |
 | 임시 계정의 개수 | 개수를 쓰지 않음. 무엇이든 놓을 수 있고 「남은/가진」을 표시하지 않음 |
 | 슬롯 | 슬롯 8개는 언제나 그 슬롯의 슬롯 함수 하나. 빈 슬롯 없음, 장착(다른 함수·C 스킬을 슬롯에 넣기) 없음. C 스킬은 슬롯 함수 function body 안의 블록 |

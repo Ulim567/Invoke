@@ -21,6 +21,10 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
   - place: RaidDungeon
     clip: {fileID: 8300000, guid: dd1c464af8b0b644c8fa2e78d3a7525c, type: 3}
+  - place: HuntingGround2
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
+  - place: HuntingGround3
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
   monsters:
   - monster: Gateway
     appear: []

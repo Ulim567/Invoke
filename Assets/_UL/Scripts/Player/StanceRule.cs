@@ -131,7 +131,7 @@ public abstract class StanceRule
 /// - 3의 배수: 쿨타임 -15%, 받는 피해 +10%<br/>
 /// - 5의 배수: 데미지 +10%, 쿨타임 +10%<br/>
 /// - 40~60: 스킬이 준 데미지의 5% 회복, 데미지 -5%<br/>
-/// - 소수: 데미지 +20%, 데미지를 준 스킬마다 자해 2%(최대 체력 비율)<br/>
+/// - 소수: 데미지 +20%, 데미지를 준 스킬마다 자해 1%(최대 체력 비율, 11/18 2%에서 낮춤)<br/>
 /// - 피보나치 수: 소환 계열 데미지 +20%, 찌르기 계열 데미지 -10%<br/>
 /// - 완전수: 데미지 +30%<br/>
 /// 예: 5는 홀수+5의 배수+소수+피보나치 수(데미지 +30%, 찌르기 +5%, 휘두르기 -15%, 소환 +20%, 쿨타임 +10%, 자해).
@@ -145,7 +145,7 @@ public class CStanceRule : StanceRule
 	static readonly StanceEffect MultipleOfThree = new StanceEffect(cooldown: -0.15f, received: 0.1f);
 	static readonly StanceEffect MultipleOfFive = new StanceEffect(damage: 0.1f, cooldown: 0.1f);
 	static readonly StanceEffect Middle = new StanceEffect(lifesteal: 0.05f, damage: -0.05f);
-	static readonly StanceEffect Prime = new StanceEffect(damage: 0.2f, selfDamage: 0.02f);
+	static readonly StanceEffect Prime = new StanceEffect(damage: 0.2f, selfDamage: 0.01f);
 	static readonly StanceEffect Fibonacci = new StanceEffect(summon: 0.2f, thrust: -0.1f);
 	// 평균 50번을 뽑아야 나오므로 손해를 두지 않는다 (기획)
 	static readonly StanceEffect Perfect = new StanceEffect(damage: 0.3f);

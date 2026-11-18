@@ -92,7 +92,7 @@ public class StanceTest : MonoBehaviour
 
 		ExpectEffect(c, 0, new StanceEffect(), "0: 자세 없음, 효과 없음");
 		ExpectEffect(c, 1, new StanceEffect(thrust: 0.05f, slash: -0.15f, summon: 0.2f), "1: 홀수 + 피보나치 (찌르기 +15-10%)");
-		ExpectEffect(c, 5, new StanceEffect(damage: 0.3f, thrust: 0.05f, slash: -0.15f, summon: 0.2f, cooldown: 0.1f, selfDamage: 0.02f),
+		ExpectEffect(c, 5, new StanceEffect(damage: 0.3f, thrust: 0.05f, slash: -0.15f, summon: 0.2f, cooldown: 0.1f, selfDamage: 0.01f),
 			"5: 홀수 + 5의 배수 + 소수 + 피보나치 (Notion 예시)");
 		ExpectEffect(c, 6, new StanceEffect(damage: 0.3f, thrust: -0.15f, slash: 0.15f, cooldown: -0.15f, received: 0.1f),
 			"6: 짝수 + 3의 배수 + 완전수 (Notion 예시)");
@@ -100,7 +100,7 @@ public class StanceTest : MonoBehaviour
 			"55: 홀수 + 5의 배수 + 40~60 + 피보나치 (Notion 예시, 받는 피해 대신 회복)");
 		ExpectEffect(c, 45, new StanceEffect(damage: 0.05f, thrust: 0.15f, slash: -0.15f, cooldown: -0.05f, received: 0.1f, lifesteal: 0.05f),
 			"45: 홀수 + 3의 배수 + 5의 배수 + 40~60 (쿨타임 -15+10%)");
-		ExpectEffect(c, 2, new StanceEffect(damage: 0.2f, thrust: -0.25f, slash: 0.15f, summon: 0.2f, selfDamage: 0.02f),
+		ExpectEffect(c, 2, new StanceEffect(damage: 0.2f, thrust: -0.25f, slash: 0.15f, summon: 0.2f, selfDamage: 0.01f),
 			"2: 짝수 + 소수 + 피보나치");
 	}
 
@@ -213,12 +213,12 @@ public class StanceTest : MonoBehaviour
 		stance.Clear();
 	}
 
-	// 자해: 소수면 시전 한 번에 한 번만 최대 체력의 2%, 경직·무적 없이, 무적 중에도 깎는다. 소수가 아니면 없다
+	// 자해: 소수면 시전 한 번에 한 번만 최대 체력의 1%, 경직·무적 없이, 무적 중에도 깎는다. 소수가 아니면 없다
 	IEnumerator TestSelfDamage()
 	{
 		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.Thrust, out PredefinedFunction original);
 		int maxHp = health.MaxHp;
-		int expected = Round(maxHp * 0.02f);
+		int expected = Round(maxHp * 0.01f);
 
 		// 소수가 아닌 자세: 자해 없음
 		stance.SetStance(4);
@@ -234,7 +234,7 @@ public class StanceTest : MonoBehaviour
 		cast.NotifyDamageDealt(gameObject, 5);
 		cast.NotifyDamageDealt(gameObject, 5);
 		yield return null;
-		Check($"소수(97): 시전 한 번에 한 번만 최대 체력의 2%({expected})", before - health.Hp == expected, $"{before} → {health.Hp}");
+		Check($"소수(97): 시전 한 번에 한 번만 최대 체력의 1%({expected})", before - health.Hp == expected, $"{before} → {health.Hp}");
 		Check("자해는 경직·무적을 걸지 않음", !health.IsStunned && !health.IsInvincible, $"경직 {health.IsStunned}, 무적 {health.IsInvincible}");
 
 		// 데미지 0은 데미지를 준 것으로 세지 않는다

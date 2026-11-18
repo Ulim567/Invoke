@@ -100,7 +100,7 @@ public class PlayerStance : MonoBehaviour
 			pendingHeal += whole;
 		}
 
-		// 최대 체력 × 비율을 데미지 계산과 같게 반올림한다 (100 × 2% = 2, 0보다 크면 최소 1)
+		// 최대 체력 × 비율을 데미지 계산과 같게 반올림한다 (100 × 1% = 1, 0보다 크면 최소 1)
 		if (firstOfCast && effect.SelfDamageRate > 0f)
 			pendingSelfDamage += DamageCalculator.Calculate(new DamageRequest(health.MaxHp, effect.SelfDamageRate)).Damage;
 	}

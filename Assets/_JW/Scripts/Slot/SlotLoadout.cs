@@ -228,12 +228,14 @@ public class SlotLoadout : MonoBehaviour
 		}
 	}
 
-	/// <summary>슬롯에 넣을 수 있는 스킬인지. 등록된 사전 정의 함수이고 입력 함수(input.*)가 아니면 true. 더블점프(패시브)는 false (#256).</summary>
+	/// <summary>슬롯에 넣을 수 있는 스킬인지. 등록된 사전 정의 함수이고 입력 함수(input.*)가 아니면 true. 더블점프·대시(키로 쓰는 이동, #256·#557)는 false.</summary>
 	public static bool IsEquippableSkill(string skillId)
 	{
 		if (string.IsNullOrEmpty(skillId) || skillId.StartsWith("input.")) return false;
 		// 더블점프는 해금하면 Space로 쓰는 패시브라 슬롯에 넣지 않는다 (#256). 블록코딩에서는 부를 수 있다
 		if (skillId == PredefinedFunctionIds.DoubleJump) return false;
+		// 대시도 해금하면 ←← / →→ 로 쓰므로 슬롯에 넣지 않는다 (#557). 블록코딩에서는 부를 수 있다
+		if (skillId == PredefinedFunctionIds.Dash) return false;
 		// is_valid_orb는 값을 돌려주기만 하는 함수라 슬롯에 넣지 않는다 (#532, 이우림). is_valid_target(game.)과 같다
 		if (skillId == PredefinedFunctionIds.PyIsValidOrb) return false;
 		// 출력 함수(#536)도 슬롯에 넣지 않는다. 슬롯에서 바로 쓰면 출력할 값을 넘길 수 없기 때문

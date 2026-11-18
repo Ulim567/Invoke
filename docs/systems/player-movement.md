@@ -19,10 +19,17 @@
   - 왼쪽 Shift(`PlayerInputReader.RunHeld`)를 누르는 동안 이동 속도 × `Run Speed Multiplier`(임시 1.5).
   - 땅에 있을 때만 Shift 상태를 읽는다. 공중에서는 땅을 떠난 순간(점프, 발판 내려가기, 낭떠러지)의 달리기 여부를 착지할 때까지 유지한다. 공중에서 Shift를 누르거나 떼도 속도가 바뀌지 않는다. 방향(←→)은 공중에서도 바꿀 수 있다.
   - 슬롯을 누르고 있는 동안(대상 고르는 중)은 Player 맵이 꺼져 `RunHeld`가 false라 달리지 않는다.
-  - 대시는 달리기와 별개로 스킬(`common.dash`)이다.
+  - 대시는 달리기와 별개다. 해금하면 ←← / →→ 로 쓴다 (아래 「방향키 두 번 대시」, #557).
 - 입력은 `PlayerInputReader`의 `MoveX`, `MoveY`(검 타기 중에만, #317), `JumpPressed`, `DropPressed`, `RunHeld`만 읽는다. 내 캐릭터(`isLocalPlayer`)에서만 동작한다.
 - 이동 스킬 (#256)
   - 대시(`StartDash`): 그 방향으로 `Dash Distance`(임시 4칸)를 `Dash Duration`(0.15초)에 간다. 공중 가능. 대시 중에는 중력·좌우 입력·점프가 없다. 벽에 막히면 멈춘다.
+  - 방향키 두 번 대시 (#557): 스킬 트리에서 `common.dash`를 해금했으면(`DashUnlocked`, `PlayerProgress.Unlocked`) ← 나 → 를 빠르게 두 번 눌러 그쪽으로 `StartDash`를 한다. `PlayerProgress`가 없는 테스트 씬은 `Allow Dash Without Progress`를 따른다.
+    - 두 번 누르기(`DoubleTapDetector`): 한쪽 키를 `Tap Dash Window`(임시 0.25초) 안에 눌렀다 떼고, 뗀 뒤 그 시간 안에 같은 쪽을 다시 누름. 오래 누르고 걷다가 다시 누르기, 반대쪽으로 바꾸기, 천천히 두 번은 대시가 아니다. ←←← 는 대시 한 번 (네 번 누르면 두 번).
+    - 쿨타임 `Tap Dash Cooldown`(임시 0.5초, 대시를 시작한 때부터). 공중에서는 땅에 닿을 때까지 한 번(`AirDashUsed`).
+    - 이동 잠김, 경직·사망, 대시·검 타기·공중 부양·돌진 중에는 나가지 않는다. 슬롯 키를 누르는 동안은 `MoveX`가 0이라 나가지 않는다.
+    - `PlayerInputReader.MoveX`만 읽어서 판정한다 (입력 액션 추가 없음). 내 캐릭터(소유 클라이언트)가 판정하고 대시한다.
+    - 연출: 대시 스킬과 같은 `SkillEffectEvents.RaiseFired("common.dash", …)`를 서버가 낸다 (대시 소리 등). Host의 내 캐릭터는 바로, 원격 클라이언트는 `[Command]`로 서버에 알린다. 서버는 해금했는지만 다시 본다.
+    - 블록코딩의 대시(`common.dash` 스킬)는 해금·쿨타임·공중 1번을 보지 않고, 쓴 것으로 세지도 않는다.
   - 더블점프: 스킬 트리에서 `common.double_jump`를 해금했으면(`PlayerProgress.Unlocked`) 공중에서 Space로 한 번 더 뛴다. 땅에 닿으면 다시 쓸 수 있다. `PlayerProgress`가 없는 테스트 씬은 `Allow Double Jump Without Progress`를 따른다. 블록코딩의 더블점프는 `RequestAirJump`로 같은 공중 점프를 한다 (해금 검사 없음).
   - 검 타기(`StartRide` / `StopRide`): 중력 없이 떠서 ←→로 `Ride Speed`(임시 9), ↑↓(`MoveY`, #317)로 `Ride Vertical Speed`(임시 6)로 `Ride Seconds`(임시 30초) 동안 난다. 키를 떼면 그 자리에 멈춘다(중력 없음). 시간이 다 되면 스스로 내려온다.
     - 아래 바닥(땅·발판)과는 `Ride Clearance`(임시 0.6)만큼 띄워 둔다 (#351). ↓를 계속 눌러도 그 높이에서 멈추고, 바닥 가까이에서 타기 시작하면 그 높이까지 떠오른다. 그래서 발밑의 소환검이 바닥에 묻히지 않고, 바닥에 선 것(`IsGrounded`)으로 보지 않아 걷기 모션이 나오지 않는다.
@@ -142,6 +149,8 @@
 | `FaceTowards(float x)` | x 위치 | - | 그 x 쪽을 바라본다. 스킬이 대상 쪽으로 돌아설 때 부른다. 서버에서 다른 컴퓨터의 플레이어에 부르면 서버 값을 바로 바꾸고 소유 클라이언트에도 알린다 (#223) |
 | `StartDash(int direction)` | 1 오른쪽, -1 왼쪽 | - | (#256) 대시. 대시 스킬이 부른다 |
 | `IsDashing` | - | `bool` | (#256) 대시 중 |
+| `DashUnlocked`, `AirDashUsed` | - | `bool` | (#557) ←← / →→ 대시 해금 여부, 이번 공중에서 썼는지 |
+| `TapDashCooldownRemaining` | - | `float` | (#557) ←← / →→ 대시를 다시 쓸 때까지 남은 시간(초). 0이면 쓸 수 있음 |
 | `RequestAirJump()` | - | - | (#256) 공중이고 이번 공중에서 안 썼으면 한 번 더 점프. 블록코딩 더블점프가 부른다 |
 | `DoubleJumpUnlocked`, `AirJumpUsed` | - | `bool` | (#256) 더블점프 해금 여부, 이번 공중에서 썼는지 |
 | `AirJumped` (event) | - | - | [연출] (#256) 더블점프를 한 순간. 이미 공중이라 「공중 상태로 바뀜」으로는 알 수 없어서 따로 알린다. 점프 모션을 다시 틀 때 (PlayerAnimator, 임혜원). 모든 화면에서 한 번씩 불림 (#322): 내 화면은 뛴 순간, 서버·Host와 다른 클라이언트는 `[Command]` → `[ClientRpc]`로 조금 늦게 |

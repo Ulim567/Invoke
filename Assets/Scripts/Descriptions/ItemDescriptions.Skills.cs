@@ -211,11 +211,11 @@ public static partial class ItemDescriptions
 		[PredefinedFunctionIds.Dash] = new ItemDescription
 		{
 			Summary = "바라보는 쪽으로 짧은 거리를 빠르게 이동합니다.",
-			Purpose = "",
+			Purpose = "해금하면 ← 나 → 를 빠르게 두 번 눌러 그쪽으로 대시합니다. 공격을 피하거나 빠르게 다가갈 때 씁니다.",
 			Example = "",
 			ExampleCode = "",
 			ExampleResult = "",
-			Caution = "",
+			Caution = "방향키 대시는 0.5초에 한 번, 공중에서는 땅에 닿을 때까지 한 번 쓸 수 있습니다. 슬롯에는 넣을 수 없습니다.",
 		},
 		[PredefinedFunctionIds.DoubleJump] = new ItemDescription
 		{

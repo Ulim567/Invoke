@@ -9,7 +9,7 @@ using UnityEngine;
 /// - 슬롯 하나에는 비어 있음 / 블록코딩으로 만든 함수(GUID) / C 캐릭터 스킬(고정 ID) 중 하나가 들어간다.<br/>
 /// - 장착 화면(임혜원)은 EquipFunction, EquipSkill, Unequip, Swap을 부르고 Changed를 받아 다시 그린다.<br/>
 /// - SlotCaster는 TryGetFunction으로 시전할 함수(원본)를 받는다. 같은 슬롯은 같은 원본을 계속 돌려주므로 쿨타임·실행 중 검사·캔슬이 이어진다.<br/>
-/// - 임시 계정·오프라인 테스트: 장착 내용은 이 컴퓨터 파일(persistentDataPath/SlotLoadout.json)에 저장하고, 함수는 이 컴퓨터의 함수 파일(FunctionStorage)에서 찾는다.<br/>
+/// - 임시 계정·오프라인 테스트: 장착 내용은 이 컴퓨터 파일(persistentDataPath/Local/{이 캐릭터의 언어}/SlotLoadout.json, #570)에 저장하고, 함수는 이 컴퓨터의 함수 파일(FunctionStorage)에서 찾는다.<br/>
 /// - 실제 계정: 서버가 보낸 슬롯·함수를 SetEntries로 받는다 (#263). 그 뒤로는 파일을 읽거나 쓰지 않고, 장착을 바꾸는 함수(EquipXxx, Unequip, Swap)는 거부한다.<br/>
 /// - 코드 영역 크기는 CodeSize로 알려 주기만 한다. 한도 검사는 메모리 작업에서 한다.
 /// </para>
@@ -56,7 +56,8 @@ public class SlotLoadout : MonoBehaviour
 	// 서버가 보낸 이 캐릭터의 함수 전부 (#263). null이면 이 컴퓨터의 파일을 쓴다
 	List<FunctionData> serverFunctions;
 
-	static string SavePath => Path.Combine(Application.persistentDataPath, "SlotLoadout.json");
+	// 이 캐릭터 언어의 폴더 안 (#570, LocalSaveFolder). Awake에서 읽으므로 내 캐릭터가 정해지기 전이라도 이 오브젝트의 언어로 고른다
+	string SavePath => LocalSaveFolder.PathFor(PlayerCharacter.LanguageOf(gameObject), "SlotLoadout.json");
 
 	/// <summary>[표시] 슬롯 내용이 바뀌었을 때 (바뀐 슬롯 번호). 불러오기·다시 읽기처럼 여러 슬롯이 바뀌면 -1</summary>
 	public event Action<int> Changed;
@@ -228,12 +229,21 @@ public class SlotLoadout : MonoBehaviour
 		}
 	}
 
-	/// <summary>슬롯에 넣을 수 있는 스킬인지. 등록된 사전 정의 함수이고 입력 함수(input.*)가 아니면 true. 더블점프(패시브)는 false (#256).</summary>
+	/// <summary>슬롯에 넣을 수 있는 스킬인지. 등록된 사전 정의 함수이고 입력 함수(input.*)가 아니면 true. 더블점프·대시(키로 쓰는 이동, #256·#557)는 false.</summary>
 	public static bool IsEquippableSkill(string skillId)
 	{
 		if (string.IsNullOrEmpty(skillId) || skillId.StartsWith("input.")) return false;
 		// 더블점프는 해금하면 Space로 쓰는 패시브라 슬롯에 넣지 않는다 (#256). 블록코딩에서는 부를 수 있다
 		if (skillId == PredefinedFunctionIds.DoubleJump) return false;
+		// 대시도 해금하면 ←← / →→ 로 쓰므로 슬롯에 넣지 않는다 (#557). 블록코딩에서는 부를 수 있다
+		if (skillId == PredefinedFunctionIds.Dash) return false;
+		// is_valid_orb는 값을 돌려주기만 하는 함수라 슬롯에 넣지 않는다 (#532, 이우림). is_valid_target(game.)과 같다
+		if (skillId == PredefinedFunctionIds.PyIsValidOrb) return false;
+		// 출력 함수(#536)도 슬롯에 넣지 않는다. 슬롯에서 바로 쓰면 출력할 값을 넘길 수 없기 때문
+		if (skillId == PredefinedFunctionIds.Printf || skillId == PredefinedFunctionIds.PyPrint) return false;
+		// 자세 함수(C #538, Python #546, 이우림)도 슬롯에 넣지 않는다. 돌려준 자세 숫자를 받아 판별하는 코드와 함께 함수 안에서 쓰는 함수이기 때문
+		if (skillId == PredefinedFunctionIds.InitStance || skillId == PredefinedFunctionIds.GetStance
+			|| skillId == PredefinedFunctionIds.PyInitStance || skillId == PredefinedFunctionIds.PyGetStance) return false;
 		return PredefinedFunctionRegistry.TryGet(skillId, out _);
 	}
 
@@ -282,7 +292,9 @@ public class SlotLoadout : MonoBehaviour
 			return null;
 		}
 		// 실행할 수 없는 함수면 변환기가 콘솔 경고를 남긴다
-		return FunctionDataConverter.TryConvert(data, owned, out UserFunction function) ? function : null;
+		// 캐릭터 언어의 규칙으로 바꾼다(#532, 이우림). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
+		LanguageRule language = GetComponent<LanguageRule>();
+		return FunctionDataConverter.TryConvert(data, owned, language != null ? language.Family : LanguageFamily.C, out UserFunction function) ? function : null;
 	}
 
 	void SaveAndNotify(int slot)

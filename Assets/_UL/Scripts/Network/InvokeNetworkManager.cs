@@ -205,6 +205,31 @@ public class InvokeNetworkManager : NetworkManager
 		RaidParties.OnMemberGone(conn);
 	}
 
+	/// <summary>
+	/// [서버] 지금 그 연결의 플레이어를 없애고 캐릭터 화면으로 돌려보내도 되는지 (#570).<br/>
+	/// 플레이어를 아직 만들지 않았거나(장소 씬을 기다리는 중), 서버가 알린 이동(레이드 시작·끝, 부활해 로비로)을 기다리는 중이면 false.
+	/// </summary>
+	// 이동을 기다리는 중에 없애면 클라이언트의 로딩 화면이 이동 끝(TravelEndedMessage)을 받지 못해 걷히지 않으므로 막는다
+	public bool CanReturnToCharacters(NetworkConnectionToClient conn) =>
+		conn.identity != null && !ServerTravel.IsWaiting(conn) && !RaidParties.IsWaitingForTravel(conn);
+
+	/// <summary>
+	/// 서버에서 그 연결의 플레이어를 접속은 둔 채 없애고, 클라이언트에 불러온 장소 씬을 내리라고 알린다 (#570). 서버에서만 부른다.<br/>
+	/// InvokeAuthenticator가 「캐릭터 화면으로 돌아가기」에 성공한 연결에 대해 부른다. 레이드·연습장·이동 정리는 DespawnPlayer가 한다.
+	/// </summary>
+	public void ReturnToCharacters(NetworkConnectionToClient conn)
+	{
+		if (conn.identity == null) return;
+		Scene current = conn.identity.gameObject.scene;
+
+		// 클라이언트는 알린 씬을 쌓아 두기만 하므로, 캐릭터 화면 뒤에 장소의 바닥과 오브젝트가 남지 않도록 내리라고 알린다 (TravelPlayer와 같음)
+		// 호스트의 클라이언트는 서버와 씬을 같이 쓰므로 알리지 않는다 (서버는 그 씬을 계속 돌려야 함)
+		if (!(conn is LocalConnectionToClient))
+			conn.Send(new SceneMessage { sceneName = current.name, sceneOperation = SceneOperation.UnloadAdditive });
+
+		DespawnPlayer(conn);
+	}
+
 	IEnumerator SpawnPlayerInLobby(NetworkConnectionToClient conn)
 	{
 		// 서버가 켜지자마자 접속하면 장소 씬을 아직 불러오는 중일 수 있으므로 기다린다
@@ -306,7 +331,7 @@ public class InvokeNetworkManager : NetworkManager
 			RejectTravel(conn, msg.destination, "모르는 장소입니다");
 			return;
 		}
-		TravelPlayer(conn, player, target);
+		TravelPlayer(conn, player, target, msg.arrival);
 	}
 
 	// 이동하지 않을 때도 답을 보내야, 클라이언트가 로딩 화면을 닫고 액션 맵을 다시 활성화한다
@@ -329,13 +354,17 @@ public class InvokeNetworkManager : NetworkManager
 	/// 씬 이름이 아니라 Scene 값을 받는다. 연습장·레이드 던전처럼 같은 씬을 여러 번 불러와도 그대로 쓰기 위함이다.
 	/// </para>
 	/// </summary>
-	public void TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target)
+	/// <param name="arrival">도착할 ArrivalPoint의 Id (#518). 비우면 떠나온 장소로 찾는다</param>
+	public void TravelPlayer(NetworkConnectionToClient conn, GameObject player, Scene target, string arrival = null)
 	{
 		// 이전 씬에서 시전한 함수가 새 씬에서 계속 실행되지 않도록 끊는다 (몬스터를 기다리던 작업, 이전 씬에 만들 검 등)
 		// 로비로 오면 끊는 대신 프로세스를 재시작하고 체력을 채운다. 소환검을 새 씬으로 옮기기(아래 MoveToScene) 전에 해야 검이 따라오지 않는다 (#435)
 		if (target.name == PlaceScenes.Lobby) ResetOnLobbyArrival(player);
 		// 원인은 System이다. 장소 이동으로 끊긴 함수는 실행 중단 알림을 띄우지 않는다 (#504)
 		else if (player.TryGetComponent(out FunctionExecutor executor)) executor.InterruptAll(InterruptCause.System);
+		// 장소를 옮기면 자세를 없앤다 (#538). 기획은 「전투 장소에 들어가면」이지만, 시전할 수 없는 로비에서는 자세를 쓸 일이 없어 모든 이동에서 없앤다
+		// 작업을 끊은 뒤에 하는 이유: 끊긴 init_stance가 마지막 틱에 자세를 다시 정하지 않게 하기 위함
+		if (player.TryGetComponent(out PlayerStance stance)) stance.Clear();
 
 		Scene previous = player.scene;
 
@@ -350,7 +379,7 @@ public class InvokeNetworkManager : NetworkManager
 		// ServerTeleport는 서버 쪽 위치를 바꾸고 클라이언트에도 순간이동(RpcTeleport)을 보낸다
 		// 씬 메시지 뒤에 보내는 이유: 클라이언트는 새 씬을 다 로드한 뒤에 teleport를 처리하므로, 로드하는 동안 떨어진 플레이어도 도착 위치로 돌아온다
 		// 로드하는 동안 클라이언트의 플레이어가 밟을 땅이 없어 떨어지지 않도록, PlaceTravelClient가 이동하는 동안 움직임을 잠근다 (#216)
-		Vector3 position = PlaceOnGround(target, FindArrivalPosition(target, previous.name), player);
+		Vector3 position = PlaceOnGround(target, FindArrivalPosition(target, previous.name, arrival), player);
 		player.GetComponent<NetworkTransformBase>().ServerTeleport(position, player.transform.rotation);
 
 		// 소환검은 플레이어를 따라 새 씬으로 옮기고, 던져서 떨어진 물리 검은 손으로 돌려받는다 (#325)
@@ -420,9 +449,17 @@ public class InvokeNetworkManager : NetworkManager
 	}
 
 	// 장소 사이를 이동한 플레이어가 도착할 위치를 찾는다.
-	// 떠나온 장소(fromPlace)가 같은 ArrivalPoint가 있으면 그 위치, 없으면 씬의 NetworkStartPosition 위치
-	static Vector3 FindArrivalPosition(Scene scene, string fromPlace)
+	// 도착 자리 이름(arrival, #518)이 같은 ArrivalPoint → 떠나온 장소(fromPlace)가 같은 ArrivalPoint → 씬의 NetworkStartPosition 위치
+	static Vector3 FindArrivalPosition(Scene scene, string fromPlace, string arrival = null)
 	{
+		if (!string.IsNullOrEmpty(arrival))
+		{
+			foreach (GameObject root in scene.GetRootGameObjects())
+				foreach (ArrivalPoint point in root.GetComponentsInChildren<ArrivalPoint>())
+					if (point.Id == arrival) return point.transform.position;
+			Debug.LogWarning($"[InvokeNetworkManager] {scene.name} 씬에 Id가 {arrival}인 ArrivalPoint가 없어서 떠나온 장소로 찾습니다.");
+		}
+
 		bool hasArrivalPoint = false;
 		foreach (GameObject root in scene.GetRootGameObjects())
 		{

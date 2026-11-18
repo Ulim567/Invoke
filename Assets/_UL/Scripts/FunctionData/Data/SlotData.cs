@@ -84,6 +84,16 @@ public class SlotData
 	// 포인터 타입마다 NULL을 따로 두지 않는다. 편집 화면은 플레이어가 NULL을 입력한 칸이 어떤 포인터 자리인지 알 수 없기 때문
 	public static SlotData FromNull() => FromLiteral(VariableType.PointerTo(null), NullLiteral);
 
+	/// <summary>
+	/// None 직접 입력의 Literal 값 (Python, #532).
+	/// </summary>
+	public const string NoneLiteral = "None";
+
+	/// <summary>
+	/// 직접 입력한 None (Python, #532). Type은 None, Literal은 "None"이다.
+	/// </summary>
+	public static SlotData FromNone() => FromLiteral(new VariableType(VariableTypeKind.None), NoneLiteral);
+
 	public static SlotData FromVariable(string variableName) =>
 		new SlotData { Kind = SlotKind.Value, VariableName = variableName };
 

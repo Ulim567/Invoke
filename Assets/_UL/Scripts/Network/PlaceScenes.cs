@@ -13,6 +13,10 @@ public static class PlaceScenes
 {
 	public const string Lobby = "Lobby";
 	public const string HuntingGround = "HuntingGround";
+	/// <summary>사냥터2 (#518): 세로로 긴 맵. 사냥터1(HuntingGround)·사냥터3과 포탈로 이어짐</summary>
+	public const string HuntingGround2 = "HuntingGround2";
+	/// <summary>사냥터3 (#518): 가로로 긴 맵. 사냥터2와 포탈 두 쌍으로 이어짐</summary>
+	public const string HuntingGround3 = "HuntingGround3";
 	public const string TrainingRoom = "TrainingRoom";
 	public const string RaidDungeon = "RaidDungeon";
 
@@ -20,7 +24,7 @@ public static class PlaceScenes
 	/// 서버가 시작할 때 한 번씩 불러오는 장소.
 	/// 연습장과 레이드 던전은 입장할 때마다 따로 불러오므로 여기에 넣지 않는다.
 	/// </summary>
-	public static readonly string[] FixedPlaces = { Lobby, HuntingGround };
+	public static readonly string[] FixedPlaces = { Lobby, HuntingGround, HuntingGround2, HuntingGround3 };
 
 	/// <summary>
 	/// 공격할 수 없는 장소(스킬을 시전할 수 없는 장소). 서버가 이 장소에서 온 시전 요청을 거부한다 (CastRejection.InNoCastPlace).

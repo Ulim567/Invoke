@@ -24,6 +24,9 @@ public static partial class ItemDescriptions
 	public static ItemDescription Get(string key)
 	{
 		if (string.IsNullOrEmpty(key)) return null;
+		// 내 캐릭터 언어의 표를 먼저 본다 (#532, ItemDescriptions.Python.cs)
+		Dictionary<string, ItemDescription> languageEntries = EntriesOf(LanguageFamilies.Of(PlayerCharacter.LocalLanguage));
+		if (languageEntries != null && languageEntries.TryGetValue(key, out ItemDescription byLanguage)) return byLanguage;
 		if (Entries.TryGetValue(key, out ItemDescription found)) return found;
 		return SkillEntries.TryGetValue(key, out found) ? found : null;
 	}
@@ -45,6 +48,8 @@ public static partial class ItemDescriptions
 		["target"] = "몬스터 한 명입니다. get_bug()를 넣거나, get_bug()를 담아 둔 Target 변수를 넣습니다.",
 		["targets"] = "공격할 몬스터 여러 명입니다. 슬롯에서 시전하면 여러 명을 고르게 해 줍니다.",
 		["sword"] = "쓸 소환검의 포인터입니다. summon_sword()가 돌려준 값을 넣습니다.",
+		["orb"] = "쓸 마나 구슬입니다. orb_create()가 돌려준 값을 담아 둔 variable이나 list의 원소를 넣습니다.",
+		["orbs"] = "쓸 마나 구슬들을 담은 list입니다. 다 쓴 구슬은 건너뜁니다.",
 	};
 
 	static readonly Dictionary<string, ItemDescription> Entries = new Dictionary<string, ItemDescription>
@@ -357,6 +362,36 @@ public static partial class ItemDescriptions
 			ExampleResult = "처음 고른 몬스터가 찌르기로 죽었으면 새 몬스터를 골라 찌르고, 살아 있으면 같은 몬스터를 한 번 더 찌릅니다.",
 			Slots = new[] { "target : 확인할 대상 | Target" },
 			Caution = "true이면 그 대상을 스킬에 넘겨도 대상 때문에 runtime error가 발생하지 않습니다. Target은 pointer가 아니므로 NULL과 비교하지 않고 이 함수로 확인합니다.",
+		},
+		[PredefinedFunctionIds.Printf] = new ItemDescription
+		{
+			Summary = "값 하나를 화면 왼쪽 아래에 출력합니다.",
+			Purpose = "화면에 보이지 않는 값(variable, function이 돌려준 값)을 확인할 때 씁니다.",
+			Example = "예를 들면, variable에 담긴 값을 확인할 수 있습니다.",
+			ExampleCode = "int n = 3; printf(n);",
+			ExampleResult = "Q 슬롯에서 쓰면 화면 왼쪽 아래에 [Q] n = 3이 3초 동안 보입니다.",
+			Slots = new[] { "value : 출력할 값 | 아무 값" },
+			Caution = "variable이나 expression을 넣으면 n = 3처럼 이름과 값이 함께 보이고, 값을 직접 적으면 값만 보입니다. 출력은 최대 5줄까지 쌓이고, 내 화면에만 보입니다.",
+		},
+		// 자세 함수 (#538) ---------------------------------------------------------
+		[PredefinedFunctionIds.InitStance] = new ItemDescription
+		{
+			Summary = "자세를 1~100 사이의 무작위 숫자로 다시 정합니다.",
+			Returns = "새로 정한 자세 숫자입니다.",
+			// 규칙 이름·수치는 적지 않는다. 규칙은 처음부터 모두 적용되고, 내용은 스킬 트리에서 해금해야 알 수 있다 (이우림 결정 11/18, stance.md)
+			Purpose = "자세 숫자에 따라 효과가 붙습니다. 효과를 정하는 규칙은 여덟 가지이며, 규칙의 내용은 스킬 트리에서 해금하면 알 수 있습니다.",
+			Example = "예를 들면, 자세를 정하고 그 숫자를 확인할 수 있습니다.",
+			ExampleCode = "int n = init_stance(); printf(n);",
+			ExampleResult = "2.5초 뒤 자세가 정해지고, 화면 왼쪽 아래에 n = 37처럼 자세 숫자가 보입니다.",		},
+		[PredefinedFunctionIds.GetStance] = new ItemDescription
+		{
+			Summary = "지금 자세 숫자를 돌려줍니다.",
+			Returns = "지금 자세 숫자입니다. 자세가 없으면 0입니다.",
+			Purpose = "다른 슬롯이나 다른 function에서 지금 자세를 확인하고, 자세에 맞는 스킬을 고를 때 씁니다.",
+			Example = "예를 들면, 자세가 홀수일 때만 검 찌르기를 쓸 수 있습니다.",
+			ExampleCode = "if (get_stance() % 2 == 1) { thrust(get_bug()); }",
+			ExampleResult = "자세가 홀수이면 고른 몬스터를 찌르고, 짝수이거나 자세가 없으면 아무것도 하지 않습니다.",
+			Caution = "자세를 바꾸지 않으므로 시간이 더 들지 않습니다. 전투 장소에 막 들어와 init_stance를 부르기 전이면 0입니다.",
 		},
 
 		// type ----------------------------------------------------------------

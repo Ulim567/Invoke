@@ -14,7 +14,7 @@ using UnityEngine;
 /// </summary>
 public static class GroundColliderFixer
 {
-	static readonly string[] Scenes = { "Lobby", "HuntingGround", "TrainingRoom", "RaidDungeon" };
+	static readonly string[] Scenes = { "Lobby", "HuntingGround", "HuntingGround2", "HuntingGround3", "TrainingRoom", "RaidDungeon" };
 
 	[MenuItem("Invoke/맵/땅 콜라이더 속 채우기")]
 	static void Fix()

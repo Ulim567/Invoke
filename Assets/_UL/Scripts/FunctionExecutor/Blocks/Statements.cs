@@ -29,6 +29,8 @@ internal class Statements
 	VariableStore scope;
 	// 처음 Step을 불렀는지. 범위는 처음 한 번만 연다
 	bool started;
+	// 지금 statement를 시작할 때의 heap 표시(#532). 이 뒤에 malloc한 객체가 이 statement의 임시 객체다
+	int heapMark;
 
 	public Statements(IReadOnlyList<Block> blocks, bool opensScope)
 	{
@@ -42,7 +44,8 @@ internal class Statements
 		{
 			started = true;
 			// 범위를 여는 statement는 사용자 정의 함수 안에만 있으므로 지역 변수가 언제나 있다
-			if (opensScope)
+			// Python 함수(#532)는 { } 범위가 없다. if·반복문 안에서 만든 변수도 함수가 끝날 때까지 남는다
+			if (opensScope && context.CurrentNames == null)
 			{
 				scope = context.CurrentVariables;
 				scope.OpenScope();
@@ -84,6 +87,7 @@ internal class Statements
 			}
 
 			running = next.Clone();
+			heapMark = context.HeapMark;
 		}
 
 		BlockResult result = running.Execute(context);
@@ -92,7 +96,12 @@ internal class Statements
 		running = null;
 
 		// 실패, return, break, continue는 남은 statement를 실행하지 않고 바깥에 그대로 알린다
+		// return은 임시 객체를 놓지 않는다. 돌려준 값(예: return orb_create())을 부른 쪽이 받아 담기 전에 해제하지 않기 위함
 		if (result != BlockResult.Done) return result;
+
+		// Python(#532): statement 하나가 끝나면 그 statement가 만든 임시 객체를 놓고 가비지 컬렉션을 돌린다
+		// 변수·리스트에 담지 않은 구슬(orb_create();)은 여기서 해제된다. 대입 뒤, del 뒤, 함수 호출이 끝난 뒤가 모두 이 시점이다
+		context.ReleaseStatementTemporaries(heapMark);
 
 		index++;
 		return index >= blocks.Count ? BlockResult.Done : BlockResult.Running;

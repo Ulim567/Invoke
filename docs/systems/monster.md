@@ -36,6 +36,7 @@
 - 몬스터 공격 = 공격 형태 + 효과
   - 효과는 `MonsterAttackData` 파일에 목록으로 담는다. 맞으면 위에서부터 차례로 적용한다.
   - 효과 적용은 모두 `MonsterAttackResolver.Apply` 한 곳을 거친다. 체력 피해는 `DamageCalculator.Calculate(DamageRequest.Flat(Amount))`(박진우)를 거쳐 나온 정수로 `IDamageable.TakeDamage`를 부르고, 실행 중단은 맞은 대상의 `FunctionExecutor.InterruptAll()`(이우림)로 실행 중인 함수를 모두 끊는다(실행기가 없으면 무시). 메모리 효과(점유·탈취·회수 방해)는 받는 방식을 정하기 전까지 로그만 남긴다.
+  - `Apply(attack, hit, source)`: `source`(때린 쪽 위치, 선택)를 주면 체력 피해 직전에 `PlayerKnockback.NotifySource`로 알려 맞은 플레이어가 그 반대로 밀린다(player-health.md). 투사체(`MonsterProjectile`)와 낙하 패킷(`FallingPacket`)은 자기 위치를 넘긴다. Gateway의 공격은 넘기지 않아 바라보는 반대쪽으로 밀린다.
   - 투사체는 MonsterProjectile 레이어다. Player에 맞으면 효과를 주고 사라지고, Ground·Platform에 닿거나 `Lifetime`초가 지나면 효과 없이 사라진다.
   - 패링: Player에 맞으면 효과를 주기 전에 그 플레이어의 `ParryGuard.TryParry(투사체)`(박진우, `c-skills.md`)를 묻는다. `true`면 효과 없이 사라진다. 관통 투사체도 잡히면 사라진다. 관통은 이미 맞힌 대상에게는 다시 묻지 않는다.
   - 맞았는지 판단과 효과 적용은 서버(또는 네트워크 없는 테스트)에서만 한다 (#310).
@@ -56,6 +57,9 @@
   - 발견: `Chase Players`가 켜져 있을 때만 한다. 끄면 플레이어를 무시하고 순찰만 한다. `Detect Interval`(0.2초)마다 `Detect Range` 안의 살아 있는(`PlayerHealth.IsDead`가 false) 플레이어 중 가장 가까운 플레이어를 쫓는다.
   - 놓침: 쫓던 플레이어가 죽거나 `Lose Range` 밖으로 나가면 잠깐 멈췄다가 순찰로 돌아간다.
   - 추적: 좌우로만 움직이고 점프하지 않는다. 앞이 낭떠러지나 장애물이면 그 자리에서 기다린다(떨어지지 않는다).
+  - 밀려나기 (Leak, Worm): 맞으면(`Damaged`) 때린 쪽(`Monster.LastAttackerX`, 없으면 바라보는 쪽)의 반대로 `Knockback Time`(0.15초) 동안 `Knockback Speed`(4)로 밀린다. 그동안 순찰·추적 이동을 덮어쓴다.
+    - 밀리는 쪽이 낭떠러지나 장애물이면(순찰과 같은 검사) 밀기를 끝내고 그 자리에 멈춘다. 사냥터 3 구덩이 등에 빠지지 않는다.
+    - 죽었거나 기절 중이거나 보스(`Is Boss`)면 밀리지 않는다. 속도는 서버에서만 바꾸고 위치는 `NetworkRigidbodyReliable2D`가 맞춘다.
   - 몬스터가 죽으면 멈춘다. 그림은 오른쪽을 보고 그리고, 왼쪽을 볼 때 `SpriteRenderer.flipX`를 켠다(플레이어와 같은 규칙).
   - AI는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 처음 방향을 랜덤으로 정하는 일도 서버만 한다 (#310)
 
@@ -69,6 +73,28 @@
     - `LeakSpawner`: 위치 (-10, 1), 구역 56×12 (X -38~18, 바닥과 발판 3층), 최대 6마리
     - `LoopSpawner`: 위치 (28.5, 0), 구역 17×10 (X 20~37, 위가 뚫린 구역), 최대 3마리
     - 마리 수는 씬에 놓은 스포너에서만 바꾼다. 프리팹 원본(Leak 3, Loop 2)은 테스트용으로 그대로 둔다
+  - 사냥터 2·3 (#526) 배치. 위치는 초록 상자 중심 (X, Y), 크기는 구역 가로×세로
+    - 사냥터 2 (`HuntingGround2`), 스포너 6개
+      - `Leak_Ground_W`: (-17, -4) 22×2, 2마리
+      - `Leak_Ground_E`: (17, -4) 22×2, 2마리
+      - `Leak_Tier12`: (0, 0.5) 56×4, 3마리
+      - `Leak_Tier34`: (0, 6.5) 56×4, 2마리
+      - `Loop_Tier34`: (0, 6.5) 56×4, 1마리
+      - `Loop_Tier56`: (0, 12.5) 56×6, 3마리
+    - 사냥터 3 (`HuntingGround3`), 스포너 7개
+      - `Leak_Gnd_1`: (-42.5, -4) 15×2, 2마리
+      - `Leak_Gnd_2`: (-18, -4) 16×2, 2마리
+      - `Leak_Gnd_3`: (7.5, -4) 19×2, 2마리
+      - `Leak_Gnd_4`: (34.5, -4) 17×2, 2마리
+      - `Leak_Tier2`: (-8.5, 2) 65×2, 3마리
+      - `Loop_Tier1`: (-3.5, -1) 91×2, 2마리
+      - `Loop_Tier3`: (-0.5, 5) 65×2, 3마리
+    - 구역 높이로 층을 고른다. 스포너는 구역 안에 들어오는 윗면만 후보로 쓰므로, 구역 세로를 원하는 층만 덮게 둔다.
+    - 땅 구역은 높이 2라 구덩이 바닥(Y -6)이 구역 밖으로 빠진다. 그래서 구덩이 안에는 몬스터가 생기지 않는다.
+    - Leak은 언덕을 벽으로, 구덩이를 낭떠러지로 보고 돌아서므로 생긴 구간 안에 갇힌다. 그래서 땅 스포너는 하나로 길게 두지 않고 구간별로 나눠 둔다.
+    - 포탈 앞에는 몬스터를 두지 않는다: 사냥터 2는 바닥 X -6~6과 맨 위 층, 사냥터 3은 양 끝 X -60~-50, 50~59.
+    - Loop(`FlyingShooterAI`)는 생긴 곳에서 2.5칸(`Hover Height`) 위에 떠 있다.
+    - 배치 도구: 메뉴 Invoke → 맵 → 사냥터 2·3 몬스터 스포너 놓기 (`HuntingGroundSpawnerPlacer`). 다시 누르면 씬에 있던 스포너를 지우고 위 표대로 다시 놓는다.
   - 서버(Host 포함)에서만 만든다. 서버가 켜지는 순간 모든 지점에 만들고, 클라이언트는 서버가 만든 몬스터를 받기만 한다. 네트워크를 켜지 않으면 만들지 않는다.
   - 죽은 몬스터는 `Despawn Delay` 뒤 `Destroy`로 없앤다. 서버에서 없애면 Mirror(`NetworkIdentity`)가 모든 클라이언트에서도 없앤다.
   - 몬스터 프리팹은 `NetworkIdentity`를 붙이고 NetworkManager의 Registered Spawnable Prefabs에 등록한다. 체력·피격·사망 연출은 `MonsterNetwork`로 맞춘다(#310). 위치는 `NetworkRigidbodyReliable2D`(Gateway는 `NetworkTransformReliable`, Sync Direction Server To Client)로 맞춘다(#310, 아래 「위치·방향은 모든 화면에서 같다」).
@@ -77,7 +103,7 @@
   - 떠다니기: 중력 없이 생긴 자리보다 `Hover Height`(2.5)만큼 위에서 위아래로 살짝 둥실거린다.
   - 순찰: 움직이기·멈추기를 랜덤 시간씩 번갈아 하고 가끔 돌아선다. 벽(`Obstacle Layers`)이나 처음 자리에서 `Patrol Radius`(4)보다 멀어지면 돌아선다.
   - 공격: `Attack Range`(6) 안의 살아 있는 플레이어 중 가장 가까운 플레이어를 멈춰서 바라보고, 처음엔 `First Shot Delay`(0.5초) 뒤, 그다음엔 `Fire Interval`(2초)마다 몸 중심을 겨냥해 `ProjectileAttack.Fire`를 부른다. 대각선으로도 쏜다. `Lose Range`(8) 밖으로 나가거나 죽으면 순찰로 돌아간다.
-  - 밀려나기: 맞으면(`Damaged`) 쏘던 플레이어 반대쪽(없으면 바라보는 반대쪽)으로 `Knockback Time`(0.15초) 동안 `Knockback Speed`(4)로 밀린다. `TakeDamage`에는 때린 쪽 정보가 없어서 쏘던 플레이어를 기준으로 한다.
+  - 밀려나기: 맞으면(`Damaged`) 쏘던 플레이어 반대쪽(없으면 바라보는 반대쪽)으로 `Knockback Time`(0.15초) 동안 `Knockback Speed`(4)로 밀린다. 쏘던 플레이어를 기준으로 한다(`LastAttackerX`는 쓰지 않음). 보스(Gateway)는 이 AI를 쓰지 않아 밀리지 않는다.
   - AI(이동·탐지·발사)는 서버(또는 네트워크를 켜지 않은 테스트)에서만 돈다. 클라이언트의 복사본은 쏘지 않는다 (#310)
 - 발사 (`ProjectileAttack`)
   - `Fire`를 부르면 연출 `FireEffectPlayed`가 바로 나가고, `Fire Delay`초(모으는 시간) 뒤에 투사체가 나간다. 모으는 중에는 `IsCharging`이 `true`이고, 다시 `Fire`를 불러도 무시한다.
@@ -160,9 +186,11 @@
   - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴린다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다. 개수는 `Count`~`Max Count` 사이에서 무작위(`Max Count`가 `Count` 이하면 늘 `Count`개)
   - 버그 조각은 나중에 상점 등에서 많이 쓰도록 잡몹마다 2~3개씩 넉넉히 준다 (김도훈 결정)
   - 블록·함수 드롭: 받는 플레이어마다 `Item Chance`로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목 중 무작위로 `Item Count`개의 가진 개수를 1씩 늘린다 (`PlayerProgress.AddItem`, 이우림 #500)
-    - 쓸 수 있는 항목: 새 캐릭터 처음 항목(`ItemCountRules.Initial`의 키: thrust, sword_throw, get_bug) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
+    - 쓸 수 있는 항목: 그 플레이어 캐릭터 언어의 처음 항목(`ItemCountRules.Initial(언어)`의 키, `PlayerCharacter.LanguageOf`. C는 thrust, sword_throw, get_bug 등, Python은 py.* 등. 처음 항목을 C 것으로만 센 탓에 Python 마법사가 C 블록을 받던 문제를 고침, #550) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
     - 여러 개면 하나씩 따로 고른다 (같은 항목이 겹칠 수 있음). 항목당 최대 99개에서 멈춘다(`ItemCountRules.MaxCount`)
     - 화면에는 무엇인지 알리지 않고 「블록 ×N」으로만 알린다(`LocalRewardReceived`의 블록 수). 무엇을 받았는지는 블록 편집 화면의 「남은/가진」 개수로 확인한다
+    - 받으면 버그 조각처럼 블록 아이콘(`item_block`, 주황 코드 블록)이 튀어 올라 내 캐릭터로 날아온다. 아이콘은 무엇을 받았든 같고, 받은 수만큼 띄운다. `RewardEffectPlayed`의 재료 목록 끝에 (`MonsterReward.ItemDropIconId`, 받은 수) 한 줄을 붙여서 `MaterialDropView`(박진우)가 그대로 띄우게 한다. 진짜 재료가 아니라 가방에는 들어가지 않고, `LocalRewardReceived`의 재료 목록에는 붙지 않는다
+    - 아이콘 프리팹: `Assets/_DH/Resources/MaterialDrops/item_block.prefab`. 그림 `Assets/_DH/Sprites/material_item_block.png`(16×16 8장)를 고친 뒤 메뉴 Invoke → DH → 블록 드롭 프리팹 만들기를 누른다
   - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`, `AddItem`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
   - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다.
   - 재료 ID: `bug_fragment`(버그 조각), `boss_core`(보스 코어). 이름표는 `SkillTreeDefaults`(임혜원)와 같다.
@@ -196,6 +224,7 @@
 | `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0이 되면 사망한다. 피해 기록에는 남지 않는다 |
 | `TakeDamage(int damage, GameObject attacker)` | 데미지, 때린 플레이어 | - | (#484) 체력을 줄이고, 실제로 줄인 양을 `attacker`의 누적 피해량에 더한다. `attacker`가 `null`이거나 `Invulnerable`이면 기록하지 않는다. 서버에서만 |
 | `DamageDealtBy(GameObject attacker)` | 때린 플레이어 | `int` | (#484) 그 플레이어의 누적 피해량. 없으면 0. 서버에서만 |
+| `HasLastAttackerX`, `LastAttackerX` | - | `bool`, `float` | [서버] 마지막 피해에 때린 쪽(`TakeDamage(int, GameObject)`의 `attacker`)이 있었는지와 그 X 위치. `Damaged`보다 먼저 정해진다. `GroundChaseAI`가 밀려날 방향에 쓴다 |
 | `GetAttackerRanking(List<GameObject> result)` | 채울 목록 | - | (#484) 때린 플레이어를 누적 피해량이 큰 순서로, 같으면 먼저 때린 순서로 `result`에 채운다 (비우고 채움). 없어진 오브젝트는 뺀다. `MonsterReward`가 받을 사람을 고를 때 쓴다. 서버에서만 |
 | `Hp` | - | `int` | 지금 체력. 읽기만 한다. |
 | `MaxHp` | - | `int` | 최대 체력 (Inspector 값) |
@@ -222,7 +251,7 @@
 
 ### `ContactDamage`
 
-`Monster`와 같은 오브젝트에 붙인다. 다른 스크립트가 부르는 함수는 없고, Inspector 값만 정한다.
+`Monster`와 같은 오브젝트에 붙인다. 다른 스크립트가 부르는 함수는 없고, Inspector 값만 정한다. 피해를 주기 직전에 `PlayerKnockback.NotifySource`로 몬스터 위치를 알려, 닿은 플레이어가 몬스터 반대쪽으로 밀린다.
 
 | Inspector 값 | 설명 |
 | --- | --- |
@@ -239,7 +268,12 @@
 | --- | --- | --- | --- |
 | `Target` | - | `PlayerHealth` | 지금 쫓는 플레이어. 순찰 중이면 `null`. 연출(추적 중 표정 등)이나 공격 AI가 읽는다. |
 | `Facing` | - | `int` | 바라보는 방향. 오른쪽 1, 왼쪽 -1 |
-| `IsMoving` | - | `bool` | 지금 좌우로 움직이고 있으면 `true`. 이동·대기 애니메이션을 바꿀 때 읽는다. |
+| `IsMoving` | - | `bool` | 지금 좌우로 움직이고 있으면 `true`(밀려나는 중 포함). 이동·대기 애니메이션을 바꿀 때 읽는다. |
+
+| Inspector 값 (밀려나기) | 기본값 | 설명 |
+| --- | --- | --- |
+| `Knockback Speed` | 4 | 맞았을 때 밀려나는 속도 (초당 유닛). 0이면 밀리지 않는다 |
+| `Knockback Time` | 0.15 | 맞았을 때 밀려나는 시간(초) |
 
 ### `MonsterSpawner`
 
@@ -349,7 +383,7 @@ Gateway 프리팹 최상위에 `Monster`, `GatewayAI`, `StatusEffects`와 함께
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `LocalRewardReceived` (static event) | `int` 경험치, `IReadOnlyList<MaterialDrop>` 재료, `int` 블록·함수 수 | - | [연출] 내 캐릭터가 어떤 몬스터에게서든 보상을 받았을 때. 획득 표시(시안 8-5)처럼 몬스터와 상관없이 받는 화면이 쓴다. 블록·함수는 수만 넘긴다(「블록 ×N」). 받은 플레이어의 화면에서만. 재료 목록은 이벤트 안에서만 읽는다 |
-| `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 내 캐릭터가 보상을 받았을 때. 받은 플레이어의 화면(호스트 포함)에서만 불린다 (`[TargetRpc]`, #404). 받은 플레이어 = 그 화면의 내 캐릭터. 네트워크 없는 테스트는 받은 플레이어마다 그 자리에서. "+경험치" 글자, 재료가 날아오는 연출에 쓴다. 재료 목록은 이벤트 안에서만 읽는다. 몬스터는 0.5초 뒤 없어지므로 띄운 그림을 몬스터 자식으로 두지 않는다 |
+| `RewardEffectPlayed` (event) | `PlayerProgress`, `int` 경험치, `int` 돈, `IReadOnlyList<MaterialDrop>` 재료 | - | [연출] 내 캐릭터가 보상을 받았을 때. 받은 플레이어의 화면(호스트 포함)에서만 불린다 (`[TargetRpc]`, #404). 받은 플레이어 = 그 화면의 내 캐릭터. 네트워크 없는 테스트는 받은 플레이어마다 그 자리에서. "+경험치" 글자, 재료가 날아오는 연출에 쓴다. 블록·함수를 받았으면 재료 목록 끝에 (`ItemDropIconId` = `item_block`, 받은 수) 한 줄이 붙는다(연출용, 진짜 재료 아님). 재료 목록은 이벤트 안에서만 읽는다. 몬스터는 0.5초 뒤 없어지므로 띄운 그림을 몬스터 자식으로 두지 않는다 |
 
 | Inspector 값 | 설명 |
 | --- | --- |

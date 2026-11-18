@@ -131,7 +131,8 @@ public static class MapDecorator
 			new Prop("CyberLab_Objects_2", -14, 8.75f), new Prop("CyberLab_Objects_2", -2, 8.75f), new Prop("CyberLab_Objects_2", 10, 8.75f),
 			new Prop("CyberLab_Objects_1", -20, 8.75f), new Prop("CyberLab_Objects_1", 4, 8.75f), new Prop("CyberLab_Objects_1", 16, 8.75f),
 			new Prop("CyberLab_Objects_14", -21, -3.16f), new Prop("CyberLab_Objects_14", -18.4f, -3.16f), new Prop("CyberLab_Objects_15", -16.4f, -3.16f),
-			new Prop("CyberLab_Objects_12", 6, -3.16f), new Prop("CyberLab_Objects_13", 8.8f, -3.53f),
+			// 큰 모니터 책상(CyberLab_Objects_12)은 편집 터미널 그림으로 옮겼다 (임혜원 11/18: 허수아비 뒤 컴퓨터가 더 눈에 띔). 여기엔 작은 것만
+			new Prop("CyberLab_Objects_13", 8.8f, -3.53f),
 			new Prop("CyberLab_Objects_4", 19, -3.19f), new Prop("CyberLab_Objects_6", 21, -3.59f),
 			new Prop("CyberLab_Objects_9", -8, 3), new Prop("CyberLab_Objects_10", -5.9f, 3),
 			new Prop("CyberLab_Objects_7", 21, 4), new Prop("CyberLab_Objects_8", -22, 2),
@@ -146,11 +147,71 @@ public static class MapDecorator
 		ambient = new Rect(-36, -4, 72, 16),
 	};
 
+	// 사냥터2 (#518, 맑은 낮 하늘, Sky Clouds 1). 가로 60칸(X -30~29), 세로로 긴 맵. 바닥 윗면 Y -4. 바닥 가운데(X -1~1)는 포탈 자리라 비운다.
+	// 발판 1층(윗면 -1, 칸 Y -2): X -24~-11, 10~23 → 키 큰 소품(Lamp 3칸)은 그 아래에 두지 않는다. 떠다니는 꽃은 위층 사이에 (구름 위로 올라가는 느낌)
+	const string Clear = "D2E2EC";
+	static Decoration HuntingGround2() => new Decoration
+	{
+		props = new[]
+		{
+			new Prop("Grass", -17, -4, Clear),
+			new Prop("Flowers_Assorted", -6, -4, Clear),
+			new Prop("Grass_WTrash", 12, -4, Clear),
+			new Prop("Foxtail_Blue", 21, -4, Clear),
+			new Prop("FloatingFlower_Blue", -20, 9.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 1, 12.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 20, 15.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", -10, 19.5f, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 10, 21f, null, "Props", 5),
+		},
+		stamps = new[]
+		{
+			RockBig(-27, -4), Bush(-21, -4), TreeDead(-12, -4), Grave(-9, -4),
+			Lamp(6, -4), Mound(15, -4), Thorns(19, -4), RockTall(25, -4),
+		},
+		ambient = new Rect(-28, -4, 56, 26),
+	};
+
+	// 사냥터3 (#518, 보라 밤, Sky background 3 + 불 켜진 창문 폐허). 가로 120칸(X -60~59), 바닥 윗면 Y -4. 양 끝(X -57~-55, 54~56)은 포탈 자리라 비운다.
+	// 언덕 X -34~-28(윗면 -3), 18~21(-3), 22~25(-2), 구덩이 X -8~-4·44~48(바닥 -6) → 소품은 그 높이에 세운다
+	// 발판 1층(윗면 -1, 칸 Y -2): X -48~-37, -22~-11, 4~15, 30~41 → 키 큰 소품(Lamp)은 그 아래에 두지 않는다
+	const string Night3 = "7A6CB0";
+	static Decoration HuntingGround3() => new Decoration
+	{
+		props = new[]
+		{
+			new Prop("Grass", -48, -4, Night3),
+			new Prop("StopSign_Flowers_Moss", -36, -4, Night3),
+			new Prop("Map_Moss", -24, -4, Night3),
+			new Prop("Grass", -12, -4, Night3),
+			new Prop("Bollard_Moss", -2, -4, Night3),
+			new Prop("Bollard_Moss", -1.3f, -4, Night3),
+			new Prop("Grass_WTrash", 14, -4, Night3),
+			new Prop("Foxtail_Pink", 20, -3, Night3),
+			new Prop("Flowers_Assorted", 32, -4, Night3),
+			new Prop("Foxtail_Pink", 50, -4, Night3),
+			new Prop("FloatingFlower_Blue", -27, 8, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", -6, 3, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 0, 8, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 26, 8, null, "Props", 5),
+			new Prop("FloatingFlower_Blue", 46, 2, null, "Props", 5),
+		},
+		stamps = new[]
+		{
+			RockBig(-52, -4), Bush(-45, -4), TreeDead(-31, -3), Lamp(-29, -3), Grave(-26, -4),
+			TreeRound(-11, -4), Thorns(-6, -6), RockTall(0, -4), Mound(10, -4), Fence(18, -3), Lamp(24, -2),
+			Thorns(36, -4), TreeDead(42, -4), Grave(46, -6), RockBig(51, -4),
+		},
+		ambient = new Rect(-60, -6, 120, 18),
+	};
+
 	static Decoration Find(string sceneName)
 	{
 		switch (sceneName)
 		{
 			case PlaceScenes.HuntingGround: return HuntingGround();
+			case PlaceScenes.HuntingGround2: return HuntingGround2();
+			case PlaceScenes.HuntingGround3: return HuntingGround3();
 			case PlaceScenes.RaidDungeon: return RaidDungeon();
 			case PlaceScenes.TrainingRoom: return TrainingRoom();
 			case PlaceScenes.Lobby: return Lobby();
@@ -161,19 +222,67 @@ public static class MapDecorator
 	[MenuItem("Invoke/맵/지금 씬 소품 놓기")]
 	static void DecorateCurrentScene()
 	{
+		if (!DecorateActiveScene())
+			EditorUtility.DisplayDialog("소품 놓기", $"'{EditorSceneManager.GetActiveScene().name}' 씬의 소품 배치표가 없어요. (로비·사냥터 1~3·레이드 던전·연습장만 있음)", "확인");
+	}
+
+	/// <summary>
+	/// 열려 있는 씬에 배치표대로 소품을 놓는다. 다른 에디터 도구(HuntingGroundBuilder)도 부른다. 저장은 하지 않는다. 배치표가 없으면 false
+	/// </summary>
+	internal static bool DecorateActiveScene()
+	{
 		var scene = EditorSceneManager.GetActiveScene();
 		Decoration deco = Find(scene.name);
-		if (deco == null)
-		{
-			EditorUtility.DisplayDialog("소품 놓기", $"'{scene.name}' 씬의 소품 배치표가 없어요. (로비·사냥터·레이드 던전·연습장만 있음)", "확인");
-			return;
-		}
+		if (deco == null) return false;
 
 		int props = PlaceProps(scene, deco.props);
 		int tiles = StampDecor(deco.stamps) + FillBackWall(deco.backWall);
 		PlaceAmbient(scene, deco.ambient);
+		if (scene.name == PlaceScenes.TrainingRoom) UseBigEditorTerminal();
 		EditorSceneManager.MarkSceneDirty(scene);
 		Debug.Log($"[MapDecorator] {scene.name}: 스프라이트 소품 {props}개, 타일 소품 {tiles}칸. 확인하고 Ctrl/Cmd+S로 저장한다");
+		return true;
+	}
+
+	// 편집 터미널 그림 (임혜원 11/18) --------------------------------------------------
+	// 연습장 편집 터미널(EditorTerminal, PanelStation)을 작은 단말기(CyberLab_Objects_13) 대신 큰 모니터 책상(CyberLab_Objects_12, 46×27픽셀)으로.
+	// 작은 단말기는 발판·배경에 묻혀 어디서 코드를 짜는지 잘 안 보였다. 그림 밑변을 바닥(Y -4)에 맞추고, 범위(트리거)는 그림 가로 × 캐릭터 높이
+	const float TrainingFloorTop = -4f;
+	// 자리: 왼쪽 발판(X -16~-12) 아래에서 벗어나 방 가운데 쪽으로 (임혜원 11/18). 예전 터미널 X -10, 장착대 X -5
+	// 장착대는 가운데 발판(X -3~2, 바닥 위 4칸) 오른쪽으로. 그 아래에 두면 「슬롯 장착」 안내판이 발판에 가려졌다 (임혜원 11/18).
+	// 터미널 안내판(폭 약 3.6칸)과 나란히 왼쪽에 둘 자리는 없어서 허수아비(X 8) 쪽에 둔다
+	const float TerminalX = -7.5f, EquipX = 4.5f;
+
+	static void UseBigEditorTerminal()
+	{
+		GameObject terminal = GameObject.Find("EditorTerminal");
+		Sprite sprite = LoadSprite("CyberLab_Objects_12");
+		if (terminal == null || sprite == null || !terminal.TryGetComponent(out SpriteRenderer renderer))
+		{
+			Debug.LogWarning("[MapDecorator] 연습장에서 EditorTerminal(SpriteRenderer) 또는 CyberLab_Objects_12 그림을 찾지 못해 터미널 그림을 그대로 둠");
+			return;
+		}
+		Undo.RecordObject(renderer, "Editor Terminal");
+		Undo.RecordObject(terminal.transform, "Editor Terminal");
+		renderer.sprite = sprite;
+		Vector2 size = sprite.bounds.size;
+		float pivotToBottom = -sprite.bounds.min.y; // 기준점에서 밑변까지
+		Vector3 position = terminal.transform.position;
+		terminal.transform.position = new Vector3(TerminalX, TrainingFloorTop + pivotToBottom, position.z);
+		// 장착대도 터미널 오른쪽으로 같이 옮긴다 (큰 책상이 겹치지 않게)
+		GameObject equip = GameObject.Find("EquipStation");
+		if (equip != null)
+		{
+			Undo.RecordObject(equip.transform, "Editor Terminal");
+			equip.transform.position = new Vector3(EquipX, equip.transform.position.y, equip.transform.position.z);
+		}
+		if (terminal.TryGetComponent(out BoxCollider2D area))
+		{
+			Undo.RecordObject(area, "Editor Terminal");
+			const float height = 2.5f; // 캐릭터 높이만큼 위로 (앞에 서면 들어감)
+			area.size = new Vector2(Mathf.Max(1.5f, size.x), height);
+			area.offset = new Vector2(sprite.bounds.center.x, -pivotToBottom + height * 0.5f);
+		}
 	}
 
 	// 떠다니는 데이터 조각 -----------------------------------------------------

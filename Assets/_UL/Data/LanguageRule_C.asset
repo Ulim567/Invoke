@@ -55,6 +55,9 @@ MonoBehaviour:
   - failure: 13
     handling: 0
     category: 1
+  - failure: 14
+    handling: 0
+    category: 1
   defaultInt: 0
   defaultFloat: 0
   defaultBool: 0
@@ -65,3 +68,4 @@ MonoBehaviour:
   zeroIsNull: 1
   stringEquality: 0
   allowShadowing: 1
+  garbageCollected: 0

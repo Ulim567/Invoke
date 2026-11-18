@@ -39,6 +39,11 @@ public static class PredefinedFunctionIds
 	public const string SwordDance = "c.sword_dance";
 	// 이동
 	public const string SwordRide = "c.sword_ride";
+	// 출력 함수 printf(값) (#536). 스킬이 아니고 스킬 트리 노드도 없다. c.로 시작해 C 캐릭터에게만 보인다
+	public const string Printf = "c.printf";
+	// 자세 함수 init_stance(), get_stance() (#538). 스킬이 아니고 스킬 트리 노드도 없다. c.로 시작해 C 캐릭터에게만 보인다
+	public const string InitStance = "c.init_stance";
+	public const string GetStance = "c.get_stance";
 
 	// Python 스킬 (박진우, 파이썬 마법사). 수치는 Assets/_JW/Resources/SkillTable.asset
 	// 원소
@@ -56,6 +61,13 @@ public static class PredefinedFunctionIds
 	public const string PyOrbBarrage = "py.orb_barrage";
 	public const string PyOrbBurst = "py.orb_burst";
 	public const string PyOrbShield = "py.orb_shield";
+	// 구슬 확인 함수 is_valid_orb(orb) (#532). 스킬이 아니고 스킬 트리 노드도 없다. py.로 시작해 Python 캐릭터에게만 보인다
+	public const string PyIsValidOrb = "py.is_valid_orb";
+	// 출력 함수 print(값) (#536). 스킬이 아니고 스킬 트리 노드도 없다. C의 printf와 하는 일이 같고, 값을 Python 표기로 보인다
+	public const string PyPrint = "py.print";
+	// 자세 함수 init_stance(), get_stance() (#546). 스킬이 아니고 스킬 트리 노드도 없다. C의 자세 함수와 하는 일이 같고, 효과 규칙만 Python 규칙이다
+	public const string PyInitStance = "py.init_stance";
+	public const string PyGetStance = "py.get_stance";
 	// 보조
 	public const string PyHex = "py.hex";
 	public const string PySnakeBind = "py.snake_bind";

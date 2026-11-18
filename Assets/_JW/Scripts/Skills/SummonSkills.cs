@@ -251,7 +251,7 @@ public class CMark : DataDrivenSkill
 		Monster monster = hit.GetComponentInParent<Monster>();
 		if (monster == null || monster.IsDead) return;
 		hits++;
-		SummonDamage.Deal(Id, Data, caster, monster, sword.transform.position, 0f);
+		SummonDamage.Deal(this, Data, caster, monster, sword.transform.position, 0f);
 		// 두 검이 모두 찔렀을 때 표식과 기절
 		if (hits < sent.Count) return;
 		Unsubscribe();
@@ -322,7 +322,7 @@ public class CSwordDance : DataDrivenSkill
 				fired = true;
 				Effects(task)?.RaiseFired(Id, center, Vector2.zero);
 			}
-			SummonDamage.Deal(Id, Data, caster, target, s.transform.position, 0f);
+			SummonDamage.Deal(this, Data, caster, target, s.transform.position, 0f);
 			StatusEffects.TryApply(target.gameObject, StatusType.Bleed, caster);
 			if (target.IsDead) break;
 		}
@@ -348,15 +348,18 @@ public class CSwordDance : DataDrivenSkill
 /// <summary>소환 계열 스킬이 함께 쓰는 데미지 주기 (#243). 공격력 × 표 배율 → TakeDamage → SkillEffectEvents.Hit</summary>
 static class SummonDamage
 {
-	public static void Deal(string skillId, SkillData data, GameObject caster, Monster monster, Vector2 point, float bonusRate)
+	// skill: 데미지를 주는 스킬. 연출 event의 스킬 ID와 자세의 자해 알림(#538)에 쓴다
+	public static void Deal(DataDrivenSkill skill, SkillData data, GameObject caster, Monster monster, Vector2 point, float bonusRate)
 	{
 		if (caster == null || monster == null || monster.IsDead) return;
 		PlayerStats stats = caster.GetComponent<PlayerStats>();
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = data != null ? data.DamageMultiplier : 1f;
-		DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = bonusRate };
+		// 자세(#538)의 데미지 추가분을 조건 배율에 더한다
+		DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = bonusRate + skill.StanceDamageBonus(caster) };
 		DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
-		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(skillId, monster.gameObject, point, result);
+		skill.NotifyDamageDealt(caster, result.Damage);
+		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(skill.Id, monster.gameObject, point, result);
 	}
 }

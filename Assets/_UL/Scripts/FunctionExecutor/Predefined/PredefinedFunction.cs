@@ -130,9 +130,16 @@ public abstract class PredefinedFunction : FunctionBlock
 	{
 		if (!TryValidateReturnValue(context)) return false;
 
-		if (mallocedPointers != null) context.MoveToSystemGlobals(mallocedPointers);
+		if (mallocedPointers != null && MovesMallocedToSystemGlobals) context.MoveToSystemGlobals(mallocedPointers);
 		return true;
 	}
+
+	/// <summary>
+	/// 정상으로 끝날 때 이 함수가 malloc한 포인터를 숨은 시스템 전역으로 옮기면 true(기본값). C 스킬(검 소환)은 그대로 둔다.<br/>
+	/// Python의 구슬 생성처럼, 만든 객체를 돌려주고 플레이어가 변수·리스트에 담게 하는 함수는 false로 덮어쓴다 (#532).
+	/// 그러면 담지 않은 객체는 그 statement가 끝날 때 가비지 컬렉션이 해제한다.
+	/// </summary>
+	protected virtual bool MovesMallocedToSystemGlobals => true;
 
 	// Return으로 정한 값을 반환 타입으로 맞춘다. 맞추지 못하면 TypeMismatch가 아니라 개발자 책임으로 기록한다
 	// 반환 값은 스킬 작성자(개발자)가 정하므로, 플레이어의 compile error로 보이지 않게 하기 위함
@@ -146,7 +153,9 @@ public abstract class PredefinedFunction : FunctionBlock
 			context.RecordInternalError();
 			return false;
 		}
-		if (!NumericRules.TryConvertForStore(ReturnValue.Value, ReturnType, context.Rule, out RuntimeValue converted))
+		// Python(#532)은 어떤 함수든 None을 돌려줄 수 있다. 예: 구슬이 5개라 만들지 못한 orb_create()
+		if (context.Family == LanguageFamily.Python && ReturnValue.Value.IsNone) return true;
+		if (!NumericRules.TryConvertForStore(ReturnValue.Value, ReturnType, context.Rule, context.Family, out RuntimeValue converted))
 		{
 			Debug.LogError($"{Name}: Return으로 넘긴 {ReturnValue.Value.Type?.Kind} 값을 반환 타입 {ReturnType.Kind}(으)로 바꿀 수 없습니다.");
 			context.RecordInternalError();
@@ -168,10 +177,17 @@ public abstract class PredefinedFunction : FunctionBlock
 	{
 		// OnStart에서 이미 Fail이나 Stop을 불렀으면 OnTick을 부르지 않는다
 		// 입력을 요청한 틱(OnStart에서 요청)에도 부르지 않는다. 입력을 기다리는 동안은 동작 시간(TickCount)에 넣지 않기 때문
-		if (requestedError == null && !stopRequested && !context.IsWaitingInput)
+		if (requestedError == null && requestedFailure == null && !stopRequested && !context.IsWaitingInput)
 		{
 			elapsedTicks++;
 			OnTick(context, elapsedTicks);
+		}
+
+		// 언어의 실패 종류로 끝내기(#532, FailWith). 스킬 에러보다 먼저 본다
+		if (requestedFailure != null)
+		{
+			context.RecordFailure(requestedFailure.Value);
+			return BlockResult.Failed;
 		}
 
 		// Fail과 Stop을 둘 다 불렀으면 에러를 먼저 따른다. 에러를 놓치면 안 되기 때문
@@ -216,10 +232,30 @@ public abstract class PredefinedFunction : FunctionBlock
 			return;
 		}
 
-		if (requestedError != null) return;
+		if (requestedError != null || requestedFailure != null) return;
 
 		error.SourceName = Name;
 		requestedError = error;
+	}
+
+	// FailWith로 정한 실패 종류. 없으면 null
+	FunctionFailure? requestedFailure;
+
+	/// <summary>
+	/// 이 함수를 스킬 에러가 아니라 언어의 실패 종류로 끝낸다 (#532). OnStart나 OnTick에서 부른다.<br/>
+	/// 예: Python 구슬 스킬이 리스트에서 구슬이 아닌 값을 받으면 FailWith(FunctionFailure.TypeMismatch)로 TypeError를 낸다.
+	/// 그 틱이 끝날 때 OnCancel이 불린다(OnFail은 불리지 않는다). Fail과 함께 부르면 처음 것을 쓴다.
+	/// </summary>
+	// 스킬 에러로 내지 않는 이유: TypeError, MemoryError처럼 언어가 정한 오류는 실행기의 다른 블록이 내는 것과 같은 이름으로 보여야 하기 때문
+	protected void FailWith(FunctionFailure failure)
+	{
+		if (HasEnded)
+		{
+			Debug.LogError($"{Name}: 끝난 뒤에 FailWith({failure})를 불렀습니다. FailWith는 OnStart, OnTick에서만 부릅니다.");
+			return;
+		}
+		if (requestedError != null || requestedFailure != null) return;
+		requestedFailure = failure;
 	}
 
 	/// <summary>
@@ -334,6 +370,29 @@ public abstract class PredefinedFunction : FunctionBlock
 	/// 시전한 캐릭터의 힙에 있는 T 타입 객체의 수. 누수된 객체도 센다. 소환검 최대 개수 검사에 쓴다.
 	/// </summary>
 	protected int CountHeapObjects<T>(FunctionContext context) => context.Memory.Heap.CountObjects<T>();
+
+	/// <summary>
+	/// 포인터의 객체를 T 타입으로 꺼낸다. 꺼내지 못해도 에러로 끝내지 않고 false만 돌려준다 (#532).<br/>
+	/// Python 값(구슬, 리스트)처럼 플레이어가 넘긴 객체를 확인만 할 때 쓴다. 에러로 끝낼지는 부른 스킬이 정한다.
+	/// </summary>
+	protected bool TryPeekHeapObject<T>(FunctionContext context, int pointer, out T obj) => context.Memory.Heap.TryGet(pointer, out obj);
+
+	/// <summary>
+	/// 힙에 있는 T 타입 객체의 포인터를 malloc한 순서대로 돌려준다(누수 객체 제외, #532). 숨은 시스템 전역이 아닌 객체도 나온다.<br/>
+	/// 예: 슬롯에서 바로 시전한 구슬 스킬이 쓸 구슬을 고를 때.
+	/// </summary>
+	protected List<int> GetHeapPointers<T>(FunctionContext context) => context.Memory.Heap.GetPointers<T>();
+
+	/// <summary>
+	/// 리스트 값(Python, #532)의 원소들. 리스트가 아니거나 heap에 없으면 false.
+	/// </summary>
+	protected bool TryGetListElements(FunctionContext context, RuntimeValue value, out IReadOnlyList<RuntimeValue> elements)
+	{
+		elements = null;
+		if (!value.IsList || !context.Memory.Heap.TryGet(value.AsObjectPointer(), out ListStorage list)) return false;
+		elements = list.Elements;
+		return true;
+	}
 
 	// OnCancel 안에서 힙을 바꾸지 못하게 막는다
 	// OnCancel에서 Free하면 실행 중단을 당해도 누수가 생기지 않고, Malloc하면 끊기는 작업의 포인터가 되어 바로 누수가 되기 때문

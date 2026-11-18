@@ -1,6 +1,6 @@
 # 설명 표 (블록·함수·type 설명)
 
-- 담당자: 이우림 (스킬 24개의 칸: 박진우)
+- 담당자: 이우림 (스킬 41개의 칸: 박진우)
 
 ## 하는 일
 - 블록·함수·type의 플레이어용 설명을 한 곳(`ItemDescriptions`)에 담는다. 참고 카드, 설명창, 스킬 트리 설명이 모두 이 표를 읽는다.
@@ -8,7 +8,7 @@
 - 코드: `Assets/Scripts/Descriptions/`
   - `ItemDescription.cs`: 설명 하나의 칸
   - `ItemDescriptions.cs`: 문법 블록 20개, type 5개, 기본 함수(get_bug, is_valid_target), 옛 문법 노드 10개, 파라미터 이름의 뜻
-  - `ItemDescriptions.Skills.cs`: 스킬 24개
+  - `ItemDescriptions.Skills.cs`: 스킬 41개 (C 24개, Python 17개 #523)
 - 하지 않는 일
   - 이름: 스킬은 `SkillTable`의 `DisplayName`(c-skills.md), 기본 함수의 한글 이름은 `BlockReference.KoreanNameOf`(block-editor.md)
   - 함수 원형: 사전 정의 함수의 파라미터와 반환 타입으로 `BlockReference`가 만듦
@@ -71,6 +71,8 @@
   - 설명의 원본: C# 표 하나 (asset·Notion이 아님)
   - 스킬 카드의 칸: 블록과 같은 다섯 칸 (캔버스 9-3의 이름·원형·사용 방법은 코드가 채움)
   - 블록 20개·type 5개의 문구: Notion 「블록 표」 확정본
-- 박진우와 맞출 것
-  - 스킬 24개(`ItemDescriptions.Skills.cs`)의 용도, 예시, 주의할 점, 하는 일 확인
-  - 각 스킬의 「예전 자세한 설명」 주석: 하는 일·용도·주의할 점으로 나누어 옮긴 뒤 지움
+- 박진우가 채움 (11/18)
+  - 스킬 41개(`ItemDescriptions.Skills.cs`)의 하는 일, 용도, 예시, 주의할 점. 「예전 자세한 설명」 주석은 옮긴 뒤 지움
+  - 예시 코드는 그 스킬을 쓰는 캐릭터의 언어로 (C 스킬은 한 줄 C, Python 스킬은 Python)
+  - 대시·더블점프는 키보드 고정 이동기로 바뀔 예정이라 하는 일만
+  - 대시는 ←← / →→ 로 바뀌어(#557) 용도·주의할 점에 키와 제한을 적음

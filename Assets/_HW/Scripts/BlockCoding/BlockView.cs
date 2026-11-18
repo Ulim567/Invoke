@@ -15,7 +15,7 @@ using UnityEngine.UI;
 /// </para>
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
-public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
+public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
 	[SerializeField, Tooltip("블록 전체의 바탕. 투명하게 두고 끌기·놓기를 받는 자리로만 쓴다 (#487). 줄 바탕이 없는 예전 프리팹이면 여기에 분류 색을 칠한다")]
 	Image background;
@@ -203,7 +203,8 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 
 	// 값 칸에 끼우는 블록 (알약 모양)
 	static bool IsValueBlock(BlockData data) =>
-		data.Kind is BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not or BlockKind.ArrayGet or BlockKind.Malloc;
+		data.Kind is BlockKind.Arithmetic or BlockKind.Compare or BlockKind.Logic or BlockKind.Not or BlockKind.ArrayGet or BlockKind.Malloc
+			or BlockKind.ListLen;
 
 	/// <summary>
 	/// 변수 칸(대입의 왼쪽, array 이름) index번을 컴파일 오류 색으로 칠하거나 되돌린다 (#504).
@@ -355,6 +356,12 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	// 블록 종류마다 한 줄을 만든다. 칸 번호는 function-data.md 「블록마다 가진 칸」 순서
 	void BuildRow()
 	{
+		// Python 캐릭터는 Python 모양으로 만든다 (#532, 이우림). Python에 없는 블록(선언, malloc 등)은 아래 C 모양
+		if (BlockLabels.IsPython && BuildPythonRow())
+		{
+			RefreshTexts();
+			return;
+		}
 		switch (Data.Kind)
 		{
 			case BlockKind.Declare:
@@ -371,7 +378,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			case BlockKind.Arithmetic:
 				AddText("(");
 				AddValue(0);
-				AddOperatorOption(1, Enum.GetNames(typeof(ArithmeticOperator)));
+				AddOperatorOption(1, BlockLabels.ArithmeticOptions);
 				AddValue(2);
 				AddText(")");
 				break;
@@ -479,6 +486,213 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		RefreshTexts();
 	}
 
+	// Python 모양의 한 줄 (#532). ; 없음, { } 대신 :, 대입의 왼쪽과 리스트 이름은 이름을 적는 칸(대입이 곧 변수 만들기이기 때문). 만들었으면 true
+	bool BuildPythonRow()
+	{
+		switch (Data.Kind)
+		{
+			case BlockKind.Assign:
+				AddVariableNameField(0);
+				AddText("=");
+				AddValue(1);
+				return true;
+			case BlockKind.Arithmetic:
+				AddText("(");
+				AddValue(0);
+				AddOperatorOption(1, BlockLabels.ArithmeticOptions);
+				AddValue(2);
+				AddText(")");
+				return true;
+			case BlockKind.Compare:
+				AddValue(0);
+				AddOperatorOption(1, Enum.GetNames(typeof(CompareOperator)));
+				AddValue(2);
+				return true;
+			case BlockKind.Logic:
+				AddValue(0);
+				AddOperatorOption(1, Enum.GetNames(typeof(LogicOperator)));
+				AddValue(2);
+				return true;
+			case BlockKind.Not:
+				AddText("not");
+				AddValue(0);
+				return true;
+			case BlockKind.Conditional:
+				string branch = Data.Slots[0].Option;
+				if (branch == nameof(ConditionalBranch.Else))
+				{
+					AddText("else:");
+					return true;
+				}
+				AddText(BlockLabels.BranchKeyword(branch));
+				AddValue(1);
+				AddText(":");
+				return true;
+			case BlockKind.For:
+				AddText("for");
+				AddNameField(0);
+				AddText("in range(");
+				AddValue(1);
+				AddText(",");
+				AddValue(2);
+				AddText("):");
+				return true;
+			case BlockKind.While:
+				AddText("while");
+				AddValue(0);
+				AddText(":");
+				return true;
+			case BlockKind.Break:
+				AddText("break");
+				return true;
+			case BlockKind.Continue:
+				AddText("continue");
+				return true;
+			case BlockKind.ArrayGet:
+				AddVariableNameField(0, true);
+				AddText("[");
+				AddValue(1);
+				AddText("]");
+				return true;
+			case BlockKind.ArraySet:
+				AddVariableNameField(0, true);
+				AddText("[");
+				AddValue(1);
+				AddText("] =");
+				AddValue(2);
+				return true;
+			case BlockKind.Function:
+				AddText(() => editor.FunctionNameOf(Data) + "(");
+				for (int i = 0; i < Data.Slots.Count; i++)
+				{
+					if (i > 0) AddText(",");
+					AddValue(i);
+				}
+				AddText(")");
+				return true;
+			case BlockKind.Return:
+				AddText("return");
+				AddValue(0);
+				return true;
+			case BlockKind.Wait:
+				AddText("wait(");
+				AddValue(0);
+				AddText("초)");
+				return true;
+			case BlockKind.Global:
+				AddText("global");
+				AddGlobalNamePicker(0, AddNameField(0));
+				return true;
+			case BlockKind.Del:
+				AddText("del");
+				AddVariableNameField(0);
+				return true;
+			case BlockKind.ListNew:
+				AddVariableNameField(0);
+				AddText("= []");
+				return true;
+			case BlockKind.ListAppend:
+				AddVariableNameField(0, true);
+				AddText(".append(");
+				AddValue(1);
+				AddText(")");
+				return true;
+			case BlockKind.ListPop:
+				AddVariableNameField(0, true);
+				AddText(".pop(");
+				AddValue(1);
+				AddText(")");
+				return true;
+			case BlockKind.ListLen:
+				AddText("len(");
+				AddValue(0);
+				AddText(")");
+				return true;
+		}
+		return false;
+	}
+
+	// 이름을 적는 변수 칸 (Python, #532): 대입의 왼쪽, del, 리스트 이름. 고르지 않고 적는다. 새 이름을 적으면 그 이름의 변수가 생기기 때문
+	// 데이터는 VariableName에 넣는다(대입 블록의 변수 칸과 같은 칸). 이름 규칙은 선언의 이름 칸과 같다
+	// global 블록의 이름 칸 옆 ▾ 버튼 (Python, #532). Global Variables의 이름(대입·리스트 만들기 블록)만 보인다
+	// 그 밖의 이름은 global로 써도 실행 중에 NameError이기 때문 (이우림 결정 11/18 (가)). 이름을 직접 적는 것은 그대로 된다
+	void AddGlobalNamePicker(int index, BlockField field)
+	{
+		if (index >= Data.Slots.Count || field == null) return;
+		SlotData slot = Data.Slots[index];
+		Button pick = editor.CreateButton(row);
+		TMP_Text pickLabel = pick.GetComponentInChildren<TMP_Text>();
+		if (pickLabel != null) pickLabel.text = "";
+		var anchor = (RectTransform)pick.transform;
+		pick.onClick.AddListener(() =>
+		{
+			List<string> names = editor.PythonGlobalNames();
+			if (names.Count == 0)
+			{
+				editor.ShowNotice("Global Variables에 전역 변수 없음");
+				return;
+			}
+			editor.ShowDropdown(anchor, names.ToArray(), names.IndexOf(slot.Name), picked =>
+			{
+				if (names[picked] == slot.Name) return;
+				slot.Name = names[picked];
+				field.Text = slot.Name;
+				RefreshTexts();
+				editor.NotifyChanged();
+			});
+		});
+	}
+
+	// 칸 옆의 ▾ 버튼으로 이름을 고를 수도 있다(값 칸의 「변수 고르기」와 같음). listsOnly이면 리스트일 수 있는 이름만 보인다(BlockEditor.PythonListNames)
+	void AddVariableNameField(int index, bool listsOnly = false)
+	{
+		if (index >= Data.Slots.Count) return;
+		SlotData slot = Data.Slots[index];
+		BlockField field = editor.CreateField(row);
+		field.SetBackground(nameFieldSprite, fieldLineColor);
+		field.Text = slot.VariableName;
+		field.Edited += text =>
+		{
+			text = text.Trim();
+			if (!BlockSlotText.IsIdentifier(text))
+			{
+				RejectText(field, slot.VariableName, "이름은 영문자, 숫자, 밑줄만 사용 가능하며 숫자로 시작 불가 (True, if 같은 Python 낱말 불가)");
+				return;
+			}
+			if (text == slot.VariableName) return;
+			slot.VariableName = text;
+			field.Text = slot.VariableName;
+			RefreshTexts();
+			editor.NotifyChanged();
+		};
+
+		// 버튼 프리팹의 글자는 비우고 ▾ 그림만 보인다 (값 칸의 변수 고르기 버튼과 같은 모양)
+		Button pick = editor.CreateButton(row);
+		TMP_Text pickLabel = pick.GetComponentInChildren<TMP_Text>();
+		if (pickLabel != null) pickLabel.text = "";
+		var anchor = (RectTransform)pick.transform;
+		pick.onClick.AddListener(() =>
+		{
+			var names = new List<string>();
+			HashSet<string> lists = listsOnly ? editor.PythonListNames() : null;
+			foreach (KeyValuePair<string, VariableType> variable in editor.VisibleVariables(Data))
+				if (lists == null || lists.Contains(variable.Key)) names.Add(variable.Key);
+			if (names.Count == 0)
+			{
+				editor.ShowNotice(listsOnly ? "이 위치에서 선택 가능한 list 없음 ([]를 대입한 이름)" : "이 위치에서 선택 가능한 이름 없음");
+				return;
+			}
+			editor.ShowDropdown(anchor, names.ToArray(), names.IndexOf(slot.VariableName), picked =>
+			{
+				if (names[picked] == slot.VariableName) return;
+				slot.VariableName = names[picked];
+				field.Text = slot.VariableName;
+				RefreshTexts();
+				editor.NotifyChanged();
+			});
+		});
+	}
+
 	void AddText(string content) => editor.CreateText(row).text = content;
 
 	void AddText(Func<string> content) => dynamicTexts.Add((editor.CreateText(row), content));
@@ -541,7 +755,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 		slot == null || (slot.Block == null && string.IsNullOrEmpty(slot.Literal) && string.IsNullOrEmpty(slot.VariableName));
 
 	// 새 이름 칸 (선언의 변수 이름, for의 i). 이름으로 쓸 수 없는 글자면 원래 이름으로 되돌린다
-	void AddNameField(int index)
+	BlockField AddNameField(int index)
 	{
 		SlotData slot = Data.Slots[index];
 		BlockField field = editor.CreateField(row);
@@ -561,6 +775,7 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 			RefreshTexts();
 			editor.NotifyChanged();
 		};
+		return field;
 	}
 
 	// 잘못 적은 글자는 원래 값으로 되돌리고, 글자를 잠깐 빨갛게 보이며 상태 줄에 이유를 알린다 (데이터는 바꾸지 않는다)
@@ -688,6 +903,13 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	public void OnPointerExit(PointerEventData eventData)
 	{
 		if (editor != null) editor.ExitHover(this);
+	}
+
+	// 블록 목록의 칩을 끌지 않고 누르면 설명 카드 (#544, 노션 11/16 「블록 목록의 블록 클릭」). 편집 영역에 놓인 블록은 칸을 누르는 일이 많아 띄우지 않는다
+	public void OnPointerClick(PointerEventData eventData)
+	{
+		if (templateFactory == null || editor == null || eventData.button != PointerEventData.InputButton.Left) return;
+		editor.ShowItemCard(Data);
 	}
 
 	public void OnBeginDrag(PointerEventData eventData)

@@ -31,6 +31,11 @@ public class CharacterProgressData
 
 	public GlobalVariablesData Globals = new GlobalVariablesData();
 
+	/// <summary>
+	/// 상점 칸 (#534, 칸 번호 순서, ShopRules.SlotCount개). DB에 칸이 하나라도 빠졌으면 비어 있고, 상점을 열 때 서버가 새로 뽑는다.
+	/// </summary>
+	public List<ShopOffer> ShopOffers = new List<ShopOffer>();
+
 	// 처음 슬롯 함수의 function body에 넣을 스킬 (슬롯 0부터, 캐릭터 언어마다). 나머지 슬롯 함수는 빈 본문
 	// 해금 목록에서 만들지 않는 이유: 본문에는 스킬 ID만이 아니라 인자 블록(GetBug)까지 들어가야 하는데, 해금 목록에는 그 정보가 없기 때문
 	// target: 대상 인자로 GetBug()를 넣는지. 대상이 없는 스킬(구슬 생성 등)은 인자 없이 부른다
@@ -40,11 +45,12 @@ public class CharacterProgressData
 		(PredefinedFunctionIds.SwordThrow, true),
 	};
 
-	// 파이썬 마법사 (#486, 박진우): 구슬을 만들고(orb_create) 그 구슬을 쏜다(orb_shot)
+	// 파이썬 마법사: 매직 미사일과 저주 (#532, 임시. 스킬 트리 이슈에서 다시 정함)
+	// 구슬 스킬이 아닌 이유: 구슬 발사는 구슬을 변수에 담아 넘겨야 하는데(orb_shot(target, orb)), 처음에는 변수 블록(syntax.variable)이 잠겨 있기 때문
 	static readonly (string id, bool target)[] InitialSlotSkillsPython =
 	{
-		(PredefinedFunctionIds.PyOrbCreate, false),
-		(PredefinedFunctionIds.PyOrbShot, true),
+		(PredefinedFunctionIds.PyMagicMissile, true),
+		(PredefinedFunctionIds.PyHex, true),
 	};
 
 	static (string id, bool target)[] InitialSlotSkillsOf(string language) =>
@@ -66,7 +72,7 @@ public class CharacterProgressData
 	/// <summary>
 	/// 새 캐릭터의 슬롯 함수 하나를 만든다. 새 GUID, 이름 slot1~slot8, 파라미터 없음. 본문은 캐릭터 언어(language)마다 다르다.<br/>
 	/// - C: 슬롯 0 = thrust(GetBug());, 슬롯 1 = sword_throw(GetBug());<br/>
-	/// - Python (#486): 슬롯 0 = orb_create();, 슬롯 1 = orb_shot(GetBug());<br/>
+	/// - Python (#532, 임시): 슬롯 0 = magic_missile(get_bug()), 슬롯 1 = hex(get_bug())<br/>
 	/// - 나머지 슬롯 = 빈 본문. 모르는 언어는 C
 	/// </summary>
 	public static FunctionData NewSlotFunction(int slot, string language)

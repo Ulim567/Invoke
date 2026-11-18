@@ -116,6 +116,11 @@ public class FunctionTask
 	// Failure와 같은 이유로 실패로 끝났을 때만 보여 준다
 	public SkillError Error => IsFailed ? context.RecordedError : null;
 
+	/// <summary>
+	/// Overflow로 끝났을 때 재귀 호출(이미 호출 중인 함수를 다시 부름)에서 났으면 true (#532). 그 밖에는 false.
+	/// </summary>
+	public bool OverflowWasRecursive => Failure == FunctionFailure.Overflow && context.OverflowWasRecursive;
+
 	// 작업은 실행기만 만든다. function은 원본이 아니라 실행기가 만든 복사본이어야 한다
 	// 실행기를 받지 않는다. 작업은 결과만 남기고, 실행기가 읽어서 처리하기 때문
 	internal FunctionTask(int id, GameObject caster, ProcessMemory memory, CooldownTracker cooldowns, LanguageRule language, FunctionBlock function, float secondsPerTick)
@@ -168,6 +173,9 @@ public class FunctionTask
 
 	// 이번 틱에 블록이 요청한 비동기 시전을 꺼낸다. 실행기가 Step 다음에 부른다
 	internal IReadOnlyList<FunctionBlock> TakeAsyncRequests() => context.TakeAsyncRequests();
+
+	// 이번 틱에 출력 함수가 요청한 출력 글을 꺼낸다 (#536). 실행기가 Step 다음에 부른다
+	internal IReadOnlyList<string> TakeOutputs() => context.TakeOutputs();
 
 	// 이번 틱에 새로 입력을 요청했으면 요청한 입력 함수를 돌려준다. 실행기가 Step 다음에 부르고, 요청 하나에 한 번만 true다
 	internal bool TryTakeNewInputRequest(out PredefinedFunction requester)

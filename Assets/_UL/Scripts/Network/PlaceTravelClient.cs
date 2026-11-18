@@ -57,13 +57,21 @@ public class PlaceTravelClient : MonoBehaviour
 	/// 서버에 접속하지 않았거나, 로컬 플레이어가 아직 없거나, 이전 요청의 답을 기다리는 중이면 아무것도 하지 않는다.
 	/// </summary>
 	/// <param name="destination">갈 씬 이름 (PlaceScenes의 Lobby, HuntingGround, TrainingRoom). RaidDungeon은 서버가 거절한다</param>
-	public void RequestTravel(string destination)
+	public void RequestTravel(string destination) => RequestTravel(destination, null);
+
+	/// <summary>
+	/// 서버에 장소 이동을 요청하면서 도착할 자리(ArrivalPoint의 Id)를 정한다 (#518, 사냥터 사이 포탈 PlacePortal이 부른다).<br/>
+	/// arrival을 비우면 위의 RequestTravel(destination)과 같다.
+	/// </summary>
+	/// <param name="destination">갈 씬 이름 (PlaceScenes)</param>
+	/// <param name="arrival">도착할 ArrivalPoint의 Id. 그 씬에 없으면 떠나온 장소로 찾는다</param>
+	public void RequestTravel(string destination, string arrival)
 	{
 		if (!NetworkClient.isConnected || NetworkClient.localPlayer == null) return;
 		if (traveling || waitingForData) return;
 
 		// 로딩 화면이 화면을 다 덮은 뒤에 요청을 보낸다. 먼저 보내면 이전 장소가 사라지는 모습이 페이드 사이로 보인다
-		BeginTravel(() => NetworkClient.Send(new TravelRequestMessage { destination = destination }));
+		BeginTravel(() => NetworkClient.Send(new TravelRequestMessage { destination = destination, arrival = arrival }));
 	}
 
 	/// <summary>
@@ -148,6 +156,13 @@ public class PlaceTravelClient : MonoBehaviour
 			dataReady = false;
 			inputBlocked = false;
 			return;
+		}
+		// 「캐릭터 선택」(#570)은 접속을 둔 채 플레이어만 없앤다. 다음 캐릭터가 들어올 때도 데이터를 다 받을 때까지 로딩 화면으로 막기 위해 처음 접속한 상태로 되돌린다
+		// 장소 이동은 플레이어를 없애지 않으므로 여기에 걸리지 않는다
+		if (dataReady && NetworkClient.localPlayer == null)
+		{
+			dataReady = false;
+			inputBlocked = false;
 		}
 		if (dataReady) return;
 

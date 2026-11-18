@@ -46,6 +46,10 @@ public abstract class FunctionBlock : Block
 	// argument 없이 시전했으면 배열 자체가 null이다. 실행하는 복사본에만 넘기고 원본에는 넘기지 않는다
 	internal RuntimeValue?[] Arguments { get; private set; }
 
+	// argument 칸에 플레이어가 적은 글(변수 이름, expression 글자). Parameters와 같은 순서이고, 값을 직접 적은 칸과 비운 칸은 null이다 (#536)
+	// 출력 함수가 「n = 3」처럼 무엇을 출력했는지 보이려고 쓴다. 출력 함수를 부르는 함수 호출 블록만 넘기므로, 그 밖에는 null이다
+	internal string[] ArgumentTexts { get; private set; }
+
 	// 이 함수가 돌려준 값. 끝까지 실행한 뒤 TryValidateEnd가 반환 타입으로 맞춰 둔다. 정하지 않았으면 null
 	// 함수 호출 블록(CallBlock)이 이 함수가 끝난 뒤 받아 간다
 	internal RuntimeValue? ReturnValue { get; private protected set; }
@@ -68,6 +72,8 @@ public abstract class FunctionBlock : Block
 			if (!TryAllocateFrame(context))
 			{
 				context.RecordFailure(FunctionFailure.Overflow);
+				// 이 함수가 이미 호출 중이면 재귀로 stack이 찬 것이다 (#532). Python은 재귀이면 RecursionError, 아니면 MemoryError로 보인다
+				context.RecordOverflowCause(RecursionKey != null && context.IsRunningFunction(RecursionKey));
 				return BlockResult.Failed;
 			}
 			AfterFrameAllocated(context);
@@ -87,6 +93,9 @@ public abstract class FunctionBlock : Block
 		ReleaseFrame(context);
 	}
 
+	// 같은 함수인지 가리는 값 (#532). 사용자 정의 함수는 복사본끼리 같은 값을 돌려준다. 재귀 호출을 찾을 때 쓴다. 사전 정의 함수는 null(재귀 없음)
+	internal virtual object RecursionKey => null;
+
 	// 시작하기 전, 틱마다 불린다. false이면 이번 틱에는 시작하지 않고 기다린다
 	// 기다리는 동안 끊기면 시작하지 않은 것이므로 정리할 것이 없다
 	internal virtual bool CanStartNow(FunctionContext context) => true;
@@ -103,6 +112,12 @@ public abstract class FunctionBlock : Block
 	internal void SetArguments(RuntimeValue?[] values)
 	{
 		Arguments = values;
+	}
+
+	// 함수 호출 블록이 실행할 복사본에 argument 칸의 글을 넘긴다 (#536)
+	internal void SetArgumentTexts(string[] texts)
+	{
+		ArgumentTexts = texts;
 	}
 
 	// 프레임을 받은 직후에 한 번 불린다. 프레임을 받지 못해(Overflow) 시작하지 않은 함수에는 불리지 않는다

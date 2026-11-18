@@ -12,6 +12,8 @@ using UnityEngine.InputSystem.LowLevel;
 /// 더블점프를 해금했으면(또는 PlayerProgress가 없으면) Space로, 아니면 블록코딩 경로(RequestAirJump)로 확인한다. 공용 Player에 PlayerProgress가 붙어 테스트 씬도 해금 목록을 따르기 때문 (#303)<br/>
 /// 3. 검 타기: 소환검이 없으면 NoSummonedSwordError. 있으면 검이 타는 중 상태, 떨어지지 않고 → 키로 옆으로 이동, 스킬이 끝나도 계속 탐(30초), 내리면 검이 돌아옴<br/>
 /// 4. 위아래 검 타기 (#317): ↑로 올라가고 떼면 그 높이에 멈춤, ↓로 내려가다 아래 바닥과 Ride Clearance만큼 떠서 멈춤(바닥에 선 것이 아님), ↓ + Space로 아래 발판을 뚫음(땅이면 그대로), 빈 슬롯 키를 누른 채 ↑를 누르면 MoveY가 0이고 높이 그대로 (슬롯 8칸이 다 차 있으면 이 항목은 실패로 알림)<br/>
+/// 5. 방향키 두 번 대시 (#557): →→ 로 대시, 쿨타임 안에는 안 나감, 천천히 두 번·오래 누른 뒤 다시 누르기는 안 나감, 공중에서 한 번 쓰면 AirDashUsed이고 땅에 닿으면 풀림, 슬롯에 넣을 수 없음.
+/// 대시를 해금하지 않았으면(PlayerProgress가 있고 해금 목록에 없음) ←← 로 안 나가는 것만 본다<br/>
 /// 「[MoveSkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다.
 /// </para>
 /// </summary>
@@ -159,8 +161,87 @@ public class MovementSkillSimTest : MonoBehaviour
 		Check("검 타기: 검이 곁으로 돌아옴", swords.ReadyCount == swords.Swords.Count && swords.Swords.Count > 0);
 		yield return Cast(PredefinedFunctionIds.FreeSword);
 
+		// 5. 방향키 두 번 대시 (#557)
+		yield return TapDash(player, movement);
+
 		if (failed == 0) Debug.Log($"{Tag} 전체 통과");
 		else Debug.LogError($"{Tag} {failed}개 실패");
+	}
+
+	IEnumerator TapDash(GameObject player, PlayerMovement movement)
+	{
+		Check("방향키 대시: 대시는 슬롯에 넣을 수 없음", !SlotLoadout.IsEquippableSkill(PredefinedFunctionIds.Dash));
+		yield return Keys(0.1f);
+		yield return WaitUntil(() => movement.IsGrounded && !movement.IsDashing, 3f);
+
+		if (!movement.DashUnlocked)
+		{
+			Debug.Log($"{Tag} 방향키 대시: 해금 안 됨(PlayerProgress) → 안 나가는 것만 확인");
+			yield return DoubleTap(Key.LeftArrow, 0.05f, 0.08f);
+			Check("방향키 대시: 해금 안 했으면 ←← 로 안 나감", !movement.IsDashing);
+			yield return Keys(0.1f);
+			yield break;
+		}
+
+		// →→ 로 대시: 오른쪽으로 3칸 넘게
+		yield return new WaitForSeconds(0.6f);
+		Vector2 before = player.transform.position;
+		yield return DoubleTap(Key.RightArrow, 0.05f, 0.08f);
+		Check("방향키 대시: →→ 로 대시 중", movement.IsDashing);
+		Check("방향키 대시: 오른쪽을 바라봄", movement.Facing == 1);
+		yield return Keys(0.05f);
+		yield return WaitUntil(() => !movement.IsDashing, 1f);
+		float moved = player.transform.position.x - before.x;
+		Check($"방향키 대시: 오른쪽으로 3칸 넘게 ({moved:0.0}칸)", moved > 3f);
+		Check($"방향키 대시: 쿨타임이 돌고 있음 ({movement.TapDashCooldownRemaining:0.00}초)", movement.TapDashCooldownRemaining > 0f);
+
+		// 쿨타임 안에 ←← : 안 나감
+		yield return DoubleTap(Key.LeftArrow, 0.05f, 0.08f);
+		Check("방향키 대시: 쿨타임 안에는 ←← 로 안 나감", !movement.IsDashing);
+		yield return Keys(0.05f);
+
+		// 천천히 두 번 (뗀 뒤 0.4초): 안 나감
+		yield return new WaitForSeconds(0.6f);
+		yield return DoubleTap(Key.LeftArrow, 0.05f, 0.4f);
+		Check("방향키 대시: 천천히 두 번은 안 나감", !movement.IsDashing);
+		yield return Keys(0.05f);
+
+		// 오래 누르고 걷다가 떼고 바로 다시 누름: 안 나감
+		yield return new WaitForSeconds(0.3f);
+		yield return DoubleTap(Key.LeftArrow, 0.5f, 0.08f);
+		Check("방향키 대시: 오래 누른 뒤 다시 누르기는 안 나감", !movement.IsDashing);
+		yield return Keys(0.05f);
+
+		// 공중: 점프하고 ←← 로 대시하면 AirDashUsed, 땅에 닿으면 풀림
+		yield return WaitUntil(() => movement.IsGrounded, 3f);
+		yield return new WaitForSeconds(0.6f);
+		yield return Keys(0.05f, Key.Space);
+		yield return Keys(0.1f);
+		yield return DoubleTap(Key.LeftArrow, 0.05f, 0.08f);
+		Check("방향키 대시: 공중에서 ←← 로 대시", movement.IsDashing);
+		Check("방향키 대시: 공중에서 쓰면 AirDashUsed", movement.AirDashUsed);
+		yield return Keys(0.05f);
+		yield return WaitUntil(() => !movement.IsDashing, 1f);
+		// 쿨타임이 끝났는데도 아직 공중이면 한 번 더 해 봐서 안 나가는지 본다 (높이에 따라 이미 내려왔을 수 있음)
+		yield return WaitUntil(() => movement.TapDashCooldownRemaining <= 0f || movement.IsGrounded, 1f);
+		if (!movement.IsGrounded)
+		{
+			yield return DoubleTap(Key.RightArrow, 0.05f, 0.08f);
+			Check("방향키 대시: 공중에서 두 번째는 안 나감", !movement.IsDashing);
+			yield return Keys(0.05f);
+		}
+		else Debug.Log($"{Tag} 방향키 대시: 쿨타임 전에 내려와서 공중 두 번째는 건너뜀");
+		yield return WaitUntil(() => movement.IsGrounded, 3f);
+		yield return null;
+		Check("방향키 대시: 땅에 닿으면 AirDashUsed 풀림", !movement.AirDashUsed);
+	}
+
+	// 같은 키를 hold초 눌렀다 gap초 뗀 뒤 다시 누르고, 두 번째 누름은 잠깐(0.03초)만 기다린다 (대시 0.15초 안에 확인하려고)
+	IEnumerator DoubleTap(Key key, float hold, float gap)
+	{
+		yield return Keys(hold, key);
+		yield return Keys(gap);
+		yield return Keys(0.03f, key);
 	}
 
 	// 공중 점프 한 번: 해금했으면 Space, 아니면 블록코딩 더블점프와 같은 RequestAirJump

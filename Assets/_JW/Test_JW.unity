@@ -2781,11 +2781,13 @@ MonoBehaviour:
   slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
   bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   bleedFlashSeconds: 0.15
+  poisonFlashColor: {r: 0.45, g: 1, b: 0.35, a: 1}
   bleedEffect: {fileID: 0}
   markEffect: {fileID: 0}
   stunEffect: {fileID: 0}
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
+  poisonEffect: {fileID: 0}
   headEffectHeight: 0.2
 --- !u!114 &1391551133
 MonoBehaviour:
@@ -3137,6 +3139,97 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1549205722
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1549205724}
+  - component: {fileID: 1549205725}
+  m_Layer: 0
+  m_Name: PythonSoundTest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &1549205724
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1549205722}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1549205725
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1549205722}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db58b62dbc1e476ab8798561322926e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonSkillSoundTest
+  table: {fileID: 0}
+  volume: 0.8
+  gap: 1.8
+--- !u!1 &1551000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1551000003}
+  - component: {fileID: 1551000002}
+  m_Layer: 0
+  m_Name: PythonWizardTest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &1551000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1551000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8957fa8be7a4ebabe7842d4a0ca0ae0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonWizardSimTest
+--- !u!4 &1551000003
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1551000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1571074967
 GameObject:
   m_ObjectHideFlags: 0
@@ -3295,11 +3388,13 @@ MonoBehaviour:
   slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
   bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   bleedFlashSeconds: 0.15
+  poisonFlashColor: {r: 0.45, g: 1, b: 0.35, a: 1}
   bleedEffect: {fileID: 0}
   markEffect: {fileID: 0}
   stunEffect: {fileID: 0}
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
+  poisonEffect: {fileID: 0}
   headEffectHeight: 0.2
 --- !u!114 &1810310912
 MonoBehaviour:
@@ -3430,11 +3525,13 @@ MonoBehaviour:
   slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
   bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   bleedFlashSeconds: 0.15
+  poisonFlashColor: {r: 0.45, g: 1, b: 0.35, a: 1}
   bleedEffect: {fileID: 0}
   markEffect: {fileID: 0}
   stunEffect: {fileID: 0}
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
+  poisonEffect: {fileID: 0}
   headEffectHeight: 0.2
 --- !u!114 &1943402329
 MonoBehaviour:
@@ -3452,6 +3549,51 @@ MonoBehaviour:
   heightAboveTop: 0.6
   trailDelay: 0.3
   trailSpeed: 30
+--- !u!1 &2033864093
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2033864095}
+  - component: {fileID: 2033864094}
+  m_Layer: 0
+  m_Name: NoCooldownTest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &2033864094
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2033864093}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1bc878f34e7c4e75be1549eaf417c64c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TestNoCooldown
+  interval: 1
+--- !u!4 &2033864095
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2033864093}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3497,3 +3639,6 @@ SceneRoots:
   - {fileID: 1150044987}
   - {fileID: 495670049}
   - {fileID: 1893761188}
+  - {fileID: 1551000003}
+  - {fileID: 2033864095}
+  - {fileID: 1549205724}

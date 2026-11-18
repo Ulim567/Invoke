@@ -127,6 +127,7 @@
     - `PlayerInputReader`에서 `Move`만 비활성화하는 수정안(`slot-caster.md`)은 쓰지 않음. 액션 맵 활성화 상태를 두 컴포넌트가 따로 바꾸게 되는 문제
   - 입력 키 결정 (#71)
     - 대시: 스킬(`common.dash`)로만 씀. Player 액션 맵의 `Dash` 액션은 `Run`으로 바꿈
+    - (#557) 대시를 해금하면 ←← / →→ 로 씀. 새 액션 없이 `PlayerMovement`가 `MoveX`로 두 번 누르기를 판정 (player-movement.md)
     - 왼쪽 Shift: 달리기(`Run`). 달리기 속도 적용은 박진우(`PlayerMovement`)
     - 검 줍기: Z(`PickUp`), 상호작용: ↑(`Interact`), 여러 명 선택의 대상 찍기: Space(`Mark`)
     - 키 사용자 지정: 추후 결정

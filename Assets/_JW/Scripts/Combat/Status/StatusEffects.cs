@@ -268,6 +268,19 @@ public class StatusEffects : NetworkBehaviour
 		return true;
 	}
 
+	/// <summary>
+	/// TryApply와 같고, 지속 시간만 기본 지속 시간 × (1 + durationRate)로 건다 (#546, 이우림).
+	/// 시전자의 자세가 지속 시간을 늘릴 때 쓴다. 예: Python 7의 배수(+0.3)이면 표식 5초 → 6.5초. durationRate가 0이면 TryApply와 같다.
+	/// </summary>
+	public static bool TryApply(GameObject target, StatusType type, GameObject source, float durationRate)
+	{
+		if (target == null) return false;
+		StatusEffects effects = target.GetComponentInParent<StatusEffects>();
+		if (effects == null) return false;
+		effects.Apply(type, StatusDefaults.DurationOf(type) * (1f + durationRate), source);
+		return true;
+	}
+
 	void Update()
 	{
 		// 출혈 데미지와 만료는 서버만 한다. 클라이언트는 서버가 목록에서 지우면 StatusRemoved를 받는다
@@ -307,7 +320,9 @@ public class StatusEffects : NetworkBehaviour
 	{
 		if (damageable == null || (monster != null && monster.IsDead)) return;
 		DamageRequest request = DamageRequest.Flat(StatusDefaults.BleedDamage);
-		request.BonusRate = bleedBonusRate;
+		// 출혈을 건 플레이어의 지금 자세 데미지 추가분도 더한다 (#538, 이우림 결정 11/18). 스킬 정보가 없으므로 계열 추가분(찌르기 등)은 빼고 모든 스킬 추가분만.
+		// 자해·회복은 스킬 시전이 아니므로 붙지 않는다
+		request.BonusRate = bleedBonusRate + PlayerStance.DamageBonusOf(bleedSource);
 		int damage = DamageCalculator.Calculate(request).Damage;
 		damageable.TakeDamage(damage, bleedSource);
 		BleedTicked?.Invoke(damage);
@@ -318,6 +333,8 @@ public class StatusEffects : NetworkBehaviour
 	{
 		if (damageable == null || (monster != null && monster.IsDead)) return;
 		DamageRequest request = DamageRequest.Flat(StatusDefaults.PoisonDamage * Mathf.Max(1, poisonStacks));
+		// 중독을 건 플레이어의 지금 자세 데미지 추가분 (#538). 출혈과 같은 규칙
+		request.BonusRate = PlayerStance.DamageBonusOf(poisonSource);
 		int damage = DamageCalculator.Calculate(request).Damage;
 		damageable.TakeDamage(damage, poisonSource);
 		PoisonTicked?.Invoke(damage);

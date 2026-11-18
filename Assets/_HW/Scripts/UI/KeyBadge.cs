@@ -73,7 +73,7 @@ public class KeyBadge : MonoBehaviour
 		text.color = new Color(ink.r, ink.g, ink.b, darkInk ? 0.75f : 0.5f);
 		image.color = new Color(0, 0, 0, 0);
 		image.enabled = false;
-		bool small = label == null || label.text.Trim().Length <= 1; // X 같은 아이콘 버튼
+		bool small = label == null || IsIconLabel(label.text); // X 같은 아이콘 버튼
 		ContentSizeFitter fitter = badge.GetComponent<ContentSizeFitter>();
 
 		if (small)
@@ -102,6 +102,14 @@ public class KeyBadge : MonoBehaviour
 		margin.x = 0f;
 		label.margin = margin;
 		return component;
+	}
+
+	// 한 글자 이하인 버튼 글자는 X 같은 아이콘으로 본다. 단 한글 한 글자(상점 구매 확인 창의 「예」, #534)는 낱말이므로 버튼 안에 「예 Enter」로 붙인다
+	static bool IsIconLabel(string text)
+	{
+		string trimmed = text.Trim();
+		if (trimmed.Length > 1) return false;
+		return trimmed.Length == 0 || trimmed[0] < '가' || trimmed[0] > '힣';
 	}
 
 	// 버튼의 글자 (키 표시 안의 글자는 빼고)

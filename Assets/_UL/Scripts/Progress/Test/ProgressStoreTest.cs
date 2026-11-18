@@ -72,10 +72,21 @@ public class ProgressStoreTest : MonoBehaviour
 			Check($"처음 해금 = SkillTree 처음 노드 ({string.Join(", ", startingNodes)})", startingNodes.Count > 0 && first.Unlocked.OrderBy(x => x).SequenceEqual(startingNodes.OrderBy(x => x)));
 			Check("처음 함수 = 슬롯 함수 8개, 페이지 함수 0개", first.Functions.Count == SlotLoadout.SlotCount && progress.CountPageFunctions(characterKey) == 0);
 			Check("처음 슬롯 = slot1~slot8, 파라미터 없음, slot1 thrust(GetBug()), slot2 sword_throw(GetBug()), 나머지 빈 본문", IsInitialSlots(first));
-			Check("처음 개수 = thrust 1, sword_throw 1, get_bug 2 (#500)", SameCounts(first.ItemCounts, new Dictionary<string, int>
-				{ { PredefinedFunctionIds.Thrust, 1 }, { PredefinedFunctionIds.SwordThrow, 1 }, { PredefinedFunctionIds.GetBug, 2 } }));
-			Check("처음 슬롯 함수가 쓰는 개수 = 처음 가진 개수 (남은 개수 모두 0)",
-				SameCounts(BlockUsageCounter.Count(firstSlotGuids, first.Functions, first.Globals), first.ItemCounts));
+			// 자세 함수는 스킬 트리에서 해금해야 받으므로 처음 개수에 없다 (#545)
+			Check("처음 개수 = thrust 1, sword_throw 1, get_bug 2, printf 1, 자세 함수 없음 (#500, #536, #545)", SameCounts(first.ItemCounts, new Dictionary<string, int>
+				{ { PredefinedFunctionIds.Thrust, 1 }, { PredefinedFunctionIds.SwordThrow, 1 }, { PredefinedFunctionIds.GetBug, 2 }, { PredefinedFunctionIds.Printf, 1 } }));
+			// 출력 함수만 슬롯 함수가 쓰지 않는 1개를 더 받는다 (#536)
+			Dictionary<string, int> slotUsage = BlockUsageCounter.Count(firstSlotGuids, first.Functions, first.Globals);
+			slotUsage[PredefinedFunctionIds.Printf] = ItemCountRules.InitialPrintCount;
+			Check("처음 슬롯 함수가 쓰는 개수 + printf 1 = 처음 가진 개수 (남은 개수는 printf 1, 나머지 0)", SameCounts(slotUsage, first.ItemCounts));
+			Dictionary<string, int> pyInitial = ItemCountRules.Initial(CharacterLanguages.Python);
+			Check("새 Python 캐릭터도 자세 함수 처음 개수 없음 (#545)",
+				!pyInitial.ContainsKey(PredefinedFunctionIds.PyInitStance) && !pyInitial.ContainsKey(PredefinedFunctionIds.PyGetStance));
+			SkillTree.TryGet(CStanceRule.OddNode, out SkillTreeNode ruleNode);
+			SkillTree.TryGet(PredefinedFunctionIds.InitStance, out SkillTreeNode initNode);
+			Check("규칙 노드를 해금하면 개수를 주지 않고, 자세 정하기는 init_stance 1개 (#545)",
+				ruleNode != null && ItemCountRules.KeysUnlockedBy(ruleNode).Count == 0
+				&& initNode != null && ItemCountRules.KeysUnlockedBy(initNode).SequenceEqual(new[] { PredefinedFunctionIds.InitStance }));
 
 			// 저장
 			progress.SaveProgress(characterKey, 5, 30, 500);
@@ -159,11 +170,12 @@ public class ProgressStoreTest : MonoBehaviour
 			FunctionData page = loaded.Functions.Find(f => f.Guid == function.Guid);
 			Check("페이지 함수는 마지막에 저장한 내용", loaded.Functions.Count == SlotLoadout.SlotCount + 1 && page != null && page.Name == "RenamedFunction");
 			Check("전역 변수 선언 1개 (mySword)", loaded.Globals.Declarations.Count == 1);
-			Check($"개수: Declare 3, For {ItemCountRules.MaxCount}(최대에서 멈춤), Assign 1(해금과 함께), 0으로 만든 thrust는 없음, sword_throw 1, get_bug 2",
+			Check($"개수: Declare 3, For {ItemCountRules.MaxCount}(최대에서 멈춤), Assign 1(해금과 함께), 0으로 만든 thrust는 없음, sword_throw 1, get_bug 2, printf 1(#536)",
 				SameCounts(loaded.ItemCounts, new Dictionary<string, int>
 				{
 					{ "Declare", 3 }, { "For", ItemCountRules.MaxCount }, { "Assign", 1 },
 					{ PredefinedFunctionIds.SwordThrow, 1 }, { PredefinedFunctionIds.GetBug, 2 },
+					{ PredefinedFunctionIds.Printf, ItemCountRules.InitialPrintCount },
 				}));
 
 			CharacterProgressData old = store.Progress.Load(oldCharacterKey);

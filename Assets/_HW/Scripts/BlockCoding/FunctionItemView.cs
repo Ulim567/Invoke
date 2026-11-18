@@ -16,7 +16,7 @@ using UnityEngine.UI;
 /// - BlockEditor가 Show로 내용을 채운다. 프리팹은 InvokeUIBuilder가 만든다 (FunctionItem).
 /// </para>
 /// </summary>
-public class FunctionItemView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
+public class FunctionItemView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
 	[SerializeField, Tooltip("항목 바탕 (둥근 네모). 함수 색을 칠한다")]
 	Image background;
@@ -98,6 +98,13 @@ public class FunctionItemView : MonoBehaviour, IBeginDragHandler, IDragHandler, 
 		// 원형은 부분마다 리치 텍스트 색이 있어 글자 색으로는 흐리게 할 수 없으므로 투명도로 흐리게 한다
 		if (prototypeText != null) prototypeText.alpha = dimmed ? 0.5f : 1f;
 		SetEmpty(dragging);
+	}
+
+	// 끌지 않고 누르면 설명 카드 (#544, 노션 11/16 「블록 목록의 블록 클릭」). 끈 뒤에는 Unity가 클릭을 보내지 않는다
+	public void OnPointerClick(PointerEventData eventData)
+	{
+		if (editor == null || factory == null || eventData.button != PointerEventData.InputButton.Left) return;
+		editor.ShowItemCard(countSample ?? factory());
 	}
 
 	public void OnBeginDrag(PointerEventData eventData)

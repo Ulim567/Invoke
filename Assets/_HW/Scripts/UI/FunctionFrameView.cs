@@ -83,6 +83,16 @@ public class FunctionFrameView : MonoBehaviour
 	}
 
 	/// <summary>
+	/// Python 함수의 틀 (#532): 「def 이름(a, b):」. 반환 타입이 없으므로 반환 타입 자리에 def를 누를 수 없게 보이고, 끝의 }가 없다(들여쓰기로 몸통을 나타냄).
+	/// </summary>
+	public void ShowPythonFunction(string name, string parameters)
+	{
+		ShowFunction("def", name, parameters, false);
+		if (paramsText != null) paramsText.text = $"({parameters}):";
+		if (footerText != null) footerText.text = "";
+	}
+
+	/// <summary>
 	/// 전역 변수를 고치는 동안의 틀: 함수가 아니므로 반환 타입과 중괄호 없이 이름(Global Variables)만 보인다.
 	/// </summary>
 	public void ShowGlobals()

@@ -16,6 +16,7 @@ using Mirror;
 /// - 발판(Platform) 위에서 ↓ + Space(DropPressed)를 누르면 잠깐 그 발판과 부딪히지 않게 해서 아래로 내려간다. 내 캐릭터만 통과한다.<br/>
 /// - 발판을 아래에서 뚫고 오르는 것은 발판 타일맵의 Platform Effector 2D가 한다 (docs/systems/player-movement.md 「발판 설정」).<br/>
 /// - 입력은 PlayerInputReader에서만 읽는다. 위아래(MoveY)는 검 타기 중에만 쓴다 (#317).<br/>
+/// - 대시를 해금했으면 ←← / →→ 를 빠르게 두 번 눌러 그쪽으로 대시한다 (#557, 더블점프처럼 이 컴포넌트가 스스로 함).<br/>
 /// - 움직임 잠그기(SetMovementLocked, #207): 장소 이동처럼 씬을 바꾸는 동안 그 자리에 멈춰 둔다. 잠근 동안 속도 0, 중력 없음, 입력·돌진 무시.
 /// </para>
 /// <para>
@@ -49,6 +50,14 @@ public class PlayerMovement : NetworkBehaviour
 	[SerializeField, Min(0.1f)] private float dashDistance = 4f;
 	[Tooltip("대시에 걸리는 시간 (초, 임시)")]
 	[SerializeField, Min(0.02f)] private float dashDuration = 0.15f;
+
+	[Header("방향키 두 번 대시 (#557)")]
+	[Tooltip("PlayerProgress(해금 목록)가 없는 테스트 씬에서 ←← / →→ 대시를 쓸 수 있게 할지. 실제 게임은 스킬 트리 해금으로 정한다")]
+	[SerializeField] private bool allowDashWithoutProgress = true;
+	[Tooltip("두 번 누르기로 볼 간격 (초, 임시). 첫 번째를 누른 시간과, 뗀 뒤 두 번째를 누를 때까지가 각각 이 안이어야 한다")]
+	[SerializeField, Min(0.05f)] private float tapDashWindow = 0.25f;
+	[Tooltip("방향키 대시의 쿨타임 (초, 임시). 대시를 시작한 때부터 잰다")]
+	[SerializeField, Min(0f)] private float tapDashCooldown = 0.5f;
 
 	[Header("더블점프 (#256)")]
 	[Tooltip("PlayerProgress(해금 목록)가 없는 테스트 씬에서 더블점프를 쓸 수 있게 할지. 실제 게임은 스킬 트리 해금으로 정한다")]
@@ -112,6 +121,10 @@ public class PlayerMovement : NetworkBehaviour
 	float floatDuration;
 	// 공중 점프(더블점프)를 이번 공중에서 이미 썼는지. 땅에 닿으면 다시 쓸 수 있다
 	bool airJumpUsed;
+	// 방향키 두 번 대시 (#557). 두 번 누르기 판정, 다음에 쓸 수 있는 시간, 이번 공중에서 썼는지(땅에 닿으면 false)
+	readonly DoubleTapDetector tapDetector = new DoubleTapDetector();
+	float tapDashReadyTime;
+	bool airDashUsed;
 	PlayerProgress progress;
 
 	/// <summary>
@@ -254,6 +267,27 @@ public class PlayerMovement : NetworkBehaviour
 			return false;
 		}
 	}
+
+	/// <summary>
+	/// ←← / →→ 대시를 쓸 수 있으면 true (#557): 스킬 트리에서 common.dash를 해금했는지 (PlayerProgress.Unlocked).<br/>
+	/// PlayerProgress가 없는 테스트 씬에서는 Allow Dash Without Progress를 따른다. 블록코딩의 대시(common.dash)는 이 값을 보지 않는다.
+	/// </summary>
+	public bool DashUnlocked
+	{
+		get
+		{
+			if (progress == null) progress = GetComponent<PlayerProgress>();
+			if (progress == null) return allowDashWithoutProgress;
+			foreach (string id in progress.Unlocked) if (id == PredefinedFunctionIds.Dash) return true;
+			return false;
+		}
+	}
+
+	/// <summary>이번 공중에서 ←← / →→ 대시를 이미 썼으면 true (#557). 땅에 닿으면 false로 돌아온다. 블록코딩 대시는 세지 않는다</summary>
+	public bool AirDashUsed => airDashUsed;
+
+	/// <summary>←← / →→ 대시를 다시 쓸 수 있을 때까지 남은 시간 (초, #557). 0이면 쓸 수 있다</summary>
+	public float TapDashCooldownRemaining => Mathf.Max(0f, tapDashReadyTime - Time.time);
 
 	/// <summary>
 	/// 대시 (#256): direction(1 오른쪽, -1 왼쪽) 쪽으로 Dash Distance(임시 4칸)를 Dash Duration(0.15초)에 간다. 그쪽을 바라본다.<br/>
@@ -400,6 +434,50 @@ public class PlayerMovement : NetworkBehaviour
 		return true;
 	}
 
+	// [소유 클라이언트] ←← / →→ 대시 (#557). 판정은 매 프레임 해서(대시·검 타기 중에도) 누른 순서를 놓치지 않고, 쓸 수 있을 때만 대시한다.
+	// 쿨타임은 대시를 시작한 때부터, 공중에서는 땅에 닿을 때까지 한 번. 블록코딩 대시(StartDash를 스킬이 부름)는 이 제한을 받지 않는다
+	void UpdateTapDash()
+	{
+		int dir = tapDetector.Update(input.MoveX, Time.time, tapDashWindow);
+		if (dir == 0 || !CanTapDash()) return;
+		bool inAir = !IsGrounded;
+		StartDash(dir);
+		if (!dashing) return;
+		tapDashReadyTime = Time.time + tapDashCooldown;
+		if (inAir) airDashUsed = true;
+		ShareTapDashed(dir);
+	}
+
+	bool CanTapDash()
+	{
+		if (movementLocked || dashing || riding || lunging) return false;
+		if (health != null && !health.CanAct) return false;
+		if (Time.time < tapDashReadyTime) return false;
+		if (airDashUsed && !IsGrounded) return false;
+		return DashUnlocked;
+	}
+
+	// [소유 클라이언트] ←← / →→ 대시를 서버에 알려 대시 스킬과 같은 연출(SkillEffectEvents.Fired, 대시 소리 등)을 모든 화면에 낸다.
+	// Host의 내 캐릭터와 네트워크 없는 테스트는 바로 내고, 원격 클라이언트는 Command로 서버가 낸다
+	void ShareTapDashed(int direction)
+	{
+		if (isServer || !isClient) RaiseTapDashEffect(direction);
+		else CmdTapDashed(direction);
+	}
+
+	[Command]
+	void CmdTapDashed(int direction)
+	{
+		if (!DashUnlocked) return;
+		RaiseTapDashEffect(direction >= 0 ? 1 : -1);
+	}
+
+	void RaiseTapDashEffect(int direction)
+	{
+		SkillEffectEvents effects = GetComponent<SkillEffectEvents>();
+		if (effects != null) effects.RaiseFired(PredefinedFunctionIds.Dash, transform.position, new Vector2(direction, 0f));
+	}
+
 	// [소유 클라이언트] 더블점프를 다른 화면에도 알린다 (#322). 내 화면은 이미 AirJumped를 불렀다.
 	// Host의 내 캐릭터는 서버이므로 바로 Rpc를 보내고, 원격 클라이언트는 Command로 서버에 알린다. 네트워크 없는 테스트는 아무것도 하지 않는다
 	void ShareAirJumped()
@@ -534,6 +612,7 @@ public class PlayerMovement : NetworkBehaviour
 	{
 		if (!isLocalPlayer) return;
 		Move();
+		UpdateTapDash();
 		if (IsDropping && Time.time >= dropEndTime && !IsInsideDroppedPlatform()) EndDrop();
 	}
 
@@ -629,8 +708,12 @@ public class PlayerMovement : NetworkBehaviour
 		bool grounded = IsGrounded;
 		// 옆면으로 발판 안에 들어가 안쪽 밑변 위에 서 있으면, 그 발판을 뚫어 떨어뜨린다 (#357). 발판은 위에서만 밟혀야 한다
 		if (grounded && DropOutOfPlatformIfInside()) grounded = false;
-		// 땅에 닿으면 더블점프를 다시 쓸 수 있다 (#256)
-		if (grounded) airJumpUsed = false;
+		// 땅에 닿으면 더블점프를 다시 쓸 수 있다 (#256). ←← / →→ 대시의 공중 1번도 다시 (#557)
+		if (grounded)
+		{
+			airJumpUsed = false;
+			airDashUsed = false;
+		}
 		// 땅에 있을 때만 Shift를 읽는다. 공중에서는 땅을 떠난 순간(점프, 내려가기, 낭떠러지)의 값을 그대로 쓴다
 		if (grounded) runMode = input.RunHeld;
 

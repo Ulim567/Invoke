@@ -7,7 +7,7 @@ using UnityEngine.Tilemaps;
 /// <summary>
 /// (에디터 전용) 글자로 적은 맵 설계도대로 열려 있는 장소 씬의 땅(Ground)과 발판(Platform)을 칠한다.
 /// <para>
-/// 사용법: 장소 씬(Lobby, HuntingGround, TrainingRoom, RaidDungeon)을 열고 메뉴 Invoke → 맵 → 「지금 씬 땅 칠하기」.<br/>
+/// 사용법: 장소 씬(Lobby, HuntingGround, HuntingGround2, HuntingGround3, TrainingRoom, RaidDungeon)을 열고 메뉴 Invoke → 맵 → 「지금 씬 땅 칠하기」.<br/>
 /// - 씬 이름과 같은 설계도를 찾아서, Grid 아래 Ground·Platform 타일맵을 비우고 다시 칠한다. Ctrl/Cmd+Z로 되돌릴 수 있다.<br/>
 /// - 칠한 뒤 씬 저장(Ctrl/Cmd+S)은 사람이 한다.<br/>
 /// - 타일은 Tile Palette로 만든 타일 에셋(Palettes 폴더)에서, 원본 그림의 칸 위치로 찾는다.
@@ -44,6 +44,7 @@ public static class MapPainter
 		public Tileset tiles;
 		public string[] ground;
 		public string[] platform;
+		public string platformStyle = "thick"; // 바깥 장소 발판 그림 (platform_<style>_left/mid/right). 사냥터2 cloud, 사냥터3 neon (#518)
 	}
 
 	const string NoMansLandPng = "Assets/_HW/Map/Tiles/NoMansLand_Tiles.png";
@@ -74,7 +75,8 @@ public static class MapPainter
 		},
 	};
 
-	// 로비: 가로 72칸. 왼쪽 시작 → 가운데 광장 → 오른쪽 높은 단(입구 3개). 바닥 윗면 Y -4, 높은 단 윗면 Y -2, 양쪽 벽 Y 3까지
+	// 로비: 가로 72칸. 왼쪽 시작 → 가운데 광장(문 3개, X -6·-2·2) → 오른쪽 높은 단. 바닥 윗면 Y -4, 높은 단 윗면 Y -2, 양쪽 벽 Y 3까지
+	// 발판은 문 위 안내판(문 위 끝에서 1.8칸, 가로 X -11~7쯤)과 겹치지 않게 X -26~-22·11~15(윗면 -1), -18~-14(윗면 1) (#518)
 	static Layout Lobby() => new Layout
 	{
 		left = -36, top = 10, tiles = NoMansLand,
@@ -118,9 +120,9 @@ public static class MapPainter
 			"........................................................................",
 			"........................................................................",
 			"........................................................................",
-			"..........................<===>.........................................",
+			"..................<===>.................................................",
 			"........................................................................",
-			"..............<===>...................<===>.............................",
+			"..........<===>................................<===>....................",
 			"........................................................................",
 			"........................................................................",
 			"........................................................................",
@@ -260,6 +262,7 @@ public static class MapPainter
 	};
 
 	// 연습장: 가로 50칸 실내. 천장 Y 9, 발판 3개. 바닥 윗면 Y -4
+	// 왼쪽 발판은 X -16~-12 (편집 터미널 X -10 위에 걸쳐 터미널이 가려져서 한 칸 왼쪽으로, 임혜원 11/18)
 	static Layout TrainingRoom() => new Layout
 	{
 		left = -25, top = 16, tiles = CyberLab,
@@ -317,7 +320,7 @@ public static class MapPainter
 			"..................................................",
 			"......................<===>.......................",
 			"..................................................",
-			"..........<===>....................<===>..........",
+			".........<===>.....................<===>..........",
 			"..................................................",
 			"..................................................",
 			"..................................................",
@@ -333,12 +336,117 @@ public static class MapPainter
 		},
 	};
 
+	// 사냥터2·3 (#518)처럼 큰 맵은 설계도 글자를 손으로 적지 않고, 벽·바닥 모양 + 발판 목록으로 만든다.
+	// 맨 윗줄(top)에 양쪽 벽 꼭대기, 바닥 윗면 floorTop, 바닥 아래 9줄은 속. 양 끝 벽 2칸
+	// 발판 하나 = (왼쪽 칸 X, 오른쪽 칸 X, 윗면 Y). 칸 X는 그 칸의 왼쪽 끝 좌표
+	// 땅 모양 바꾸기 (#518): height > 0이면 X x0~x1에 height칸 높은 언덕, < 0이면 그만큼 깊은 구덩이. 점프 높이(4칸) 안으로, 발판 아래에는 두지 않는다 (머리가 발판에 걸림)
+	static Layout Generated(int left, int width, int top, int floorTop, (int x0, int x1, int surface)[] platforms, (int x0, int x1, int height)[] terrain = null)
+	{
+		int floorRow = top - (floorTop - 1);
+		int rows = floorRow + 10;
+		var groundCells = new char[rows][];
+		var platform = new char[rows][];
+		for (int r = 0; r < rows; r++)
+		{
+			string inner = new string('.', width - 4);
+			string row;
+			if (r == 0) row = "TR" + inner + "LT";
+			else if (r < floorRow) row = "#r" + inner + "l#";
+			else if (r == floorRow) row = "##" + new string('T', width - 4) + "##";
+			else row = new string('#', width);
+			groundCells[r] = row.ToCharArray();
+			platform[r] = new string('.', width).ToCharArray();
+		}
+		if (terrain != null)
+		{
+			foreach (var (x0, x1, height) in terrain)
+			{
+				int c0 = x0 - left, c1 = x1 - left;
+				if (height > 0)
+				{
+					// 언덕: 윗줄 L T… R, 아래 l #… r, 원래 바닥 윗면 줄은 속으로
+					for (int c = c0; c <= c1; c++) groundCells[floorRow][c] = '#';
+					for (int h = 1; h <= height; h++)
+					{
+						int r = floorRow - h;
+						bool topRow = h == height;
+						for (int c = c0; c <= c1; c++)
+							groundCells[r][c] = c == c0 ? (topRow ? 'L' : 'l') : c == c1 ? (topRow ? 'R' : 'r') : (topRow ? 'T' : '#');
+					}
+				}
+				else if (height < 0)
+				{
+					// 구덩이: 바닥을 파내고 그 아래 줄이 새 바닥 윗면. 양옆 땅은 구덩이 쪽을 향한 옆면
+					int depth = -height;
+					for (int d = 0; d < depth; d++)
+					{
+						int r = floorRow + d;
+						for (int c = c0; c <= c1; c++) groundCells[r][c] = '.';
+						groundCells[r][c0 - 1] = d == 0 ? 'R' : 'r';
+						groundCells[r][c1 + 1] = d == 0 ? 'L' : 'l';
+					}
+					for (int c = c0; c <= c1; c++) groundCells[floorRow + depth][c] = 'T';
+				}
+			}
+		}
+		var ground = new string[rows];
+		for (int r = 0; r < rows; r++) ground[r] = new string(groundCells[r]);
+		foreach (var (x0, x1, surface) in platforms)
+		{
+			int r = top - (surface - 1);
+			for (int x = x0; x <= x1; x++) platform[r][x - left] = x == x0 ? '<' : x == x1 ? '>' : '=';
+		}
+		var platformRows = new string[rows];
+		for (int r = 0; r < rows; r++) platformRows[r] = new string(platform[r]);
+		return new Layout { left = left, top = top, tiles = NoMansLand, ground = ground, platform = platformRows };
+	}
+
+	static Layout WithPlatformStyle(Layout layout, string style)
+	{
+		layout.platformStyle = style;
+		return layout;
+	}
+
+	// 사냥터2 (#518, 캔버스 17-2 「세로로 더 길게, 위로 올라갈 수 있도록」): 가로 60칸(X -30~29), 양 끝 벽 Y 24까지. 바닥 윗면 Y -4.
+	// 발판 7층(윗면 Y -1, 2, 5, 8, 11, 14, 17, 층 사이 3칸)을 좌우로 지그재그. 위층 발판은 아래층과 2칸 넘게 겹쳐 올라갈 수 있다.
+	// 포탈: 바닥 가운데(X 0) ↔ 사냥터1, 맨 위 왼쪽 발판(X -24) ↔ 사냥터3 왼쪽, 맨 위 오른쪽 발판(X 24) ↔ 사냥터3 오른쪽 (HuntingGroundBuilder)
+	internal static readonly (int, int, int)[] HuntingGround2Platforms =
+	{
+		(-24, -11, -1), (10, 23, -1),
+		(-14, -3, 2), (2, 13, 2),
+		(-6, 5, 5),
+		(-16, -4, 8), (3, 15, 8),
+		(-26, -13, 11), (12, 25, 11),
+		(-18, -7, 14), (6, 17, 14),
+		(-28, -15, 17), (14, 27, 17),
+	};
+	// 발판 그림: 구름 (맑은 하늘 탑 분위기)
+	static Layout HuntingGround2() => WithPlatformStyle(Generated(-30, 60, 24, -4, HuntingGround2Platforms), "cloud");
+
+	// 사냥터3 (#518, 캔버스 17-3 「가로로 더 길게」): 가로 120칸(X -60~59), 양 끝 벽 Y 10까지. 바닥 윗면 Y -4.
+	// 사냥터1처럼 발판 3층(윗면 Y -1, 2, 5), 12칸짜리를 26칸 간격으로 되풀이. 포탈은 바닥 양 끝(X -56, 55) ↔ 사냥터2 맨 위 왼쪽·오른쪽
+	// 땅이 평평하기만 하면 사냥터1과 똑같아 보여서 언덕·구덩이를 둔다 (1층 발판 아래가 아닌 곳): 언덕 X -34~-28(1칸), 18~21(1칸), 22~25(2칸, 계단), 구덩이 X -8~-4·44~48(2칸)
+	internal static readonly (int, int, int)[] HuntingGround3Terrain =
+	{
+		(-34, -28, 1), (18, 21, 1), (22, 25, 2), (-8, -4, -2), (44, 48, -2),
+	};
+	internal static readonly (int, int, int)[] HuntingGround3Platforms =
+	{
+		(-48, -37, -1), (-22, -11, -1), (4, 15, -1), (30, 41, -1),
+		(-40, -29, 2), (-14, -3, 2), (12, 23, 2),
+		(-32, -21, 5), (-6, 5, 5), (20, 31, 5),
+	};
+	// 발판 그림: 네온 금속판 (보라 밤, 민트 빛 윗면 + 분홍 글리치 조각)
+	static Layout HuntingGround3() => WithPlatformStyle(Generated(-60, 120, 10, -4, HuntingGround3Platforms, HuntingGround3Terrain), "neon");
+
 	static Layout Find(string sceneName)
 	{
 		switch (sceneName)
 		{
 			case PlaceScenes.Lobby: return Lobby();
 			case PlaceScenes.HuntingGround: return HuntingGround();
+			case PlaceScenes.HuntingGround2: return HuntingGround2();
+			case PlaceScenes.HuntingGround3: return HuntingGround3();
 			case PlaceScenes.TrainingRoom: return TrainingRoom();
 			case PlaceScenes.RaidDungeon: return RaidDungeon();
 			default: return null;
@@ -348,24 +456,25 @@ public static class MapPainter
 	[MenuItem("Invoke/맵/지금 씬 땅 칠하기")]
 	static void PaintCurrentScene()
 	{
+		string error = PaintActiveScene();
+		if (error != null) EditorUtility.DisplayDialog("맵 칠하기", error, "확인");
+	}
+
+	/// <summary>
+	/// 열려 있는 씬을 설계도대로 칠한다. 다른 에디터 도구(HuntingGroundBuilder)도 부른다. 저장은 하지 않는다. 못 칠하면 이유, 칠하면 null
+	/// </summary>
+	internal static string PaintActiveScene()
+	{
 		var scene = EditorSceneManager.GetActiveScene();
 		Layout layout = Find(scene.name);
-		if (layout == null)
-		{
-			EditorUtility.DisplayDialog("맵 칠하기", $"'{scene.name}' 씬의 설계도가 없어요. 장소 씬을 열고 눌러 주세요.", "확인");
-			return;
-		}
+		if (layout == null) return $"'{scene.name}' 씬의 설계도가 없어요. 장소 씬을 열고 눌러 주세요.";
 
 		Tilemap ground = FindTilemap("Ground");
 		Tilemap platform = FindTilemap("Platform");
-		if (ground == null || platform == null)
-		{
-			EditorUtility.DisplayDialog("맵 칠하기", "Grid 아래에 Ground, Platform 타일맵이 있어야 해요.", "확인");
-			return;
-		}
+		if (ground == null || platform == null) return "Grid 아래에 Ground, Platform 타일맵이 있어야 해요.";
 
 		Dictionary<char, TileBase> tiles = LoadTiles(layout.tiles);
-		if (layout.tiles == NoMansLand) UseThickPlatformTiles(tiles);
+		if (layout.tiles == NoMansLand) UsePlatformTiles(tiles, layout.platformStyle);
 
 		Undo.RegisterCompleteObjectUndo(new Object[] { ground, platform }, "Paint Map");
 		ground.ClearAllTiles();
@@ -373,9 +482,24 @@ public static class MapPainter
 		int count = Paint(ground, layout.ground, layout, tiles) + Paint(platform, layout.platform, layout, tiles);
 		ground.CompressBounds();
 		int pieces = SplitPlatforms(platform);
+		RebuildColliders(scene);
 
 		EditorSceneManager.MarkSceneDirty(scene);
 		Debug.Log($"[MapPainter] {scene.name}: 타일 {count}칸을 칠함, 발판 {pieces}개로 나눔. 확인하고 Ctrl/Cmd+S로 저장한다");
+		return null;
+	}
+
+	/// <summary>
+	/// 칠한 타일대로 콜라이더 모양을 바로 다시 만든다 (#518). 타일맵 콜라이더는 다음 에디터 갱신 때 늦게 바뀌어서,
+	/// 칠하자마자 저장하면(HuntingGroundBuilder) 복사해 온 사냥터1의 땅 모양이 씬에 남아 사냥터2 양 끝을 걸어 나가고 사냥터3 끝에서 바닥 밑으로 떨어졌다
+	/// </summary>
+	internal static void RebuildColliders(UnityEngine.SceneManagement.Scene scene)
+	{
+		foreach (GameObject root in scene.GetRootGameObjects())
+		{
+			foreach (TilemapCollider2D tiles in root.GetComponentsInChildren<TilemapCollider2D>(true)) tiles.ProcessTilemapChanges();
+			foreach (CompositeCollider2D composite in root.GetComponentsInChildren<CompositeCollider2D>(true)) composite.GenerateGeometry();
+		}
 	}
 
 	// 발판 하나(같은 줄에서 가로로 이어진 칸)마다 Platform을 복제한 오브젝트로 옮긴다. 예전에 나눈 Platform_* 는 먼저 지운다
@@ -424,14 +548,18 @@ public static class MapPainter
 	}
 
 	// 바깥 장소의 발판 칸(< = >)을 두꺼운 발판 그림으로. 타일 에셋이 없으면 만든다
-	const string ThickTileFolder = "Assets/_HW/Map/Palettes/PlatformThick";
-	static void UseThickPlatformTiles(Dictionary<char, TileBase> tiles)
+	// 바깥 장소의 발판 칸(< = >)을 장소별 발판 그림으로. 타일 에셋(Palettes/Platform<Style>)이 없으면 만든다
+	// thick: 두꺼운 돌 발판 (로비·사냥터1·레이드) / cloud: 구름 (사냥터2) / neon: 네온 금속판 (사냥터3). 콜라이더는 셋 다 그림 .meta의 Physics Shape(맨 위 5픽셀 띠)
+	static void UsePlatformTiles(Dictionary<char, TileBase> tiles, string style)
 	{
-		(char ch, string name)[] parts = { ('<', "platform_thick_left"), ('=', "platform_thick_mid"), ('>', "platform_thick_right") };
-		if (!AssetDatabase.IsValidFolder(ThickTileFolder)) AssetDatabase.CreateFolder("Assets/_HW/Map/Palettes", "PlatformThick");
+		if (string.IsNullOrEmpty(style)) style = "thick";
+		string folderName = "Platform" + char.ToUpper(style[0]) + style.Substring(1);
+		string folder = $"Assets/_HW/Map/Palettes/{folderName}";
+		(char ch, string name)[] parts = { ('<', $"platform_{style}_left"), ('=', $"platform_{style}_mid"), ('>', $"platform_{style}_right") };
+		if (!AssetDatabase.IsValidFolder(folder)) AssetDatabase.CreateFolder("Assets/_HW/Map/Palettes", folderName);
 		foreach (var (ch, name) in parts)
 		{
-			string tilePath = $"{ThickTileFolder}/{name}.asset";
+			string tilePath = $"{folder}/{name}.asset";
 			var tile = AssetDatabase.LoadAssetAtPath<Tile>(tilePath);
 			if (tile == null)
 			{

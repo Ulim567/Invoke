@@ -35,9 +35,16 @@ public class ForBlock : LoopBlock
 		startSlot = new ValueSlots(startOriginal);
 	}
 
+	// Python(#532) 반복의 다음 i 값과 끝 값. range(start, end)는 처음 한 번만 계산하고, { }가 i를 바꿔도 다음 바퀴의 i는 range가 정한다
+	System.Numerics.BigInteger pythonNext, pythonEnd;
+	bool isPython;
+	// i를 담은 범위를 이 블록이 열었는지. Python은 범위를 열지 않으므로 닫지도 않는다
+	bool openedScope;
+
 	protected override BlockResult Check(FunctionContext context, out bool loop)
 	{
 		loop = false;
+		if (isPython || (indexScope == null && context.CurrentNames != null)) return CheckPython(context, out loop);
 		if (indexScope == null)
 		{
 			BlockResult startResult = startSlot.Step(context);
@@ -59,7 +66,7 @@ public class ForBlock : LoopBlock
 		RuntimeValue end = endSlot[0];
 		endSlot = null;
 		indexScope.TryGet(indexName, out RuntimeValue index);
-		if (!NumericRules.TryCompare(CompareOperator.Less, null, index, endOriginal, end, context.Rule, out loop))
+		if (!NumericRules.TryCompare(CompareOperator.Less, null, index, endOriginal, end, context.Rule, context.Family, out loop))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;
@@ -74,7 +81,7 @@ public class ForBlock : LoopBlock
 
 	protected override void OnEnd(FunctionContext context)
 	{
-		indexScope?.CloseScope();
+		if (openedScope) indexScope?.CloseScope();
 	}
 
 	protected override void OnCancel(FunctionContext context)
@@ -82,7 +89,46 @@ public class ForBlock : LoopBlock
 		base.OnCancel(context);
 		startSlot?.Cancel(context);
 		endSlot?.Cancel(context);
-		indexScope?.CloseScope();
+		if (openedScope) indexScope?.CloseScope();
+	}
+
+	// Python의 for i in range(start, end) (#532). 첫 검사에서 start, end를 한 번 계산하고, 바퀴마다 i에 range의 다음 값을 넣는다
+	// i는 함수의 지역 변수(global로 적었으면 전역 변수)라서 for가 끝나도 남는다. Python에 { } 범위가 없기 때문
+	// start, end가 int(bool 포함)가 아니면 TypeError(TypeMismatch)
+	BlockResult CheckPython(FunctionContext context, out bool loop)
+	{
+		loop = false;
+		if (!isPython)
+		{
+			BlockResult startResult = startSlot.Step(context);
+			if (startResult != BlockResult.Done) return startResult;
+			endSlot ??= new ValueSlots(endOriginal);
+			BlockResult endResult = endSlot.Step(context);
+			if (endResult != BlockResult.Done) return endResult;
+
+			if (!NumericRules.TryGetPythonInteger(startSlot[0], out pythonNext) || !NumericRules.TryGetPythonInteger(endSlot[0], out pythonEnd))
+			{
+				context.RecordFailure(FunctionFailure.TypeMismatch);
+				return BlockResult.Failed;
+			}
+			isPython = true;
+			endSlot = null;
+		}
+		else if (incrementPending)
+		{
+			incrementPending = false;
+			pythonNext += 1;
+		}
+
+		if (pythonNext >= pythonEnd) return BlockResult.Done;
+		if (!context.TryGetPythonAssignTarget(indexName, out VariableStore target))
+		{
+			context.RecordFailure(FunctionFailure.UndeclaredVariable);
+			return BlockResult.Failed;
+		}
+		target.SetDynamic(indexName, RuntimeValue.FromInteger(pythonNext));
+		loop = true;
+		return BlockResult.Done;
 	}
 
 	// i의 범위를 열고 start 값으로 i를 선언한다. 실패하면 실패 종류를 기록하고 false
@@ -92,8 +138,9 @@ public class ForBlock : LoopBlock
 		LanguageRuleData rule = context.Rule;
 		indexScope = context.CurrentVariables;
 		indexScope.OpenScope();
+		openedScope = true;
 
-		if (!NumericRules.TryConvertForStore(startOriginal, startSlot[0], Int, rule, out RuntimeValue start))
+		if (!NumericRules.TryConvertForStore(startOriginal, startSlot[0], Int, rule, context.Family, out RuntimeValue start))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return false;

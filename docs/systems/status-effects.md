@@ -20,6 +20,7 @@
   - 처음 건 뒤 `BleedInterval`(1초)마다 `BleedDamage`(5)를 준다. 지속 5초면 5번, 총 25.
   - 출혈 중에 다시 걸면 지속 시간만 늘어나고 데미지 간격은 그대로다.
   - 출혈 배율 (#172): `AmplifyBleed(bonusRate)`를 부르면 지금 출혈이 풀릴 때까지 틱 데미지에 `BonusRate`를 더한다 (상처 가르기 +100% → 10). 겹치지 않고 큰 값 하나. 출혈이 풀리면(시간·`Clear`·죽음) 없어진다.
+  - 자세 (#538, stance.md): 출혈·중독 틱 데미지에 건 플레이어(`bleedSource`, `poisonSource`)의 지금 자세의 모든 스킬 추가분을 더한다. 계열 추가분(찌르기 등)은 스킬 정보가 없어 빼고, 자해·회복은 없음 (스킬 시전이 아님)
   - 데미지는 `DamageCalculator.Calculate(DamageRequest.Flat(BleedDamage))`를 거쳐 같은 오브젝트의 `IDamageable.TakeDamage(int, GameObject attacker)`로 준다.
   - 출혈을 건 플레이어 (#484): 출혈 데미지의 `attacker`는 출혈을 건 플레이어다. 몬스터가 처치 보상을 정할 때 그 플레이어의 피해로 센다 (`monster.md`).
     - 출혈 중에 다른 플레이어가 다시 걸면: 마지막으로 건 플레이어 (지속 시간도 그 사람 기준으로 다시 시작하기 때문)
@@ -56,6 +57,7 @@
 | `Apply(StatusType type, float duration)` | 상태, 초 | - | 지속 시간을 정해 건다 |
 | `Apply(StatusType type, GameObject source)` | 상태, 건 플레이어 | - | (#484) 기본 지속 시간으로 걸고 건 플레이어를 기억한다. 지금은 출혈만 건 플레이어를 쓴다 |
 | `StatusEffects.TryApply(GameObject target, StatusType type, GameObject source = null)` | 대상, 상태, 건 플레이어 | `bool` | 대상(또는 부모)의 `StatusEffects`로 건다. 없으면 `false`. 스킬이 맞은 대상에 쓴다. 출혈을 거는 스킬은 `source`에 시전자(`caster`)를 넘긴다 (#484) |
+| `StatusEffects.TryApply(GameObject target, StatusType type, GameObject source, float durationRate)` | 대상, 상태, 건 플레이어, 지속 시간 증감 | `bool` | 위와 같고 지속 시간만 기본 × (1 + `durationRate`). 시전자의 자세가 지속 시간을 늘릴 때 쓴다(#546, stance.md). Python 보조 계열 스킬(저주·뱀 속박·섬광)이 `DataDrivenSkill.StanceStatusDurationRate(시전자)`를 넘긴다 |
 | `Has(StatusType type)` | 상태 | `bool` | 걸려 있으면 `true` |
 | `RemainingTime(StatusType type)` | 상태 | `float` | 남은 시간(초). 없으면 0 |
 | `Clear(StatusType type)` / `ClearAll()` | 상태 / - | - | 바로 푼다 |

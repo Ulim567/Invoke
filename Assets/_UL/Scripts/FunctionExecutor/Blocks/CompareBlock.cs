@@ -31,7 +31,7 @@ public class CompareBlock : ValueBlock
 		BlockResult result = slots.Step(context);
 		if (result != BlockResult.Done) return result;
 
-		if (!NumericRules.TryCompare(op, leftOriginal, slots[0], rightOriginal, slots[1], context.Rule, out bool compared))
+		if (!NumericRules.TryCompare(op, leftOriginal, slots[0], rightOriginal, slots[1], context.Rule, context.Family, out bool compared))
 		{
 			context.RecordFailure(FunctionFailure.TypeMismatch);
 			return BlockResult.Failed;

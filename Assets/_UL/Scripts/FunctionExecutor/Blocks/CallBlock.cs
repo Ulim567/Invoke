@@ -22,6 +22,8 @@ public class CallBlock : ValueBlock
 	readonly FunctionBlock function;
 	// argument(원본). Parameters와 같은 순서이고, 비운 칸은 null
 	readonly ValueBlock[] argumentOriginals;
+	// argument 칸에 플레이어가 적은 글. 출력 함수를 부를 때만 있고, 그 밖에는 null이다 (#536)
+	readonly string[] argumentTexts;
 	// 이 실행에서 쓰는 value slot과 함수 복사본. 블록 복사본마다 따로 가져야 하므로 OnStart에서 만든다
 	ValueSlots slots;
 	// 실행 중인 함수 복사본. value slot을 다 실행하기 전과 비동기 함수는 null이다
@@ -33,6 +35,14 @@ public class CallBlock : ValueBlock
 	{
 		this.function = function;
 		argumentOriginals = arguments;
+	}
+
+	/// <summary>
+	/// argument 칸에 적은 글(argumentTexts, argument와 같은 순서)도 함께 넘기는 호출. 출력 함수(printf, print)가 「n = 3」처럼 보이는 데 쓴다 (#536).
+	/// </summary>
+	public CallBlock(FunctionBlock function, ValueBlock[] arguments, string[] argumentTexts) : this(function, arguments)
+	{
+		this.argumentTexts = argumentTexts;
 	}
 
 	protected override void OnStart(FunctionContext context)
@@ -55,6 +65,7 @@ public class CallBlock : ValueBlock
 
 			FunctionBlock copy = (FunctionBlock)function.Clone();
 			copy.SetArguments(arguments);
+			copy.SetArgumentTexts(argumentTexts);
 
 			if (function.IsAsync) waitingAsync = copy;
 			else running = copy;
@@ -78,6 +89,8 @@ public class CallBlock : ValueBlock
 
 		// 반환 값은 함수가 끝날 때 이미 반환 타입으로 맞춰 두었다(TryValidateEnd). 맞추지 못했으면 Done이 아니라 Failed로 끝났다
 		if (function.ReturnType.Kind != VariableTypeKind.Void) Result = running.ReturnValue.Value;
+		// Python(#532)에서 값을 돌려주지 않는 함수(void 스킬)의 호출은 None이다. C는 이 값을 읽지 않는다
+		else Result = RuntimeValue.None;
 		return BlockResult.Done;
 	}
 
@@ -96,7 +109,7 @@ public class CallBlock : ValueBlock
 		for (int i = 0; i < argumentOriginals.Length && i < parameters.Count; i++)
 		{
 			if (argumentOriginals[i] == null) continue;
-			if (!NumericRules.TryConvertForStore(argumentOriginals[i], slots[i], parameters[i].Type, context.Rule, out RuntimeValue value)) return false;
+			if (!NumericRules.TryConvertForStore(argumentOriginals[i], slots[i], parameters[i].Type, context.Rule, context.Family, out RuntimeValue value)) return false;
 			arguments[i] = value;
 		}
 		return true;

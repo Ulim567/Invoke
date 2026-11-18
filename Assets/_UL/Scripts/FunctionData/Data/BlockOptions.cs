@@ -14,7 +14,7 @@ public enum ConditionalBranch
 }
 
 /// <summary>
-/// 연산 블록의 연산자. 차례대로 +, -, *, /, %
+/// 연산 블록의 연산자. 차례대로 +, -, *, /, %, // (Python만)
 /// </summary>
 public enum ArithmeticOperator
 {
@@ -23,6 +23,8 @@ public enum ArithmeticOperator
 	Multiply,
 	Divide,
 	Modulo,
+	// Python의 // (아래로 내림하는 나눗셈, #532). C에는 없다
+	FloorDivide,
 }
 
 /// <summary>

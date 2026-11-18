@@ -30,7 +30,7 @@
 ## 1차 표 (11/8)
 | 곳 | 소리 |
 | --- | --- |
-| BGM 로비·사냥터·연습장 | `hunting_bgm` |
+| BGM 로비·사냥터(1·2·3)·연습장 | `hunting_bgm` (사냥터2·3 줄은 임혜원이 추가, 김도훈 허락 11/18) |
 | BGM 레이드 던전 | `boss_bgm` |
 | Gateway 내려찍기(패킷 낙하·때리기) | `boss_attack_3` |
 | Gateway 패킷 던지기 | `packet_attack` |
@@ -49,6 +49,30 @@
 | 플레이어 사망 | `player_death` |
 | 스킬 트리 해금 성공 | `skill_unlock` |
 | UI 버튼 클릭 | `ui_click` |
+
+## 3차: 파이썬 스킬 (#568, 박진우)
+- 파일: `Assets/_JW/Audio/SFX/Python/py_*.mp3`. Pixabay(무료, 출처 표기 불필요)에서 받아 앞부분 자르기, 길이 0.4~1.6초, 음량(평균 -20dB, 최고 -3dB 아래)을 맞춤
+- 표에는 메뉴 Invoke → JW → 파이썬 스킬 효과음 넣기(`PythonSkillSounds`)가 없는 `py.*` 줄만 더한다. 기존 줄은 그대로
+
+| 스킬 | 소리 (Pixabay 원본) |
+| --- | --- |
+| 매직 미사일 `py.magic_missile` | `py_magic_missile` (Magic_Spell_03) |
+| 파이어볼 `py.fireball` | `py_fireball` (Fire Ball) |
+| 얼음 창 `py.ice_spear` | `py_ice_spear` (Ice Spell Impact) |
+| 체인 라이트닝 `py.chain_lightning` | `py_chain_lightning` (Lightning Spell) |
+| 메테오 `py.meteor` | `py_meteor` (Epic Spell Impact) |
+| 블리자드 `py.blizzard` | `py_blizzard` (Frost Spell Impact) |
+| 독 안개 `py.venom_mist` | `py_venom_mist` (Steam Hissing) |
+| 구슬 생성 `py.orb_create` | `py_orb_create` (Fairy Sparkle) |
+| 구슬 발사 `py.orb_shot` | `py_orb_shot` (Magic_Spell_04, 조금 높게) |
+| 구슬 난사 `py.orb_barrage` | `py_orb_barrage` (Zap Hit) |
+| 구슬 폭발 `py.orb_burst` | `py_orb_burst` (Magic Burst) |
+| 구슬 보호막 `py.orb_shield` | `py_orb_shield` (Sci-Fi Energy Shield Activation 1) |
+| 저주 `py.hex` | `py_hex` (Dark Magic Curse Light Impact #1) |
+| 뱀 속박 `py.snake_bind` | `py_snake_bind` (Snake hissing) |
+| 섬광 `py.flash` | `py_flash` (Elemental Spell Impact (Light)) |
+| 블링크 `py.blink` | `py_blink` (instant teleport) |
+| 공중 부양 `py.levitate` | `py_levitate` (Magical Sparkle Rise FX) |
 
 ## 다른 시스템이 쓰는 것
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |

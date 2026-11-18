@@ -131,6 +131,7 @@ public class Thrust : PredefinedFunction
 | --- | --- |
 | `Fail(SkillError error)` | 이 function을 에러로 끝냄. 그 tick 끝에 `OnFail` → `OnCancel` 순서로 불림. 처리는 언어 규칙 파일의 `SkillFailed` 줄을 따름. 여러 번 부르면 처음 에러만 씀 |
 | `Stop()` | 이 function을 에러 없이 일찍 끝냄. 그 tick 끝에 `OnEnd`가 불림. 사용자 정의 함수 안이었다면 다음 `Block`으로 넘어감 |
+| `FailWith(FunctionFailure failure)` (#532) | 스킬 에러가 아니라 언어의 실패 종류로 끝냄(예: Python 구슬 스킬이 리스트에서 구슬이 아닌 값을 받으면 `TypeMismatch`, 구슬 생성의 heap 부족은 `OutOfMemory`). `OnFail`은 불리지 않고 `OnCancel`만 |
 
 - `Fail`과 `Stop`을 둘 다 부름: `Fail`을 따름
 - `OnEnd`, `OnCancel` 안에서 부름: 콘솔 오류, 무시
@@ -155,6 +156,9 @@ protected override void OnStart(FunctionContext context)
 | `TryGetHeapObject<T>(FunctionContext context, int pointer, out T obj)` | `bool` | 포인터의 객체를 `T` 타입으로 꺼냄. 쓸 수 없는 포인터이면 `Fail(InvalidPointerError.For(heap, pointer))` 후 `false` (C의 null 역참조). 에러 종류는 `Free`와 같음 (#504) |
 | `GetGlobalPointers<T>(FunctionContext context)` | `List<int>` | 숨은 시스템 전역의 `T` 객체 포인터. 다른 작업이 올려 둔 객체(예: 먼저 시전한 검 소환의 소환검)를 찾을 때 |
 | `CountHeapObjects<T>(FunctionContext context)` | `int` | heap의 `T` 객체 수. 누수 객체 포함 (소환검 최대 개수 검사) |
+| `TryPeekHeapObject<T>(FunctionContext context, int pointer, out T obj)` (#532) | `bool` | 포인터의 객체를 꺼냄. 꺼내지 못해도 에러로 끝내지 않음(플레이어가 넘긴 값을 확인만 할 때) |
+| `GetHeapPointers<T>(FunctionContext context)` (#532) | `List<int>` | heap의 `T` 객체 포인터(누수 제외), malloc한 순서. 숨은 시스템 전역이 아닌 객체도 나옴 |
+| `TryGetListElements(FunctionContext context, RuntimeValue value, out IReadOnlyList<RuntimeValue> elements)` (#532) | `bool` | Python 리스트 값의 원소들. 리스트가 아니면 false |
 
 - 쓸 수 없는 포인터: `NullPointer`, 해제한 포인터, 누수된 포인터, 타입이 다른 객체의 포인터
 - 숨은 시스템 전역 (#139): C 라이브러리의 `static` 전역 변수처럼 플레이어에게 보이지 않는 캐릭터의 포인터 목록
@@ -162,6 +166,8 @@ protected override void OnStart(FunctionContext context)
   - 이 함수가 정상으로 끝나면: 이 함수가 malloc한 포인터가 숨은 시스템 전역으로 옮겨짐. 사용자 정의 함수 안에서 불렸어도 이 함수가 끝나는 순간 옮겨지므로, 부른 함수가 나중에 실패해도 남음
   - 실행 중단이나 실패로 끝나면: 해제하지 않은 객체는 누수
 - 진행 중인 다른 함수가 malloc한 객체: `GetGlobalPointers`에 나오지 않음
+- `MovesMallocedToSystemGlobals` (#532, 기본 true): false로 덮어쓰면 정상으로 끝나도 숨은 시스템 전역으로 옮기지 않음. 만든 객체를 돌려주고 플레이어가 담게 하는 함수(Python 구슬 생성). 담지 않으면 가비지 컬렉션이 해제
+- Python 캐릭터 (#532): 반환 타입과 상관없이 `Return(RuntimeValue.None)`을 돌려줄 수 있음
 - 만든 객체를 플레이어도 쓰게 하려면: 포인터를 반환 값으로 넘김(`ReturnType`을 그 struct의 포인터로, `Return`). 플레이어가 지역 변수에 받아도 숨은 시스템 전역이 붙잡고 있어 누수가 아님 (#139, 검 소환에 적용은 박진우에게 요청)
 - `OnCancel` 안에서 `Malloc`, `Free`를 부름: 콘솔 오류, 무시 (`OnCancel`에서 해제하면 누수가 생기지 않기 때문)
 - `size`가 음수이거나 `obj`가 `null`: 예외 (스킬 코드의 실수)
@@ -236,6 +242,7 @@ protected override void OnEnd(FunctionContext context)
     - 하위 클래스로 나눈 이유: 포인터 에러를 한꺼번에 확인하던 코드(박진우 `SwordPointerSimTest` 등)를 고치지 않기 위함
   - `Assets/_JW/Scripts/Python/ManaOrbs.cs` (#486)
     - `NoManaOrbError`: 쓸 수 있는 마나 구슬 없음. 구슬 스킬(발사, 난사, 폭발, 보호막)이 냄
+    - `UsedManaOrbError` (#532): 이미 쓴 마나 구슬을 넘김. `Message` 「이미 쓴 마나 구슬」
 
 ### `InputFunction` (입력 함수 만들기, #131)
 
@@ -260,9 +267,37 @@ protected override void OnEnd(FunctionContext context)
 
 | 고정 ID | 클래스 | 파라미터 | 반환 타입 | 하는 일 |
 | --- | --- | --- | --- | --- |
+| `py.is_valid_orb` (#532) | `PyIsValidOrb` (`_JW/Scripts/Python/PythonOrbSkills.cs`) | `orb`(`Any`) | `bool` | 아직 쓰지 않은 마나 구슬이면 true. 다 쓴 구슬, None, 구슬이 아닌 값은 false. `py.`라서 Python 캐릭터에게만 보이고, 스킬 트리 노드가 없어 늘 보임. 슬롯에 넣을 수 없음(`SlotLoadout.IsEquippableSkill`). `TickCount` 1 |
 | `game.is_valid_target` | `IsValidTarget` | `target`(`Target`, 종류 없음) | `bool` | 스킬에 넘길 수 있는 대상이면 true. 「대상 없음」·죽음·없어짐이면 false. 값을 넘기지 않으면(슬롯 직접 시전) false. `TickCount` 1 |
 
-- `ValidatesTargets` (`PredefinedFunction`, 기본 true): false면 시작 전 Target argument 검사(`InvalidTarget`)를 건너뜀. `is_valid_target`만 false. 쓸 수 없는 대상을 받아 false를 돌려줘야 하기 때문
+- `ValidatesTargets` (`PredefinedFunction`, 기본 true): false면 시작 전 Target argument 검사(`InvalidTarget`)를 건너뜀. `is_valid_target`과 출력 함수만 false. 쓸 수 없는 대상을 받아 false를 돌려주거나 그대로 출력해야 하기 때문
+
+### 출력 function (#536)
+- 값 하나를 시전한 플레이어의 화면 왼쪽 아래 알림 목록에 한 줄로 보임. 스킬이 아니라 기본 function. 스킬 트리 노드가 없어 늘 보이고, 슬롯에 넣을 수 없음(`SlotLoadout.IsEquippableSkill`)
+
+| 고정 ID | 클래스 | 파라미터 | 반환 타입 | 하는 일 |
+| --- | --- | --- | --- | --- |
+| `c.printf` | `CPrintf` | `value`(`Any`) | `void` | C 모양으로 출력. bool `true`·`false`, char·문자열은 따옴표 없이, 포인터는 번호(0이면 `NULL`), array는 `{1, 2, 3}`. `TickCount` 1 |
+| `py.print` | `PyPrint` | `value`(`Any`) | `void` | Python 모양으로 출력. `True`·`False`, `None`, 소수 `3.0`, 문자열은 따옴표 없이, 리스트는 `[1, 'a']`. `TickCount` 1 |
+
+- 출력 글: argument 칸에 변수나 expression을 넣었으면 `n = 3`, `x + 1 = 4`처럼 편집 화면의 글을 앞에 붙임. 값을 직접 적었으면 값만
+  - 값 부분은 100자(`PrintFunction.MaxValueLength`)까지. 넘으면 잘라 끝에 `...`. 서버에서 잘라 보내는 글과 HUD 상자가 끝없이 커지지 않게 함
+  - argument 칸의 글: `FunctionDataConverter`가 출력 함수를 부르는 호출에만 만들어 `CallBlock` → `FunctionBlock.ArgumentTexts`로 넘김(시전자 언어 모양, `BlockLabels.SlotTextOf`)
+- 화면까지: 출력 함수는 실행 문맥에 기록만 함(`FunctionContext.RequestOutput`) → 실행기가 틱마다 꺼내 `FunctionExecutor.Output` event → `FunctionExecutorNetwork.OwnOutput`(network.md) → HUD 알림 목록(hud.md)
+  - 같은 틱에 실패한 작업도 실패 전에 출력한 글은 보임
+- 클래스 위치: `Assets/_UL/Scripts/FunctionExecutor/Predefined/Game/PrintFunctions.cs`. 공통 부분은 `PrintFunction`, 값 모양만 언어마다(`Format`)
+
+### 자세 function (#538, Python #546)
+- 자세 숫자를 정하고 읽음 (stance.md). 스킬이 아니라 기본 function. 스킬 트리 노드가 없어 늘 보이고, 슬롯에 넣을 수 없음(`SlotLoadout.IsEquippableSkill`). 스킬이 아니므로 자세의 자해·회복을 일으키지 않음
+- C와 Python. 동작은 공통 클래스(`InitStanceFunction`, `GetStanceFunction`)에 있고 언어마다 고정 ID만 다름. 이름은 두 언어 모두 `init_stance`, `get_stance`. 효과는 시전자 언어의 자세 규칙
+
+| 고정 ID | 클래스 | 파라미터 | 반환 타입 | 하는 일 |
+| --- | --- | --- | --- | --- |
+| `c.init_stance`, `py.init_stance` | `CInitStance`, `PyInitStance` | 없음 | `int` | 자세를 1~100 무작위로 다시 정하고 그 숫자를 돌려줌(`PlayerStance.Roll`). `TickCount` 125(2.5초), 마지막 tick에 정함(도중에 끊기면 자세 그대로). `CooldownTicks` 150(3초) |
+| `c.get_stance`, `py.get_stance` | `CGetStance`, `PyGetStance` | 없음 | `int` | 지금 자세 숫자. 없으면 0. `TickCount` 1 |
+
+- 클래스 위치: `Assets/_UL/Scripts/FunctionExecutor/Predefined/Game/StanceFunctions.cs`
+- `PlayerStance`가 없는 캐릭터면 콘솔 오류를 내고 0을 돌려줌
 
 ```csharp
 // GetBug의 실행 단계

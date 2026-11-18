@@ -34,10 +34,17 @@ public class CooldownTracker
 	/// </summary>
 	public event Action<string, int> CooldownStarted;
 
-	public CooldownTracker(PlayerStats stats, Func<int> getCurrentTick)
+	// 시전자의 자세가 끝난 스킬에 주는 쿨타임 증감(-0.15면 15% 짧게, #538). 없으면 증감 없음
+	// 스킬을 받는 이유: Python 7의 배수처럼 계열마다 증감이 다를 수 있기 때문 (#546)
+	// 능력치(PlayerStats)에 넣지 않고 따로 받는 이유: 능력치의 쿨타임 감소는 0~1로 잘려 쿨타임 증가(5의 배수 +10%)를 표현할 수 없고,
+	// 자세처럼 자주 바뀌는 값을 능력치에 넣었다 빼면 능력치를 보여 주는 화면에 섞이기 때문
+	readonly Func<PredefinedFunction, float> getStanceCooldownRate;
+
+	public CooldownTracker(PlayerStats stats, Func<int> getCurrentTick, Func<PredefinedFunction, float> getStanceCooldownRate = null)
 	{
 		this.stats = stats;
 		this.getCurrentTick = getCurrentTick;
+		this.getStanceCooldownRate = getStanceCooldownRate;
 	}
 
 	/// <summary>
@@ -111,7 +118,7 @@ public class CooldownTracker
 
 	// 스킬이 끝났다. 쿨타임은 이 스킬이 끝난 순간부터 흐른다. 정상 종료, 실패, 실행 중단 모두 같다
 	// 실패·실행 중단에도 쿨타임 전체를 거는 이유: 스킬을 일부러 끊어 쿨타임을 줄이지 못하게 하기 위함
-	// 쿨타임 감소는 끝나는 순간의 능력치로 한 번 적용한다. PredefinedFunction이 부른다
+	// 쿨타임 감소와 자세의 증감은 끝나는 순간의 값으로 한 번 적용한다. PredefinedFunction이 부른다
 	internal void SkillEnded(PredefinedFunction skill)
 	{
 		string id = skill.Id;
@@ -124,8 +131,10 @@ public class CooldownTracker
 		int cooldown = skill.CooldownTicks;
 		if (cooldown <= 0) return;
 
+		// 능력치의 쿨타임 감소를 적용한 뒤 자세의 증감을 곱한다 (#538). 예: 자세 15는 3의 배수 -15% + 5의 배수 +10% = 0.95배
+		float rate = getStanceCooldownRate != null ? getStanceCooldownRate(skill) : 0f;
 		// 공격 속도(ApplyAttackSpeed)와 같게 반올림해서 틱 수로 맞춘다
-		cooldown = Mathf.RoundToInt(stats.ApplyCooldownReduction(cooldown));
+		cooldown = Mathf.Max(0, Mathf.RoundToInt(stats.ApplyCooldownReduction(cooldown) * (1f + rate)));
 		int endTick = getCurrentTick() + cooldown;
 		// 같은 스킬이 겹쳐 실행되었으면 더 늦게 끝나는 쿨타임을 남긴다. 먼저 끝난 쪽의 기록이 쿨타임을 줄이지 않게 하기 위함
 		if (cooldownEndTicks.TryGetValue(id, out int existing) && existing > endTick) return;

@@ -20,7 +20,7 @@ public class HostPlaceVisibility : MonoBehaviour
 
 	static readonly HashSet<string> PlaceNames = new HashSet<string>
 	{
-		PlaceScenes.Lobby, PlaceScenes.HuntingGround, PlaceScenes.TrainingRoom, PlaceScenes.RaidDungeon,
+		PlaceScenes.Lobby, PlaceScenes.HuntingGround, PlaceScenes.HuntingGround2, PlaceScenes.HuntingGround3, PlaceScenes.TrainingRoom, PlaceScenes.RaidDungeon,
 	};
 
 	// 이 컴포넌트가 끈 Renderer

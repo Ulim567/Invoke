@@ -261,18 +261,42 @@ public static class HudUIBuilder
 		Button levelUp = Shortcut(shortcuts, "LevelUpButton", "레벨업", "2", new Vector2(46, 0));
 		hideInRaid.Add(shortcuts.gameObject);
 
-		// 실패 알림 (#480): 왼쪽 아래 띠 위, 왼쪽 정렬. 첫 줄 「[Runtime Error] 이름」, 둘째 줄 「설명」 (FailureNotice가 줄을 나눔)
-		// 바탕 크기는 글자에 맞춘다. 문장이 짧아 감싸지 않아도 되기 때문
-		RectTransform notice = NewUI("Notice", root);
-		Place(notice, new Vector2(0, 0), new Vector2(0, 0), new Vector2(12, 64), Vector2.zero);
-		Image noticeImage = SetImage(notice.gameObject, "hud_gauge"); // 슬롯 말풍선과 같은 바탕 (뒤의 게임 화면이 비치지 않게)
+		// 알림 목록 (#480, #536): 왼쪽 아래 띠 위의 정해진 크기 영역(Notices). 오류(두 줄)와 출력(한 줄)을 상자 하나씩 아래에서 위로 쌓는다 (HudView)
+		// - 영역 밖은 RectMask2D가 잘라 낸다. 위쪽 NoticeFade만큼은 경계를 흐리게(softness) 해, 밀려 올라간 알림이 위로 갈수록 흐려지며 사라진다
+		// - softness는 위아래에 함께 걸리므로, 마스크의 아래 경계를 NoticeFade만큼 영역 밖으로 내려(padding 음수) 아래쪽은 흐려지지 않게 한다
+		// 너비와 흐려지는 높이는 게임이 시작할 때 HudView의 Notice Area Width, Notice Fade Height로 다시 정한다. 여기 값은 에디터에서 보이는 처음 모양이다
+		const float NoticeWidth = 150f, NoticeHeight = 110f, NoticeFade = 45f;
+		RectTransform notices = NewUI("Notices", root);
+		Place(notices, new Vector2(0, 0), new Vector2(0, 0), new Vector2(12, 64), new Vector2(NoticeWidth, NoticeHeight));
+		RectMask2D noticeMask = notices.gameObject.AddComponent<RectMask2D>();
+		noticeMask.softness = new Vector2Int(0, (int)NoticeFade);
+		noticeMask.padding = new Vector4(0, -NoticeFade, 0, 0);
+
+		// 상자들을 세로로 쌓는 목록. 기준점이 왼쪽 아래라 상자가 늘면 위로 자란다. HudView가 세로 위치를 움직여 새 알림이 부드럽게 밀어 올리게 한다
+		RectTransform noticeContent = NewUI("Content", notices);
+		noticeContent.anchorMin = new Vector2(0, 0);
+		noticeContent.anchorMax = new Vector2(1, 0);
+		noticeContent.pivot = new Vector2(0, 0);
+		noticeContent.sizeDelta = Vector2.zero;
+		noticeContent.anchoredPosition = Vector2.zero;
+		VerticalLayoutGroup contentLayout = noticeContent.gameObject.AddComponent<VerticalLayoutGroup>();
+		contentLayout.spacing = 1; // 상자 사이 간격. 간격에는 바탕이 없어 뒤 화면이 보인다
+		contentLayout.childAlignment = TextAnchor.LowerLeft;
+		contentLayout.childControlWidth = contentLayout.childControlHeight = true;
+		contentLayout.childForceExpandWidth = contentLayout.childForceExpandHeight = false;
+		ContentSizeFitter contentFit = noticeContent.gameObject.AddComponent<ContentSizeFitter>();
+		contentFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+		// 상자 견본. HudView가 복사해 알림 하나에 하나씩 쓴다. 크기는 글자에 맞춘다(목록이 상자의 preferred size를 씀)
+		RectTransform notice = NewUI("NoticeTemplate", noticeContent);
+		Image noticeImage = SetImage(notice.gameObject, "hud_gauge"); // 슬롯 말풍선과 같은 바탕
+		noticeImage.color = new Color(1f, 1f, 1f, 0.7f); // 반투명 70%: 알림이 쌓여도 뒤 화면이 조금 비치게
 		noticeImage.raycastTarget = false;
 		VerticalLayoutGroup noticeLayout = notice.gameObject.AddComponent<VerticalLayoutGroup>();
 		noticeLayout.padding = new RectOffset(6, 6, 3, 3);
 		noticeLayout.childControlWidth = noticeLayout.childControlHeight = true;
 		noticeLayout.childForceExpandWidth = noticeLayout.childForceExpandHeight = false;
-		ContentSizeFitter noticeFit = notice.gameObject.AddComponent<ContentSizeFitter>();
-		noticeFit.horizontalFit = noticeFit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+		notice.gameObject.AddComponent<CanvasGroup>(); // 시간이 다 된 알림을 제자리에서 흐리게 할 때 쓴다
 		TMP_Text noticeText = Text(notice, "Text", "", 7, Color.white);
 		noticeText.alignment = TextAlignmentOptions.TopLeft;
 		notice.gameObject.SetActive(false);
@@ -306,8 +330,9 @@ public static class HudUIBuilder
 		Set(so, "slotRejectedSprite", LoadSprite("hud_slot_rejected"));
 		Set(so, "skillTreeButton", skillTree);
 		Set(so, "levelUpButton", levelUp);
-		Set(so, "noticePanel", notice.gameObject);
-		Set(so, "noticeText", noticeText);
+		Set(so, "noticePanel", notices.gameObject);
+		Set(so, "noticeContent", noticeContent);
+		Set(so, "noticeTemplate", notice.gameObject);
 		so.ApplyModifiedPropertiesWithoutUndo();
 
 		// Esc: 다른 화면이 열려 있지 않을 때 설정 열기 (UIShortcut #298, 맨 위 화면만 반응)

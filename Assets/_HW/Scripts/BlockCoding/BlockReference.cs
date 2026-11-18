@@ -50,10 +50,10 @@ public class BlockReferenceEntry
 	/// <summary>카드 제목. 블록 목록(팔레트)의 칩 이름과 같다. 예: If, Else If, thrust</summary>
 	public string Name;
 
-	/// <summary>분류 태그 (#489). 「분류 > 소분류」로 두 단계: 제어 > 조건, 변수 > 배열, 함수 > 스킬. 소분류가 없으면 분류만 (값, 함수)</summary>
+	/// <summary>분류 태그 (#489). 「분류 > 소분류」로 두 단계: 제어 > 조건, 변수 > 배열, 스킬 > 찌르기(#578). 소분류가 없으면 분류만 (값, 함수)</summary>
 	public string Category;
 
-	/// <summary>분류 태그의 앞 단계 (제어, 변수, 값, 함수). 참고 탭이 이 분류마다 머리글을 하나 둔다. 문법 탭의 분류와 같다</summary>
+	/// <summary>분류 태그의 앞 단계 (제어, 변수, 값, 함수, 스킬). 참고 탭이 이 분류마다 머리글을 하나 둔다. 스킬 말고는 문법 탭의 분류와 같다</summary>
 	public string Group;
 
 	/// <summary>분류 태그의 색을 정할 때 쓰는 견본 블록 (BlockLabels.ColorOf). 편집 영역에 놓지 않는다</summary>
@@ -73,6 +73,27 @@ public class BlockReferenceEntry
 
 	/// <summary>한글 이름 (꼬챙이, 버그 찾기, 메모리 할당). 있으면 카드 제목은 이것만 보이고, 검색에도 쓴다. 문법 블록이면 null (#489)</summary>
 	public string KoreanName;
+
+	/// <summary>설명 표·가진 개수의 key (#544). 문법 블록은 If·For 같은 항목 ID, 사전 정의 함수는 고정 ID(c.thrust), type은 type.float</summary>
+	public string Key;
+
+	/// <summary>설명 카드의 「블록 사용 예」 그림으로 그릴 블록 (#544). 대상(Target)을 받는 칸에는 get_bug()를 끼워 둔다. type이면 null</summary>
+	public BlockData Picture;
+
+	/// <summary>type 카드면 그 값의 모양 (0.5, 'a', true). 설명 카드의 그림 칸에 값 알약으로 보인다 (#544). 블록이면 null</summary>
+	public string TypeLiteral;
+
+	/// <summary>어느 탭에서 꺼내는지 (#544 설명 카드의 「사용 방법」): 「함수 탭」, 「블록 탭」</summary>
+	public string UsageTab;
+
+	/// <summary>사용 방법의 나머지 글 (#544). 예: 「에서 코드로 끌어다 놓기」</summary>
+	public string UsageText;
+
+	/// <summary>
+	/// true면 Summary에 색 태그(&lt;color&gt;)를 쓴다 (#545 자세 규칙 카드). 카드는 「기능」 줄 이름을 숨기고 Summary를 태그대로 보인다.
+	/// false(다른 카드)면 설명의 &lt; &gt;(예: a &lt; b)를 태그로 읽지 않게 글자 그대로 보인다
+	/// </summary>
+	public bool RichSummary;
 }
 
 /// <summary>
@@ -80,7 +101,7 @@ public class BlockReferenceEntry
 /// <para>
 /// - 문법 블록(제어, 변수, 값, return)과 malloc·free·wait: 이 파일의 표에는 이름, 분류, 견본 블록만 적고, 형식과 설명은 ItemDescriptions.Of(견본 블록)에서 읽는다.
 ///   malloc·free·wait 카드는 함수 탭과 같이 함수 카드 모양(소문자 이름, 한글 이름, 원형)으로 보인다 (#489).<br/>
-/// - 분류 태그는 「분류 > 소분류」 두 단계 (제어 > 조건, 함수 > 스킬). 참고 탭은 앞 단계(Group)마다 머리글을 둔다 (#489).<br/>
+/// - 분류 태그는 「분류 > 소분류」 두 단계 (제어 > 조건, 함수 > 기본 함수, 스킬 > 찌르기). 참고 탭은 앞 단계(Group)마다 머리글을 둔다 (#489, 스킬은 #578).<br/>
 /// - 함수 블록(C 스킬, 공통 이동, 입력): 함수 탭에 나오는 사전 정의 함수(c., common., input., game.)마다 한 장.
 ///   설명은 ItemDescriptions.Get(고정 ID)에서 읽고, 원형·파라미터·동작 시간·쿨타임은 사전 정의 함수의 값에서 만든다.<br/>
 /// - 카드를 펼친 내용의 순서는 해금 설명 카드와 같다: 하는 일 → 용도 → 예시 → 슬롯 → (return 값) → 주의할 점 → (실행).<br/>
@@ -93,6 +114,8 @@ public static class BlockReference
 	static readonly string[] FunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
 
 	static List<BlockReferenceEntry> entries;
+	// entries를 만든 때의 언어 방식 (#532). 내 캐릭터 언어가 바뀌면(로그인한 캐릭터가 바뀜) 다시 만든다
+	static LanguageFamily entriesFamily;
 
 	// Play 모드에 들어갈 때 도메인 다시 불러오기를 꺼 두었으므로, 스킬 트리 설명을 고친 뒤에도 지난 값이 남지 않게 static 값을 직접 비운다
 	[UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -105,7 +128,11 @@ public static class BlockReference
 	{
 		get
 		{
-			if (entries == null) entries = Build();
+			if (entries == null || entriesFamily != BlockLabels.Family)
+			{
+				entriesFamily = BlockLabels.Family;
+				entries = Build();
+			}
 			return entries;
 		}
 	}
@@ -126,6 +153,14 @@ public static class BlockReference
 	const string CategorySeparator = " > ";
 
 	static string Category(string group, string subgroup) => group + CategorySeparator + subgroup;
+
+	/// <summary>분류 태그의 뒤 단계 (「스킬 > 찌르기」 → 찌르기). 한 단계뿐이면(값, 함수) 빈 글자. 참고 탭이 소구분을 나눌 때 쓴다 (#578)</summary>
+	internal static string SubgroupOf(string category)
+	{
+		if (string.IsNullOrEmpty(category)) return "";
+		int split = category.IndexOf(CategorySeparator, StringComparison.Ordinal);
+		return split < 0 ? "" : category.Substring(split + CategorySeparator.Length);
+	}
 
 	static bool Contains(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -160,6 +195,43 @@ public static class BlockReference
 		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5"))),
 	};
 
+	// Python 캐릭터의 문법 카드 (#532). 블록 목록(BlockEditor.PythonPaletteGroups)과 같은 블록
+	static readonly (string Name, string Category, Func<BlockData> Sample)[] PythonSyntaxRows =
+	{
+		("If", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.If)),
+		("Elif", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.ElseIf)),
+		("Else", Category("제어", "조건"), () => BlockData.Conditional(ConditionalBranch.Else)),
+		("For", Category("제어", "반복"), () => BlockData.For("i", Int("0"), Int("10"))),
+		("While", Category("제어", "반복"), () => BlockData.While(SlotData.EmptyValue())),
+		("Break", Category("제어", "반복"), () => BlockData.Break()),
+		("Continue", Category("제어", "반복"), () => BlockData.Continue()),
+
+		("Assign", Category("변수", "변수"), () => BlockData.Assign("x", SlotData.EmptyValue())),
+		("Global", Category("변수", "변수"), () => BlockData.Global("x")),
+		("Del", Category("변수", "변수"), () => BlockData.Del("x")),
+		("List", Category("변수", "리스트"), () => BlockData.ListNew("items")),
+		("Append", Category("변수", "리스트"), () => BlockData.ListAppend("items", SlotData.EmptyValue())),
+		("Pop", Category("변수", "리스트"), () => BlockData.ListPop("items")),
+		("Len", Category("변수", "리스트"), () => BlockData.ListLen(SlotData.EmptyValue())),
+		("List Get", Category("변수", "리스트"), () => BlockData.ArrayGet("items", SlotData.EmptyValue())),
+		("List Set", Category("변수", "리스트"), () => BlockData.ArraySet("items", SlotData.EmptyValue(), SlotData.EmptyValue())),
+
+		("Arithmetic", "값", () => BlockData.Arithmetic(SlotData.EmptyValue(), ArithmeticOperator.Add, SlotData.EmptyValue())),
+		("Compare", "값", () => BlockData.Compare(SlotData.EmptyValue(), CompareOperator.Greater, SlotData.EmptyValue())),
+		("Logic", "값", () => BlockData.Logic(SlotData.EmptyValue(), LogicOperator.And, SlotData.EmptyValue())),
+		("Not", "값", () => BlockData.Not(SlotData.EmptyValue())),
+
+		("Return", "함수", () => BlockData.Return()),
+		("Wait", Category("함수", "기본 함수"), () => BlockData.Wait(SlotData.FromLiteral(new VariableType(VariableTypeKind.Float), "0.5"))),
+	};
+
+	// 언어 방식의 문법 카드 표 (#532)
+	static (string Name, string Category, Func<BlockData> Sample)[] SyntaxRowsOf(LanguageFamily family) => family switch
+	{
+		LanguageFamily.Python => PythonSyntaxRows,
+		_ => SyntaxRows,
+	};
+
 	// 카드 순서: 문법 블록(제어, 변수, 값, return) → 함수 탭과 같은 순서의 함수 카드(스킬, 기본 함수, 메모리) (#489)
 	static List<BlockReferenceEntry> Build()
 	{
@@ -169,7 +241,7 @@ public static class BlockReference
 		var builtinBasics = new List<BlockReferenceEntry>(); // wait: 기본 함수 중 get_bug, is_valid_target 뒤 (함수 탭과 같은 순서)
 		var memory = new List<BlockReferenceEntry>();
 
-		foreach ((string name, string category, Func<BlockData> sample) in SyntaxRows)
+		foreach ((string name, string category, Func<BlockData> sample) in SyntaxRowsOf(BlockLabels.Family))
 		{
 			BlockData block = sample();
 			// 접힌 카드는 형식, 펼치면 해금 설명 카드와 같은 순서의 칸 (설명 표 ItemDescriptions)
@@ -181,6 +253,10 @@ public static class BlockReference
 				Sample = block,
 				Summary = description?.Summary,
 				CodeText = string.IsNullOrEmpty(description?.Format) ? name : description.Format,
+				Key = BlockUsageCounter.KeyOf(block),
+				Picture = block,
+				UsageTab = "블록 탭",
+				UsageText = "에서 코드로 끌어다 놓기",
 			};
 			List<(string, string)> returned = string.IsNullOrEmpty(description?.Returns) ? null
 				: new List<(string, string)> { (description.Returns, "") };
@@ -194,6 +270,7 @@ public static class BlockReference
 				entry.Name = builtin.Value.Name;
 				entry.KoreanName = builtin.Value.KoreanName;
 				entry.CodeText = builtin.Value.Prototype;
+				entry.UsageTab = "함수 탭"; // malloc·free·wait는 함수 탭에서 꺼낸다 (#489)
 				(block.Kind == BlockKind.Wait ? builtinBasics : memory).Add(entry);
 				continue;
 			}
@@ -214,11 +291,13 @@ public static class BlockReference
 			}
 		}
 
-		list.AddRange(skills);
+		// 스킬은 계열 순서로 (#578, 함수 탭과 같은 순서). 같은 계열 안에서는 등록 순서 그대로 (OrderBy는 순서를 지킨다)
+		list.AddRange(skills.OrderBy(entry => SkillFamilyRank(entry.FunctionId)));
 		list.AddRange(basics);
 		list.AddRange(builtinBasics);
 		list.AddRange(memory);
-		// 머리글을 나눌 분류: 분류 태그의 앞 단계 (「함수 > 스킬」 → 함수)
+		list.AddRange(TypeEntries());
+		// 머리글을 나눌 분류: 분류 태그의 앞 단계 (「함수 > 기본 함수」 → 함수, 「스킬 > 찌르기」 → 스킬)
 		foreach (BlockReferenceEntry entry in list)
 		{
 			int split = entry.Category.IndexOf(CategorySeparator, StringComparison.Ordinal);
@@ -227,10 +306,172 @@ public static class BlockReference
 		return list;
 	}
 
+	// 설명 카드 (#544) ---------------------------------------------------------------
+
+	/// <summary>
+	/// key(설명 표·가진 개수의 key: If, c.thrust, type.float)의 카드. 내 캐릭터 언어에 없으면 null.
+	/// </summary>
+	public static BlockReferenceEntry EntryOf(string key)
+	{
+		if (string.IsNullOrEmpty(key)) return null;
+		foreach (BlockReferenceEntry entry in All)
+			if (entry.Key == key) return entry;
+		return null;
+	}
+
+	/// <summary>
+	/// 블록 하나의 카드 (블록 목록의 칩, 함수 탭 항목을 눌렀을 때). 내가 만든 함수를 부르는 블록은 null.
+	/// </summary>
+	public static BlockReferenceEntry EntryOf(BlockData block) => block == null ? null : EntryOf(BlockUsageCounter.KeyOf(block));
+
+	/// <summary>
+	/// 스킬 트리 노드를 해금하면 쓸 수 있게 되는 것들의 카드 (#544). 해금 직후 카드와 스킬 트리 설명 칸이 보인다.
+	/// <para>
+	/// - 스킬 노드: 그 스킬 함수. 검 소환처럼 블록도 여는 노드는 그 블록(malloc, free)도 뒤에 붙인다.<br/>
+	/// - 문법 노드: 여는 블록 종류(UnlocksBlocks)의 카드. 조건문은 If·Else If·Else 셋. 함수 블록 종류(Function)는 스킬마다 따로 열리므로 빼고, return만.<br/>
+	/// - 자세 규칙 노드 (#545): 그 규칙의 카드 한 장. revealed가 false(해금 전)이면 이름·기능이 「???」인 카드.<br/>
+	/// - 순서는 참고 탭과 같다. 내 캐릭터 언어에 없는 블록은 빠진다 (Python의 선언 등).
+	/// </para>
+	/// </summary>
+	/// <param name="revealed">규칙 노드의 내용을 보여 줄지. 스킬 트리는 해금한 노드에만 카드를 띄우므로(#562) 지금은 모두 true</param>
+	public static List<BlockReferenceEntry> EntriesUnlockedBy(SkillTreeNode node, bool revealed = true)
+	{
+		var result = new List<BlockReferenceEntry>();
+		if (node == null) return result;
+		if (node.Kind == SkillTreeNodeKind.Rule)
+		{
+			BlockReferenceEntry rule = RuleEntryOf(node.Id, revealed);
+			if (rule != null) result.Add(rule);
+			return result;
+		}
+		if (node.Kind == SkillTreeNodeKind.Skill)
+		{
+			BlockReferenceEntry skill = EntryOf(node.Id);
+			if (skill != null) result.Add(skill);
+		}
+		foreach (BlockReferenceEntry entry in All)
+		{
+			if (entry.FunctionId != null || entry.Picture == null || entry.Picture.Kind == BlockKind.Function) continue;
+			if (node.UnlocksBlocks.Contains(entry.Picture.Kind) && !result.Contains(entry)) result.Add(entry);
+		}
+		return result;
+	}
+
+	/// <summary>자세 규칙 카드의 분류 태그 (#545)</summary>
+	public const string RuleCategory = "자세 규칙";
+
+	// 규칙 카드의 효과 색: 좋은 효과는 청록(스킬 트리의 「해금됨」 색), 나쁜 효과는 빨강(「재료가 모자라요」 색)
+	const string GoodEffectColor = "#5EF2D6", BadEffectColor = "#E07070";
+
+	/// <summary>
+	/// 자세 규칙 카드 한 장 (#545). 규칙 노드 ID가 규칙 표에 없으면 null.<br/>
+	/// revealed면 「자세 숫자가 2로 나누어떨어지지 않는 수인 경우, 아래 효과가 적용됩니다.」와 「효과:」 아래 좋은 효과(청록)·나쁜 효과(빨강) 목록. 아니면 이름·내용 모두 「???」
+	/// </summary>
+	// 글은 설명 표가 아니라 자세 규칙 표(StanceRule)에서 읽는다: 효과 계산과 같은 줄이라 수치가 어긋나지 않는다.
+	// 블록이 아니므로 그림·형식·사용 방법이 없다
+	public static BlockReferenceEntry RuleEntryOf(string nodeId, bool revealed)
+	{
+		if (!StanceRule.TryGetRule(nodeId, out StanceRuleEntry rule)) return null;
+		const string Hidden = "???";
+		string summary = Hidden;
+		if (revealed)
+		{
+			// 문장과 효과 목록 사이는 한 줄 띄운다 (이우림 요청 11/18)
+			var lines = new List<string> { $"자세 숫자가 {rule.Condition}인 경우, 아래 효과가 적용됩니다.", "", "효과:" };
+			lines.AddRange(rule.Gains.Select(text => $"<color={GoodEffectColor}>- {text}</color>"));
+			lines.AddRange(rule.Losses.Select(text => $"<color={BadEffectColor}>- {text}</color>"));
+			summary = string.Join("\n", lines);
+		}
+		return new BlockReferenceEntry
+		{
+			Name = revealed ? rule.Name : Hidden,
+			Category = RuleCategory,
+			Summary = summary,
+			Key = nodeId,
+			RichSummary = true,
+		};
+	}
+
+	// type 카드 (#544): 설명 표의 type 다섯 개. C 캐릭터만 (Python은 type을 적지 않는다)
+	static readonly string[] TypeKeys = { "type.float", "type.char", "type.bool", "type.string", "type.NULL" };
+
+	static IEnumerable<BlockReferenceEntry> TypeEntries()
+	{
+		if (BlockLabels.Family == LanguageFamily.Python) yield break;
+		foreach (string key in TypeKeys)
+		{
+			ItemDescription description = ItemDescriptions.Get(key);
+			if (description == null) continue;
+			string name = key.Substring("type.".Length);
+			var entry = new BlockReferenceEntry
+			{
+				Name = name,
+				Category = "type",
+				Summary = description.Summary,
+				CodeText = name,
+				Key = key,
+				TypeLiteral = description.Format,
+				UsageTab = "블록 탭",
+				UsageText = name == "NULL" ? "의 값 칸에 NULL을 적어 넣기" : $"의 선언 블록에서 {name}을 고르거나, 값 칸에 {description.Format}처럼 적기",
+			};
+			AddDescriptionSections(entry, description, "쓰는 곳", description.SlotItems(), null, null);
+			yield return entry;
+		}
+	}
+
+	// 함수 카드 그림 (#544): 대상(target)을 받는 칸에는 get_bug()를 끼운다. 시안 9-3 「skewer ( get_bug ( ) );」
+	static BlockData PictureOf(string id, IReadOnlyList<ParameterData> parameters)
+	{
+		var slots = new SlotData[parameters.Count];
+		for (int i = 0; i < slots.Length; i++)
+		{
+			bool target = parameters[i].Name == "target";
+			slots[i] = target ? SlotData.FromBlock(BlockData.CallPredefinedFunction(PredefinedFunctionIds.GetBug, new SlotData[0])) : SlotData.EmptyValue();
+		}
+		return BlockData.CallPredefinedFunction(id, slots);
+	}
+
 	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬, Python 스킬(#486), 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수
 	// BlockEditor.RebuildFunctionTab도 이 함수로 나눈다 (두 곳이 어긋나지 않게)
+	// py.is_valid_orb는 py.로 시작하지만 스킬이 아니라 기본 함수다 (#532, 이우림). is_valid_target과 같은 구역에 둔다
+	// 출력 함수(c.printf, py.print, #536)도 c.·py.로 시작하지만 기본 함수다
+	// 자세 함수(c.init_stance, c.get_stance #538, py.init_stance, py.get_stance #546)도 기본 함수다
+	/// <summary>
+	/// 내 캐릭터 언어의 스킬 계열 순서 (#578). 스킬 트리의 계열 줄 순서와 같다.
+	/// 함수 탭의 「스킬」 구역과 참고 탭의 스킬 카드가 이 순서로 놓인다.
+	/// </summary>
+	internal static IReadOnlyList<SkillFamily> SkillFamilyOrder => BlockLabels.IsPython ? SkillFamilies.PythonOrder : SkillFamilies.COrder;
+
+	/// <summary>
+	/// 스킬의 계열 순번 (SkillFamilyOrder 안의 자리). 스킬 표에 계열이 없거나 이 언어의 순서에 없는 계열이면 맨 뒤.
+	/// 함수 탭(BlockEditor)과 참고 탭이 같은 순서로 놓도록 둘 다 이 함수로 줄 세운다.
+	/// </summary>
+	internal static int SkillFamilyRank(string skillId)
+	{
+		SkillFamily? family = SkillFamilies.Of(skillId);
+		if (family == null) return int.MaxValue;
+		IReadOnlyList<SkillFamily> order = SkillFamilyOrder;
+		for (int i = 0; i < order.Count; i++)
+			if (order[i] == family.Value) return i;
+		return int.MaxValue;
+	}
+
+	// 스킬 카드의 분류 태그 (#578): 「스킬 > 찌르기」. 참고 탭은 앞 단계 「스킬」마다 머리글을 둔다. 스킬 표에 계열이 없으면 「스킬」만
+	static string SkillCategoryOf(string skillId)
+	{
+		SkillFamily? family = SkillFamilies.Of(skillId);
+		return family == null ? SkillGroup : Category(SkillGroup, SkillFamilies.KoreanName(family.Value));
+	}
+
+	/// <summary>스킬 카드의 분류 태그 앞 단계이자 함수 탭의 구역 이름 (#578)</summary>
+	internal const string SkillGroup = "스킬";
+
 	internal static bool IsSkill(string id) =>
-		id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("py.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal);
+		id != PredefinedFunctionIds.PyIsValidOrb
+		&& id != PredefinedFunctionIds.Printf && id != PredefinedFunctionIds.PyPrint
+		&& id != PredefinedFunctionIds.InitStance && id != PredefinedFunctionIds.GetStance
+		&& id != PredefinedFunctionIds.PyInitStance && id != PredefinedFunctionIds.PyGetStance
+		&& (id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("py.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal));
 
 	static BlockReferenceEntry FunctionEntry(PredefinedFunction function)
 	{
@@ -251,12 +492,16 @@ public static class BlockReference
 		var entry = new BlockReferenceEntry
 		{
 			Name = name,
-			Category = Category("함수", IsSkill(id) ? "스킬" : "기본 함수"),
+			Category = IsSkill(id) ? SkillCategoryOf(id) : Category("함수", "기본 함수"),
 			Sample = sample,
 			Summary = description?.Summary,
 			CodeText = Prototype(function.ReturnType, name, parameters),
 			FunctionId = id,
 			KoreanName = KoreanNameOf(id),
+			Key = id,
+			Picture = PictureOf(id, parameters),
+			UsageTab = "함수 탭",
+			UsageText = "에서 코드로 끌어다 놓기",
 		};
 
 		List<(string, string)> returned = returnsValue
@@ -324,11 +569,13 @@ public static class BlockReference
 			switch (parameter.Name)
 			{
 				case "target": args.Add("get_bug()"); break;
+				// Python 구슬 스킬(#532): 구슬을 담아 둔 variable
+				case "orb": args.Add("orb"); break;
 				case "sword": args.Add("summon_sword()"); break;
 				default: return null;
 			}
 		}
-		return $"{name}({string.Join(", ", args)});";
+		return BlockLabels.IsPython ? $"{name}({string.Join(", ", args)})" : $"{name}({string.Join(", ", args)});";
 	}
 
 	// 설명창 (#476) ------------------------------------------------------------
@@ -441,6 +688,13 @@ public static class BlockReference
 	{
 		[PredefinedFunctionIds.GetBug] = "버그 찾기",
 		[PredefinedFunctionIds.IsValidTarget] = "대상 확인",
+		[PredefinedFunctionIds.PyIsValidOrb] = "구슬 확인",
+		[PredefinedFunctionIds.Printf] = "출력",
+		[PredefinedFunctionIds.PyPrint] = "출력",
+		[PredefinedFunctionIds.InitStance] = "자세 정하기",
+		[PredefinedFunctionIds.GetStance] = "자세 확인",
+		[PredefinedFunctionIds.PyInitStance] = "자세 정하기",
+		[PredefinedFunctionIds.PyGetStance] = "자세 확인",
 	};
 
 	/// <summary>
@@ -480,13 +734,15 @@ public static class BlockReference
 		BlockKind.Malloc => ("malloc", "메모리 할당", "Sword* malloc(Sword);"),
 		// 파라미터 이름은 설명 표의 슬롯 이름(pointer, seconds)과 같게 둔다. 카드의 원형과 슬롯 줄이 같은 이름을 가리키게
 		BlockKind.Free => ("free", "메모리 해제", "void free(Sword* pointer);"),
-		BlockKind.Wait => ("wait", "기다리기", "void wait(float seconds);"),
+		BlockKind.Wait => ("wait", "기다리기", BlockLabels.IsPython ? "def wait(seconds)" : "void wait(float seconds);"),
 		_ => null,
 	};
 
 	// C 선언 모양의 함수 원형. 예: void thrust(Target target);
+	// Python 캐릭터(#532)는 「def orb_shot(target, orb)」처럼 타입 없이 보인다
 	static string Prototype(VariableType returnType, string name, IReadOnlyList<ParameterData> parameters)
 	{
+		if (BlockLabels.IsPython) return $"def {name}({(parameters == null ? "" : string.Join(", ", parameters.Select(p => p.Name)))})";
 		string returned = returnType == null || returnType.Kind == VariableTypeKind.Void ? "void" : TypeText(returnType);
 		string args = parameters == null ? "" : string.Join(", ", parameters.Select(p => $"{TypeText(p.Type)} {p.Name}"));
 		return $"{returned} {name}({args});";
@@ -508,8 +764,11 @@ public static class BlockReference
 	// 변수·파라미터 이름 색 (하늘색, VS Code와 같음). 핑크로 했다가 사용자가 바꿈
 	const string ParameterColor = "#9CDCFE";
 
-	static readonly HashSet<string> Keywords = new HashSet<string> { "if", "else", "for", "while", "break", "continue", "return" };
-	static readonly HashSet<string> PrimitiveWords = new HashSet<string> { "void", "int", "float", "bool", "char", "string", "array", "true", "false", "NULL" };
+	// Python 낱말(#532)도 함께 둔다. def·elif·in·global·del·and·or·not은 키워드, True·False·None·list는 기본 값·타입 색
+	static readonly HashSet<string> Keywords = new HashSet<string> { "if", "else", "for", "while", "break", "continue", "return",
+		"def", "elif", "in", "global", "del", "and", "or", "not", "pass" };
+	static readonly HashSet<string> PrimitiveWords = new HashSet<string> { "void", "int", "float", "bool", "char", "string", "array", "true", "false", "NULL",
+		"True", "False", "None", "list" };
 
 	/// <summary>
 	/// C 코드 글자(함수 원형 void skewer(Target target);, 문법 형식 if (조건) { 블록 })를 낱말마다 색을 나눈 리치 텍스트로 바꾼다 (#489, VS Code Dark+ 기준).

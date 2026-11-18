@@ -26,12 +26,19 @@ using UnityEngine;
 // 조건문은 블록 여러 개를 하나로 묶으므로 ConvertStatement가 아니라 TryConvertStatements가 따로 바꾼다
 public static class FunctionDataConverter
 {
-	public static bool TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, out UserFunction function)
+	public static bool TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, out UserFunction function) =>
+		TryConvert(data, ownedFunctions, LanguageFamily.C, out function);
+
+	/// <summary>
+	/// 캐릭터의 언어 방식 family(LanguageRule.Family)를 따라 바꾼다 (#532). C이면 위의 TryConvert와 같다.<br/>
+	/// Python이면 파라미터·반환 타입이 없고, 프레임 크기는 1 + 지역 이름 수(FunctionData.PythonLocalNames)이며, global·del·리스트 블록을 바꾼다.
+	/// </summary>
+	public static bool TryConvert(FunctionData data, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family, out UserFunction function)
 	{
 		if (data == null) throw new ArgumentNullException(nameof(data));
 		if (ownedFunctions == null) throw new ArgumentNullException(nameof(ownedFunctions));
 
-		function = new Conversion(data, ownedFunctions).ConvertFunction(data);
+		function = new Conversion(data, ownedFunctions, family).ConvertFunction(data);
 		return function != null;
 	}
 
@@ -56,8 +63,12 @@ public static class FunctionDataConverter
 		// 바꾸기 시작한 함수들. 블록을 바꾸는 중인 함수도 들어 있어서, 재귀 호출이 같은 객체를 가리킨다
 		readonly Dictionary<string, UserFunction> convertedByGuid = new Dictionary<string, UserFunction>();
 
-		public Conversion(FunctionData root, IEnumerable<FunctionData> ownedFunctions)
+		// Python 규칙으로 바꾸는지 (#532). 한 번의 변환에서 바꾸는 함수는 모두 같은 캐릭터의 것이라 같은 언어다
+		readonly bool python;
+
+		public Conversion(FunctionData root, IEnumerable<FunctionData> ownedFunctions, LanguageFamily family)
 		{
+			python = family == LanguageFamily.Python;
 			// 바꾸는 함수가 목록에 없어도 자기 자신을 부를 수 있게 먼저 넣는다
 			if (root.Guid != null) functionsByGuid[root.Guid] = root;
 			foreach (FunctionData owned in ownedFunctions)
@@ -71,6 +82,7 @@ public static class FunctionDataConverter
 		public UserFunction ConvertFunction(FunctionData data)
 		{
 			if (data.Guid != null && convertedByGuid.TryGetValue(data.Guid, out UserFunction started)) return started;
+			if (python) return ConvertPythonFunction(data);
 
 			// 예전 데이터에 반환 타입이 빠져 있으면 Void로 본다. FunctionData.Create도 Void로 만든다
 			VariableType returnType = data.ReturnType ?? new VariableType(VariableTypeKind.Void);
@@ -89,6 +101,29 @@ public static class FunctionDataConverter
 			// 블록보다 먼저 만들어 기록한다. 블록 안의 재귀 호출이 이 객체를 가리키게 하기 위함
 			// 파라미터와 반환 타입은 복사해서 넘긴다. 편집 화면이 같은 함수 데이터를 고치면, 이미 바꾼 함수의 파라미터만 바뀌고 프레임 크기는 그대로라 서로 어긋나기 때문
 			UserFunction function = new UserFunction(data.Name, (int)frameSize, CopyParameters(data.Parameters), CopyType(returnType), data.IsAsync);
+			if (data.Guid != null) convertedByGuid[data.Guid] = function;
+
+			if (!TryConvertStatements(data, data.Blocks, out Block[] blocks)) return null;
+			function.SetBlocks(blocks);
+			return function;
+		}
+
+		// Python 함수(#532)를 바꾼다. 파라미터와 반환 값의 타입은 Any(적지 않음)로 본다
+		// 프레임 = 1(호출) + 지역 이름 수. 지역 이름은 파라미터와 함수 안에서 대입하는 이름이다(global로 적은 이름 제외)
+		UserFunction ConvertPythonFunction(FunctionData data)
+		{
+			HashSet<string> parameterNames = new HashSet<string>();
+			List<ParameterData> parameters = new List<ParameterData>();
+			foreach (ParameterData parameter in data.Parameters)
+			{
+				if (string.IsNullOrEmpty(parameter?.Name)) return Reject<UserFunction>(data, "파라미터 이름이 비어 있습니다.");
+				if (!parameterNames.Add(parameter.Name)) return Reject<UserFunction>(data, $"파라미터 {parameter.Name}이(가) 두 번 있습니다.");
+				parameters.Add(new ParameterData(parameter.Name, VariableType.AnyType));
+			}
+
+			HashSet<string> locals = data.PythonLocalNames();
+			PythonNames names = new PythonNames(locals, data.GlobalNames());
+			UserFunction function = new UserFunction(data.Name, 1 + locals.Count, parameters.ToArray(), VariableType.AnyType, data.IsAsync, names);
 			if (data.Guid != null) convertedByGuid[data.Guid] = function;
 
 			if (!TryConvertStatements(data, data.Blocks, out Block[] blocks)) return null;
@@ -302,7 +337,7 @@ public static class FunctionDataConverter
 				// 칸: 파라미터 수만큼의 값. 반환 값은 버리지만, Return 누락과 반환 타입 불일치는 expression에서처럼 실패한다
 				case BlockKind.Function:
 					return TryConvertCall(data, block, out FunctionBlock function, out ValueBlock[] arguments)
-						? new CallBlock(function, arguments)
+						? new CallBlock(function, arguments, ArgumentTextsOf(function, block))
 						: null;
 
 				// 칸: 돌려줄 값(비워도 됨). 반환 타입에 맞는지와 return 누락은 실행 중에 함수가 끝날 때 본다
@@ -320,6 +355,35 @@ public static class FunctionDataConverter
 					ValueBlock seconds = ConvertValue(data, block.Slots[0]);
 					return seconds == null ? null : new WaitBlock(seconds);
 				}
+
+				// Python 블록(#532). C 함수에 있으면 아래에서 거부한다(C에는 없는 문법)
+				// 칸: 이름. 이름 규칙은 ConvertPythonFunction이 PythonNames에 이미 담았다
+				case BlockKind.Global when python && block.Slots.Count >= 1:
+					if (string.IsNullOrEmpty(block.Slots[0].Name)) return Reject(data, "global 블록의 이름 칸이 비어 있습니다.");
+					return new GlobalBlock();
+
+				// 칸: 변수
+				case BlockKind.Del when python && block.Slots.Count >= 1:
+					if (string.IsNullOrEmpty(block.Slots[0].VariableName)) return Reject(data, "del 블록의 변수 칸이 비어 있습니다.");
+					return new DelBlock(block.Slots[0].VariableName);
+
+				// 칸: 리스트 변수, 넣을 값
+				case BlockKind.ListAppend when python && block.Slots.Count >= 2:
+				{
+					string listName = block.Slots[0].VariableName;
+					if (string.IsNullOrEmpty(listName)) return Reject(data, "append 블록의 리스트 칸이 비어 있습니다.");
+					ValueBlock value = ConvertValue(data, block.Slots[1]);
+					return value == null ? null : new ListAppendBlock(listName, value);
+				}
+
+				// 꺼낸 값은 버린다. 칸: 리스트 변수, index(비우면 맨 끝)
+				case BlockKind.ListPop when python && block.Slots.Count >= 1:
+					return ConvertListPop(data, block);
+
+				// 칸: 리스트 이름
+				case BlockKind.ListNew when python && block.Slots.Count >= 1:
+					if (string.IsNullOrEmpty(block.Slots[0].VariableName)) return Reject(data, "리스트 만들기 블록의 이름 칸이 비어 있습니다.");
+					return new ListNewBlock(block.Slots[0].VariableName);
 			}
 
 			return Reject(data, $"{block.Kind} 블록은 아직 실행할 수 없습니다.");
@@ -378,6 +442,24 @@ public static class FunctionDataConverter
 				if (arguments[i] == null) return false;
 			}
 			return true;
+		}
+
+		// 출력 함수에 넘길 argument 칸의 글 (#536). 변수와 expression은 편집 화면에 보이는 글 그대로(예: n, x + 1), 값을 직접 적은 칸과 비운 칸은 null
+		// 출력 함수만 만드는 이유: 다른 함수는 이 글을 쓰지 않으므로, 함수를 바꿀 때마다 글을 만들 필요가 없기 때문
+		// 값을 직접 적은 칸을 빼는 이유: printf(5)가 「5 = 5」로 보이지 않게 하기 위함
+		string[] ArgumentTextsOf(FunctionBlock function, BlockData block)
+		{
+			if (!(function is PrintFunction)) return null;
+
+			LanguageFamily family = python ? LanguageFamily.Python : LanguageFamily.C;
+			string[] texts = new string[block.Slots.Count];
+			for (int i = 0; i < texts.Length; i++)
+			{
+				SlotData slot = block.Slots[i];
+				if (slot.Block == null && slot.VariableName == null) continue;
+				texts[i] = BlockLabels.SlotTextOf(slot, family);
+			}
+			return texts;
 		}
 
 		// 함수 블록이 GUID로 부르는 사용자 정의 함수를 찾아 바꾼다. 부른 함수를 바꿀 수 없으면 그 함수 이름으로 콘솔 경고가 남는다
@@ -482,6 +564,9 @@ public static class FunctionDataConverter
 					if (!TryConvertCall(data, block, out FunctionBlock function, out ValueBlock[] arguments)) return null;
 
 					VariableType returnType = function.ReturnType;
+					// Python(#532)은 모든 함수가 값을 돌려준다. 돌려줄 값이 없는 함수(void 스킬)는 None이다(CallBlock)
+					if (python && returnType.Kind == VariableTypeKind.Void)
+						return function.IsAsync ? Reject<ValueBlock>(data, $"{function.Name}은(는) 비동기 함수라 expression으로 쓸 수 없습니다.") : new CallBlock(function, arguments, ArgumentTextsOf(function, block));
 					if (returnType.Kind == VariableTypeKind.Void)
 						return Reject<ValueBlock>(data, $"{function.Name}은(는) 값을 돌려주지 않으므로 expression으로 쓸 수 없습니다.");
 					if (!RuntimeValue.IsSupportedType(returnType) || returnType.Kind == VariableTypeKind.Array)
@@ -492,9 +577,33 @@ public static class FunctionDataConverter
 
 					return new CallBlock(function, arguments);
 				}
+
+				// Python 리스트 블록(#532)
+				// 칸: 리스트 변수, index(비우면 맨 끝)
+				case BlockKind.ListPop when python && block.Slots.Count >= 1:
+					return ConvertListPop(data, block);
+
+				// 칸: 리스트 값
+				case BlockKind.ListLen when python && block.Slots.Count >= 1:
+				{
+					ValueBlock list = ConvertValue(data, block.Slots[0]);
+					return list == null ? null : new ListLenBlock(list);
+				}
 			}
 
 			return Reject<ValueBlock>(data, $"expression으로 쓴 {block.Kind} 블록은 아직 실행할 수 없습니다.");
+		}
+
+		// pop 블록. statement와 expression이 같은 블록을 쓴다. index 칸을 비우면 맨 끝 원소를 꺼낸다
+		// 빈 칸을 받는 이유: Python의 pop()은 index를 적지 않는 것이 기본이기 때문(#474의 「값 칸은 반드시 채움」 규칙의 예외, 이우림 결정 11/18)
+		ListPopBlock ConvertListPop(FunctionData data, BlockData block)
+		{
+			string listName = block.Slots[0].VariableName;
+			if (string.IsNullOrEmpty(listName)) return Reject<ListPopBlock>(data, "pop 블록의 리스트 칸이 비어 있습니다.");
+			if (block.Slots.Count < 2 || IsEmpty(block.Slots[1])) return new ListPopBlock(listName, null);
+
+			ValueBlock index = ConvertValue(data, block.Slots[1]);
+			return index == null ? null : new ListPopBlock(listName, index);
 		}
 	}
 

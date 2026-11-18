@@ -97,6 +97,12 @@ public class FunctionExecutor : MonoBehaviour
 	public event Action<string, int> CooldownStarted;
 
 	/// <summary>
+	/// 출력 함수(printf, print)가 글 한 줄을 출력했을 때 불린다 (작업, 출력 글) (#536). 출력한 틱에 불린다.<br/>
+	/// 멀티플레이에서 서버가 출력 글을 시전한 사람의 화면에 보낼 때 쓴다(FunctionExecutorNetwork.OwnOutput).
+	/// </summary>
+	public event Action<FunctionTask, string> Output;
+
+	/// <summary>
 	/// 함수(사전 정의 함수, 사용자 정의 함수)를 시전해서 작업을 하나 만든다. 작업은 다음 틱부터 진행한다.<br/>
 	/// 넘긴 함수는 원본으로 남고 복사본이 실행되므로, 같은 함수 객체를 여러 번 넘겨도 된다.<br/>
 	/// 시전 전 검사(메모리 등)에 걸리면 작업을 만들지 않고 CastRejected를 알린 뒤 null을 돌려준다.
@@ -139,7 +145,7 @@ public class FunctionExecutor : MonoBehaviour
 		RuntimeValue?[] converted = new RuntimeValue?[parameters.Count];
 		for (int i = 0; i < arguments.Length; i++)
 		{
-			if (!NumericRules.TryConvertForStore(arguments[i], parameters[i].Type, language.Rule, out RuntimeValue value))
+			if (!NumericRules.TryConvertForStore(arguments[i], parameters[i].Type, language.Rule, language.Family, out RuntimeValue value))
 				throw new ArgumentException($"{function.Name}의 파라미터 {parameters[i].Name}({parameters[i].Type.Kind})에 {arguments[i].Type?.Kind} 값을 넘겼습니다.", nameof(arguments));
 			converted[i] = value;
 		}
@@ -317,7 +323,7 @@ public class FunctionExecutor : MonoBehaviour
 	void LoadGlobalVariables()
 	{
 		GlobalVariablesData file = globalVariablesFile ?? GlobalVariablesStorage.Load();
-		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, int.MaxValue, out var variables))
+		if (!GlobalVariablesConverter.TryConvert(file, language.Rule, language.Family, int.MaxValue, out var variables))
 			variables = new List<(string, VariableType, RuntimeValue)>();
 		memory.ResetGlobals(variables);
 	}
@@ -367,7 +373,7 @@ public class FunctionExecutor : MonoBehaviour
 	public bool CanUseGlobalVariables(GlobalVariablesData file, out List<GlobalVariablesConverter.Failure> failures)
 	{
 		if (file == null) throw new ArgumentNullException(nameof(file));
-		return GlobalVariablesConverter.TryConvert(file, language.Rule, memory.Capacity, out _, out failures);
+		return GlobalVariablesConverter.TryConvert(file, language.Rule, language.Family, memory.Capacity, out _, out failures);
 	}
 
 	void Awake()
@@ -380,7 +386,8 @@ public class FunctionExecutor : MonoBehaviour
 			Debug.LogError($"{name}: LanguageRule 컴포넌트가 없습니다. 언어 규칙 파일 없이 붙여서 실행합니다. 프리팹에 LanguageRule을 붙이고 언어 규칙 파일을 연결합니다.", this);
 			language = gameObject.AddComponent<LanguageRule>();
 		}
-		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick);
+		// 자세(#538)의 쿨타임 증감은 쿨타임을 걸 때마다 PlayerStance에서 읽는다. PlayerStance가 없으면 0
+		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick, skill => PlayerStance.CooldownRateOf(gameObject, skill));
 		cooldowns.CooldownStarted += (skillId, endTick) => CooldownStarted?.Invoke(skillId, endTick - CurrentTick);
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));
@@ -438,6 +445,9 @@ public class FunctionExecutor : MonoBehaviour
 		foreach (FunctionTask task in GetTickOrder())
 		{
 			FunctionFailure? failure = task.Step();
+			// 출력은 실패를 처리하기 전에 알린다. 같은 틱에 실패한 함수라도 실패 직전에 출력한 값은 플레이어가 봐야 원인을 찾을 수 있기 때문 (#536)
+			foreach (string text in task.TakeOutputs())
+				Output?.Invoke(task, text);
 			// 프로세스를 새로 시작했으면 이 작업이 남긴 입력·비동기 시전 요청은 버린다. 새로 시작한 프로세스에 죽은 프로세스의 작업이 생기지 않게 하기 위함
 			// 이 틱에 남은 작업은 이미 끊겨서 Step이 진행하지 않는다
 			if (failure.HasValue && HandleFailure(task, failure.Value)) continue;

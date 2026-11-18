@@ -28,6 +28,9 @@ public abstract class PlaceInteractable : MonoBehaviour
 	[SerializeField, Min(1), Tooltip("가까이 갔을 때 마름모 위에 뜨는 ↑ 키 그림의 크기 배수 (Sign이 없을 때만). 사냥터 사이 포탈은 크게")]
 	int keyScale = 1;
 
+	[SerializeField, Min(5), Tooltip("↑ 키 그림의 픽셀 크기 (홀수). 문은 9, 사냥터 사이 포탈은 13 (#518: 9의 2배는 너무 커서 이름표를 가림). 배수(Key Scale)와 달리 픽셀이 고르게 보인다")]
+	int keySize = 9;
+
 	[SerializeField, Tooltip("가까이 갔을 때 띄우는 한 줄 안내판 (예: [↑] 사냥터로 이동). 있으면 마름모·↑ 키 대신 이것을 보여 준다. 메뉴 Invoke → 맵 → 문 위치·행선지 표시 맞추기가 넣는다")]
 	GameObject sign;
 
@@ -45,7 +48,8 @@ public abstract class PlaceInteractable : MonoBehaviour
 	// 표시 (#434)
 	const float PixelsPerUnit = 16f;
 	static readonly Color MarkerColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
-	static Sprite markerSprite, keySprite;
+	static Sprite markerSprite;
+	static readonly System.Collections.Generic.Dictionary<int, Sprite> keySprites = new System.Collections.Generic.Dictionary<int, Sprite>();
 	SpriteRenderer marker, key;
 	Vector3 markerBase;
 	float markerPhase;
@@ -95,16 +99,22 @@ public abstract class PlaceInteractable : MonoBehaviour
 		var keyObject = new GameObject("Key");
 		keyObject.transform.SetParent(go.transform, false);
 		// 키 아래 끝이 마름모 위 끝에서 1픽셀 위에 오게 (키는 Key Scale배)
-		keyObject.transform.localPosition = new Vector3(0f, (3.5f + 1f + 4.5f * keyScale) / PixelsPerUnit, 0f);
+		keyObject.transform.localPosition = new Vector3(0f, (3.5f + 1f + keySize * 0.5f * keyScale) / PixelsPerUnit, 0f);
 		keyObject.transform.localScale = new Vector3(keyScale, keyScale, 1f);
 		key = keyObject.AddComponent<SpriteRenderer>();
-		key.sprite = KeySprite();
+		key.sprite = KeySprite(keySize);
 		keyObject.SetActive(false);
 
 		if (prompt != null && prompt.TryGetComponent(out SpriteRenderer promptRenderer))
 		{
 			marker.sortingLayerID = key.sortingLayerID = promptRenderer.sortingLayerID;
 			marker.sortingOrder = key.sortingOrder = promptRenderer.sortingOrder;
+		}
+		// ↑ 안내가 없으면(사냥터 사이 포탈, #518) 자기 그림 바로 앞에 그린다. 그대로 두면 Default(맨 뒤) 층이라 하늘 뒤에 가려 안 보였다
+		else if (TryGetComponent(out SpriteRenderer own))
+		{
+			marker.sortingLayerID = key.sortingLayerID = own.sortingLayerID;
+			marker.sortingOrder = key.sortingOrder = own.sortingOrder + 10;
 		}
 		markerPhase = Mathf.Abs(transform.position.x) * 0.7f; // 여러 개가 같이 움직이지 않게
 		UpdateMarker();
@@ -122,21 +132,26 @@ public abstract class PlaceInteractable : MonoBehaviour
 		return markerSprite;
 	}
 
-	// 9×9 키 모양: 어두운 바탕, 밝은 테두리, 가운데 흰 ↑ (HUD의 키 표시와 같은 색)
-	static Sprite KeySprite()
+	// size×size 키 모양 (9 또는 13 등 홀수): 어두운 바탕, 밝은 테두리(모서리 한 칸 비움), 가운데 흰 ↑ (HUD의 키 표시와 같은 색)
+	// 9: 화살 대 1픽셀, 머리 2단 / 13: 대 1픽셀, 머리 3단
+	static Sprite KeySprite(int size)
 	{
-		if (keySprite != null) return keySprite;
+		if (size % 2 == 0) size++;
+		if (keySprites.TryGetValue(size, out Sprite cached) && cached != null) return cached;
 		var border = new Color32(0xB8, 0xBE, 0xD6, 0xFF);
 		var back = new Color32(0x1A, 0x1E, 0x3A, 0xE6);
 		var arrow = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
-		keySprite = MakeSprite(9, (x, y) =>
+		int last = size - 1, mid = size / 2, tip = size - 3, wings = (size - 5) / 2;
+		Sprite sprite = MakeSprite(size, (x, y) =>
 		{
-			if (x == 0 || y == 0 || x == 8 || y == 8) return (x == 0 || x == 8) && (y == 0 || y == 8) ? new Color32(0, 0, 0, 0) : border;
-			bool shaft = x == 4 && y >= 2 && y <= 6;
-			bool head = (y == 5 && (x == 3 || x == 5)) || (y == 4 && (x == 2 || x == 6));
+			if (x == 0 || y == 0 || x == last || y == last) return (x == 0 || x == last) && (y == 0 || y == last) ? new Color32(0, 0, 0, 0) : border;
+			bool shaft = x == mid && y >= 2 && y <= tip;
+			int down = tip - y; // 화살 끝에서 몇 줄 아래
+			bool head = down >= 1 && down <= wings && Mathf.Abs(x - mid) == down;
 			return shaft || head ? arrow : back;
 		}, "InteractKey");
-		return keySprite;
+		keySprites[size] = sprite;
+		return sprite;
 	}
 
 	static Sprite MakeSprite(int size, System.Func<int, int, Color32> pixel, string name)
@@ -239,6 +254,33 @@ public abstract class PlaceInteractable : MonoBehaviour
 		textPosition.x = Mathf.Round(textPosition.x / Px) * Px;
 		textPosition.y = Mathf.Round(textPosition.y / Px) * Px;
 		label.rectTransform.localPosition = textPosition;
+
+		// 맵 끝 벽 가까이 있는 문(사냥터1 로비 문)은 안내판이 화면 밖으로 잘린다 (임혜원 11/18). 화면이 보여 주는 맵 안쪽으로 밀어 넣는다
+		float shift = ShiftIntoMap(sign.transform.position.x + left, sign.transform.position.x + left + width);
+		if (shift != 0f)
+		{
+			shift = Mathf.Round(shift / Px) * Px;
+			foreach (Transform part in new[] { pill, keyIcon, textTransform }) part.localPosition += new Vector3(shift, 0f, 0f);
+		}
+	}
+
+	// 카메라가 보여 주는 맵 가로 범위: 이 장소 씬의 땅(Ground) 타일맵에서 양 끝 벽(CameraBounds의 Edge Inset 2칸)을 뺀 곳. 그 안에 들도록 밀 양
+	float ShiftIntoMap(float worldLeft, float worldRight)
+	{
+		const float WallInset = 2f, Margin = 0.25f;
+		foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+		{
+			foreach (UnityEngine.Tilemaps.TilemapRenderer ground in root.GetComponentsInChildren<UnityEngine.Tilemaps.TilemapRenderer>(true))
+			{
+				if (ground.name != "Ground") continue;
+				Bounds map = ground.bounds;
+				float min = map.min.x + WallInset + Margin, max = map.max.x - WallInset - Margin;
+				if (worldLeft < min) return min - worldLeft;
+				if (worldRight > max) return max - worldRight;
+				return 0f;
+			}
+		}
+		return 0f;
 	}
 
 	void Update()

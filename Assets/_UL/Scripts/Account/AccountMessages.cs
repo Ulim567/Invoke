@@ -119,6 +119,24 @@ public struct EnterGameResultMessage : NetworkMessage
 }
 
 /// <summary>
+/// 내 화면 → 서버: 게임에서 나와 캐릭터 화면으로 돌아가기 요청 (#570). 접속은 끊지 않는다. InvokeAuthenticator.RequestLeave가 보낸다.
+/// </summary>
+public struct LeaveGameRequest : NetworkMessage
+{
+}
+
+/// <summary>
+/// 서버 → 내 화면: 캐릭터 화면으로 돌아가기 결과. 성공하면 서버가 플레이어를 없앴고, 그 계정의 지금 캐릭터 목록이 들어 있다.
+/// </summary>
+public struct LeaveGameResultMessage : NetworkMessage
+{
+	public AccountFailure failure;
+	public CharacterSummary[] characters;
+
+	public bool Success => failure == AccountFailure.None;
+}
+
+/// <summary>
 /// 서버 → 내 화면: 서버가 곧 이 접속을 끊는다는 알림과 그 이유. 예: 다른 곳에서 같은 계정으로 로그인함.
 /// </summary>
 public struct AccountKickedMessage : NetworkMessage

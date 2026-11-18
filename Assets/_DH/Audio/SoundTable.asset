@@ -21,6 +21,10 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
   - place: RaidDungeon
     clip: {fileID: 8300000, guid: dd1c464af8b0b644c8fa2e78d3a7525c, type: 3}
+  - place: HuntingGround2
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
+  - place: HuntingGround3
+    clip: {fileID: 8300000, guid: 5792c88b86ba47f44b05f2d8378b969b, type: 3}
   monsters:
   - monster: Gateway
     appear: []
@@ -130,6 +134,57 @@ MonoBehaviour:
   - skillId: c.sword_dance
     fired:
     - {fileID: 8300000, guid: 5d2935e21aa7b98438738cfe16e5a184, type: 3}
+  - skillId: py.magic_missile
+    fired:
+    - {fileID: 8300000, guid: c672766fc626f4dc086b2ad27ae443e6, type: 3}
+  - skillId: py.fireball
+    fired:
+    - {fileID: 8300000, guid: 3dfac6ce30e814d5db6b9fd6dc9af417, type: 3}
+  - skillId: py.ice_spear
+    fired:
+    - {fileID: 8300000, guid: de7e2d7cdfe31430f838acb775c081e9, type: 3}
+  - skillId: py.chain_lightning
+    fired:
+    - {fileID: 8300000, guid: 3ff6353d66a2745e8a4c9b015364d6bc, type: 3}
+  - skillId: py.meteor
+    fired:
+    - {fileID: 8300000, guid: 59ab15491a8304e0998cd22769884409, type: 3}
+  - skillId: py.blizzard
+    fired:
+    - {fileID: 8300000, guid: 01063f2061e6f4739868f11206d3077e, type: 3}
+  - skillId: py.venom_mist
+    fired:
+    - {fileID: 8300000, guid: 4885bfbf961e044f0b1952e73a0288c0, type: 3}
+  - skillId: py.orb_create
+    fired:
+    - {fileID: 8300000, guid: 760513b02c31b4a598d46d868b1c0f02, type: 3}
+  - skillId: py.orb_shot
+    fired:
+    - {fileID: 8300000, guid: 10b34d3f7adf646edb003bc3200c6a1f, type: 3}
+  - skillId: py.orb_barrage
+    fired:
+    - {fileID: 8300000, guid: 824406692eaf64841b8065778689aba6, type: 3}
+  - skillId: py.orb_burst
+    fired:
+    - {fileID: 8300000, guid: f9b03a7acfda84393ab0e45b83d8c815, type: 3}
+  - skillId: py.orb_shield
+    fired:
+    - {fileID: 8300000, guid: f509e4776644d4bf8a251324b041c093, type: 3}
+  - skillId: py.hex
+    fired:
+    - {fileID: 8300000, guid: 2c75a28e7defe41eb8d296501c2efadc, type: 3}
+  - skillId: py.snake_bind
+    fired:
+    - {fileID: 8300000, guid: 6fb2c262fb37a4368a9ae36bea53acf1, type: 3}
+  - skillId: py.flash
+    fired:
+    - {fileID: 8300000, guid: 7da73cc70cc9d438191d2bf8398834f4, type: 3}
+  - skillId: py.blink
+    fired:
+    - {fileID: 8300000, guid: 19a2fd49298e84d56bf7951848c46048, type: 3}
+  - skillId: py.levitate
+    fired:
+    - {fileID: 8300000, guid: 78b9bb4b034f04b16b599b493477719d, type: 3}
   common:
     playerHit: []
     playerDeath:

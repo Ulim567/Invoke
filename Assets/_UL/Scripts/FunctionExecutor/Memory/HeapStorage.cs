@@ -121,7 +121,37 @@ public class HeapStorage
 				taskPointers.Add(owner, pointers);
 			}
 			pointers.Add(pointer);
+			// 임시 객체 순번도 붙인다(#532). Python statement가 끝날 때 이 statement가 만든 객체인지 가리기 위함
+			// 가비지 컬렉션을 하는 언어만 붙인다. C는 statement마다 놓지 않으므로, 붙이면 끝나지 않는 작업에서 기록만 쌓이기 때문
+			if (CollectsGarbage) AddTemporary(owner, pointer, true);
 		}
+		return pointer;
+	}
+
+	/// <summary>
+	/// pointer 객체의 heap 칸 수를 size로 바꾼다 (Python 리스트, #532). 늘릴 칸이 모자라면 바꾸지 않고 false(MemoryError).
+	/// 없는 포인터이면 false.
+	/// </summary>
+	internal bool TryResize(int pointer, int size)
+	{
+		if (size < 0 || !TryGetReachable(pointer, out HeapEntry entry)) return false;
+		int difference = size - entry.Size;
+		if (difference > 0 && !memory.TryAllocateHeap(difference)) return false;
+		if (difference < 0) memory.ReleaseHeap(-difference);
+		entry.Size = size;
+		return true;
+	}
+
+	/// <summary>
+	/// obj를 heap size칸에 올리되 어느 루트에도 넣지 않는다 (#532). 초기화 때 Python 전역 변수의 빈 리스트처럼, 곧바로 전역 변수가 가리킬 객체에 쓴다.
+	/// heap이 모자라면 NullPointer.
+	/// </summary>
+	internal int MallocUnrooted(object obj, int size)
+	{
+		if (obj == null) throw new ArgumentNullException(nameof(obj));
+		if (size < 0 || !memory.TryAllocateHeap(size)) return NullPointer;
+		int pointer = NextPointer();
+		entries.Add(pointer, new HeapEntry { Obj = obj, Size = size });
 		return pointer;
 	}
 
@@ -212,6 +242,19 @@ public class HeapStorage
 	}
 
 	/// <summary>
+	/// 힙에 있는 T 타입 객체의 포인터를 값 순서(malloc한 순서)대로 돌려준다 (#532). 누수 객체와 Destroy된 Unity 오브젝트는 뺀다.<br/>
+	/// GetGlobalPointers와 달리 숨은 시스템 전역이 아닌 객체(변수·리스트가 쥔 Python 구슬)도 나온다.
+	/// </summary>
+	public List<int> GetPointers<T>()
+	{
+		List<int> pointers = new List<int>();
+		foreach (KeyValuePair<int, HeapEntry> pair in entries)
+			if (!pair.Value.IsLeaked && pair.Value.Obj is T && !IsDestroyed(pair.Value.Obj)) pointers.Add(pair.Key);
+		pointers.Sort();
+		return pointers;
+	}
+
+	/// <summary>
 	/// 힙에 있는 T 타입 객체의 수. 누수된 객체도 센다. 소환검 최대 개수 검사에 쓴다.<br/>
 	/// Destroy된 Unity 오브젝트는 세지 않는다 (TryGet, GetGlobalPointers와 같은 기준). 쓸 수 없는 객체가 소환 가능 개수를 차지하지 않게 하기 위함이다 (#325).
 	/// </summary>
@@ -240,6 +283,7 @@ public class HeapStorage
 		entries.Clear();
 		// 진행 중인 작업의 포인터도 지운다. 남겨 두면 그 작업의 사전 정의 함수가 끝날 때 숨은 시스템 전역으로 옮겨져, 없는 기록을 가리키게 되기 때문
 		taskPointers.Clear();
+		temporaries.Clear();
 		globalPointers.Clear();
 		memory.ReleaseHeap(releasedSize);
 
@@ -271,6 +315,59 @@ public class HeapStorage
 	internal void HandleTaskEnded(FunctionTask task)
 	{
 		taskPointers.Remove(task);
+		temporaries.Remove(task);
+		MarkUnreachableAsLeaked();
+	}
+
+	// 작업이 쥔 임시 객체 하나 (#532). 작업 안에서 malloc한 객체, 또는 리스트에서 꺼내 아직 변수에 담지 않은 값
+	struct Temporary
+	{
+		public int Pointer;
+		// 쥔 순서. statement가 시작할 때의 표시(CurrentMark)보다 크면 그 statement가 쥔 것이다
+		public int Sequence;
+		// malloc으로 생긴 기록이면 true. 놓을 때 작업의 malloc 목록(taskPointers)에서도 뺀다
+		public bool Malloced;
+	}
+
+	// 작업마다 쥔 임시 객체 (#532). 작업의 지역 루트에 들어간다. Python statement가 끝날 때 그 statement가 쥔 것을 놓는다
+	readonly Dictionary<FunctionTask, List<Temporary>> temporaries = new Dictionary<FunctionTask, List<Temporary>>();
+	// 임시 객체를 쥔 순번. 늘리기만 한다
+	int temporarySequence;
+
+	// 지금까지의 임시 객체 순번. Python statement가 시작할 때 기록하는 표시다 (#532)
+	internal int CurrentMark => temporarySequence;
+
+	// 작업 owner가 값을 담기 전까지 pointer의 객체를 쥔다 (#532). 리스트에서 꺼낸 구슬처럼, 변수에 담기 전에 다른 작업의 가비지 컬렉션이 해제하지 않게 하기 위함
+	internal void Hold(FunctionTask owner, int pointer)
+	{
+		if (owner == null || pointer == NullPointer) return;
+		AddTemporary(owner, pointer, false);
+	}
+
+	void AddTemporary(FunctionTask owner, int pointer, bool malloced)
+	{
+		if (!temporaries.TryGetValue(owner, out List<Temporary> list))
+		{
+			list = new List<Temporary>();
+			temporaries.Add(owner, list);
+		}
+		list.Add(new Temporary { Pointer = pointer, Sequence = ++temporarySequence, Malloced = malloced });
+	}
+
+	// Python statement가 끝났을 때 실행기가 부른다 (#532). owner 작업이 mark 뒤에 쥔 임시 객체를 놓고 가비지 컬렉션을 돌린다
+	// 그 statement 안에서만 쓴 임시 객체를 놓기 위함. mark 앞에 쥔 객체(바깥 expression이 아직 들고 있는 값)는 그대로 둔다
+	internal void ReleaseTemporaries(FunctionTask owner, int mark)
+	{
+		if (owner != null && temporaries.TryGetValue(owner, out List<Temporary> list))
+		{
+			taskPointers.TryGetValue(owner, out List<int> pointers);
+			for (int i = list.Count - 1; i >= 0; i--)
+			{
+				if (list[i].Sequence <= mark) continue;
+				if (list[i].Malloced) pointers?.Remove(list[i].Pointer);
+				list.RemoveAt(i);
+			}
+		}
 		MarkUnreachableAsLeaked();
 	}
 
@@ -287,6 +384,8 @@ public class HeapStorage
 		HashSet<int> reachable = new HashSet<int>(globalPointers);
 		reachable.UnionWith(GetTaskLocalPointers());
 		reachable.UnionWith(GetPlayerGlobalPointers());
+		// 루트가 가리키는 리스트의 원소도 닿을 수 있다(#532). 리스트 안의 리스트까지 따라간다
+		AddReachableThroughLists(reachable);
 
 		if (CollectsGarbage)
 		{
@@ -344,6 +443,9 @@ public class HeapStorage
 	{
 		HashSet<int> playerGlobals = new HashSet<int>(GetPlayerGlobalPointers());
 		HashSet<int> taskLocals = new HashSet<int>(GetTaskLocalPointers());
+		// 리스트에 담은 객체는 그 리스트의 주인과 같은 주인으로 센다 (#532)
+		AddReachableThroughLists(playerGlobals);
+		AddReachableThroughLists(taskLocals);
 
 		int playerGlobalSize = 0, systemGlobalSize = 0, taskLocalSize = 0, leakedSize = 0;
 		foreach (KeyValuePair<int, HeapEntry> pair in entries)
@@ -359,6 +461,18 @@ public class HeapStorage
 		return new HeapUsage(playerGlobalSize, systemGlobalSize, taskLocalSize, leakedSize);
 	}
 
+	// reachable에 든 리스트의 원소가 가리키는 객체를 reachable에 더한다 (#532). 더한 객체가 리스트이면 그 원소도 따라간다
+	void AddReachableThroughLists(HashSet<int> reachable)
+	{
+		Queue<int> pending = new Queue<int>(reachable);
+		while (pending.Count > 0)
+		{
+			if (!entries.TryGetValue(pending.Dequeue(), out HeapEntry entry) || !(entry.Obj is ListStorage list)) continue;
+			foreach (int pointer in PointersIn(list.Elements))
+				if (reachable.Add(pointer)) pending.Enqueue(pointer);
+		}
+	}
+
 	// 작업의 지역 루트(루트 집합 1): 진행 중인 작업이 malloc한 포인터와, 실행 중인 작업들의 지역 변수에 담긴 포인터
 	// malloc 목록도 함께 보는 이유: malloc한 값이 아직 변수에 담기기 전(예: 선언 블록이 값을 넣기 직전의 틱)에도 누수로 보지 않기 위함
 	IEnumerable<int> GetTaskLocalPointers()
@@ -366,6 +480,11 @@ public class HeapStorage
 		foreach (List<int> pointers in taskPointers.Values)
 			foreach (int pointer in pointers)
 				yield return pointer;
+
+		// 리스트에서 꺼내 아직 담지 않은 값(#532). malloc한 임시 객체는 위의 taskPointers에 이미 있다
+		foreach (List<Temporary> list in temporaries.Values)
+			foreach (Temporary temporary in list)
+				if (!temporary.Malloced) yield return temporary.Pointer;
 
 		if (runningLocalPointers == null) yield break;
 		foreach (int pointer in runningLocalPointers())
@@ -391,6 +510,12 @@ public class HeapStorage
 				case VariableTypeKind.Array when value.Type.ElementType?.Kind == VariableTypeKind.Pointer:
 					foreach (RuntimeValue element in value.AsArray().Elements)
 						if (element.AsPointer() != NullPointer) yield return element.AsPointer();
+					break;
+
+				// Python의 리스트와 구슬(#532)도 heap 객체를 가리킨다. 리스트의 원소는 AddReachableThroughLists가 따라간다
+				case VariableTypeKind.List:
+				case VariableTypeKind.Struct:
+					if (value.AsObjectPointer() != NullPointer) yield return value.AsObjectPointer();
 					break;
 			}
 		}

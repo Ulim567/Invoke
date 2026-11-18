@@ -32,7 +32,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 50
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -45,7 +45,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 200
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -58,7 +58,7 @@ MonoBehaviour:
     targeting: 2
     damageMultiplier: 0.5
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 100
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -71,7 +71,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 50
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -84,7 +84,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 100
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -97,7 +97,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 150
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -123,7 +123,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 50
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -136,7 +136,7 @@ MonoBehaviour:
     targeting: 5
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 50
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -162,7 +162,7 @@ MonoBehaviour:
     targeting: 4
     damageMultiplier: 0.5
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 100
     localVariableCount: 0
     heapSize: 1
     areaRadius: 4
@@ -175,7 +175,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 100
     localVariableCount: 0
     heapSize: 1
     areaRadius: 4
@@ -188,7 +188,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 150
     localVariableCount: 0
     heapSize: 1
     areaRadius: 4
@@ -201,7 +201,7 @@ MonoBehaviour:
     targeting: 1
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 200
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -214,7 +214,7 @@ MonoBehaviour:
     targeting: 3
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 300
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -253,7 +253,7 @@ MonoBehaviour:
     targeting: 6
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 150
     localVariableCount: 0
     heapSize: 1
     areaRadius: 4
@@ -266,7 +266,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 0.5
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 200
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -279,7 +279,7 @@ MonoBehaviour:
     targeting: 0
     damageMultiplier: 0.5
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 300
     localVariableCount: 0
     heapSize: 0
     areaRadius: 4
@@ -292,7 +292,7 @@ MonoBehaviour:
     targeting: 6
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 25
     localVariableCount: 0
     heapSize: 1
     areaRadius: 4
@@ -318,7 +318,7 @@ MonoBehaviour:
     targeting: 6
     damageMultiplier: 1
     tickCount: 20
-    cooldownTicks: 0
+    cooldownTicks: 300
     localVariableCount: 0
     heapSize: 1
     areaRadius: 4

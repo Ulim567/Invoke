@@ -149,6 +149,8 @@ void CmdPickUp()
   - 빌드 (#506): 원본을 만든 뒤 `Build`로 빌드 결과(`IsBuildSucceeded`)를 정함. 슬롯 함수들, 그 함수가 부르는 함수(`SlotCompileChecker`), 마지막에 받은 전역 변수 파일(`CanUseGlobalVariables`) 중 하나라도 컴파일 오류가 있으면 실패
     - 실패하면 모든 슬롯의 시전을 `CompileError`로 거부. 슬롯이 부르지 않는 페이지 함수는 빌드에 넣지 않음. 함수 데이터를 받지 못한 슬롯은 빌드에서 빼고 시전 때 `NoFunction`
     - 실제 계정·임시 계정 모두 같은 규칙 (임시 계정도 이 함수로 데이터가 들어옴)
+  - 언어 (#532): 원본 만들기(`FunctionDataConverter`)와 빌드(`SlotCompileChecker`)는 그 플레이어의 언어 방식(`LanguageRule.Family`)을 따른다. Python은 문법 오류만 컴파일 오류
+  - 저장 검사 (#532): 캐릭터 언어에 없는 블록(`BlockData.IsUsableIn`, 예: Python 함수의 선언 블록, C 함수의 global 블록)이 든 함수는 `BlockLocked`
 - 「데이터 준비됨」: 처음 슬롯·함수·전역 변수를 모두 적용하면 `IsDataReady` true, `DataReady` 한 번
 - 받은 데이터 검사: 없음(보안은 나중). 검사 자리: `ApplyPlayerData`, `ProvideTarget`의 서버 처리
 
@@ -162,14 +164,15 @@ void CmdPickUp()
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `RequestCast(int slot, GameObject target = null)` | 슬롯 번호(0~7), 대상 몬스터 | - | [소유 클라이언트] 서버에 시전 요청. 대상(`Target`) 파라미터가 있는 스킬만 `target` 사용. 답은 `CastAccepted` / `CastRejected` |
-| `RequestCast(int slot, GameObject[] targets)` | 슬롯 번호(0~7), 고른 몬스터들 | - | [소유 클라이언트] 대상 array(`Target` array) 파라미터가 있는 스킬(전장 휩쓸기)의 시전 요청. 서버가 순서대로 `RuntimeValue.FromBugs`로 바꿔 첫 파라미터에 넣음. 서버에 없는 몬스터는 「대상 없음」 원소. 대상 없는 시전은 `RequestCast(slot)`(`RequestCast(slot, null)`은 컴파일 오류). 답은 `CastAccepted` / `CastRejected` (#238) |
+| `RequestCast(int slot, GameObject[] targets)` | 슬롯 번호(0~7), 고른 몬스터들 | - | [소유 클라이언트] 대상 array(`Target` array) 파라미터가 있는 스킬(전장 휩쓸기)와 대상 리스트(Target list) 파라미터가 있는 스킬(Python 구슬 난사, #532)의 시전 요청. 서버가 순서대로 `RuntimeValue.FromBugs`로 바꿔 첫 파라미터에 넣음. 서버에 없는 몬스터는 「대상 없음」 원소. 대상 없는 시전은 `RequestCast(slot)`(`RequestCast(slot, null)`은 컴파일 오류). 답은 `CastAccepted` / `CastRejected` (#238) |
 | `RequestCancel(int slot)` | 슬롯 번호 | - | [소유 클라이언트] 그 슬롯으로 시전한 작업 끊기 요청(`FunctionExecutor.Cancel`). 끊기면 `TaskEnded(Cancelled)` |
 | `ProvideTarget(int taskId, GameObject target)` | 작업 번호, 고른 몬스터(없으면 `null`) | - | [소유 클라이언트] 입력을 기다리는 이 플레이어의 작업에 몬스터 넣기 요청. 이미 끝난 작업이면 서버가 버림 |
 | `CastAccepted` (event) | `int` 슬롯, `int` 작업 번호 | - | [로직] 시전 성공. 소유 클라이언트에만 |
 | `CastRejected` (event) | `int` 슬롯, `CastRejection` 이유 | - | [로직] 시전 거부. 소유 클라이언트에만. 이유: `OnCooldown`, `NotEnoughMemory`, `NoFunction`(서버에 그 슬롯의 함수 없음), `CannotAct`(시전자가 죽었거나 경직 중, #310), `InNoCastPlace`(시전자가 공격할 수 없는 장소에 있음, #313), `CompileError`(빌드 실패, `NoFunction`보다 먼저 봄, #506) |
 | `TaskStarted` (event) | `int` 작업 번호, `int` 슬롯(비동기 작업 -1), `string` 함수 이름 | - | [연출] 작업이 진행 시작. 모든 클라이언트. 시전 모션 |
 | `TaskEnded` (event) | `int` 작업 번호, `FunctionTaskEndReason` | - | [로직] 작업이 끝남. 모든 클라이언트. 시작 전에 끊긴 작업은 이것만 |
-| `OwnTaskEnded` (event) | `int` 작업 번호, `TaskEndInfo` | - | [표시] 내 작업이 끝남. 소유 클라이언트에만, `TaskEnded`보다 먼저. `TaskEndInfo`: 끝난 이유, 실패 종류·분류(`Failed`일 때), 스킬 에러 클래스 이름·`Message`(`SkillFailed`일 때). HUD 알림 문장은 `FailureNotice.ForTaskEnd` (#480, [function-executor.md](function-executor.md)) |
+| `OwnTaskEnded` (event) | `int` 작업 번호, `TaskEndInfo` | - | [표시] 내 작업이 끝남. 소유 클라이언트에만, `TaskEnded`보다 먼저. `TaskEndInfo`: 끝난 이유, 실패 종류·분류(`Failed`일 때), 시전자의 언어 방식(#532), 스킬 에러 클래스 이름·`Message`(`SkillFailed`일 때), 슬롯 번호·함수 이름(#536). HUD 알림 문장은 `FailureNotice.ForTaskEnd` (#480, [function-executor.md](function-executor.md)) |
+| `OwnOutput` (event) | `int` 슬롯(슬롯에서 시전하지 않은 작업은 -1), `string` 작업의 함수 이름, `string` 출력 글 | - | [표시] 내 작업의 출력 함수(`printf`, `print`)가 출력함. 소유 클라이언트에만(`[TargetRpc]`). HUD 알림 목록이 `[Q] n = 3`으로 보임 (#536, [predefined-function.md](predefined-function.md) 「출력 function」) |
 | `InputRequested` (event) | `int` 작업 번호, `string` 입력 함수 ID, `int` 슬롯(비동기 작업 -1) | - | [로직] 이 플레이어의 작업이 입력을 기다림. 소유 클라이언트에만. 이 안에서 바로 `ProvideTarget`을 불러도 됨 |
 | `IsDataReady` | - | `bool` | 서버가 이 플레이어의 함수 데이터를 처음 다 받아 시전 준비가 됨. 로딩 화면이 기다림 |
 | `DataReady` (event) | - | - | [표시] `IsDataReady`가 true가 될 때 한 번. 소유 클라이언트(호스트 포함) |

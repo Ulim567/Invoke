@@ -28,7 +28,8 @@ using UnityEngine;
 /// - 내 화면은 RequestCast(슬롯, 대상) 또는 RequestCast(슬롯, 대상 배열), RequestCancel(슬롯)로 서버에 부탁한다. FunctionExecutor.Cast, Cancel을 직접 부르지 않는다.<br/>
 /// - 서버의 답은 시전한 사람에게만 온다: 성공이면 CastAccepted(슬롯, 작업 번호), 거부면 CastRejected(슬롯, 이유).<br/>
 /// - 작업이 시작하고 끝나면 모든 화면에 TaskStarted(작업 번호, 슬롯, 함수 이름), TaskEnded(작업 번호, 끝난 이유)가 불린다.<br/>
-/// - 작업이 끝나면 시전한 사람의 화면에만 그보다 먼저 OwnTaskEnded(작업 번호, 끝난 이유와 실패 내용)가 불린다 (#480).<br/>
+/// - 작업이 끝나면 시전한 사람의 화면에만 그보다 먼저 OwnTaskEnded(작업 번호, 끝난 이유와 실패 내용, 슬롯·함수 이름)가 불린다 (#480, #536).<br/>
+/// - 출력 함수(printf, print)가 출력하면 시전한 사람의 화면에만 OwnOutput(슬롯, 함수 이름, 출력 글)이 불린다 (#536).<br/>
 /// - 네트워크를 켜지 않은 테스트에서도 같은 함수와 event로 동작한다. 이때는 서버로 보내지 않고 그 자리에서 실행기를 부른다.
 /// </para>
 /// <para>
@@ -196,6 +197,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	public event Action<int, TaskEndInfo> OwnTaskEnded;
 
 	/// <summary>
+	/// [표시] 내 작업의 출력 함수(printf, print)가 글 한 줄을 출력했을 때 (슬롯 번호, 작업의 함수 이름, 출력 글) (#536). 시전한 사람의 화면에서만 불린다.<br/>
+	/// 슬롯 번호는 함수 안에서 비동기로 시전된 작업이면 -1이다. HUD가 왼쪽 아래 알림 목록에 「[Q] n = 3」처럼 보이고, 슬롯이 없으면 함수 이름을 보인다.
+	/// </summary>
+	// 출력은 시전한 사람만 보면 된다. 다른 플레이어의 출력이 내 화면에 섞이지 않게 하기 위함
+	public event Action<int, string, string> OwnOutput;
+
+	/// <summary>
 	/// [로직] 내 작업이 입력 함수를 만나 입력을 기다리기 시작했을 때 (작업 번호, 입력 함수 ID, 슬롯 번호). 시전한 사람의 화면에서만 불린다.<br/>
 	/// 입력 함수 ID로 자기가 맡은 입력인지 확인한다(예: input.get_bug). 슬롯 번호는 비동기로 시전된 작업이면 -1이다.<br/>
 	/// 값을 정하면 ProvideTarget을 부른다. 이 event 안에서 바로 불러도 된다.
@@ -222,6 +230,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded += OnExecutorTaskEnded;
 		executor.InputRequested += OnExecutorInputRequested;
 		executor.CooldownStarted += OnExecutorCooldownStarted;
+		executor.Output += OnExecutorOutput;
 		if (health != null) health.Died += OnPlayerDied;
 	}
 
@@ -231,6 +240,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded -= OnExecutorTaskEnded;
 		executor.InputRequested -= OnExecutorInputRequested;
 		executor.CooldownStarted -= OnExecutorCooldownStarted;
+		executor.Output -= OnExecutorOutput;
 		if (health != null) health.Died -= OnPlayerDied;
 	}
 
@@ -602,7 +612,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			if (slot >= 0 && !KeepsSlotFrame(function, slot)) return PlayerDataRequestResult.SlotFunctionLocked;
 
 			// 코드 영역 크기는 저장한 뒤의 함수 목록으로 센다. 함께 저장하는 다른 함수의 새 내용도 넣기 위함
-			PlayerDataRequestResult content = CheckFunctionContent(function, after, slotGuids, unlocked);
+			PlayerDataRequestResult content = CheckFunctionContent(function, after, slotGuids, unlocked, language != null ? language.Family : LanguageFamily.C);
 			if (content != PlayerDataRequestResult.Saved) return content;
 		}
 		// 블록·함수 개수 (#500): 저장한 뒤의 함수와 전역 변수로 센 개수가 가진 개수를 넘으면 거부한다
@@ -621,7 +631,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 
 	/// <summary>
 	/// 저장하려는 함수의 내용을 검사한다. 통과하면 Saved, 아니면 거부 이유를 돌려준다. 네트워크와 상관없어서 서버 없이 부를 수 있다.<br/>
-	/// - BlockLocked: 해금하지 않은 문법의 블록(SkillTree.IsBlockUnlocked)을 씀. <br/>
+	/// - BlockLocked: 해금하지 않은 문법의 블록(SkillTree.IsBlockUnlocked)을 씀. 캐릭터 언어에 없는 블록(BlockData.IsUsableIn, 예: Python 함수의 선언 블록)도 같다 (#532)<br/>
 	/// - SkillLocked: 해금하지 않은 C 스킬을 부름. 스킬 트리에 노드가 있는 사전 정의 함수만 본다(입력 함수 input.*, 테스트 함수 test.*는 노드가 없어 통과)<br/>
 	/// - CodeSizeExceeded: function을 반영한 함수 목록으로 센 슬롯의 코드 영역 크기가 ProgressRules.MaxCodeSize보다 큼.
 	///   슬롯과 이어지지 않은 함수는 크기에 들어가지 않으므로, 그런 함수 자체가 커도 거부하지 않는다
@@ -630,11 +640,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	/// <param name="ownedFunctions">서버가 가진 캐릭터의 모든 함수. function은 아직 반영되지 않은 상태여도 된다</param>
 	/// <param name="slotFunctionGuids">슬롯에 걸린 사용자 정의 함수(슬롯 함수)들의 GUID. 코드 영역 크기를 세는 출발점이다</param>
 	/// <param name="unlocked">해금한 스킬 트리 노드 ID</param>
+	/// <param name="family">캐릭터의 언어 방식 (#532)</param>
 	public static PlayerDataRequestResult CheckFunctionContent(FunctionData function, IEnumerable<FunctionData> ownedFunctions,
-		IEnumerable<string> slotFunctionGuids, ICollection<string> unlocked)
+		IEnumerable<string> slotFunctionGuids, ICollection<string> unlocked, LanguageFamily family = LanguageFamily.C)
 	{
 		foreach (BlockData block in function.AllBlocks())
 		{
+			if (!BlockData.IsUsableIn(block.Kind, family)) return PlayerDataRequestResult.BlockLocked;
 			if (!SkillTree.IsBlockUnlocked(block.Kind, unlocked)) return PlayerDataRequestResult.BlockLocked;
 
 			// 함수 블록은 블록 종류(순차 실행 노드)와 별개로, 부르는 C 스킬 자체의 해금을 따로 본다
@@ -885,7 +897,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			return null;
 		}
 
-		if (!FunctionDataConverter.TryConvert(data, functions, out UserFunction converted)) return null;
+		// 캐릭터 언어의 규칙으로 바꾼다(#532). Python 캐릭터의 함수는 Python 변수 규칙으로 실행된다
+		if (!FunctionDataConverter.TryConvert(data, functions, language != null ? language.Family : LanguageFamily.C, out UserFunction converted)) return null;
 		userFunctionOriginals[entry.Id] = converted;
 		return converted;
 	}
@@ -907,7 +920,8 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 			if (slotOriginals[i] == null) return false;
 			slotGuids.Add(entry.Id);
 		}
-		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals);
+		// 캐릭터 언어의 규칙으로 컴파일한다 (#532). Python은 문법 오류만 찾는다
+		return SlotCompileChecker.Compiles(slotGuids, functions, appliedGlobals, language != null ? language.Family : LanguageFamily.C);
 	}
 
 	void OnBuildSucceededChanged(bool oldValue, bool newValue) => BuildResultChanged?.Invoke();
@@ -1074,9 +1088,10 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		function is PredefinedFunction skill && skill.Parameters.Count > 0 && skill.Parameters[0].Type?.Kind == VariableTypeKind.Target;
 
 	// 첫 파라미터가 대상 array(Target array)인 스킬인지. 그때만 고른 몬스터들을 argument로 넘긴다 (전장 휩쓸기)
+	// Python 스킬(구슬 난사)의 대상 리스트(Target list)도 같다(#532). 스킬이 대상 array와 리스트를 함께 읽는다
 	static bool TakesTargetArray(FunctionBlock function) =>
 		function is PredefinedFunction skill && skill.Parameters.Count > 0
-		&& skill.Parameters[0].Type?.Kind == VariableTypeKind.Array
+		&& (skill.Parameters[0].Type?.Kind == VariableTypeKind.Array || skill.Parameters[0].Type?.Kind == VariableTypeKind.List)
 		&& skill.Parameters[0].Type.ElementType?.Kind == VariableTypeKind.Target;
 
 	// 받은 오브젝트들을 순서 그대로 몬스터로 바꾼다. 서버에서 찾지 못한 오브젝트(null)나 몬스터가 아닌 오브젝트는 null(대상 없음)로 둔다
@@ -1118,15 +1133,31 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		// 끝난 이유는 실패 내용(OwnTaskEnded)을 먼저 보낸다. 화면이 TaskEnded에서 작업 기록을 지우기 전에 알림을 띄울 수 있게 하기 위함
 		if (IsOffline)
 		{
-			OwnTaskEnded?.Invoke(task.Id, TaskEndInfo.From(task, language));
+			OwnTaskEnded?.Invoke(task.Id, OwnEndInfo(task));
 			TaskEnded?.Invoke(task.Id, task.EndReason);
 		}
 		else if (isServer)
 		{
 			// 서버만 있는 오브젝트(접속한 사람이 없음)에는 보낼 곳이 없다
-			if (connectionToClient != null) TargetOwnTaskEnded(task.Id, TaskEndInfo.From(task, language));
+			if (connectionToClient != null) TargetOwnTaskEnded(task.Id, OwnEndInfo(task));
 			RpcTaskEnded(task.Id, task.EndReason);
 		}
+	}
+
+	// 시전한 사람에게 보낼 끝난 이유. 실행기가 모르는 슬롯 번호를 여기서 채운다 (#536)
+	TaskEndInfo OwnEndInfo(FunctionTask task)
+	{
+		TaskEndInfo info = TaskEndInfo.From(task, language);
+		info.Slot = SlotOf(task);
+		return info;
+	}
+
+	// 출력 글은 그 작업을 시전한 사람에게만 보낸다 (#536)
+	void OnExecutorOutput(FunctionTask task, string text)
+	{
+		string functionName = task.Name ?? "";
+		if (IsOffline) OwnOutput?.Invoke(SlotOf(task), functionName, text);
+		else if (isServer && connectionToClient != null) TargetOwnOutput(SlotOf(task), functionName, text);
 	}
 
 	// 입력 요청은 그 작업을 시전한 사람에게만 보낸다. 고르는 일은 그 사람의 화면에서 하기 때문
@@ -1165,6 +1196,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// 실패 내용은 시전한 사람에게만 보낸다. 다른 플레이어의 실패 이유는 내 화면에 알릴 필요가 없기 때문
 	[TargetRpc]
 	void TargetOwnTaskEnded(int taskId, TaskEndInfo info) => OwnTaskEnded?.Invoke(taskId, info);
+
+	[TargetRpc]
+	void TargetOwnOutput(int slot, string functionName, string text) => OwnOutput?.Invoke(slot, functionName, text);
 
 	[TargetRpc]
 	void TargetInputRequested(int taskId, string inputFunctionId, int slot) => InputRequested?.Invoke(taskId, inputFunctionId, slot);

@@ -19,6 +19,13 @@
   - 맞으면 경직 0.3초(`Hit Stun Time`) 뒤 무적 1초(`Invincible Time`)가 이어진다. 피격 순간부터 둘이 끝날 때까지 다시 맞지 않는다.
   - 경직 동안은 피격 모션, 무적 동안은 깜빡인다.
   - 죽는 공격이면 피격 연출 없이 사망 연출만 한다.
+- 넉백 (`PlayerKnockback`)
+  - 피해를 받으면 때린 쪽 반대로 `Knockback Time`(0.15초, 경직 시간보다 길면 경직 시간만큼) 동안 가로 속도 `Knockback Speed`(5)로 밀린다. 밀리기 시작할 때 위로 `Knockback Up Speed`(4)로 살짝 뜬다(약 0.27칸, 이미 더 빨리 오르는 중이면 그대로). 벽에 막히면 그냥 멈춘다.
+  - 실제 피격(`Damaged` + 경직)에만 민다. 무적·보호막으로 막힌 피해, 죽는 공격, 자해(`TakeSelfDamage`)는 밀지 않는다.
+  - 방향: 때리는 쪽(`ContactDamage`는 몬스터 위치, `MonsterAttackResolver`는 투사체·낙하 패킷 위치)이 피해 직전에 `NotifySource`로 알린 위치의 반대. 모르면(Gateway의 공격 등) 바라보는 반대쪽.
+  - 죽었거나 대시·돌진 중이거나 움직임이 잠겨 있으면(`PlayerMovement.IsDashing`, `IsLunging`, `IsMovementLocked`) 밀지 않는다.
+  - 네트워크: 플레이어 위치는 소유 클라이언트가 정하므로, 서버가 방향을 정해 `[TargetRpc]`로 소유 클라이언트에 보내고 거기서 민다. 호스트의 내 캐릭터와 네트워크 없는 테스트는 그 자리에서 민다. 피격 알림(`RpcHit`)보다 먼저 보내서, 경직이 대시를 끝내기 전에 대시 중인지 본다.
+  - `PlayerMovement`는 경직 중 `Update`에서 가로 속도를 0으로 두므로, `PlayerKnockback`은 `LateUpdate`와 `FixedUpdate`에서 속도를 넣는다. 서버는 `InvokeNetworkManager.FixedUpdate`가 장소 씬 물리를 직접 돌려 실행 순서가 정해져 있지 않으므로, `FixedUpdate`만으로는 호스트에서 밀리지 않는다 (`PlayerMovement`는 고치지 않음).
 - 사망
   - 체력이 0이 되면 사망한다. 사망 중에는 피해를 받지 않고 `CanAct`가 false다.
   - 1초(`Hide Delay`) 뒤 캐릭터를 숨기고 관전으로 넘어간다. Collider는 그대로 남는다(땅에 그대로 서 있게 하기 위함).
@@ -45,13 +52,15 @@
 
 ## 다른 시스템이 쓰는 것
 
-공용 플레이어 프리팹(`Assets/Prefabs/Player.prefab`) 최상위 오브젝트에 `PlayerHealth`, `PlayerHealthEffects`가 붙는다. 변형 프리팹(`Player_UL`, `Player_DH` 등)은 물려받는다. `PlayerHealth`는 `IDamageable`을 구현하므로 몬스터 공격(`ContactDamage`, `MonsterAttackResolver`)은 따로 고치지 않아도 플레이어에게 피해를 준다.
+공용 플레이어 프리팹(`Assets/Prefabs/Player.prefab`) 최상위 오브젝트에 `PlayerHealth`, `PlayerHealthEffects`, `PlayerKnockback`이 붙는다. 변형 프리팹(`Player_UL`, `Player_DH` 등)은 물려받는다. `PlayerHealth`는 `IDamageable`을 구현하므로 몬스터 공격(`ContactDamage`, `MonsterAttackResolver`)은 따로 고치지 않아도 플레이어에게 피해를 준다.
 
 ### `PlayerHealth`
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0 이하이거나, 죽었거나, 경직·무적 중이면 무시한다. 보호막(`DamageBlocking`)이 막아도 무시한다. |
+| `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0 이하이거나, 죽었거나, 경직·무적 중이면 무시한다. 보호막(`DamageBlocking`)이 막아도 무시한다. 자세(`PlayerStance`)가 있으면 받는 피해 증감(C: 3의 배수 +10%)을 보호막보다 먼저 적용한다 (#538) |
+| `Heal(int amount)` | 회복량 | - | [서버] 체력을 회복한다 (#538, stance.md). 최대 체력을 넘지 않고, 0 이하이거나 죽었으면 무시. `HpChanged`는 불림. 자세의 회복(40~60: 스킬이 준 데미지의 5%)이 부름 |
+| `TakeSelfDamage(int damage)` | 자해량 | - | [서버] 자해로 체력을 줄인다 (#538, stance.md). 경직·무적을 걸지 않고, 무적 중에도 깎고, 피격 연출·보호막·받는 피해 증감을 거치지 않는다. `Damaged`, `HpChanged`는 불림. 0이 되면 사망. 0 이하이거나 죽었으면 무시 |
 | `DamageBlocking` (event) | `int` (들어올 피해) | `bool` | [서버] 피해가 들어오기 직전. 받은 쪽이 `true`를 돌려주면 그 피해를 막는다(체력·경직·무적 모두 그대로). 받은 쪽을 차례로 묻고 처음 `true`에서 멈춘다. 파이썬 마법사의 구슬 보호막(`OrbShield`)이 받는다 (#486) |
 | `Hp` | - | `int` | 지금 체력 |
 | `MaxHp` | - | `int` | 최대 체력 (`PlayerStats.MaxHp`) |
@@ -78,6 +87,21 @@
 | `HideEffectPlayed` (event) | - | - | [연출] 캐릭터를 숨기고 카메라를 관전으로 넘길 때 |
 | `RespawnEffectPlayed` (event) | - | - | [연출] 캐릭터가 다시 보이고 카메라를 내 캐릭터로 돌릴 때 |
 
+### `PlayerKnockback`
+
+공용 `Player.prefab` 최상위에 `PlayerHealth`와 함께 붙인다 (`Player_Python` 등 변형 프리팹은 물려받음). `NetworkBehaviour`다.
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `NotifySource(Component hit, Vector2 position)` (static) | 맞은 Collider 등, 때린 쪽 위치 | - | [서버] `hit`의 주인이 플레이어면 때린 쪽 위치를 알린다. 플레이어가 아니면 무시. `TakeDamage` 바로 앞(같은 프레임)에 부른다. `ContactDamage`, `MonsterAttackResolver`가 부른다 |
+| `SetHitSource(Vector2 position)` | 때린 쪽 위치 | - | [서버] 위와 같고, 컴포넌트를 이미 가진 쪽이 부른다. 같은 프레임의 피해에만 쓴다 |
+
+| Inspector 값 | 기본값 | 설명 |
+| --- | --- | --- |
+| `Knockback Speed` | 5 | 밀리는 가로 속도 (초당 유닛). 0이면 밀리지 않는다 |
+| `Knockback Time` | 0.15 | 밀리는 시간(초). `Hit Stun Time`보다 길면 경직 시간만큼만 |
+| `Knockback Up Speed` | 4 | 밀리기 시작할 때 위로 띄우는 속도 (초당 유닛). 0이면 옆으로만 밀린다 |
+
 - 다른 플레이어(파티원)의 체력을 보여 줄 때: 이 화면에 있는 플레이어 목록은 `PlayerRoster`(place-scenes.md)에서 받는다. 클라이언트에서도 위 값과 이벤트가 서버와 같다 (#310)
 
 ## 맞춘 결과
@@ -88,6 +112,7 @@
 - 박진우와 정한 것
   - `PlayerMovement`가 `CanAct`가 false면 이동·점프를 막는다 (#53)
   - `SlotCaster`가 `CanAct`가 false면 시전하지 않고 고르던 대상도 취소한다 (#48)
+- 넉백 (김도훈): `PlayerKnockback`이 `PlayerMovement`의 문서에 있는 값(`Facing`, `IsDashing`, `IsLunging`, `IsMovementLocked`, player-movement.md)을 읽기만 한다. `PlayerMovement`는 고치지 않았다
 - 죽은 뒤 입력 막기 (#310, 이우림 결정: 사용처마다 `CanAct` 검사)
   - 이동·점프(`PlayerMovement`), 슬롯 시전(`SlotCaster`): 이미 검사. 체력 동기화(위 「네트워크」)로 클라이언트에서도 서버와 같은 때 막힌다
   - 서버의 시전 처리(`FunctionExecutorNetwork`): `CanAct`가 false면 `CastRejection.CannotAct`로 거부
@@ -99,6 +124,7 @@
 - 다른 시스템이 쓰는 곳
   - 몬스터 AI(`GroundChaseAI`)가 `IsDead`를 읽어 죽은 플레이어는 쫓지 않는다.
   - 사망 화면 효과(`DeathScreenEffect`, 이우림 #424): 내 캐릭터의 `IsDead`, `RespawnDelay`를 매 프레임 읽어, 내 화면만 무채색으로 바꾸고 어둡게 하며 「사망했습니다」 글자를 띄운다 (Base 씬 Global Volume의 weight, 글자 Canvas의 alpha). 레이드에서 죽으면 `RespawnDelay` 동안만, 그 밖의 장소에서는 부활할 때까지. 레이드 실패 결과 화면 동안(`RaidResultView.MyFailureShowing`, raid.md)은 살아 있든 죽었든 파티원 모두 무채색이고 글자는 숨긴다. `RespawnDelay` 읽기 속성은 이때 이우림이 추가함 (모든 파일 수정 허락, 11/8)
+- 자세 (#538, 이우림 추가, 모든 파일 수정 허락): `TakeDamage`가 받는 피해 증감을 적용하고, 자세의 자해는 `TakeSelfDamage`로 깎고, 회복은 `Heal`로 채운다. 일반 피격처럼 처리하면 0.3초 경직 동안 시전이 막히고, 몬스터에게 맞은 직후의 자해가 무시되기 때문 (기획)
 - 공용 Player 합치기 (#268, 박진우 정리)
   - 김도훈이 공용 `Player.prefab`에 `PlayerHealth`, `PlayerHealthEffects`를 붙인다. 값은 기본값(경직 0.3초, 무적 1초, 숨김 1초, 부활 3초)
   - 변형 프리팹에 따로 붙어 있던 것은 각 담당자가 지운다 (`Player_DH`: 김도훈, `Player_JW`: 박진우, `Player_HW`: 임혜원)

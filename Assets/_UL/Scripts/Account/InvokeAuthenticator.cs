@@ -10,7 +10,8 @@ using UnityEngine;
 /// - 로그인: 내 화면이 RequestLogin 또는 RequestSignUp을 부르면, 서버에 아직 접속하지 않았을 때는 먼저 접속하고 요청을 보낸다.
 /// 서버가 AccountServer로 확인하고 결과(성공이면 캐릭터 목록)를 보낸다. 성공하면 서버와 내 화면 모두 인증을 끝낸다.
 /// 실패해도 접속을 끊지 않으므로 플레이어는 다시 시도할 수 있다.<br/>
-/// - 캐릭터: 로그인한 뒤 RequestCreateCharacter로 캐릭터를 만들고, RequestEnter로 들어간다. 들어가기에 성공하면 서버가 로비에 플레이어를 만든다.
+/// - 캐릭터: 로그인한 뒤 RequestCreateCharacter로 캐릭터를 만들고, RequestEnter로 들어간다. 들어가기에 성공하면 서버가 로비에 플레이어를 만든다.<br/>
+/// - 돌아가기: 들어간 뒤 RequestLeave를 보내면 서버가 접속은 둔 채 플레이어를 없애고, 내 화면은 캐릭터 화면으로 돌아간다 (#570).
 /// </para>
 /// <para>
 /// 사용법<br/>
@@ -52,6 +53,9 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	/// <summary>[내 화면] 들어가기 결과를 받았을 때. 성공하면 이어서 서버가 로비에 플레이어를 만든다.</summary>
 	public event Action<EnterGameResultMessage> EnterGameResultReceived;
 
+	/// <summary>[내 화면] 캐릭터 화면으로 돌아가기 결과를 받았을 때 (#570). 성공하면 서버가 플레이어를 없앴다. 성공·실패 모두 그 계정의 지금 캐릭터 목록이 들어 있다.</summary>
+	public event Action<LeaveGameResultMessage> LeaveGameResultReceived;
+
 	/// <summary>[내 화면] 서버가 곧 접속을 끊는다는 알림을 받았을 때. 받는 값은 이유 (예: LoggedInElsewhere).</summary>
 	public event Action<AccountFailure> Kicked;
 
@@ -73,6 +77,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		// 캐릭터 요청은 로그인한 연결만 보낼 수 있다
 		NetworkServer.RegisterHandler<CreateCharacterRequest>(OnCreateCharacterRequest);
 		NetworkServer.RegisterHandler<EnterGameRequest>(OnEnterGameRequest);
+		NetworkServer.RegisterHandler<LeaveGameRequest>(OnLeaveGameRequest);
 		NetworkServer.RegisterHandler<ProgressTestDataRequest>(OnProgressTestDataRequest);
 		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.ServerPlayerCreated += OnServerPlayerCreated;
 		Debug.Log($"[InvokeAuthenticator] 계정 DB를 열었습니다: {AccountStore.DefaultPath}");
@@ -87,6 +92,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkServer.UnregisterHandler<AccountAuthRequest>();
 		NetworkServer.UnregisterHandler<CreateCharacterRequest>();
 		NetworkServer.UnregisterHandler<EnterGameRequest>();
+		NetworkServer.UnregisterHandler<LeaveGameRequest>();
 		NetworkServer.UnregisterHandler<ProgressTestDataRequest>();
 		if (NetworkManager.singleton is InvokeNetworkManager manager) manager.ServerPlayerCreated -= OnServerPlayerCreated;
 		accountServer?.Dispose();
@@ -138,6 +144,18 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		else Debug.LogError("[InvokeAuthenticator] InvokeNetworkManager가 없어서 플레이어를 만들 수 없습니다.");
 	}
 
+	// 캐릭터 화면으로 돌아가기 (#570): 세션을 되돌리고 결과를 보낸 뒤 플레이어를 없앤다. 접속은 끊지 않으므로 Host도 쓸 수 있다
+	void OnLeaveGameRequest(NetworkConnectionToClient conn, LeaveGameRequest request)
+	{
+		if (!(NetworkManager.singleton is InvokeNetworkManager manager))
+		{
+			Debug.LogError("[InvokeAuthenticator] InvokeNetworkManager가 없어서 플레이어를 없앨 수 없습니다.");
+			return;
+		}
+		if (!accountServer.TryLeave(conn, manager.CanReturnToCharacters(conn))) return;
+		manager.ReturnToCharacters(conn);
+	}
+
 	// 플레이어가 만들어진 직후 「들어가기」 때 불러온 진행도를 넣는다
 	void OnServerPlayerCreated(NetworkConnectionToClient conn, GameObject player)
 	{
@@ -181,6 +199,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkClient.RegisterHandler<AccountKickedMessage>(OnKicked, false);
 		NetworkClient.RegisterHandler<CreateCharacterResultMessage>(OnCreateCharacterResult);
 		NetworkClient.RegisterHandler<EnterGameResultMessage>(OnEnterGameResult);
+		NetworkClient.RegisterHandler<LeaveGameResultMessage>(OnLeaveGameResult);
 		NetworkClient.RegisterHandler<ProgressTestDataResult>(OnProgressTestDataResult);
 	}
 
@@ -190,6 +209,7 @@ public class InvokeAuthenticator : NetworkAuthenticator
 		NetworkClient.UnregisterHandler<AccountKickedMessage>();
 		NetworkClient.UnregisterHandler<CreateCharacterResultMessage>();
 		NetworkClient.UnregisterHandler<EnterGameResultMessage>();
+		NetworkClient.UnregisterHandler<LeaveGameResultMessage>();
 		NetworkClient.UnregisterHandler<ProgressTestDataResult>();
 		hasPendingRequest = false;
 		skippingLogin = false;
@@ -243,6 +263,17 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	{
 		if (!IsLoggedIn()) return false;
 		NetworkClient.Send(new EnterGameRequest { language = language });
+		return true;
+	}
+
+	/// <summary>
+	/// [내 화면] 게임에 들어간 뒤, 게임에서 나와 캐릭터 화면으로 돌아가기를 요청한다 (#570). 접속은 끊지 않는다.
+	/// 결과는 LeaveGameResultReceived로 온다. 보내지 못했으면(로그인 전) false.
+	/// </summary>
+	public bool RequestLeave()
+	{
+		if (!IsLoggedIn()) return false;
+		NetworkClient.Send(new LeaveGameRequest());
 		return true;
 	}
 
@@ -304,6 +335,11 @@ public class InvokeAuthenticator : NetworkAuthenticator
 	void OnEnterGameResult(EnterGameResultMessage result)
 	{
 		EnterGameResultReceived?.Invoke(result);
+	}
+
+	void OnLeaveGameResult(LeaveGameResultMessage result)
+	{
+		LeaveGameResultReceived?.Invoke(result);
 	}
 
 	void OnProgressTestDataResult(ProgressTestDataResult result)

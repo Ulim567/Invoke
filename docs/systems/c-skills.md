@@ -22,7 +22,16 @@
 - 에셋: `Assets/_JW/Resources/SkillTable.asset`. Inspector에서 고친다.
 - 스킬 클래스는 값을 쓸 때마다 표를 읽는다. 표를 고치면 코드를 고치지 않아도 다음 시전부터 반영된다.
 - 한 ID에 한 줄. 표에 없는 ID는 콘솔 오류를 한 번 남기고, 이름은 ID, 틱 수는 1로 동작한다.
-- **지금 수치는 전부 임시다** (노션 「C 캐릭터 - 1차」 10. 아직 정하지 않은 것). 틱 수 20, 쿨타임 0, 지역 변수 0, heap은 쓰는 스킬만 1.
+- **지금 수치는 전부 임시다** (노션 「C 캐릭터 - 1차」 10. 아직 정하지 않은 것). 틱 수 20, 지역 변수 0, heap은 쓰는 스킬만 1.
+  - 쿨타임 (#566, 박진우): 메뉴 Invoke → JW → C 스킬 쿨타임 넣기(`CSkillCooldowns`)가 아래 값을 표에 넣는다. 1틱 = 0.02초. 기본기와 heap이 제한인 스킬은 0, 스킬 트리 뒤쪽 스킬일수록 길게 (파이썬 마법사와 같은 크기). 자세(stance.md)·능력치의 쿨타임 감소가 여기에 곱해진다.
+
+    | 계열 | 스킬 (쿨타임 틱) |
+    | --- | --- |
+    | 찌르기 | 검 찌르기 0, 검 집중찌르기 50, 꼬챙이 100, 소환검 찌르기 50, 상처 공략 100, 검 깊이찌르기 150, 급소공략 200 |
+    | 던지기 | 검 던지기 0 (던지면 맨손), 소환검 던지기 50, 검 돌아오기 50 |
+    | 휘두르기 | 검 휘두르기 0 (검기 heap), 검 크게베기 100, 소환검 휘두르기 100, 상처 가르기 150, 검 다중베기 200, 전장 휩쓸기 300 |
+    | 소환 | 검 소환 0, 해제 0, 패링 150, 표식 남기기 200, 검무 300 |
+    | 이동 | 대시 25 (블록코딩에서 부를 때. ←← / →→ 는 `PlayerMovement`의 0.5초), 더블점프 0, 검 타기 300 |
   - 기본 배율은 1. 「데미지는 낮지만」, 「약함」이라고 적힌 스킬(꼬챙이, 검 크게베기, 검무)만 임시로 0.5.
   - 조건 배율(출혈, 표식, 미니게임, 치명타)은 표가 아니라 `DamageBonus`(damage-calculation.md)를 따른다.
 
@@ -199,7 +208,8 @@
   - 사용 가능한 소환검이 모두 대상 둘레에 고르게 나뉘어 돈다 (`SummonedSwords.Dance`, `Dancing` 상태).
   - `CSwordDance.HitIntervalTicks`(임시 6틱)마다, 대상 가운데에서 2.5칸 안의 검마다 한 번씩 공격력 × 표 배율(0.5) + 출혈(`StatusEffects.TryApply(Bleed)`). 20틱이면 검 하나당 대략 3번.
   - 스킬이 끝나거나 끊기면 `EndDance`로 검이 곁으로 돌아온다. 대상이 죽으면 더 베지 않는다.
-- 소환 계열 데미지는 `SummonDamage.Deal`(공격력 × 표 배율 → `TakeDamage` → `SkillEffectEvents.Hit`)을 함께 쓴다.
+- 소환 계열 데미지는 `SummonDamage.Deal`(공격력 × 표 배율 → `TakeDamage` → `SkillEffectEvents.Hit`)을 함께 쓴다. 첫 인자는 데미지를 주는 스킬(`DataDrivenSkill`, #538에서 스킬 ID 대신)이다.
+- 자세 (#538, 이우림 추가, stance.md): 모든 스킬 데미지 자리가 `BonusRate`에 `StanceDamageBonus(caster)`(모든 스킬 + 그 스킬 계열 추가분)를 더하고, `TakeDamage` 뒤에 `NotifyDamageDealt(caster, 데미지)`를 부른다(맞힐 때마다 자세의 회복, 시전 한 번에 처음 한 번 자해). 새 스킬이 데미지를 주면 같은 두 가지를 넣는다. 계열 규칙(홀수·짝수·피보나치)은 표의 `family` 값으로 정해지므로 표의 계열이 맞아야 한다
 - 슬롯에서 전장 휩쓸기: 여러 명 선택으로 찍은 대상을 `RequestCast(슬롯, 대상 배열)`로 서버에 보내 시전한다 (slot-caster.md, #238).
 
 ### 패링 (#245)
@@ -222,7 +232,7 @@
 ### 이동 스킬: 대시·더블점프·검 타기 (#256)
 - 공통(`MovementSkill`): 스킬 동안 표의 heap(1칸)을 잡고 끝나면 돌려준다. heap이 모자라면 이동하지 않는다. 끊기면 heap은 누수.
 - 이동은 소유 클라이언트가 하므로 스킬은 `PlayerMovement`에 요청만 한다 (서버에서는 `[TargetRpc]`, player-movement.md 「이동 스킬」).
-- 대시 (`common.dash`): 바라보는 쪽으로 4칸 / 0.15초 (임시). 공중 가능, 맨손 가능.
+- 대시 (`common.dash`): 바라보는 쪽으로 4칸 / 0.15초 (임시). 공중 가능, 맨손 가능. 해금하면 ←← / →→ 로 쓴다 (#557, 패시브, `PlayerMovement`가 함, player-movement.md 「방향키 두 번 대시」). **슬롯에는 넣지 못한다** (`SlotLoadout.IsEquippableSkill`이 false). 블록코딩에서 부르면 바라보는 쪽으로 대시.
 - 더블점프 (`common.double_jump`): 해금하면 공중에서 Space로 한 번 더 (패시브, `PlayerMovement`가 함). **슬롯에는 넣지 못한다** (`SlotLoadout.IsEquippableSkill`이 false). 블록코딩에서 부르면 공중 점프 한 번.
 - 검 타기 (`c.sword_ride`): 사용 가능한 소환검 1개가 발밑에 붙고(`SummonedSwords.Ride`, `Riding` 상태), 스킬 동안 중력 없이 ←→↑↓로 난다. `PlayerMovement.RideSeconds`(임시 30초) 동안 날고, 스킬(20틱)은 시작만 하고 먼저 끝난다. 시간이 다 되면 내려오고 검은 곁으로 (끊기면 바로). 대시·장소 이동·경직·사망으로 타기가 먼저 끝나도 검은 바로 곁으로 돌아와 다른 스킬에 쓸 수 있다 (#325, `PlayerMovement`가 서버에 알림). 이미 타는 중(`SummonedSwords.HasRidingSword`)에 다시 시전하면 두 번째 검을 쓰지 않는다. 머리 위 작은 바로 남은 시간 표시(`SwordRideTimerView`, 임시). 슬롯 키를 뗀 뒤 ←→↑↓로 난다. ↑↓는 `MoveY`(#271)를 `PlayerMovement`가 읽는다 (#317, player-movement.md). 키를 떼면 그 높이에 멈추고, 아래 바닥과는 `Ride Clearance`만큼 떠 있어 ↓로도 바닥에 닿지 않는다. 발판 아래로는 ↓ + Space로 내려간다(땅은 못 뚫음, #351).
 
@@ -254,6 +264,19 @@
 | `SkillTable.Instance.Skills` | - | `IReadOnlyList<SkillData>` | 표의 모든 줄. 스킬 트리, 스킬 목록 화면에서 쓴다 |
 
 `SkillData`의 값은 위 「수치 표」의 칸과 같고, 이름은 PascalCase다 (예: `DisplayName`, `TickCount`, `NeedsSummonedSword`). 읽기만 할 수 있다.
+
+### `SkillFamilies` (#578, 이우림)
+- 위치: `Assets/_JW/Scripts/Skills/SkillData.cs` (`SkillFamily` 옆)
+- 계열의 화면 이름과 순서를 한곳에 둔다. 블록 편집 화면(함수 탭 계열 소구분, 참고 탭 카드 태그 「스킬 > 찌르기」), 스킬 트리의 계열 줄 이름, 자세 효과 글(「찌르기 계열 데미지」)이 같이 쓴다
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `SkillFamilies.KoreanName(SkillFamily family)` | 계열 | `string` | 한글 이름. 찌르기, 던지기, 휘두르기, 소환, 이동, 원소, 범위, 구슬, 보조 |
+| `SkillFamilies.COrder`, `PythonOrder` | - | `IReadOnlyList<SkillFamily>` | 캐릭터 언어별 계열 순서 = 스킬 트리 줄 순서. C 소환·찌르기·던지기·휘두르기·이동, Python 구슬·원소·범위·보조·이동 |
+| `SkillFamilies.KoreanNames(IReadOnlyList<SkillFamily> order)` | 계열 순서 | `string[]` | 순서대로 한글 이름 (스킬 트리 줄 이름) |
+| `SkillFamilies.Of(string skillId)` | 스킬 고정 ID | `SkillFamily?` | 스킬 표의 `family`. 표에 없으면 null (`SkillTable.TryGet`이 콘솔에 오류를 찍으므로 스킬인 ID만 넘김) |
+
+- 계열을 더하면 `SkillFamily` 맨 끝에 더하고(저장 값이 바뀌지 않게) `KoreanName`과 순서 목록에도 넣는다
 
 ### 연출 event (`SkillEffectEvents`, #152)
 
@@ -296,6 +319,7 @@
 | `ThrowSkillSimTest` | Test_JW의 ThrowTest. 켜고 Play → Host (약 10초). 소환검 던지기(명중·몬스터에 꽂힘), 검 던지기(사거리 안 명중·데미지·근처에 떨어짐), 검 돌아오기(소환검이 곁으로 오고 오는 길 몬스터에 데미지, 물리 검은 땅에 그대로. 한 번 더 써도 물리 검은 안 옴, #232), 처형(체력 2% 이하 몬스터 죽음)을 확인. 몬스터 하나를 처형한다. 「[ThrowTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `Thrust2SimTest` | Test_JW의 Thrust2Test. 켜고 Play → Host (약 10초). 상처 공략(출혈 없음 기본, 출혈 2.0배), 깊이찌르기 6번(치명타는 2.5배, 아니면 기본, 한 번도 안 나면 경고), 소환검 찌르기(캐릭터 안 움직임, 고른 몬스터 기본 데미지, 검이 돌아옴), 소환검 없을 때 `NoSummonedSwordError`를 확인. 소환검이 없으면 하나 소환하고, 끝에 모두 해제한다. 「[Thrust2Test] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 | `SwordWaveSimTest` | Test_JW의 WaveTest. 켜고 Play → Host (약 4초). 검 휘두르기(가장 가까운 몬스터 한 명만 맞음, 데미지, 날아가는 동안 heap 사용, 끝나면 heap 원래대로, 검기 사라짐), 검 크게베기(사거리 안 몬스터 모두 관통해서 맞음·밖은 안 맞음, 모두 출혈, 0.5배, heap 원래대로. 사거리 안에 2명 미만이면 경고)를 확인. 「[WaveTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
+| `TestNoCooldown` | (#566) 켜 두면 서버의 모든 플레이어에게 쿨타임 감소 100%를 준다(`PlayerStats.AddBonus(CooldownReduction, 1)`, 끄면 뺌). 같은 스킬을 연달아 시전하는 시험(찌르기·휘두르기·표식·패링 등)을 돌릴 때 같이 켠다. 쿨타임 자체를 보는 시험(StanceTest, CooldownTest)과는 같이 켜지 않는다. 평소에는 꺼 둔다. |
 | `SkillCastTest` | Test_JW의 SkillTest. 켜고 Play → Host. 표 검사(이름·틱 수·쿨타임·파라미터), 24개 시전(표의 틱 수만큼 실행되는지. 시작 전에 1.5초 기다리고, 소환검이 필요한 스킬 앞에서는 던진 검을 되돌리거나 모자란 만큼 소환함(표식 남기기는 2개), #220, #243. 던진 물리 검은 매번 손으로 되돌림, #232), 맨손 검사(물리 검을 던져 맨손으로 만든 뒤 검 찌르기는 `UnarmedError`, 검 돌아오기는 정상)를 한다. 「[SkillTest] 전체 통과」면 통과. 평소에는 꺼 둔다. |
 
 ## 맞춘 결과
@@ -306,6 +330,7 @@
   - 소환검 = `Sword` struct. `malloc(Sword)` 블록과 검 소환 스킬이 같은 소환검을 만든다. `Sword` 크기는 임시 2칸 (#191, #220)
 - 정한 것
   - 대시는 스킬(`common.dash`)로 둔다. 왼쪽 Shift는 달리기(이동 속도 증가)로 바꾼다 (입력 키는 이우림이 반영)
+  - 대시는 해금하면 ←← / →→ 로 쓰고 슬롯에서 뺀다 (#557, 박진우). 쿨타임 0.5초, 공중 1번, 두 번 누르기 간격 0.25초 (모두 임시)
 - 임혜원과 정함 (#152)
   - 이펙트는 `SkillEffectEvents`의 event를 받아서 튼다 (스킬 코드는 고치지 않음)
 - 정해야 할 것

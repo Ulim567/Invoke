@@ -40,7 +40,8 @@ public class SlotServerDataSimTest : MonoBehaviour
 		// 원래 장착 내용과 저장 파일 상태
 		SlotLoadout.Entry[] before = new SlotLoadout.Entry[SlotLoadout.SlotCount];
 		for (int i = 0; i < before.Length; i++) before[i] = loadout.GetEntry(i);
-		string savePath = Path.Combine(Application.persistentDataPath, "SlotLoadout.json");
+		// SlotLoadout과 같은 파일 (#570: 캐릭터 언어 폴더 안)
+		string savePath = LocalSaveFolder.PathFor(PlayerCharacter.LanguageOf(loadout.gameObject), "SlotLoadout.json");
 		string fileBefore = File.Exists(savePath) ? File.ReadAllText(savePath) : null;
 
 		// 서버가 보낸 것처럼: 슬롯 함수 8개 + 페이지 함수 1개. 모두 이 컴퓨터 파일에 없는 새 GUID

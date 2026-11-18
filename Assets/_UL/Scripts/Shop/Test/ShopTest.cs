@@ -45,9 +45,17 @@ public class ShopTest : MonoBehaviour
 		Check("새 C 캐릭터는 문법 블록 후보가 없음 (순차 실행은 함수·wait만 엶)",
 			ShopRoller.SyntaxCandidates(cStart, noItems, CharacterLanguages.C).Count == 0);
 		HashSet<string> cFunctions = Ids(ShopRoller.FunctionCandidates(cStart, noItems, CharacterLanguages.C));
-		Check("새 C 캐릭터의 함수 후보 = thrust, sword_throw, get_bug, is_valid_target, printf(#536), init_stance·get_stance(#538), Wait",
+		// 자세 함수는 스킬 트리 노드(자세 정하기·자세 확인)를 해금해야 후보가 된다 (#545)
+		Check("새 C 캐릭터의 함수 후보 = thrust, sword_throw, get_bug, is_valid_target, printf(#536), Wait. 자세 함수는 해금 전이라 없음(#545)",
 			cFunctions.SetEquals(new[] { PredefinedFunctionIds.Thrust, PredefinedFunctionIds.SwordThrow, PredefinedFunctionIds.GetBug,
-				PredefinedFunctionIds.IsValidTarget, PredefinedFunctionIds.Printf, PredefinedFunctionIds.InitStance, PredefinedFunctionIds.GetStance, "Wait" }));
+				PredefinedFunctionIds.IsValidTarget, PredefinedFunctionIds.Printf, "Wait" }));
+		HashSet<string> pyStartFunctions = Ids(ShopRoller.FunctionCandidates(StartingUnlocks(CharacterLanguages.Python), noItems, CharacterLanguages.Python));
+		Check("새 Python 캐릭터도 자세 함수는 후보가 아님 (#545)",
+			!pyStartFunctions.Contains(PredefinedFunctionIds.PyInitStance) && !pyStartFunctions.Contains(PredefinedFunctionIds.PyGetStance));
+		var cWithStance = new List<string>(cStart) { PredefinedFunctionIds.InitStance };
+		HashSet<string> cStanceFunctions = Ids(ShopRoller.FunctionCandidates(cWithStance, noItems, CharacterLanguages.C));
+		Check("자세 정하기를 해금하면 init_stance만 후보, get_stance는 아직 아님 (#545)",
+			cStanceFunctions.Contains(PredefinedFunctionIds.InitStance) && !cStanceFunctions.Contains(PredefinedFunctionIds.GetStance));
 		Check("대시·더블점프는 후보가 아님",
 			!cFunctions.Contains(PredefinedFunctionIds.Dash) && !cFunctions.Contains(PredefinedFunctionIds.DoubleJump));
 

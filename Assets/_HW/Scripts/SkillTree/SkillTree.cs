@@ -213,11 +213,31 @@ public class SkillTree : ScriptableObject
 		string cycle = FindCycle();
 		if (cycle != null) problems.Add($"선행 조건이 돌고 있음: {cycle}");
 
-		// 스킬 노드와 SkillTable(박진우)의 스킬이 같아야 한다
+		// 자세 (#545): 자세 함수 노드는 처음 개수가 없어 노드가 없으면 상점 말고는 얻을 수 없다.
+		// 규칙 노드는 자세 규칙 표(StanceRule)의 줄과 하나씩 맞아야 화면에 이름·효과가 보인다
+		foreach (string function in StanceRule.FunctionIds)
+		{
+			if (!ids.Contains(function)) problems.Add($"{function}: 자세 함수인데 스킬 트리에 없음");
+		}
+		foreach (SkillTreeNode node in nodes.Where(n => n.Kind == SkillTreeNodeKind.Rule))
+		{
+			if (!StanceRule.TryGetRule(node.Id, out _)) problems.Add($"{node.Id}: 자세 규칙 표(StanceRule)에 없는 규칙 노드");
+			if (node.UnlocksBlocks.Count > 0) problems.Add($"{node.Id}: 규칙 노드인데 여는 블록이 있음");
+		}
+		var ruleNodes = new HashSet<string>(nodes.Where(n => n.Kind == SkillTreeNodeKind.Rule).Select(n => n.Id));
+		foreach (StanceRule language in StanceRule.All)
+		{
+			foreach (StanceRuleEntry rule in language.Rules)
+			{
+				if (!ruleNodes.Contains(rule.NodeId)) problems.Add($"{rule.NodeId}: 자세 규칙 표에는 있는데 스킬 트리에 규칙 노드(Rule)로 없음");
+			}
+		}
+
+		// 스킬 노드와 SkillTable(박진우)의 스킬이 같아야 한다. 자세 함수는 스킬이 아니라서 SkillTable에 없으므로 뺀다 (#545)
 		if (SkillTable.Instance != null)
 		{
 			var skillIds = new HashSet<string>(SkillTable.Instance.Skills.Select(s => s.Id));
-			foreach (SkillTreeNode node in nodes.Where(n => n.Kind == SkillTreeNodeKind.Skill))
+			foreach (SkillTreeNode node in nodes.Where(n => n.Kind == SkillTreeNodeKind.Skill && !StanceRule.FunctionIds.Contains(n.Id)))
 			{
 				if (!skillIds.Contains(node.Id)) problems.Add($"{node.Id}: SkillTable에 없는 스킬");
 			}
@@ -285,5 +305,27 @@ public class SkillTree : ScriptableObject
 		UnityEditor.EditorUtility.SetDirty(this);
 #endif
 		Debug.Log($"[SkillTree] 기획서대로 노드 {nodes.Count}개를 채움. Ctrl/Cmd+S로 저장하고 「검사」를 눌러 확인한다");
+	}
+
+	// 「기획서대로 채우기」와 달리 에셋에 있는 노드(Inspector에서 고친 재료·메모 등)는 그대로 두고,
+	// 기획서(SkillTreeDefaults)에만 있는 노드를 맨 뒤에 더한다. 새 노드를 코드에 먼저 적은 뒤 에셋에 옮길 때 쓴다 (#545 자세 노드 19개)
+	[ContextMenu("기획서에서 빠진 노드 더하기")]
+	void AddMissingDefaults()
+	{
+		var have = new HashSet<string>(nodes.Where(n => n != null).Select(n => n.Id));
+		var added = new List<string>();
+		foreach (SkillTreeNode node in SkillTreeDefaults.Create())
+		{
+			if (have.Contains(node.Id)) continue;
+			nodes.Add(node);
+			added.Add(node.Id);
+		}
+		byId = null;
+#if UNITY_EDITOR
+		if (added.Count > 0) UnityEditor.EditorUtility.SetDirty(this);
+#endif
+		Debug.Log(added.Count == 0
+			? "[SkillTree] 빠진 노드 없음"
+			: $"[SkillTree] 노드 {added.Count}개를 더함: {string.Join(", ", added)}. Ctrl/Cmd+S로 저장하고 「검사」를 눌러 확인한다");
 	}
 }

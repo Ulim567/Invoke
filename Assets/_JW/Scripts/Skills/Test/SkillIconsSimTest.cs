@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -5,7 +6,7 @@ using UnityEngine;
 /// <para>
 /// 1. 스킬 트리의 스킬 노드마다 아이콘이 있다 (24개)<br/>
 /// 2. 아이콘이 24×24 픽셀이고 Point 필터다<br/>
-/// 3. 없는 ID와 문법 노드는 null
+/// 3. 없는 ID와 문법·자세 규칙 노드는 null. 자세 함수 노드(init_stance·get_stance, #545)는 검사하지 않는다
 /// </para>
 /// </summary>
 public class SkillIconsSimTest : MonoBehaviour
@@ -19,6 +20,8 @@ public class SkillIconsSimTest : MonoBehaviour
 		int skills = 0, found = 0;
 		foreach (SkillTreeNode node in SkillTree.Instance.Nodes)
 		{
+			// 자세 함수(init_stance·get_stance)는 스킬 노드이지만 스킬이 아니라서 아이콘이 없다 (#545)
+			if (StanceRule.FunctionIds.Contains(node.Id)) continue;
 			if (node.Kind == SkillTreeNodeKind.Skill)
 			{
 				skills++;
@@ -29,7 +32,7 @@ public class SkillIconsSimTest : MonoBehaviour
 				if (!size) Check($"{node.Id} 아이콘이 24×24 (지금 {icon.rect.width}×{icon.rect.height})", false);
 				if (icon.texture.filterMode != FilterMode.Point) Check($"{node.Id} 아이콘이 Point 필터", false);
 			}
-			else if (SkillIcons.Get(node.Id) != null) Check($"문법 노드 {node.Id}는 아이콘 없음", false);
+			else if (SkillIcons.Get(node.Id) != null) Check($"문법·자세 규칙 노드 {node.Id}는 아이콘 없음", false);
 		}
 		Check($"스킬 노드 {skills}개 중 아이콘 {found}개", skills > 0 && found == skills);
 		Check("없는 ID는 null", SkillIcons.Get("no.such_skill") == null && SkillIcons.Get(null) == null);

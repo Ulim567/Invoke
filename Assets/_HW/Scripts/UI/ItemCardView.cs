@@ -37,7 +37,8 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 	[SerializeField, Tooltip("카드 몸통 (왼쪽 위 기준). 가로는 놓인 자리에 맞추고, 글자 크기가 팝업과 같도록 키운다")] RectTransform card;
 
 	[SerializeField, Range(0.5f, 1f), Tooltip("설명 칸·참고 탭처럼 다른 글과 나란히 놓일 때(Compact) 팝업보다 작게 보이는 비율")]
-	float compactScale = 0.85f;
+	float compactScale = DefaultCompactScale;
+	const float DefaultCompactScale = 0.85f;
 
 	[Header("머리줄 (팝업에서만)")]
 	[SerializeField] GameObject header;
@@ -201,7 +202,10 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 		if (categoryText != null) categoryText.text = $"<noparse>{entry.Category}</noparse>";
 		if (categoryTag != null) categoryTag.color = entry.Picture != null ? BlockLabels.ColorOf(entry.Picture) : TypeColor;
 
-		if (summaryText != null) summaryText.text = string.IsNullOrEmpty(entry.Summary) ? "" : $"<noparse>{entry.Summary}</noparse>";
+		// 자세 규칙 카드(#545)는 효과마다 색을 칠하므로 태그를 읽고, 첫 줄 문장이 설명이라 「기능」 줄 이름을 숨긴다
+		richSummary = entry.RichSummary;
+		if (summaryText != null)
+			summaryText.text = string.IsNullOrEmpty(entry.Summary) ? "" : richSummary ? entry.Summary : $"<noparse>{entry.Summary}</noparse>";
 
 		// 함수(사전 정의 함수, malloc·free·wait)는 「함수 원형」, 문법 블록은 「형식」. type은 그림 칸의 값이 형식이므로 줄을 숨긴다
 		bool isType = entry.TypeLiteral != null;
@@ -210,6 +214,8 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 		if (codeText != null) codeText.text = BlockReference.ColorCode(entry.CodeText ?? "");
 
 		if (pictureLabel != null) pictureLabel.text = isType ? "값 예" : "블록 사용 예";
+		// 그림이 없는 카드(자세 규칙, #545)는 「블록 사용 예」 줄을 숨긴다
+		hasPicture = isType || entry.Picture != null;
 		BuildPicture(entry);
 
 		hasUsage = !string.IsNullOrEmpty(entry.UsageTab);
@@ -354,7 +360,7 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 
 	bool collapsible;
 	bool open = true;
-	bool hasUsage, hasMore, hasCode, hasEnglish;
+	bool hasUsage, hasMore, hasCode, hasEnglish, hasPicture, richSummary;
 	string titleName = "";
 	RectOffset openPadding;
 	float openSpacing;
@@ -447,10 +453,10 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 			Transform label = card.Find("SummaryLabel");
 			if (label != null) summaryLabel = label.gameObject;
 		}
-		if (summaryLabel != null) summaryLabel.SetActive(show);
+		if (summaryLabel != null) summaryLabel.SetActive(show && !richSummary);
 		if (summaryText != null) summaryText.gameObject.SetActive(show);
-		if (pictureLabel != null) pictureLabel.gameObject.SetActive(show);
-		if (pictureBox != null) pictureBox.gameObject.SetActive(show);
+		if (pictureLabel != null) pictureLabel.gameObject.SetActive(show && hasPicture);
+		if (pictureBox != null) pictureBox.gameObject.SetActive(show && hasPicture);
 		if (usageRow != null) usageRow.SetActive(show && hasUsage);
 		// 접힌 카드에도 아래 줄에 「펼치기 >」를 보여 눌러서 펼치는 카드인 것을 알린다 (사용자 요청 11/18: 토글인지 모르겠음)
 		if (detailsButton != null) detailsButton.gameObject.SetActive(show && hasMore);
@@ -490,7 +496,10 @@ public class ItemCardView : MonoBehaviour, IPointerClickHandler
 		if (card == null || fit == null) return;
 		float width = ((RectTransform)transform).rect.width;
 		if (width <= 0) return;
-		float scale = CanvasUnit() * (compact ? compactScale : 1f);
+		// compactScale이 0 이하이면 기본값(0.85). 프리팹에 0이 저장되어 카드 배율이 0, 가로가 무한대가 되어
+		// Canvas가 「Invalid AABB」를 내고 설명 칸·참고 탭 카드가 보이지 않던 일이 있었다 (#545에서 찾음)
+		float compactRate = compactScale > 0f ? compactScale : DefaultCompactScale;
+		float scale = CanvasUnit() * (compact ? compactRate : 1f);
 		// 나란히 놓인 카드는 오른쪽에 조금 비운다 (참고 탭의 스크롤 막대에 카드 테두리가 붙어 잘려 보이지 않게)
 		float inset = compact ? RightInset * CanvasUnit() : 0f;
 		float cardWidth = Mathf.Max(MinWidth, (width - inset) / scale);

@@ -13,9 +13,12 @@ using UnityEngine.UI;
 ///   탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 두고 칸에 넣는다.<br/>
 /// - 노드 위치는 SkillLayout·SyntaxLayout 표로 정한다. 표에 없는 노드는 맨 아래 「기타」 줄에 놓는다.<br/>
 /// - 스킬 탭은 내 캐릭터 언어(PlayerCharacter.LocalLanguage)의 노드만 보인다. C는 SkillLayout, Python은 PythonSkillLayout (#523). 문법 탭과 공통 이동은 두 언어 모두.<br/>
+/// - 자세 탭 (#545): 자세 정하기·자세 확인과 자세 규칙 노드(SkillTreeNodeKind.Rule). 규칙은 판별에 필요한 문법마다 한 줄(StanceLayout, PythonStanceLayout).
+///   해금 전 규칙 노드는 이름이 「???」다.<br/>
 ///   문법은 세로 한 줄이고, 트리 칸보다 길면 세로 스크롤을 켠다 (UpdateScroll).<br/>
 ///   같은 계열 안의 선행은 선으로 잇고, 다른 계열의 선행(예: 검 소환)은 이름 아래 「+ 검 소환」으로 적는다.<br/>
 /// - 창이 열리면 내 캐릭터의 PlayerProgress에서 해금 목록과 재료를 읽고, PlayerProgress.Changed마다 다시 그린다. 내 캐릭터가 없으면(네트워크 없는 시험) SetUnlocked로 받은 목록, 그것도 없으면 처음부터 해금된 노드만.<br/>
+/// - 해금한 노드를 고르면 같은 버튼이 「자세히 보기」가 되어 가운데에 설명 카드를 띄운다 (#545).<br/>
 /// - 「해금」 버튼은 UnlockRequested(노드 ID)를 알리고, 내 캐릭터의 PlayerProgress.RequestUnlock(이우림 #315)으로 서버에 해금을 요청한다.
 ///   서버가 재료를 빼고 해금·저장하며, 결과는 PlayerProgress.UnlockAnswered로 받아 실패 이유를 설명 칸에 적는다.
 /// </para>
@@ -38,6 +41,8 @@ public class SkillTreeView : MonoBehaviour
 	RectTransform treeContent;
 	[SerializeField] Button syntaxTab;
 	[SerializeField] Button skillTab;
+	[SerializeField, Tooltip("자세 탭 (#545). 자세 정하기·자세 확인과 자세 규칙 노드가 보인다. 비어 있으면 자세 노드를 볼 수 없다")]
+	Button stanceTab;
 	[SerializeField, Tooltip("고른 노드 이름")]
 	TMP_Text detailTitle;
 	[SerializeField, Tooltip("고른 노드 설명 (선행, 재료, 같이 열림, 여는 블록)")]
@@ -48,6 +53,8 @@ public class SkillTreeView : MonoBehaviour
 	const float NodeWidth = 170f, NodeHeight = 48f, ColumnGap = 28f, RowGap = 10f; // 스킬 탭 전체 약 1122×668. 시안 9 창의 트리 칸(1158×702)에 스크롤 없이 들어감
 	// 문법 탭은 세로 한 줄이라 줄 사이를 넓힌다 (캔버스 9: 노드 44 : 줄 72). 나중에 노드 옆 설명이 들어갈 높이이고, 트리 칸보다 길어져 세로 스크롤이 생긴다
 	const float SyntaxRowGap = 42f;
+	// 자세 탭은 줄마다 다른 문법이라 줄 사이를 조금 띄워 줄끼리 구분되게 한다 (#545)
+	const float StanceRowGap = 24f;
 	const float WheelSensitivity = 10f; // 트리 칸 Scroll Rect의 휠 감도 (UpdateScroll)
 	// 문법 탭 노드 옆 짧은 설명. 트리 칸(약 1140) - 노드 오른쪽 끝(310) - 간격 - 스크롤 막대(12)
 	const float SummaryGap = 24f, SummaryWidth = 760f, SummaryFontSize = 20f;
@@ -134,6 +141,38 @@ public class SkillTreeView : MonoBehaviour
 		[PredefinedFunctionIds.PyLevitate] = (4, 3, 9),
 	};
 
+	// 자세 탭 (#545). 첫 줄은 자세 정하기 → 자세 확인. 그 아래 규칙 노드는 판별에 필요한 문법마다 한 줄이고, 줄 이름이 그 문법이다.
+	// 규칙 노드끼리는 선행이 아니므로 선으로 잇지 않는다 (같은 줄을 선으로 이으면 앞 노드를 열어야 하는 것처럼 보였음)
+	// 줄 순서는 문법 노드를 여는 순서 (연산 → if문 → 논리 연산 → for문 → while문)
+	static readonly string[] StanceLanes = { "자세", "if문", "논리 연산", "for문" };
+	static readonly Dictionary<string, (int lane, int col, int row)> StanceLayout = new Dictionary<string, (int, int, int)>
+	{
+		[PredefinedFunctionIds.InitStance] = (0, 0, 0),
+		[PredefinedFunctionIds.GetStance] = (0, 1, 0),
+		[CStanceRule.OddNode] = (1, 0, 1),
+		[CStanceRule.EvenNode] = (1, 1, 1),
+		[CStanceRule.FiveNode] = (1, 2, 1),
+		[CStanceRule.ThreeNode] = (2, 0, 2),
+		[CStanceRule.MiddleNode] = (2, 1, 2),
+		[CStanceRule.PrimeNode] = (3, 0, 3),
+		[CStanceRule.FibonacciNode] = (3, 1, 3),
+		[CStanceRule.PerfectNode] = (3, 2, 3),
+	};
+
+	static readonly string[] PythonStanceLanes = { "자세", "연산", "if문", "for문", "while문" };
+	static readonly Dictionary<string, (int lane, int col, int row)> PythonStanceLayout = new Dictionary<string, (int, int, int)>
+	{
+		[PredefinedFunctionIds.PyInitStance] = (0, 0, 0),
+		[PredefinedFunctionIds.PyGetStance] = (0, 1, 0),
+		[PythonStanceRule.FourNode] = (1, 0, 1),
+		[PythonStanceRule.SevenNode] = (1, 1, 1),
+		[PythonStanceRule.BigNode] = (2, 0, 2),
+		[PythonStanceRule.SmallNode] = (2, 1, 2),
+		[PythonStanceRule.SquareNode] = (3, 0, 3),
+		[PythonStanceRule.CubeNode] = (3, 1, 3),
+		[PythonStanceRule.PalindromeNode] = (4, 0, 4),
+	};
+
 	// 내 캐릭터의 언어. 내 캐릭터가 없으면(네트워크 없는 시험) C
 	static string Language => PlayerCharacter.LocalLanguage;
 
@@ -173,7 +212,10 @@ public class SkillTreeView : MonoBehaviour
 	{
 		if (syntaxTab != null) syntaxTab.onClick.AddListener(() => ShowTab(SkillTreeNodeKind.Syntax));
 		if (skillTab != null) skillTab.onClick.AddListener(() => ShowTab(SkillTreeNodeKind.Skill));
-		if (unlockButton != null) unlockButton.onClick.AddListener(RequestUnlock);
+		// 자세 탭은 규칙 노드 종류(Rule)를 탭 이름으로 쓴다. 자세 함수(Skill)도 이 탭에 보인다(TabOf)
+		if (stanceTab != null) stanceTab.onClick.AddListener(() => ShowTab(SkillTreeNodeKind.Rule));
+		else Debug.LogWarning("[SkillTreeView] 자세 탭 버튼(stanceTab)이 연결되지 않아 자세 노드를 볼 수 없음");
+		if (unlockButton != null) unlockButton.onClick.AddListener(OnUnlockButtonClicked);
 	}
 
 	PlayerProgress progress; // 내 캐릭터의 진행도. 없으면 null
@@ -226,15 +268,17 @@ public class SkillTreeView : MonoBehaviour
 
 	string requestedId; // 해금을 요청하고 답을 기다리는 노드 (#544)
 
-	// 해금 직후 카드: 스킬은 「> 스킬 해금!」, 문법은 「> 문법 해금!  if문」. 여는 블록이 여러 개면 넘겨 본다
+	// 해금 직후 카드: 스킬은 「> 스킬 해금!」, 자세 규칙은 「> 자세 규칙 해금!」(#545), 문법은 「> 문법 해금!  if문」. 여는 블록이 여러 개면 넘겨 본다
 	static void ShowUnlockCard(string nodeId) => ShowNodeCard(nodeId, true);
 
-	// 노드가 여는 것의 설명 카드. 해금 직후는 「> 스킬 해금!」, 해금한 노드를 눌렀을 때는 「> 스킬」. 문법은 노드 이름도 (「> 문법  if문」)
+	// 노드가 여는 것의 설명 카드. 해금 직후는 「> 스킬 해금!」, 해금한 노드를 눌렀을 때는 「> 스킬」. 자세 규칙도 같음(#545). 문법은 노드 이름도 (「> 문법  if문」)
 	static void ShowNodeCard(string nodeId, bool justUnlocked)
 	{
 		if (!SkillTree.TryGet(nodeId, out SkillTreeNode node)) return;
 		List<BlockReferenceEntry> cards = BlockReference.EntriesUnlockedBy(node);
-		string kind = node.Kind == SkillTreeNodeKind.Skill ? "스킬" : "문법";
+		string kind = node.Kind == SkillTreeNodeKind.Skill ? "스킬"
+			: node.Kind == SkillTreeNodeKind.Rule ? "자세 규칙"
+			: "문법";
 		string header = $"> {kind}{(justUnlocked ? " 해금!" : "")}";
 		if (node.Kind == SkillTreeNodeKind.Syntax) header += $"  <color=#FFFFFF>{node.DisplayName}</color>";
 		ItemCardPopup.Show(cards, header);
@@ -285,6 +329,7 @@ public class SkillTreeView : MonoBehaviour
 		tab = kind;
 		SetTabColor(syntaxTab, kind == SkillTreeNodeKind.Syntax);
 		SetTabColor(skillTab, kind == SkillTreeNodeKind.Skill);
+		SetTabColor(stanceTab, kind == SkillTreeNodeKind.Rule);
 
 		ClearTree();
 		if (SkillTree.Instance == null || treeContent == null || nodePrefab == null)
@@ -293,18 +338,22 @@ public class SkillTreeView : MonoBehaviour
 			return;
 		}
 
-		bool skills = kind == SkillTreeNodeKind.Skill;
-		rowGap = skills ? RowGap : SyntaxRowGap;
+		bool syntax = kind == SkillTreeNodeKind.Syntax, stances = kind == SkillTreeNodeKind.Rule;
+		rowGap = syntax ? SyntaxRowGap : stances ? StanceRowGap : RowGap;
 		string language = Language;
 		bool python = language == CharacterLanguages.Python;
-		string[] lanes = skills ? (python ? PythonSkillLanes : SkillLanes) : SyntaxLanes;
-		Dictionary<string, (int lane, int col, int row)> layout = skills ? (python ? PythonSkillLayout : SkillLayout) : SyntaxLayout;
+		string[] lanes = syntax ? SyntaxLanes
+			: stances ? (python ? PythonStanceLanes : StanceLanes)
+			: (python ? PythonSkillLanes : SkillLanes);
+		Dictionary<string, (int lane, int col, int row)> layout = syntax ? SyntaxLayout
+			: stances ? (python ? PythonStanceLayout : StanceLayout)
+			: (python ? PythonSkillLayout : SkillLayout);
 
 		// 위치 정하기. 표에 없는 노드는 맨 아래 「기타」 줄
 		int lastRow = layout.Values.Select(p => p.row).DefaultIfEmpty(-1).Max();
 		int extraRow = lastRow + 1, extraColumn = 0, maxColumn = 0;
 		// 내 캐릭터 언어의 노드만 (C 캐릭터에 py.*, 파이썬 캐릭터에 c.*를 보이지 않는다, #523)
-		foreach (SkillTreeNode node in SkillTree.Instance.Nodes.Where(n => n.Kind == kind && SkillTree.IsFor(n.Id, language)))
+		foreach (SkillTreeNode node in SkillTree.Instance.Nodes.Where(n => TabOf(n) == kind && SkillTree.IsFor(n.Id, language)))
 		{
 			(int lane, int col, int row) p = layout.TryGetValue(node.Id, out var known) ? known : (lanes.Length, extraColumn++, extraRow);
 			placed[node.Id] = new Placed
@@ -351,7 +400,7 @@ public class SkillTreeView : MonoBehaviour
 		}
 
 		// 문법 탭: 노드 옆에 짧은 설명 (스킬 탭은 노드 사이가 좁아 오른쪽 설명 칸에만 보인다)
-		if (!skills && laneLabelPrefab != null)
+		if (syntax && laneLabelPrefab != null)
 		{
 			foreach (Placed p in placed.Values)
 			{
@@ -403,6 +452,16 @@ public class SkillTreeView : MonoBehaviour
 		lines.Add(Segment(new Vector2(bendX, toMidY), new Vector2(endX, toMidY)));
 		return lines;
 	}
+
+	// 노드가 보이는 탭. 자세 탭은 Rule로 부른다: 규칙 노드와 자세 함수 노드(init_stance·get_stance, Skill 종류)가 보인다 (#545)
+	static SkillTreeNodeKind TabOf(SkillTreeNode node) =>
+		node.Kind == SkillTreeNodeKind.Rule || StanceRule.FunctionIds.Contains(node.Id) ? SkillTreeNodeKind.Rule : node.Kind;
+
+	// 화면에 보이는 노드 이름. 규칙 노드는 해금 전 「???」 (#545, 기획: 규칙 내용은 해금해야 알 수 있다)
+	static string ShownName(SkillTreeNode node, bool isUnlocked) =>
+		node.Kind == SkillTreeNodeKind.Rule && !isUnlocked ? HiddenRule : node.DisplayName;
+
+	const string HiddenRule = "???";
 
 	Image Segment(Vector2 a, Vector2 b)
 	{
@@ -474,15 +533,18 @@ public class SkillTreeView : MonoBehaviour
 			Color border = selected ? Color.white : isUnlocked ? Color.clear : available ? AvailableOutline : LockedOutline;
 
 			// 다른 계열의 선행은 이름 아래에 작게
+			// 규칙 노드는 적지 않는다: 선행(자세 정하기 + 문법)은 탭 첫 줄과 줄 이름(「if문」 등)이 이미 알려 준다 (#545)
 			var others = node.Prerequisites
+				.Where(id => node.Kind != SkillTreeNodeKind.Rule)
 				.Where(id => !placed.TryGetValue(id, out Placed w) || w.Lane != p.Lane)
 				.Select(id => $"<color={(isUnlocked ? UnlockedText : have.Contains(id) ? Good : Dim)}>+ {NameOf(id)}</color>")
 				.ToList();
 			// 글자 기본색은 흰색(SkillTreeNodeView). 잠긴 노드만 회색
 			// 해금된 노드는 민트 바탕이라 어두운 글자 (시안 9)
-			string title = isUnlocked ? $"<color={UnlockedText}><b>{node.DisplayName}</b></color>"
-				: available ? node.DisplayName
-				: $"<color=#{ColorUtility.ToHtmlStringRGB(LockedText)}>{node.DisplayName}</color>";
+			string name = ShownName(node, isUnlocked);
+			string title = isUnlocked ? $"<color={UnlockedText}><b>{name}</b></color>"
+				: available ? name
+				: $"<color=#{ColorUtility.ToHtmlStringRGB(LockedText)}>{name}</color>";
 			string text = others.Count == 0 ? title : $"{title}\n<size=60%>{string.Join(" ", others)}</size>";
 
 			if (p.View != null)
@@ -516,12 +578,12 @@ public class SkillTreeView : MonoBehaviour
 		// 스킬은 이름 옆에 블록 편집기에서 부르는 함수 이름 (예: 검 찌르기  thrust)
 		detailTitle.text = node.Kind == SkillTreeNodeKind.Skill
 			? $"{node.DisplayName}  <color={Dim}>{BlockLabels.PredefinedFunctionName(node.Id)}</color>"
-			: node.DisplayName;
+			: ShownName(node, isUnlocked);
 		// 시안 9: 왼쪽 회색 이름표, 오른쪽 값 (표처럼 줄 맞춤)
 		string Row(string label, string value) => $"<color={Dim}>{label}</color><pos=46%>{value}";
 		var lines = new List<string>
 		{
-			Row("종류", node.Kind == SkillTreeNodeKind.Syntax ? "문법" : "스킬"),
+			Row("종류", node.Kind == SkillTreeNodeKind.Syntax ? "문법" : node.Kind == SkillTreeNodeKind.Rule ? "자세 규칙" : "스킬"),
 			Row("상태", isUnlocked ? $"<color={Good}>해금됨</color>"
 				: available && enough ? $"<color={Warn}>해금할 수 있음</color>"
 				: available ? $"<color={Bad}>재료가 모자라요</color>"
@@ -549,11 +611,14 @@ public class SkillTreeView : MonoBehaviour
 
 		if (unlockButton != null)
 		{
-			// 선행을 열면 저절로 같이 열리는 노드(해제 등)는 버튼이 없다
-			unlockButton.gameObject.SetActive(!(node.AutoUnlock && node.Cost.Count == 0));
-			unlockButton.interactable = available && enough;
+			// 해금한 노드는 같은 버튼이 「자세히 보기」가 되어 가운데에 설명 카드를 띄운다 (#545, 이우림 요청 11/19: 누를 때마다 카드가 뜨면 설명 칸만 보려 해도 매번 닫아야 함).
+			// 띄울 카드가 없는 노드(여는 것이 없는 노드)는 「해금됨」으로 막아 둔다
+			bool hasCard = isUnlocked && BlockReference.EntriesUnlockedBy(node).Count > 0;
+			// 선행을 열면 저절로 같이 열리는 노드(해제 등)는 해금 전에는 버튼이 없다
+			unlockButton.gameObject.SetActive(hasCard || !(node.AutoUnlock && node.Cost.Count == 0));
+			unlockButton.interactable = hasCard || (available && enough);
 			TMP_Text label = unlockButton.GetComponentInChildren<TMP_Text>();
-			if (label != null) label.text = isUnlocked ? "해금됨" : !available ? "선행 노드를 먼저 해금" : enough ? "해금" : "재료가 모자라요";
+			if (label != null) label.text = hasCard ? "자세히 보기" : isUnlocked ? "해금됨" : !available ? "선행 노드를 먼저 해금" : enough ? "해금" : "재료가 모자라요";
 		}
 	}
 
@@ -564,8 +629,14 @@ public class SkillTreeView : MonoBehaviour
 		selectedId = id;
 		Refresh();
 		ResetDetailScroll();
-		// 해금한 노드를 누르면 해금 직후와 같은 설명 카드를 가운데에 띄운다 (#544 뒤 이우림 피드백). 잠긴 노드는 오른쪽 설명 칸만
-		if (Unlocked.Contains(id)) ShowNodeCard(id, false);
+	}
+
+	// 설명 칸 아래 버튼: 해금한 노드는 설명 카드(「자세히 보기」), 아니면 해금 요청
+	void OnUnlockButtonClicked()
+	{
+		if (selectedId == null) return;
+		if (Unlocked.Contains(selectedId)) ShowNodeCard(selectedId, false);
+		else RequestUnlock();
 	}
 
 	// 다른 노드를 고르면 설명 칸을 맨 위부터 보이게 한다. 설명 칸 스크롤(DetailScroll, SkillTreeUIBuilder)이 없으면 아무것도 안 함.

@@ -379,12 +379,10 @@ public static partial class ItemDescriptions
 			Summary = "자세를 1~100 사이의 무작위 숫자로 다시 정합니다.",
 			Returns = "새로 정한 자세 숫자입니다.",
 			// 규칙 이름·수치는 적지 않는다. 규칙은 처음부터 모두 적용되고, 내용은 스킬 트리에서 해금해야 알 수 있다 (이우림 결정 11/18, stance.md)
-			Purpose = "자세 숫자에 따라 효과가 붙습니다. 효과를 정하는 규칙은 여덟 가지이며, 규칙의 내용은 스킬 트리에서 해금하면 알 수 있습니다. 원하는 자세가 나올 때까지 다시 뽑을 때 씁니다.",
+			Purpose = "자세 숫자에 따라 효과가 붙습니다. 효과를 정하는 규칙은 여덟 가지이며, 규칙의 내용은 스킬 트리에서 해금하면 알 수 있습니다.",
 			Example = "예를 들면, 자세를 정하고 그 숫자를 확인할 수 있습니다.",
 			ExampleCode = "int n = init_stance(); printf(n);",
-			ExampleResult = "2.5초 뒤 자세가 정해지고, 화면 왼쪽 아래에 n = 37처럼 자세 숫자가 보입니다.",
-			Caution = "숫자를 받기까지 2.5초가 걸리고, 쿨타임은 3초입니다. 자세 숫자는 화면에 표시되지 않으므로 printf로 출력해서 확인합니다. 전투 장소에 들어가면 자세가 없어집니다.",
-		},
+			ExampleResult = "2.5초 뒤 자세가 정해지고, 화면 왼쪽 아래에 n = 37처럼 자세 숫자가 보입니다.",		},
 		[PredefinedFunctionIds.GetStance] = new ItemDescription
 		{
 			Summary = "지금 자세 숫자를 돌려줍니다.",

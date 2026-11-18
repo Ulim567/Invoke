@@ -94,6 +94,7 @@
   - 레이드 던전 안 (`PlayerPlace.Mine`이 `RaidDungeon`): 결과 화면(`RaidResultView`)이 보상 줄을 보여 주므로, 레이드를 마치고 로비에 도착한 뒤 보임 (이우림 결정 11/19)
   - 로딩 화면이 덮은 동안 (`LoadingScreen.Showing`), HUD가 숨은 동안, 서버가 아직 장소를 정하지 않았을 때
 - 내 캐릭터가 바뀌거나 없어지면 떠 있던 줄과 모아 둔 것을 지움
+- 튜토리얼 대사 창(`Tutorial/Panel`, tutorial.md)이 떠 있는 동안은 영역을 그 창 바로 아래(간격 2)로 내리고, 창이 꺼지면 원래 자리로 돌아옴. 두 칸 모두 장소 이름 바로 아래라 겹치기 때문 (#589, 이우림 결정 11/19). 연결은 `HudUIBuilder`가 `AcquireFeedView`의 `Avoid` 칸에 넣음
 - 구조는 `HudUIBuilder`가 만듦(`BuildAcquireFeed`). `AcquireFeedView`는 HudCanvas 최상위(`HudView`와 같은 오브젝트)에 붙음
 
 - 아래 띠 (#431): 띠 전체를 칠하지 않는다 (바닥을 너무 가림). 가운데 막대·슬롯 뒤에만 아래에서 위로, 가운데에서 양옆으로 흐려지는 그림자(`hud_band_fade`)

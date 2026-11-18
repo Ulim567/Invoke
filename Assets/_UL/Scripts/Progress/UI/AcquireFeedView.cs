@@ -16,7 +16,8 @@ using UnityEngine.UI;
 /// - 바로 앞 줄과 같은 것(같은 재료, 같은 블록, 경험치)이면 새 줄을 만들지 않고 개수를 더하고 시간을 다시 센다.<br/>
 /// - 모아 두기: 레이드 던전 안, 로딩 화면이 덮은 동안, HUD가 숨은 동안 받은 것은 띄우지 않고 종류별로 합쳐 두었다가,
 ///   다시 보일 수 있게 되면(레이드를 마치고 로비에 도착하면) 차례로 띄운다.<br/>
-/// - 내 캐릭터가 바뀌거나 없어지면(캐릭터 화면으로 돌아가기, 다시 접속) 떠 있던 줄과 모아 둔 것을 지운다.
+/// - 내 캐릭터가 바뀌거나 없어지면(캐릭터 화면으로 돌아가기, 다시 접속) 떠 있던 줄과 모아 둔 것을 지운다.<br/>
+/// - 피할 칸(Avoid, 튜토리얼 대사 창)이 켜져 있는 동안은 영역을 그 칸 바로 아래로 내리고, 꺼지면 원래 자리로 돌아온다 (#589, 이우림 결정 11/19 (가)).
 /// </para>
 /// <para>
 /// 사용법: HudCanvas 프리팹 최상위(HudView와 같은 오브젝트)에 붙인다. 칸은 HudUIBuilder(메뉴 Invoke → UI → 게임 HUD 만들기)가 연결한다.
@@ -31,6 +32,8 @@ public class AcquireFeedView : MonoBehaviour
 	[SerializeField, Tooltip("장소 이름 아래의 정해진 크기 영역 (RectMask2D). 줄이 없으면 숨긴다")] GameObject panel;
 	[SerializeField, Tooltip("줄들을 세로로 쌓는 목록. 위 기준이며, 이 화면이 세로 위치를 움직여 새 줄이 아래 줄들을 부드럽게 밀어 내리게 한다")] RectTransform content;
 	[SerializeField, Tooltip("줄 견본. 줄 하나에 하나씩 복사해 쓴다. 바탕 Image, CanvasGroup, 자식 Icon(Image)과 Text(TMP)를 가진다")] GameObject rowTemplate;
+	[SerializeField, Tooltip("이 칸이 켜져 있는 동안 영역을 그 아래로 내린다 (튜토리얼 대사 창). 비워 두면 늘 제자리")] RectTransform avoid;
+	[SerializeField, Min(0f), Tooltip("피할 칸 아래로 내릴 때 그 칸과 띄우는 간격")] float avoidGap = 2f;
 
 	[Header("값")]
 	[SerializeField, Min(0.1f), Tooltip("한 줄을 보여 주는 시간(초)")] float rowTime = 3f;
@@ -79,11 +82,18 @@ public class AcquireFeedView : MonoBehaviour
 	float nextRowTime;
 	// 지금 보고 있는 내 캐릭터. 바뀌면 줄과 모아 둔 것을 지운다
 	GameObject boundPlayer;
+	// 영역의 원래 세로 위치 (장소 이름 바로 아래). 피할 칸이 꺼지면 여기로 돌아온다
+	float homeY;
+	// 지금 피할 칸 아래로 내려가 있으면 true
+	bool avoiding;
+	// 칸의 네 모서리를 잴 때 쓰는 자리. 매 프레임 새로 만들지 않는다
+	readonly Vector3[] corners = new Vector3[4];
 
 	void Awake()
 	{
 		if (rowTemplate != null) rowTemplate.SetActive(false);
 		if (panel == null) return;
+		homeY = ((RectTransform)panel.transform).anchoredPosition.y;
 		// 흐려지는 높이를 프리팹이 아니라 여기서 정한다. 값을 바꿔 볼 때 HUD 프리팹을 다시 만들지 않아도 되게 하기 위함 (HudView 알림 목록과 같은 방식)
 		// softness는 위아래에 함께 걸리므로, 위 경계를 같은 만큼 영역 밖으로 올려(padding 음수, 순서는 왼쪽·아래·오른쪽·위) 위쪽은 흐려지지 않게 한다
 		if (panel.TryGetComponent(out RectMask2D mask))
@@ -145,6 +155,33 @@ public class AcquireFeedView : MonoBehaviour
 			nextRowTime = Time.time + rowInterval;
 		}
 		RefreshRows();
+		RefreshPlace();
+	}
+
+	// 피할 칸(튜토리얼 대사 창)이 떠 있는 동안 영역을 그 칸 바로 아래에 둔다. 꺼지면 원래 자리로 돌아온다
+	// 내리는 이유: 튜토리얼 대사 창도 장소 이름 바로 아래에 떠서, 튜토리얼 중(사냥터에서 버그 조각 모으기)에 받은 것이 대사 창에 가려지기 때문
+	// 떠 있는 동안 매 프레임 다시 재는 이유: TutorialView가 쪽마다 대사·해 볼 일 줄 수에 맞춰 창 높이를 바꾸기 때문
+	void RefreshPlace()
+	{
+		if (panel == null) return;
+		bool shouldAvoid = avoid != null && avoid.gameObject.activeInHierarchy;
+		if (!shouldAvoid && !avoiding) return;
+		avoiding = shouldAvoid;
+
+		RectTransform area = (RectTransform)panel.transform;
+		float targetY = homeY;
+		if (avoiding)
+		{
+			// 영역 위 끝을 피할 칸 아래 끝보다 Avoid Gap만큼 아래로. 두 칸의 앵커가 달라도 맞도록 같은 부모 좌표로 바꿔 잰다
+			Transform parent = area.parent;
+			avoid.GetWorldCorners(corners);
+			float avoidBottom = parent.InverseTransformPoint(corners[0]).y;
+			area.GetWorldCorners(corners);
+			// 원래 자리에 있을 때의 위 끝 = 지금 위 끝 + (원래 위치 − 지금 위치)
+			float homeTop = parent.InverseTransformPoint(corners[1]).y + (homeY - area.anchoredPosition.y);
+			targetY = homeY + Mathf.Min(0f, avoidBottom - avoidGap - homeTop);
+		}
+		if (!Mathf.Approximately(area.anchoredPosition.y, targetY)) area.anchoredPosition = new Vector2(area.anchoredPosition.x, targetY);
 	}
 
 	// 지금 줄을 띄워도 되면 true.

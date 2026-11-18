@@ -168,6 +168,8 @@ public static class HudUIBuilder
 		memoryGlowImage.raycastTarget = false;
 		memoryGlow.gameObject.SetActive(false);
 		BuildTutorial(root, memoryGlowImage);
+		// 획득 표시는 튜토리얼 대사 창과 같은 자리(장소 이름 아래)라, 대사 창이 떠 있는 동안 그 아래로 내려가게 연결한다 (#589)
+		LinkAcquireFeedAvoid(canvasObject, root.Find("Tutorial/Panel"));
 
 		// 소환검: HP 막대 왼쪽 (#365)
 		TMP_Text swordText = Text(center, "SwordLabel", "소환검 0/5", 6, Label);
@@ -435,6 +437,15 @@ public static class HudUIBuilder
 		Set(so, "panel", feed.gameObject);
 		Set(so, "content", content);
 		Set(so, "rowTemplate", row.gameObject);
+		so.ApplyModifiedPropertiesWithoutUndo();
+	}
+
+	// 획득 표시(AcquireFeedView)의 피할 칸을 넣는다. 그 칸이 켜져 있는 동안 획득 표시가 그 아래로 내려간다
+	static void LinkAcquireFeedAvoid(GameObject canvasObject, Transform avoid)
+	{
+		if (avoid == null) Debug.LogWarning("[HudUIBuilder] 획득 표시가 피할 튜토리얼 대사 창(Tutorial/Panel)을 찾지 못함");
+		var so = new SerializedObject(canvasObject.GetComponent<AcquireFeedView>());
+		Set(so, "avoid", avoid);
 		so.ApplyModifiedPropertiesWithoutUndo();
 	}
 

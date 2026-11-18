@@ -393,7 +393,7 @@ MonoBehaviour:
     - materialId: bug_fragment
       count: 2
     unlocksBlocks: 
-    note: "\uCC98\uC74C\uBD80\uD130"
+    note: 
   - id: py.orb_shot
     kind: 1
     displayName: 
@@ -404,7 +404,7 @@ MonoBehaviour:
     - materialId: bug_fragment
       count: 3
     unlocksBlocks: 
-    note: "\uCC98\uC74C\uBD80\uD130"
+    note: 
   - id: py.orb_shield
     kind: 1
     displayName: 
@@ -448,7 +448,7 @@ MonoBehaviour:
     autoUnlock: 1
     cost: []
     unlocksBlocks: 
-    note: "\uC6D0\uC18C \uACC4\uC5F4\uC758 \uC2DC\uC791. \uC120\uD589 \uC5C6\uC774 \uC801\uC740 \uC7AC\uB8CC\uB85C \uB460"
+    note: "\uCC98\uC74C\uBD80\uD130"
   - id: py.fireball
     kind: 1
     displayName: 
@@ -525,7 +525,7 @@ MonoBehaviour:
     autoUnlock: 1
     cost: []
     unlocksBlocks: 
-    note: "\uBCF4\uC870 \uACC4\uC5F4\uC758 \uC2DC\uC791. \uC120\uD589 \uC5C6\uC774 \uC7AC\uB8CC\uB9CC"
+    note: "\uCC98\uC74C\uBD80\uD130"
   - id: py.snake_bind
     kind: 1
     displayName: 

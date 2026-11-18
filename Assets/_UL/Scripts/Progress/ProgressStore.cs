@@ -202,7 +202,7 @@ public class ProgressStore
 	}
 
 	// 그 언어의 처음 해금 가운데 빠진 노드를 넣는다. 트랜잭션 안에서 부른다 (#523)
-	// 파이썬 처음 노드(구슬 생성·구슬 발사)가 스킬 트리에 생기기 전에 만든 파이썬 캐릭터는 해금 목록에 없으므로 불러올 때 채운다
+	// 파이썬 처음 노드(지금은 매직 미사일·저주)가 해금 목록에 없는 캐릭터(스킬 트리·처음 노드가 바뀌기 전에 만든 파이썬 캐릭터)는 불러올 때 채운다
 	void InsertMissingStartingUnlocks(string characterKey)
 	{
 		foreach (string id in StartingUnlocks(LanguageOf(characterKey)))

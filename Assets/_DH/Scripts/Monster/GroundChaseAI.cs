@@ -10,6 +10,8 @@ using UnityEngine;
 /// - 발견: chasePlayers가 켜져 있을 때만 한다. 끄면 플레이어를 쫓지 않고 순찰만 한다(Leak). detectRange 안에 살아 있는 플레이어가 있으면 가장 가까운 플레이어를 쫓는다. loseRange 밖으로 벗어나거나 죽으면 순찰로 돌아간다.<br/>
 /// - 추적: 좌우로만 chaseSpeed로 움직인다. 앞이 낭떠러지거나 장애물이면 그 자리에 멈춘다(떨어지지 않고, 다른 몬스터를 밀지 않는다).<br/>
 /// - 몬스터가 죽으면 멈춘다. 공격(접촉 피해)은 같은 오브젝트의 ContactDamage가 한다.<br/>
+/// - 밀려나기: 맞으면(Monster.Damaged) 때린 쪽(Monster.LastAttackerX, 없으면 바라보는 쪽) 반대로 knockbackTime초 동안 밀린다. 그동안 순찰·추적 이동을 덮어쓴다.
+///   밀리는 쪽이 낭떠러지나 장애물이면 그 자리에 멈춘다(구덩이에 빠지지 않게). 죽었거나 기절 중이거나 보스(Monster.IsBoss)면 밀리지 않는다.<br/>
 /// - 상태 이상(같은 오브젝트의 StatusEffects, 없으면 무시): 기절 중에는 멈추고 탐지도 하지 않는다. 이속 감소 중에는 순찰·추적 속도에 MoveSpeedMultiplier를 곱한다.<br/>
 /// - 탐지·낭떠러지·장애물 검사는 몬스터가 속한 씬의 물리 세계에 한다. 서버에서는 장소 씬마다 물리 세계가 따로 있기 때문이다.
 /// </para>
@@ -73,6 +75,13 @@ public class GroundChaseAI : NetworkBehaviour
 	[SerializeField, Min(0f), Tooltip("쫓는 대상과 가로 거리가 이보다 가까우면 멈춘다. 대상 위치에서 떨지 않게 하기 위함")]
 	float stopDistance = 0.1f;
 
+	[Header("밀려나기")]
+	[SerializeField, Min(0f), Tooltip("맞았을 때 밀려나는 속도 (초당 유닛). 0이면 밀리지 않는다")]
+	float knockbackSpeed = 4f;
+
+	[SerializeField, Min(0f), Tooltip("맞았을 때 밀려나는 시간(초)")]
+	float knockbackTime = 0.15f;
+
 	Monster monster;
 	// 상태 이상. 몬스터에 붙어 있지 않으면 null이고, 상태 이상에 반응하지 않는다
 	StatusEffects status;
@@ -94,6 +103,9 @@ public class GroundChaseAI : NetworkBehaviour
 	// 순찰 상태. true면 멈추기, false면 걷기. patrolStateEndTime이 지나면 다음 상태를 뽑는다
 	bool isIdle;
 	float patrolStateEndTime;
+	// 밀려나는 방향(오른쪽 1, 왼쪽 -1)과 끝나는 시각 (서버)
+	int knockbackDir;
+	float knockbackEndTime;
 
 	/// <summary>
 	/// 지금 쫓고 있는 플레이어. 순찰 중이면 null.
@@ -122,6 +134,11 @@ public class GroundChaseAI : NetworkBehaviour
 		targetFilter.useTriggers = false;
 	}
 
+	// Damaged는 로직 이벤트라 서버에서만 불린다
+	void OnEnable() => monster.Damaged += OnDamaged;
+
+	void OnDisable() => monster.Damaged -= OnDamaged;
+
 	void Start()
 	{
 		// 처음 방향도 서버가 정한다. 클라이언트에서 따로 랜덤으로 정하면 그림 방향이 서버와 달라진다
@@ -140,6 +157,13 @@ public class GroundChaseAI : NetworkBehaviour
 		if (monster.IsDead || (status != null && status.IsStunned))
 		{
 			SetVelocityX(0f);
+			return;
+		}
+
+		// 밀려나는 동안은 순찰·추적을 하지 않는다
+		if (Time.time < knockbackEndTime)
+		{
+			KnockedBack();
 			return;
 		}
 
@@ -237,6 +261,33 @@ public class GroundChaseAI : NetworkBehaviour
 				target = player;
 			}
 		}
+	}
+
+	// 맞으면 때린 쪽 반대로 밀린다. 때린 쪽을 모르면 바라보는 반대쪽 (서버)
+	void OnDamaged(int damage)
+	{
+		if (knockbackSpeed <= 0f || knockbackTime <= 0f || monster.IsDead || monster.IsBoss || (status != null && status.IsStunned)) return;
+
+		int dir = -facing;
+		if (monster.HasLastAttackerX)
+		{
+			float dx = body.position.x - monster.LastAttackerX;
+			if (Mathf.Abs(dx) > 0.01f) dir = dx > 0f ? 1 : -1;
+		}
+		knockbackDir = dir;
+		knockbackEndTime = Time.time + knockbackTime;
+	}
+
+	// 밀리는 쪽이 낭떠러지·벽이면 밀기를 끝내고 멈춘다
+	void KnockedBack()
+	{
+		if (IsBlocked(knockbackDir))
+		{
+			knockbackEndTime = 0f;
+			SetVelocityX(0f);
+			return;
+		}
+		SetVelocityX(knockbackDir * knockbackSpeed);
 	}
 
 	// dir 쪽이 낭떠러지이거나 장애물(벽, 다른 몬스터)이면 true

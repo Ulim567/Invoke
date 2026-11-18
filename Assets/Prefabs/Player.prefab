@@ -46,6 +46,7 @@ GameObject:
   - component: {fileID: 640899364796495694}
   - component: {fileID: -8803756257136009029}
   - component: {fileID: 7940108879056456931}
+  - component: {fileID: 3740874872296346116}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -324,6 +325,9 @@ MonoBehaviour:
   lungeMaxTime: 0.25
   dashDistance: 4
   dashDuration: 0.15
+  allowDashWithoutProgress: 1
+  tapDashWindow: 0.25
+  tapDashCooldown: 0.5
   allowDoubleJumpWithoutProgress: 1
   rideSpeed: 9
   rideVerticalSpeed: 6
@@ -806,3 +810,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 25db10a911969264e81a274589646c92, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStance
+--- !u!114 &3740874872296346116
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4136478383384515981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 677330d4f723f9046b53f7b804bb8e57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerKnockback
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  knockbackSpeed: 5
+  knockbackTime: 0.15

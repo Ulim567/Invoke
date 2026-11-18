@@ -75,6 +75,8 @@ public class ContactDamage : MonoBehaviour
 			if (nextHitTime.TryGetValue(target, out float next) && now < next) continue;
 
 			nextHitTime[target] = now + hitInterval;
+			// 플레이어면 이 몬스터 반대쪽으로 밀리도록 위치를 먼저 알린다
+			PlayerKnockback.NotifySource(hits[i], transform.position);
 			target.TakeDamage(damage);
 		}
 	}

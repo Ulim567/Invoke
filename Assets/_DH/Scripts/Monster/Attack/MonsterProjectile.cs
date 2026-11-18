@@ -115,11 +115,11 @@ public class MonsterProjectile : NetworkBehaviour
 			if (pierce)
 			{
 				pierced.Add(owner);
-				MonsterAttackResolver.Apply(Attack, other);
+				MonsterAttackResolver.Apply(Attack, other, transform.position);
 				return;
 			}
 			spent = true;
-			MonsterAttackResolver.Apply(Attack, other);
+			MonsterAttackResolver.Apply(Attack, other, transform.position);
 			Despawn();
 		}
 		else if ((blockLayers.value & layerBit) != 0)

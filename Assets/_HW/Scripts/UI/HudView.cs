@@ -245,6 +245,10 @@ public class HudView : MonoBehaviour
 		health = player.GetComponent<PlayerHealth>();
 		memory = player.GetComponent<ProcessMemory>();
 		loadout = player.GetComponent<SlotLoadout>();
+		// 서버의 슬롯 데이터(SetEntries)가 Bind보다 늦게 와도, 장착을 바꿔도 다음 프레임에 슬롯 이름·아이콘을 다시 센다
+		if (loadout != null) loadout.Changed += OnLoadoutChanged;
+		// 이전 캐릭터의 슬롯 이름·아이콘이 1초 동안 남지 않게 바로 다시 센다
+		slotLabelsTime = -1f;
 		executor = player.GetComponent<FunctionExecutor>();
 		network = player.GetComponent<FunctionExecutorNetwork>();
 		if (network != null)
@@ -267,6 +271,8 @@ public class HudView : MonoBehaviour
 			network.OwnTaskEnded -= OnOwnTaskEnded;
 			network.OwnOutput -= OnOwnOutput;
 		}
+		if (loadout != null) loadout.Changed -= OnLoadoutChanged;
+		loadout = null;
 		network = null;
 		player = null;
 		runningTaskSlot.Clear();
@@ -671,6 +677,9 @@ public class HudView : MonoBehaviour
 	readonly string[] slotIconIds = new string[SlotCount]; // 슬롯 아이콘으로 쓸 스킬 ID (#444)
 	readonly List<string>[] slotSkillIds = new List<string>[SlotCount]; // 함수 칸 안의 C 스킬 ID들 (쿨타임, #431)
 	float slotLabelsTime = -1f;
+
+	// 슬롯 내용이 바뀌면 1초를 기다리지 않고 다음 SlotLabel에서 다시 센다
+	void OnLoadoutChanged(int slot) => slotLabelsTime = -1f;
 
 	// 슬롯에 보일 스킬 이름. 1초마다 다시 센다 (장착·저장이 바뀌면 따라감)
 	string SlotLabel(int slot)

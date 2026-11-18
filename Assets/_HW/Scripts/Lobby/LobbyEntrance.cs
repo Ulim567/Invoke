@@ -38,6 +38,9 @@ public class LobbyEntrance : PlaceInteractable
 	[SerializeField, Tooltip("켜면 ↑에 입구 창(들어가기 / 닫기)을 연다. 끄면(기본) 확인 창 없이 바로 이동")]
 	bool useEntranceWindow;
 
+	/// <summary>이 입구가 어디로 가는지 (튜토리얼이 가야 할 문을 찾을 때 읽는다)</summary>
+	public Destination Target => destination;
+
 	/// <summary>창 제목에 쓰는 이름</summary>
 	public string DisplayName => !string.IsNullOrEmpty(displayName) ? displayName : DefaultName(destination);
 

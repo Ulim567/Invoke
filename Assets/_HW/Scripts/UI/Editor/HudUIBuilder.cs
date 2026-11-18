@@ -154,6 +154,20 @@ public static class HudUIBuilder
 		TMP_Text memoryText = Text(center, "MemoryText", "0 / 0", 6, Label);
 		memoryText.alignment = TextAlignmentOptions.MidlineRight;
 		Place(memoryText.rectTransform, new Vector2(0.5f, 0), new Vector2(1, 0.5f), new Vector2(118, 35), new Vector2(40, 8));
+		// 튜토리얼의 Memory 강조 (김도훈): 막대 바로 뒤에 2칸 큰 민트 테두리를 깔고, 튜토리얼 메모리 쪽에서만 깜빡인다. 평소에는 꺼 둔다
+		RectTransform memoryGlow = NewUI("TutorialMemoryGlow", center);
+		memoryGlow.anchorMin = memoryBar.anchorMin;
+		memoryGlow.anchorMax = memoryBar.anchorMax;
+		memoryGlow.pivot = memoryBar.pivot;
+		memoryGlow.anchoredPosition = memoryBar.anchoredPosition;
+		memoryGlow.sizeDelta = memoryBar.sizeDelta + new Vector2(4, 4);
+		memoryGlow.SetSiblingIndex(memoryBar.GetSiblingIndex());
+		Image memoryGlowImage = memoryGlow.gameObject.AddComponent<Image>();
+		memoryGlowImage.sprite = LoadSprite("hud_white");
+		memoryGlowImage.color = Teal;
+		memoryGlowImage.raycastTarget = false;
+		memoryGlow.gameObject.SetActive(false);
+		BuildTutorial(root, memoryGlowImage);
 
 		// 소환검: HP 막대 왼쪽 (#365)
 		TMP_Text swordText = Text(center, "SwordLabel", "소환검 0/5", 6, Label);
@@ -464,6 +478,61 @@ public static class HudUIBuilder
 	}
 
 	// 레이드 파티원 목록 (시안 8-3): 장소 이름 아래, 「파티」 + 2줄 (레이드 최대 3명에서 나를 뺀 수)
+	// 튜토리얼 대사 창 (김도훈): 장소 이름 아래 왼쪽. 대사 한 줄 + 해 볼 일 줄 + 키 안내. 켜고 끄는 건 TutorialView가 한다
+	// 가야 할 곳 표시(TutorialGuide)의 화면 가장자리 화살표도 여기서 만든다 (그림은 코드가 넣는다)
+	static void BuildTutorial(RectTransform root, Image memoryGlow)
+	{
+		RectTransform tutorial = NewUI("Tutorial", root);
+		Place(tutorial, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12, -70), new Vector2(190, 62));
+		TutorialTracker tracker = tutorial.gameObject.AddComponent<TutorialTracker>();
+		TutorialGuide guide = tutorial.gameObject.AddComponent<TutorialGuide>();
+		TutorialView view = tutorial.gameObject.AddComponent<TutorialView>();
+
+		RectTransform panel = NewUI("Panel", tutorial);
+		Stretch(panel);
+		SetImage(panel.gameObject, "hud_gauge").raycastTarget = false;
+
+		TMP_Text line = Text(panel, "Line", "", 7, Color.white);
+		line.alignment = TextAlignmentOptions.TopLeft;
+		Place(line.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(7, -6), new Vector2(176, 20));
+
+		var rows = new TMP_Text[TutorialScript.MaxTasks];
+		for (int i = 0; i < rows.Length; i++)
+		{
+			rows[i] = Text(panel, "Task" + (i + 1), "[ ] ", 7, Color.white);
+			rows[i].alignment = TextAlignmentOptions.MidlineLeft;
+			Place(rows[i].rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(7, -24 - i * 9), new Vector2(176, 9));
+		}
+
+		TMP_Text keyHint = Text(panel, "KeyHint", "Enter 넘기기", 6, Muted);
+		keyHint.alignment = TextAlignmentOptions.BottomRight;
+		keyHint.raycastTarget = false;
+		Place(keyHint.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-6, 4), new Vector2(70, 8));
+
+		// 화면 가장자리 화살표: Root 전체 기준(왼쪽 아래 앵커)이라 TutorialGuide가 화면 비율로 자리를 정한다
+		RectTransform edge = NewUI("TutorialEdgeArrow", root);
+		edge.anchorMin = edge.anchorMax = Vector2.zero;
+		edge.pivot = new Vector2(0.5f, 0.5f);
+		edge.sizeDelta = new Vector2(16.5f, 10.5f);
+		Image edgeImage = edge.gameObject.AddComponent<Image>();
+		edgeImage.raycastTarget = false;
+		edge.gameObject.SetActive(false);
+
+		var guideSo = new SerializedObject(guide);
+		Set(guideSo, "edgeArrow", edgeImage);
+		guideSo.ApplyModifiedPropertiesWithoutUndo();
+
+		var so = new SerializedObject(view);
+		Set(so, "tracker", tracker);
+		Set(so, "guide", guide);
+		Set(so, "panel", panel.gameObject);
+		Array(so, "taskRows", rows);
+		Set(so, "lineText", line);
+		Set(so, "memoryHighlight", memoryGlow);
+		so.ApplyModifiedPropertiesWithoutUndo();
+		panel.gameObject.SetActive(false);
+	}
+
 	static void BuildRaidParty(RectTransform root)
 	{
 		RectTransform party = NewUI("RaidParty", root);

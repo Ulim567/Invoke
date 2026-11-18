@@ -196,7 +196,8 @@ public class TutorialTracker : MonoBehaviour
 		if (slot == QSlot) Signaled?.Invoke(TutorialTask.CastQ);
 	}
 
-	void OnReward(int exp, IReadOnlyList<MonsterReward.MaterialDrop> drops, int items) => Signaled?.Invoke(TutorialTask.GetReward);
+	// 세 번째 값은 받은 블록·함수의 항목 ID 목록 (#589에서 블록 수 int에서 바뀜). 튜토리얼은 받았다는 것만 본다
+	void OnReward(int exp, IReadOnlyList<MonsterReward.MaterialDrop> drops, IReadOnlyList<string> itemIds) => Signaled?.Invoke(TutorialTask.GetReward);
 	void OnSkillTree() => Signaled?.Invoke(TutorialTask.OpenSkillTree);
 	void OnLevelUp() => Signaled?.Invoke(TutorialTask.OpenLevelUp);
 }

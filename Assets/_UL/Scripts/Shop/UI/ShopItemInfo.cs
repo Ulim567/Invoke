@@ -81,6 +81,9 @@ public static class ShopItemInfo
 	/// <summary>블록 분류 색 (BlockLabels). 함수는 함수 색.</summary>
 	public static Color ColorOf(string itemId) => BlockLabels.ColorOf(new BlockData { Kind = KindOf(itemId) });
 
+	/// <summary>문법 블록(If, While 등)이면 true, 함수(검 찌르기, malloc 등)면 false. 획득 표시가 「블록」, 「함수」 낱말을 고를 때 쓴다.</summary>
+	public static bool IsSyntaxItem(string itemId) => !string.IsNullOrEmpty(itemId) && SyntaxTitles.ContainsKey(itemId);
+
 	/// <summary>구매 확인 창의 「~ 블록」, 「~ 함수」 낱말.</summary>
 	public static string KindWordOf(int slot) => ShopRules.IsSyntaxSlot(slot) ? "블록" : "함수";
 

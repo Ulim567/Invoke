@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -23,8 +24,28 @@ public class LoadingScreen : MonoBehaviour
 
 	Coroutine fading;
 
+	// 만들어진 로딩 화면 모두. Showing이 읽는다 (보통 Base 씬의 LoadingCanvas 하나)
+	static readonly List<LoadingScreen> all = new List<LoadingScreen>(1);
+
+	/// <summary>
+	/// 로딩 화면이 화면을 덮고 있으면 true. 나타나고 사라지는 페이드 중에도 true.<br/>
+	/// 획득 표시(AcquireFeedView)가 읽어, 장소를 옮기는 동안 받은 것을 로딩 화면 뒤에 띄우지 않고 모아 둔다.
+	/// </summary>
+	public static bool Showing
+	{
+		get
+		{
+			for (int i = 0; i < all.Count; i++)
+				if (all[i] != null && all[i].panelRoot != null && all[i].panelRoot.activeSelf) return true;
+			return false;
+		}
+	}
+
+	void OnDestroy() => all.Remove(this);
+
 	void Awake()
 	{
+		all.Add(this);
 		// 게임을 시작할 때는 보이지 않게 한다
 		canvasGroup.alpha = 0f;
 		panelRoot.SetActive(false);

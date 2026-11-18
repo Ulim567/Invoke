@@ -11,7 +11,7 @@ using UnityEngine;
 ///   Whole Scene을 켜면(레이드 보스) 같은 씬의 플레이어 모두에게 준다. 죽어서 관전 중인 파티원도 받는다.<br/>
 /// - 재료는 몬스터가 죽을 때 한 번 굴린다. 확률(Chance) 1이면 반드시 나온다.<br/>
 /// - 블록·함수 드롭: 받는 플레이어마다 Item Chance로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목(해금한 스킬 트리 노드가 여는 항목 + 그 캐릭터 언어의 처음 항목) 중
-///   무작위로 Item Count개(하나씩 따로 고름)의 가진 개수를 1씩 늘린다 (ItemCountRules, 이우림 #500). 화면에는 「블록 ×N」으로만 알리고, 무엇인지는 블록 편집 화면에서 확인한다.<br/>
+///   무작위로 Item Count개(하나씩 따로 고름)의 가진 개수를 1씩 늘린다 (ItemCountRules, 이우림 #500). 획득 표시(시안 8-5)에는 받은 항목의 이름까지 알린다(LocalRewardReceived의 항목 ID 목록).<br/>
 ///   받은 블록·함수는 재료처럼 블록 아이콘(ItemDropIconId)이 날아와 보인다. 아이콘은 무엇을 받았든 같다.<br/>
 /// - 값은 PlayerProgress(이우림)의 AddExp, AddMoney, AddMaterial, AddItem으로만 바꾼다. PlayerProgress가 없는 플레이어(테스트용 프리팹)는 건너뛴다.<br/>
 /// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다. 판정은 몬스터가 속한 씬의 물리 세계에 한다.<br/>
@@ -84,6 +84,8 @@ public class MonsterReward : NetworkBehaviour
 	readonly List<MaterialDrop> received = new List<MaterialDrop>(4);
 	// RewardEffectPlayed에 넘기는 목록: 재료 + 블록·함수 아이콘 한 줄 (EffectDrops). 이벤트 안에서만 읽는다
 	readonly List<MaterialDrop> effectDrops = new List<MaterialDrop>(5);
+	// 받는 플레이어 한 명이 이번에 받은 블록·함수의 항목 ID (받은 수만큼). 받는 플레이어마다 다시 채운다
+	readonly List<string> givenItems = new List<string>(4);
 
 	/// <summary>
 	/// 블록·함수 드롭을 재료처럼 날아오게 보여 줄 때 쓰는 아이콘 ID. 진짜 재료가 아니어서 가방(PlayerProgress)에는 들어가지 않는다.<br/>
@@ -101,10 +103,11 @@ public class MonsterReward : NetworkBehaviour
 	public event Action<PlayerProgress, int, int, IReadOnlyList<MaterialDrop>> RewardEffectPlayed;
 
 	/// <summary>
-	/// [연출] 내 캐릭터가 어떤 몬스터에게서든 보상을 받았을 때 (경험치, 재료 목록, 받은 블록·함수 수). 획득 표시(시안 8-5)처럼 몬스터와 상관없이 받는 화면이 쓴다.<br/>
-	/// 블록·함수는 무엇인지 알리지 않고 수만 넘긴다 (「블록 ×N」, 자세한 것은 블록 편집 화면). 받은 플레이어의 화면에서만 불린다. 재료 목록은 이 이벤트 안에서만 읽는다.
+	/// [연출] 내 캐릭터가 어떤 몬스터에게서든 보상을 받았을 때 (경험치, 재료 목록, 받은 블록·함수의 항목 ID 목록). 획득 표시(시안 8-5)처럼 몬스터와 상관없이 받는 화면이 쓴다.<br/>
+	/// 항목 ID는 받은 수만큼 들어 있다 (같은 항목을 두 번 받으면 두 번). 이름은 ShopItemInfo.DisplayNameOf로 바꾼다.<br/>
+	/// 받은 플레이어의 화면에서만 불린다. 두 목록은 이 이벤트 안에서만 읽는다.
 	/// </summary>
-	public static event Action<int, IReadOnlyList<MaterialDrop>, int> LocalRewardReceived;
+	public static event Action<int, IReadOnlyList<MaterialDrop>, IReadOnlyList<string>> LocalRewardReceived;
 
 	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
 	static void ResetStatics()
@@ -182,21 +185,25 @@ public class MonsterReward : NetworkBehaviour
 		player.AddExp(exp);
 		player.AddMoney(money);
 		for (int i = 0; i < rolled.Count; i++) player.AddMaterial(rolled[i].materialId, rolled[i].count);
-		int items = GiveItems(player);
-		PlayRewardEffect(player, items);
+		GiveItems(player);
+		PlayRewardEffect(player);
 	}
 
-	// 블록·함수 드롭. 받은 수를 돌려준다. 받는 사람마다 쓸 수 있는 항목이 달라서 사람마다 굴린다
-	int GiveItems(PlayerProgress player)
+	// 블록·함수 드롭. 받은 항목 ID를 givenItems에 남긴다. 받는 사람마다 쓸 수 있는 항목이 달라서 사람마다 굴린다
+	void GiveItems(PlayerProgress player)
 	{
-		if (itemCount <= 0 || itemChance <= 0f) return 0;
-		if (itemChance < 1f && UnityEngine.Random.value >= itemChance) return 0;
+		givenItems.Clear();
+		if (itemCount <= 0 || itemChance <= 0f) return;
+		if (itemChance < 1f && UnityEngine.Random.value >= itemChance) return;
 
 		FillItemPool(player);
-		if (itemPool.Count == 0) return 0;
+		if (itemPool.Count == 0) return;
 		for (int i = 0; i < itemCount; i++)
-			player.AddItem(itemPool[UnityEngine.Random.Range(0, itemPool.Count)], 1);
-		return itemCount;
+		{
+			string itemId = itemPool[UnityEngine.Random.Range(0, itemPool.Count)];
+			player.AddItem(itemId, 1);
+			givenItems.Add(itemId);
+		}
 	}
 
 	// 그 플레이어가 쓸 수 있는 항목: 처음 항목 + 해금한 노드가 여는 항목 (해금 안 한 블록은 받아도 저장할 때 막혀서 빼둔다)
@@ -230,12 +237,12 @@ public class MonsterReward : NetworkBehaviour
 	}
 
 	// 연출만 한다 (코드 작성 규칙 1). 받은 플레이어의 화면에만 보낸다. 네트워크를 켜지 않은 테스트는 [TargetRpc]를 보낼 수 없으므로 그 자리에서 부른다
-	void PlayRewardEffect(PlayerProgress player, int items)
+	void PlayRewardEffect(PlayerProgress player)
 	{
 		if (!NetworkServer.active)
 		{
-			RewardEffectPlayed?.Invoke(player, exp, money, EffectDrops(rolled, items));
-			LocalRewardReceived?.Invoke(exp, rolled, items);
+			RewardEffectPlayed?.Invoke(player, exp, money, EffectDrops(rolled, givenItems.Count));
+			LocalRewardReceived?.Invoke(exp, rolled, givenItems);
 			return;
 		}
 
@@ -249,13 +256,15 @@ public class MonsterReward : NetworkBehaviour
 			ids[i] = rolled[i].materialId;
 			counts[i] = rolled[i].count;
 		}
-		TargetRewardEffect(conn, exp, money, ids, counts, items);
+		TargetRewardEffect(conn, exp, money, ids, counts, givenItems.ToArray());
 	}
 
 	// 받은 플레이어의 클라이언트(호스트 포함)에서 불린다. 몬스터를 없애기 전에 보내므로 몬스터가 아직 이 화면에 있다
+	// itemIds: 받은 블록·함수의 항목 ID (받은 수만큼). 획득 표시가 이름을 보여 주려고 수가 아니라 ID를 보낸다
 	[TargetRpc]
-	void TargetRewardEffect(NetworkConnectionToClient target, int expGained, int moneyGained, string[] ids, int[] counts, int items)
+	void TargetRewardEffect(NetworkConnectionToClient target, int expGained, int moneyGained, string[] ids, int[] counts, string[] itemIds)
 	{
+		int items = itemIds != null ? itemIds.Length : 0;
 		NetworkIdentity me = NetworkClient.localPlayer;
 		PlayerProgress receiver = me != null ? me.GetComponent<PlayerProgress>() : null;
 
@@ -263,7 +272,7 @@ public class MonsterReward : NetworkBehaviour
 		int n = ids != null && counts != null ? Mathf.Min(ids.Length, counts.Length) : 0;
 		for (int i = 0; i < n; i++) received.Add(new MaterialDrop { materialId = ids[i], count = counts[i], chance = 1f });
 		RewardEffectPlayed?.Invoke(receiver, expGained, moneyGained, EffectDrops(received, items));
-		LocalRewardReceived?.Invoke(expGained, received, items);
+		LocalRewardReceived?.Invoke(expGained, received, itemIds ?? System.Array.Empty<string>());
 	}
 
 	// 연출용 재료 목록. 블록·함수를 받았으면 재료 뒤에 아이콘(ItemDropIconId) 한 줄을 붙여, 버그 조각처럼 날아오게 한다

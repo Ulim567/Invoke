@@ -98,6 +98,18 @@ public static class DoorSignBuilder
 		PrefabUtility.RecordPrefabInstancePropertyModifications(arrival.transform);
 	}
 
+	/// <summary>
+	/// 문이 아닌 상호작용 자리에도 같은 모양의 「[↑] 글씨」 안내판을 붙인다 (#534, 로비 상점 자리). 씬 저장은 부르는 쪽이 한다.
+	/// </summary>
+	internal static void MakeSignFor(PlaceInteractable place, string text)
+	{
+		TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+		Sprite pill = AssetDatabase.LoadAssetAtPath<Sprite>(PillSpritePath);
+		Sprite keyIcon = AssetDatabase.LoadAssetAtPath<Sprite>(KeySpritePath);
+		if (font == null || pill == null || keyIcon == null) Debug.LogWarning("[DoorSignBuilder] 안내판 글꼴·그림을 찾지 못함");
+		MakeSign(place, text, font, pill, keyIcon);
+	}
+
 	// 문 아래에 한 줄 안내판 Sign(바탕 + ↑ 키 + 글씨)을 만들거나 고치고 PlaceInteractable.sign에 넣는다
 	// 모양: 다른 게임의 상호작용 안내처럼 「[↑] 사냥터로 이동」 한 줄. 높이 13픽셀, 캐릭터 머리·이름표보다 위(문 위 끝 + 1.8칸)
 	static void MakeSign(PlaceInteractable door, string text, TMP_FontAsset font, Sprite pillSprite, Sprite keySprite)

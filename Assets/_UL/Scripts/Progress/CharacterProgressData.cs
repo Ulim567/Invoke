@@ -31,6 +31,11 @@ public class CharacterProgressData
 
 	public GlobalVariablesData Globals = new GlobalVariablesData();
 
+	/// <summary>
+	/// 상점 칸 (#534, 칸 번호 순서, ShopRules.SlotCount개). DB에 칸이 하나라도 빠졌으면 비어 있고, 상점을 열 때 서버가 새로 뽑는다.
+	/// </summary>
+	public List<ShopOffer> ShopOffers = new List<ShopOffer>();
+
 	// 처음 슬롯 함수의 function body에 넣을 스킬 (슬롯 0부터, 캐릭터 언어마다). 나머지 슬롯 함수는 빈 본문
 	// 해금 목록에서 만들지 않는 이유: 본문에는 스킬 ID만이 아니라 인자 블록(GetBug)까지 들어가야 하는데, 해금 목록에는 그 정보가 없기 때문
 	// target: 대상 인자로 GetBug()를 넣는지. 대상이 없는 스킬(구슬 생성 등)은 인자 없이 부른다

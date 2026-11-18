@@ -4,7 +4,7 @@
 
 ## 하는 일
 - 서버가 캐릭터의 진행도를 SQLite DB에 저장하고 불러온다. 서버를 껐다 켜도 저장한 값이 그대로 남는다.
-- 저장하는 것: 레벨, 경험치, 돈, 재료, 블록·함수의 가진 개수(#500), 스킬 트리 해금 목록, 슬롯 8개, 사용자 정의 함수, 전역 변수
+- 저장하는 것: 레벨, 경험치, 돈, 재료, 블록·함수의 가진 개수(#500), 스킬 트리 해금 목록, 슬롯 8개, 사용자 정의 함수, 전역 변수, 상점 칸(#534, shop.md)
 - 클라이언트는 DB에 직접 접근하지 않는다. 클라이언트가 필요한 값은 서버가 보낸다.
 - 하지 않는 일
   - 레벨업 규칙, 경험치 표: `LevelRules`(김도훈, `player-stats.md`). `AddExp`가 이 규칙으로 레벨을 올린다
@@ -37,7 +37,7 @@
 
 ### DB
 - 파일: `Accounts.db` (#174의 `AccountStore`와 같은 파일)
-- 코드: `ProgressStore` (서버·에디터만, `#if UNITY_SERVER || UNITY_EDITOR`). 진행도 테이블 7개만 다룸
+- 코드: `ProgressStore` (서버·에디터만, `#if UNITY_SERVER || UNITY_EDITOR`). 진행도 테이블 8개만 다룸
   - `AccountStore`가 연 SQLite 연결 하나를 함께 씀. 그래서 캐릭터를 만들 때 `Characters` row와 진행도 처음 row를 한 트랜잭션으로 넣을 수 있음
   - `AccountStore.CreateCharacter`가 트랜잭션 안에서 `ProgressStore`의 처음 row 넣기를 부름
 - 테이블: 종류마다 하나. 모두 캐릭터 key(`Characters.Key`)로 캐릭터를 가리킴
@@ -52,6 +52,7 @@
 | `CharacterSlots` | 슬롯 번호(0~7), 종류(`UserFunction`), 슬롯 함수 GUID | 8개 |
 | `CharacterFunctions` | 함수 GUID, 함수 데이터 JSON | 슬롯 함수 8개 + 페이지 함수 수 |
 | `CharacterGlobals` | 전역 변수 JSON | 1개 |
+| `CharacterShopOffers` | 상점 칸 번호, 항목 ID, 가격 (#534) | 8개 (처음 상점을 열기 전에는 0개). column은 shop.md 「DB」 |
 
 #### `CharacterProgress`
 | column | 타입 | 규칙 |
@@ -156,7 +157,7 @@
 - 불러올 때 `FunctionDataJson.TryGlobalVariablesFromJson`이 실패하면 전역 변수 없음으로 보고 로그를 남김
 
 ### 불러온 데이터 (`CharacterProgressData`)
-- 「들어가기」 때 `ProgressStore.Load(캐릭터 key)`가 테이블 7개를 읽어 돌려주는 객체. SQLite를 모르는 일반 C# 클래스
+- 「들어가기」 때 `ProgressStore.Load(캐릭터 key)`가 테이블 8개를 읽어 돌려주는 객체. SQLite를 모르는 일반 C# 클래스
 
 | 이름 | 타입 | 내용 |
 | --- | --- | --- |
@@ -166,6 +167,7 @@
 | `Unlocked` | `List<string>` | 해금한 노드 ID. `SkillTree`에 넘기는 해금 목록 |
 | `Slots` | `SlotLoadout.Entry[8]` | 슬롯 0~7. 각 슬롯의 슬롯 함수 GUID |
 | `Functions` | `List<FunctionData>` | 읽기에 성공한 함수 (슬롯 함수 + 페이지 함수) |
+| `ShopOffers` | `List<ShopOffer>` | 상점 칸 8개 (#534). 칸이 하나라도 빠졌으면 빈 목록 |
 
 - 함께 쓰는 함수: `NewSlotFunction(슬롯 번호, 언어)` (처음 슬롯 함수 하나. 언어를 빼면 C), `FillInitialSlotFunctions(언어)` (처음 슬롯 함수 8개를 `Functions`·`Slots`에 넣음. 언어를 빼면 C)
 | `Globals` | `GlobalVariablesData` | 전역 변수 선언 |
@@ -196,9 +198,10 @@
 | `ApplyLoaded(CharacterProgressData)` | 불러온 값을 넣음. DB에 쓰지 않음 | 서버 (`EnterGameRequest` 처리) |
 | `AddExp(int)` | 경험치 더함. 다음 레벨 경험치(`LevelRules.ExpToNext`)를 채우면 레벨을 올리고 남은 경험치를 넘김. 최대 레벨에서는 무시 | 몬스터 처치 (김도훈) |
 | `LeveledUp` (event) | [로직] 레벨이 오른 순간 (새 레벨). 서버에서만. 여러 레벨이 오르면 레벨마다 | 레벨업 연출·알림 |
-| `AddMoney(int)`, `TrySpendMoney(int)` | 돈 더하기, 빼기. 모자라면 빼지 않고 `false` | 드롭 (김도훈), 상점 |
+| `AddMoney(int)`, `TrySpendMoney(int)` | 돈 더하기, 빼기. 모자라면 빼지 않고 `false` | 드롭 (김도훈) |
 | `AddMaterial(string, int)` | 재료 더함 | 드롭 (김도훈) |
-| `AddItem(string 항목 ID, int)` | 블록·함수의 가진 개수 더함 (#500). `ItemCountRules.MaxCount`(99)에서 멈춤 | 해금(`TryUnlock`). 나중에 상점, 잡몹 드랍 |
+| `AddItem(string 항목 ID, int)` | 블록·함수의 가진 개수 더함 (#500). `ItemCountRules.MaxCount`(99)에서 멈춤 | 잡몹 드랍 (김도훈) |
+| 상점 (#534): `ShopOffers`, `RequestOpenShop`, `RequestBuyShopItem`, `RequestRefreshShop`, `ShopAnswered`, `PrepareShop`, `TryBuyShopItem`, `TryRefreshShop` | shop.md 「다른 시스템이 쓰는 것」. 구매는 재료 빼기·가진 개수 +1·칸 바꾸기를 `ProgressStore.SaveShop`으로 한 트랜잭션에 씀 | 상점 화면 (`ShopPanel`) |
 | `RequestUnlock(string 노드 ID)` | [소유 클라이언트] 서버에 노드 해금을 요청 (`[Command]`). 결과는 `UnlockAnswered`. 내 플레이어가 아니면 아무것도 하지 않음 | 스킬 트리 화면 (임혜원, #294) |
 | `TryUnlock(string 노드 ID)` | [서버] 아래 「노드 해금 검사」 순서로 검사 → 재료 빼기 + 노드·같이 열리는 노드 추가 + 블록·함수 지급을 `ProgressStore.SaveUnlock`으로 한 트랜잭션에 저장. `UnlockResult`를 돌려줌 | `RequestUnlock` |
 | `UnlockAnswered(string 노드 ID, UnlockResult)` (event) | [표시] 서버가 처리한 해금 요청의 결과 (`[TargetRpc]`). 성공(`Unlocked`)도 알림. 소유 클라이언트에서 불림 | 스킬 트리 화면 (실패 이유 표시) |
@@ -231,6 +234,7 @@
   - `Materials`: `SyncDictionary<string, int>`
   - `ItemCounts`: `SyncDictionary<string, int>` (#500)
   - `Unlocked`: `SyncList<string>`
+  - `ShopOffers`: `SyncList<ShopOffer>` (#534)
 - Sync Mode: `Owner`. 그 플레이어의 소유 클라이언트에만 보냄. 다른 플레이어의 클라이언트는 받지 않음
 - 클라이언트에서 값이 바뀌면 `PlayerProgress.Changed` (event)가 불림. 화면은 이것을 받아 다시 그림
 - 처음 값: `ApplyLoaded`가 플레이어를 만든 직후 값을 넣으므로, 소유 클라이언트는 첫 동기화 때 DB의 값을 받음
@@ -282,11 +286,12 @@
 | 함수 | 하는 일 | 테이블 |
 | --- | --- | --- |
 | `CreateInitial(캐릭터 key)` | 새 캐릭터의 처음 row(슬롯 함수 8개 포함)를 넣음. `AccountStore.CreateCharacter`의 트랜잭션 안에서 부름 | Progress, Unlocks, Slots, Functions, Globals |
-| `Load(캐릭터 key)` | `CharacterProgressData`를 돌려줌. 진행도 row가 없으면 `CreateInitial` 뒤 돌려줌 | 6개 모두 |
+| `Load(캐릭터 key)` | `CharacterProgressData`를 돌려줌. 진행도 row가 없으면 `CreateInitial` 뒤 돌려줌 | 8개 모두 |
 | `SaveProgress(캐릭터 key, 레벨, 경험치, 돈)` | row 하나를 덮어씀 | Progress |
 | `SetMaterialCount(캐릭터 key, 재료 ID, 개수)` | 넣거나 고침. 0이면 row를 지움 | Materials |
 | `SetItemCount(캐릭터 key, 항목 ID, 개수)` | 블록·함수의 가진 개수를 넣거나 고침 (#500). 0이면 row를 지움, 99에서 멈춤 | ItemCounts |
 | `SaveUnlock(캐릭터 key, 노드 ID 목록, 재료 개수 목록, 블록·함수 개수 목록)` | 노드 row 추가, 재료 개수 변경, 블록·함수 지급을 한 트랜잭션으로. 블록·함수 개수 목록은 없으면 `null` | Unlocks, Materials, ItemCounts |
+| `SaveShop(캐릭터 key, 재료 개수 목록, 블록·함수 개수 목록, 칸 번호 → 상품)` | 상점의 구매·새로고침·처음 칸을 한 트랜잭션으로 (#534). 바뀌지 않는 것은 `null` | Materials, ItemCounts, ShopOffers |
 | `CountPageFunctions(캐릭터 key)` | 슬롯에 걸리지 않은 함수 row 수 (개수 제한 검사). 읽을 수 없는 함수 row도 셈 | Slots, Functions |
 | `HasFunction(캐릭터 key, 함수 GUID)` | 그 함수 row가 있는지 (새 함수인지 볼 때) | Functions |
 | `SaveFunction(캐릭터 key, 함수 GUID, JSON)` | 넣거나 덮어씀 | Functions |
@@ -301,7 +306,7 @@
 - 컴포넌트: `ProgressTestData`. 진행도 JSON 칸(`Json`)과 언어 칸(`Language`, 기본 C)을 가짐. Base 씬의 오브젝트에 붙임
 - 사용: 에디터에서 로그인 → 캐릭터 화면에서 Inspector ⋮ → 「진행도 넣기」 → 「들어가기」
   - `InvokeAuthenticator.RequestProgressTestData(언어, JSON)` → `ProgressTestDataRequest` → `AccountServer.HandleProgressTestData` → `ProgressStore.ReplaceAll`
-  - 서버가 그 캐릭터의 진행도 테이블 7개를 한 트랜잭션으로 모두 바꿈. 결과는 `ProgressTestDataResult` (Console에 로그)
+  - 서버가 그 캐릭터의 진행도 테이블 8개를 한 트랜잭션으로 모두 바꿈 (상점 칸은 지우기만 함, 상점을 열 때 다시 뽑음). 결과는 `ProgressTestDataResult` (Console에 로그)
   - 거부: 테스트 허용 설정이 꺼짐, 임시 계정, 이미 들어감, 그 언어 캐릭터가 없음, 읽을 수 없는 JSON
 - JSON 형식: `CharacterProgressData`를 `FunctionDataJson.ToJson`으로 바꾼 모양 (Level, Exp, Money, Materials, ItemCounts, Unlocked, Slots, Functions, Globals)
   - ⋮ → 「처음 값 JSON 채우기」: 새 캐릭터와 같은 모양(슬롯 함수 8개, 처음 개수 포함)을 채움

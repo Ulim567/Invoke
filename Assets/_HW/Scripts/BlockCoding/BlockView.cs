@@ -15,7 +15,7 @@ using UnityEngine.UI;
 /// </para>
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
-public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
+public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
 	[SerializeField, Tooltip("블록 전체의 바탕. 투명하게 두고 끌기·놓기를 받는 자리로만 쓴다 (#487). 줄 바탕이 없는 예전 프리팹이면 여기에 분류 색을 칠한다")]
 	Image background;
@@ -903,6 +903,13 @@ public class BlockView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDra
 	public void OnPointerExit(PointerEventData eventData)
 	{
 		if (editor != null) editor.ExitHover(this);
+	}
+
+	// 블록 목록의 칩을 끌지 않고 누르면 설명 카드 (#544, 노션 11/16 「블록 목록의 블록 클릭」). 편집 영역에 놓인 블록은 칸을 누르는 일이 많아 띄우지 않는다
+	public void OnPointerClick(PointerEventData eventData)
+	{
+		if (templateFactory == null || editor == null || eventData.button != PointerEventData.InputButton.Left) return;
+		editor.ShowItemCard(Data);
 	}
 
 	public void OnBeginDrag(PointerEventData eventData)

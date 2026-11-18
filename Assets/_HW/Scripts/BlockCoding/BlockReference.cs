@@ -73,6 +73,21 @@ public class BlockReferenceEntry
 
 	/// <summary>한글 이름 (꼬챙이, 버그 찾기, 메모리 할당). 있으면 카드 제목은 이것만 보이고, 검색에도 쓴다. 문법 블록이면 null (#489)</summary>
 	public string KoreanName;
+
+	/// <summary>설명 표·가진 개수의 key (#544). 문법 블록은 If·For 같은 항목 ID, 사전 정의 함수는 고정 ID(c.thrust), type은 type.float</summary>
+	public string Key;
+
+	/// <summary>설명 카드의 「블록 사용 예」 그림으로 그릴 블록 (#544). 대상(Target)을 받는 칸에는 get_bug()를 끼워 둔다. type이면 null</summary>
+	public BlockData Picture;
+
+	/// <summary>type 카드면 그 값의 모양 (0.5, 'a', true). 설명 카드의 그림 칸에 값 알약으로 보인다 (#544). 블록이면 null</summary>
+	public string TypeLiteral;
+
+	/// <summary>어느 탭에서 꺼내는지 (#544 설명 카드의 「사용 방법」): 「함수 탭」, 「블록 탭」</summary>
+	public string UsageTab;
+
+	/// <summary>사용 방법의 나머지 글 (#544). 예: 「에서 코드로 끌어다 놓기」</summary>
+	public string UsageText;
 }
 
 /// <summary>
@@ -224,6 +239,10 @@ public static class BlockReference
 				Sample = block,
 				Summary = description?.Summary,
 				CodeText = string.IsNullOrEmpty(description?.Format) ? name : description.Format,
+				Key = BlockUsageCounter.KeyOf(block),
+				Picture = block,
+				UsageTab = "블록 탭",
+				UsageText = "에서 코드로 끌어다 놓기",
 			};
 			List<(string, string)> returned = string.IsNullOrEmpty(description?.Returns) ? null
 				: new List<(string, string)> { (description.Returns, "") };
@@ -237,6 +256,7 @@ public static class BlockReference
 				entry.Name = builtin.Value.Name;
 				entry.KoreanName = builtin.Value.KoreanName;
 				entry.CodeText = builtin.Value.Prototype;
+				entry.UsageTab = "함수 탭"; // malloc·free·wait는 함수 탭에서 꺼낸다 (#489)
 				(block.Kind == BlockKind.Wait ? builtinBasics : memory).Add(entry);
 				continue;
 			}
@@ -261,6 +281,7 @@ public static class BlockReference
 		list.AddRange(basics);
 		list.AddRange(builtinBasics);
 		list.AddRange(memory);
+		list.AddRange(TypeEntries());
 		// 머리글을 나눌 분류: 분류 태그의 앞 단계 (「함수 > 스킬」 → 함수)
 		foreach (BlockReferenceEntry entry in list)
 		{
@@ -268,6 +289,88 @@ public static class BlockReference
 			entry.Group = split < 0 ? entry.Category : entry.Category.Substring(0, split);
 		}
 		return list;
+	}
+
+	// 설명 카드 (#544) ---------------------------------------------------------------
+
+	/// <summary>
+	/// key(설명 표·가진 개수의 key: If, c.thrust, type.float)의 카드. 내 캐릭터 언어에 없으면 null.
+	/// </summary>
+	public static BlockReferenceEntry EntryOf(string key)
+	{
+		if (string.IsNullOrEmpty(key)) return null;
+		foreach (BlockReferenceEntry entry in All)
+			if (entry.Key == key) return entry;
+		return null;
+	}
+
+	/// <summary>
+	/// 블록 하나의 카드 (블록 목록의 칩, 함수 탭 항목을 눌렀을 때). 내가 만든 함수를 부르는 블록은 null.
+	/// </summary>
+	public static BlockReferenceEntry EntryOf(BlockData block) => block == null ? null : EntryOf(BlockUsageCounter.KeyOf(block));
+
+	/// <summary>
+	/// 스킬 트리 노드를 해금하면 쓸 수 있게 되는 것들의 카드 (#544). 해금 직후 카드와 스킬 트리 설명 칸이 보인다.
+	/// <para>
+	/// - 스킬 노드: 그 스킬 함수. 검 소환처럼 블록도 여는 노드는 그 블록(malloc, free)도 뒤에 붙인다.<br/>
+	/// - 문법 노드: 여는 블록 종류(UnlocksBlocks)의 카드. 조건문은 If·Else If·Else 셋. 함수 블록 종류(Function)는 스킬마다 따로 열리므로 빼고, return만.<br/>
+	/// - 순서는 참고 탭과 같다. 내 캐릭터 언어에 없는 블록은 빠진다 (Python의 선언 등).
+	/// </para>
+	/// </summary>
+	public static List<BlockReferenceEntry> EntriesUnlockedBy(SkillTreeNode node)
+	{
+		var result = new List<BlockReferenceEntry>();
+		if (node == null) return result;
+		if (node.Kind == SkillTreeNodeKind.Skill)
+		{
+			BlockReferenceEntry skill = EntryOf(node.Id);
+			if (skill != null) result.Add(skill);
+		}
+		foreach (BlockReferenceEntry entry in All)
+		{
+			if (entry.FunctionId != null || entry.Picture == null || entry.Picture.Kind == BlockKind.Function) continue;
+			if (node.UnlocksBlocks.Contains(entry.Picture.Kind) && !result.Contains(entry)) result.Add(entry);
+		}
+		return result;
+	}
+
+	// type 카드 (#544): 설명 표의 type 다섯 개. C 캐릭터만 (Python은 type을 적지 않는다)
+	static readonly string[] TypeKeys = { "type.float", "type.char", "type.bool", "type.string", "type.NULL" };
+
+	static IEnumerable<BlockReferenceEntry> TypeEntries()
+	{
+		if (BlockLabels.Family == LanguageFamily.Python) yield break;
+		foreach (string key in TypeKeys)
+		{
+			ItemDescription description = ItemDescriptions.Get(key);
+			if (description == null) continue;
+			string name = key.Substring("type.".Length);
+			var entry = new BlockReferenceEntry
+			{
+				Name = name,
+				Category = "type",
+				Summary = description.Summary,
+				CodeText = name,
+				Key = key,
+				TypeLiteral = description.Format,
+				UsageTab = "블록 탭",
+				UsageText = name == "NULL" ? "의 값 칸에 NULL을 적어 넣기" : $"의 선언 블록에서 {name}을 고르거나, 값 칸에 {description.Format}처럼 적기",
+			};
+			AddDescriptionSections(entry, description, "쓰는 곳", description.SlotItems(), null, null);
+			yield return entry;
+		}
+	}
+
+	// 함수 카드 그림 (#544): 대상(target)을 받는 칸에는 get_bug()를 끼운다. 시안 9-3 「skewer ( get_bug ( ) );」
+	static BlockData PictureOf(string id, IReadOnlyList<ParameterData> parameters)
+	{
+		var slots = new SlotData[parameters.Count];
+		for (int i = 0; i < slots.Length; i++)
+		{
+			bool target = parameters[i].Name == "target";
+			slots[i] = target ? SlotData.FromBlock(BlockData.CallPredefinedFunction(PredefinedFunctionIds.GetBug, new SlotData[0])) : SlotData.EmptyValue();
+		}
+		return BlockData.CallPredefinedFunction(id, slots);
 	}
 
 	// 함수 탭의 「스킬」 구역에 들어가는 함수: C 스킬, Python 스킬(#486), 공통 이동(dash 등). 나머지(get_bug, is_valid_target)는 기본 함수
@@ -307,6 +410,10 @@ public static class BlockReference
 			CodeText = Prototype(function.ReturnType, name, parameters),
 			FunctionId = id,
 			KoreanName = KoreanNameOf(id),
+			Key = id,
+			Picture = PictureOf(id, parameters),
+			UsageTab = "함수 탭",
+			UsageText = "에서 코드로 끌어다 놓기",
 		};
 
 		List<(string, string)> returned = returnsValue

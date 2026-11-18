@@ -68,7 +68,6 @@ public class SkillTreeView : MonoBehaviour
 	static readonly Color LineOn = new Color32(0x8A, 0x84, 0xA8, 0xFF);
 	static readonly Color LineOff = new Color32(0x3A, 0x35, 0x50, 0xFF);
 	const string Good = "#5EF2D6", Bad = "#E07070", Dim = "#8A84A8", Warn = "#E8A867", UnlockedText = "#1A1E3A";
-	const string DescriptionText = "#B8B3C7"; // 설명 글자 (캔버스 9의 설명 색). 이름표(Dim)보다 밝게
 	static readonly Color SummaryColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
 
 	// 노드 위치: (계열, 칸, 줄). 줄은 위에서부터 --------------------------------------
@@ -216,6 +215,23 @@ public class SkillTreeView : MonoBehaviour
 		failedId = result == UnlockResult.Unlocked ? null : nodeId;
 		failedResult = result;
 		RefreshDetail();
+		// 해금 직후 카드 (#544, 캔버스 9-3): 이 창에서 내가 요청한 해금이 끝났을 때만. 무엇을 쓸 수 있게 됐고 어떻게 쓰는지 보여 준다
+		if (result == UnlockResult.Unlocked && nodeId == requestedId)
+		{
+			requestedId = null;
+			ShowUnlockCard(nodeId);
+		}
+	}
+
+	string requestedId; // 해금을 요청하고 답을 기다리는 노드 (#544)
+
+	// 해금 직후 카드: 스킬은 「> 스킬 해금!」, 문법은 「> 문법 해금!  if문」. 여는 블록이 여러 개면 넘겨 본다
+	static void ShowUnlockCard(string nodeId)
+	{
+		if (!SkillTree.TryGet(nodeId, out SkillTreeNode node)) return;
+		List<BlockReferenceEntry> cards = BlockReference.EntriesUnlockedBy(node);
+		string header = node.Kind == SkillTreeNodeKind.Skill ? "> 스킬 해금!" : $"> 문법 해금!  <color=#FFFFFF>{node.DisplayName}</color>";
+		ItemCardPopup.Show(cards, header);
 	}
 
 	// 서버가 해금을 거부한 이유 (UnlockResult, progress-store.md 「노드 해금 검사」)
@@ -482,6 +498,7 @@ public class SkillTreeView : MonoBehaviour
 			detailTitle.text = "";
 			detailBody.text = "노드를 고르세요";
 			if (unlockButton != null) unlockButton.gameObject.SetActive(false);
+			ShowDetailCard(null);
 			return;
 		}
 
@@ -517,13 +534,10 @@ public class SkillTreeView : MonoBehaviour
 		lines.Add(Row("같이 열리는 노드", together.Count > 0 ? string.Join(", ", together) : "없음"));
 		if (node.UnlocksBlocks.Count > 0) lines.Add(Row("여는 블록", string.Join(", ", node.UnlocksBlocks.Select(BlockName))));
 		if (failedId == node.Id && !isUnlocked) lines.Add($"<color={Bad}>해금하지 못했어요. {FailText(failedResult)}</color>");
-		// 설명은 이름 바로 아래 (캔버스 9-1). 설명 표(ItemDescriptions)의 하는 일·용도·주의할 점 가운데 적힌 것. noparse: 설명의 < > 를 태그로 읽지 않게
-		// 해금 설명 카드(다음 이슈)가 생기기 전까지 쓰는 칸이다. 스킬의 용도·주의할 점은 박진우가 채우면 보인다
-		ItemDescription description = ItemDescriptions.Get(node.Id);
-		string[] parts = { description?.Summary, description?.Purpose, description?.Caution };
-		string detail = string.Join(" ", parts.Where(part => !string.IsNullOrEmpty(part)));
-		if (!string.IsNullOrEmpty(detail)) lines.InsertRange(0, new[] { $"<color={DescriptionText}><noparse>{detail}</noparse></color>", "" });
 		detailBody.text = string.Join("\n", lines);
+		// 설명은 아래 설명 카드 (#544, 해금 직후 카드·블록 목록·참고 탭과 같은 모양). 예전에 이 칸에 적던 하는 일·용도·주의할 점도 카드가 보여 준다
+		// 노드가 같으면 다시 그리지 않는다 (해금 결과·재료가 바뀌어 RefreshDetail이 불려도 넘긴 장·펼친 상태가 그대로 있게)
+		ShowDetailCard(node);
 
 		if (unlockButton != null)
 		{
@@ -533,6 +547,36 @@ public class SkillTreeView : MonoBehaviour
 			TMP_Text label = unlockButton.GetComponentInChildren<TMP_Text>();
 			if (label != null) label.text = isUnlocked ? "해금됨" : !available ? "선행 노드를 먼저 해금" : enough ? "해금" : "재료가 모자라요";
 		}
+	}
+
+	// 설명 카드 (#544) --------------------------------------------------------------
+	// 노드를 누르면 설명 칸의 상태 줄 아래에 그 노드가 여는 것의 설명 카드. 문법 노드는 여는 블록마다 한 장씩 넘겨 본다
+	// 카드 프리팹은 Resources에서 처음 쓸 때 꺼내 설명 글자(DetailBody) 바로 아래에 둔다 (LobbyUI 프리팹은 고치지 않음)
+
+	ItemCardView detailCard;
+	string detailCardId;
+
+	void ShowDetailCard(SkillTreeNode node)
+	{
+		if (node == null)
+		{
+			if (detailCard != null) detailCard.gameObject.SetActive(false);
+			detailCardId = null;
+			return;
+		}
+		if (detailCard == null && detailBody != null)
+		{
+			detailCard = ItemCardView.Create(detailBody.transform.parent);
+			if (detailCard == null) return;
+			detailCard.transform.SetSiblingIndex(detailBody.transform.GetSiblingIndex() + 1);
+			detailCard.Compact = true;
+			detailCard.SetHeader(null, null);
+		}
+		if (detailCard == null || detailCardId == node.Id) return;
+		detailCardId = node.Id;
+		List<BlockReferenceEntry> cards = BlockReference.EntriesUnlockedBy(node);
+		detailCard.gameObject.SetActive(cards.Count > 0);
+		detailCard.Show(cards);
 	}
 
 	// 버튼 ---------------------------------------------------------------------
@@ -576,6 +620,7 @@ public class SkillTreeView : MonoBehaviour
 		if (selectedId == null || !SkillTree.CanUnlock(selectedId, Unlocked)) return;
 		Debug.Log($"[SkillTreeView] 해금 요청: {selectedId}");
 		failedId = null;
+		requestedId = selectedId;
 		UnlockRequested?.Invoke(selectedId);
 		if (progress != null) progress.RequestUnlock(selectedId);
 	}

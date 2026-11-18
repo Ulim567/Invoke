@@ -4,17 +4,18 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 스킬 트리 창(LobbyUI 프리팹 안의 SkillTreePanel)을 시안 9 모양으로 바꾸는 에디터 도구. 게임에는 들어가지 않는다.
+/// 스킬 트리 창(SkillTreeCanvas 프리팹 안의 SkillTreePanel)을 시안 9 모양으로 바꾸는 에디터 도구. 게임에는 들어가지 않는다.
 /// <para>
 /// 메뉴 Invoke → UI → 스킬 트리 화면 시안대로. 여러 번 눌러도 된다.<br/>
 /// - 창: 민트 테두리, 왼쪽 위 「> 스킬 트리」, 오른쪽 위 버그 조각 개수(MaterialCountText)와 X, 아래 구분선<br/>
 /// - 「문법 / 스킬」 탭, 트리(오른쪽 끝 세로 스크롤 막대), 오른쪽 설명 칸(왼쪽 선, 제목·내용을 쌓고 넘치면 스크롤), 주황 「해금」 버튼, 아래 범례<br/>
-/// - 크기는 시안 9(640×360)를 LobbyUI 캔버스(1920×1080) 기준으로 3배 한 값. 노드 색과 설명 글자는 SkillTreeView가 그린다.
+/// - 크기는 시안 9(640×360)를 SkillTreeCanvas(1920×1080) 기준으로 3배 한 값. 노드 색과 설명 글자는 SkillTreeView가 그린다.
 /// </para>
 /// </summary>
 public static class SkillTreeUIBuilder
 {
-	const string PrefabPath = "Assets/_HW/Lobby/LobbyUI.prefab";
+	// 연습장에서도 열리도록 창을 LobbyUI(Lobby 씬)에서 Base 씬의 SkillTreeCanvas로 옮겼다 (#586)
+	const string PrefabPath = "Assets/_UL/UI/SkillTreeCanvas.prefab";
 	const string FontPath = "Assets/Fonts/Galmuri11 TMP.asset";
 	const string Panel = "Assets/_HW/UI/Account/acc_panel.png";
 	const string Orange = "Assets/_HW/UI/Account/acc_button.png";
@@ -42,7 +43,7 @@ public static class SkillTreeUIBuilder
 			Transform window = panel != null ? panel.Find("Window") : null;
 			if (window == null)
 			{
-				Debug.LogError("[SkillTreeUIBuilder] LobbyUI 안에서 SkillTreePanel/Window를 찾지 못함");
+				Debug.LogError("[SkillTreeUIBuilder] SkillTreeCanvas 안에서 SkillTreePanel/Window를 찾지 못함");
 				return;
 			}
 
@@ -156,7 +157,7 @@ public static class SkillTreeUIBuilder
 			LegendItem(legend, Hex("1A1228"), Color.white, "지금 고른 노드");
 
 			PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
-			Debug.Log("[SkillTreeUIBuilder] 스킬 트리 창을 시안 9 모양으로 바꿈 (LobbyUI 프리팹)");
+			Debug.Log("[SkillTreeUIBuilder] 스킬 트리 창을 시안 9 모양으로 바꿈 (SkillTreeCanvas 프리팹)");
 		}
 		finally
 		{

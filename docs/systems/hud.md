@@ -4,14 +4,14 @@
 
 ## 하는 일
 - 우림이 시안 8(사냥터)·8-1(로비)대로 게임 중 HUD를 그린다 (#324). 값은 읽기만 한다.
-- 하지 않는 일: 레이드 남은 시간 (레이드 제한 시간이 아직 없음). 설정 창은 settings.md, 레벨업 창은 level-up.md, 스킬 트리 창은 `SkillTreePanel`(로비에만 있음)이 이벤트를 받아서 연다
+- 하지 않는 일: 레이드 남은 시간 (레이드 제한 시간이 아직 없음). 설정 창은 settings.md, 레벨업 창은 level-up.md, 스킬 트리 창은 `SkillTreePanel`(Base 씬의 `SkillTreeCanvas`)이 이벤트를 받아서 연다
 
 ## 동작 규칙
 - 프리팹 `Assets/_HW/UI/Hud/HudCanvas`를 **Base 씬**에 둔다. 정렬 순서 5 (게임 화면 바로 위, 다른 창보다 아래)
   - 메뉴 Invoke → UI → 게임 HUD 만들기(`HudUIBuilder`, 에디터 전용)가 만든다
 - 내 캐릭터(`NetworkClient.localPlayer`)가 생기면 보이고, 없으면 숨긴다
 - 창이 열린 동안 숨긴다: `InputBlockingPanel.HudHidden` (블록 편집, 스킬 장착, 레이드 방, 레벨업). 창 뒤로 HUD가 겹쳐 보이지 않게. 설정 창은 숨기지 않고 어둡게 덮는다 (settings.md)
-- 로비 창(입구, 스킬 트리)은 HUD를 숨기지 않는다 (#431, `HidesHud` false). 창이 열린 동안(`InputBlockingPanel.AnyOpen`) HUD는 보이기만 하고 누를 수 없다 (`CanvasGroup` interactable·blocksRaycasts 끔)
+- 로비 입구 창과 스킬 트리 창은 HUD를 숨기지 않는다 (#431, `HidesHud` false). 창이 열린 동안(`InputBlockingPanel.AnyOpen`) HUD는 보이기만 하고 누를 수 없다 (`CanvasGroup` interactable·blocksRaycasts 끔)
   - 창이 HUD 위에 그려지도록 `LobbyUI` 캔버스의 Sort Order는 HUD(5)보다 큰 8
 
 | 자리 | 보여 주는 것 | 읽는 곳 |
@@ -23,7 +23,7 @@
 | | Memory 막대: 왼쪽부터 Data(진한 청록)·Heap(청록), 오른쪽부터 Stack(보라), 사용 중 / 전체 | `ProcessMemory` |
 | | 슬롯 8칸 Q W E R A S D F | 아래 「슬롯 상태」 |
 | 왼쪽 아래 띠 위 | 알림 목록: 오류와 출력을 최대 5개, 알림마다 3초 (#480, #536). 아래 「알림 목록」 | `FunctionExecutorNetwork.CastRejected`, `OwnTaskEnded`, `OwnOutput` |
-| 오른쪽 아래 | 스킬 트리(1) · 레벨업(2) 바로가기. 아이콘 자리에 숫자 키 | 누르거나 숫자 1·2를 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비에 있을 때만, 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게, 키도 안 먹음). 숫자 키는 HUD의 `UIShortcut` On Shortcut 1·2 (#431, player-input.md)라 다른 창이 열려 있으면 반응하지 않음 |
+| 오른쪽 아래 | 스킬 트리(1) · 레벨업(2) 바로가기. 아이콘 자리에 숫자 키 | 누르거나 숫자 1·2를 누르면 `HudView.SkillTreeRequested` / `LevelUpRequested`. 스킬 트리는 내 캐릭터가 로비·연습장에 있을 때만(`PlaceScenes.CanOpenSkillTree`, #586), 레벨업은 받는 창이 있을 때만 켬 (꺼지면 흐리게, 키도 안 먹음). 숫자 키는 HUD의 `UIShortcut` On Shortcut 1·2 (#431, player-input.md)라 다른 창이 열려 있으면 반응하지 않음 |
 
 ### 슬롯 상태
 | 상태 | 모습 | 읽는 곳 |
@@ -100,7 +100,7 @@
 
 ## 장소 판정 (#362)
 - 내 캐릭터가 어느 장소에 있는지는 `PlayerPublicInfo.Place`(이우림 #359)로 본다 (`PlayerPlace.Of(player)`, `PlayerPlace.Mine`). 클라이언트에서는 Mirror가 플레이어를 늘 `Base` 씬에 만들어서 `scene.name`으로는 알 수 없다
-- 쓰는 곳: 장소 이름, 레이드에서 숨기기, 스킬 트리 버튼(로비에서만), 파티원 목록, 설정 창의 레이드 포기, 레벨업 결과 창(로비에서), 스킬 트리 창
+- 쓰는 곳: 장소 이름, 레이드에서 숨기기, 스킬 트리 버튼(로비·연습장에서만), 파티원 목록, 설정 창의 레이드 포기, 레벨업 결과 창(로비에서), 스킬 트리 창
 
 ## 머리 위 닉네임 (#362)
 - `NameTagView`(HudCanvas 안): 이 화면의 플레이어(`PlayerRoster`) 중 내 캐릭터와 같은 장소(`IsInMyPlace`)에 있는 플레이어 머리 위에 `PlayerPublicInfo.Nickname`을 띄운다. 내 이름은 청록, 다른 플레이어는 흰색

@@ -6,14 +6,15 @@ using Mirror;
 /// 열린 동안 내 캐릭터의 Player·Attack 액션 맵이 꺼진다.
 /// 닫기 버튼의 On Click()에 SkillTreePanel.Close를 연결한다.<br/>
 /// 여는 법: HUD의 「스킬 트리」 버튼(HudView.SkillTreeRequested). 로비의 스킬 트리 장소는 없앴다 (#378).
-/// 이 창은 Lobby 씬에 있으므로 HUD 버튼은 내 캐릭터가 로비에 있을 때만 켜진다.
+/// 이 창은 SkillTreeCanvas 프리팹(Base 씬)에 있다. 클라이언트가 연습장에 가면 Lobby 씬을 내리므로, 로비 밖에서도 열려면 Base 씬에 있어야 한다.
+/// 열 수 있는 장소는 PlaceScenes.CanOpenSkillTree가 정한다 (로비, 연습장).
 /// </para>
 /// </summary>
 public class SkillTreePanel : InputBlockingPanel
 {
 	void Start() => HudView.SkillTreeRequested += OpenForLocalPlayer;
 
-	// 로비 창은 HUD를 숨기지 않는다 (#431). HUD는 보이기만 하고 누를 수 없다. 창이 HUD 위에 그려지도록 LobbyUI 캔버스의 Sort Order가 HUD(5)보다 크다
+	// 스킬 트리 창은 HUD를 숨기지 않는다 (#431). HUD는 보이기만 하고 누를 수 없다. 창이 HUD 위에 그려지도록 SkillTreeCanvas의 Sort Order가 HUD(5)보다 크다
 	protected override bool HidesHud => false;
 
 	void OnDestroy() => HudView.SkillTreeRequested -= OpenForLocalPlayer;
@@ -26,8 +27,8 @@ public class SkillTreePanel : InputBlockingPanel
 	// HUD의 「스킬 트리」 버튼: 내 캐릭터로 연다
 	void OpenForLocalPlayer()
 	{
-		// 내 캐릭터가 로비에 있을 때만 연다 (호스트는 모든 장소 씬을 띄워 둠. 장소는 PlayerPublicInfo.Place, #362)
-		if (IsOpen || NetworkClient.localPlayer == null || PlayerPlace.Mine != PlaceScenes.Lobby) return;
+		// 내 캐릭터가 스킬 트리를 열 수 있는 장소(로비·연습장)에 있을 때만 연다 (장소는 PlayerPublicInfo.Place, #362)
+		if (IsOpen || NetworkClient.localPlayer == null || !PlaceScenes.CanOpenSkillTree(PlayerPlace.Mine)) return;
 		Show(NetworkClient.localPlayer.GetComponentInChildren<PlayerInputReader>());
 	}
 }

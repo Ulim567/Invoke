@@ -41,6 +41,20 @@ public static class PlaceScenes
 	}
 
 	/// <summary>
+	/// 스킬 트리 창을 열 수 있는 장소. 장소를 더하거나 빼려면 여기만 고친다.
+	/// </summary>
+	public static readonly string[] SkillTreePlaces = { Lobby, TrainingRoom };
+
+	/// <summary>
+	/// 장소 씬 이름이 스킬 트리 창을 열 수 있는 장소(SkillTreePlaces)이면 true.
+	/// HUD의 스킬 트리 버튼(HudView)과 스킬 트리 창(SkillTreePanel)이 같은 규칙을 쓰도록 여기서 판정한다.
+	/// </summary>
+	public static bool CanOpenSkillTree(string sceneName)
+	{
+		return System.Array.IndexOf(SkillTreePlaces, sceneName) >= 0;
+	}
+
+	/// <summary>
 	/// 이 플레이어가 지금 공격할 수 없는 장소에 있으면 true. 서버·호스트·클라이언트 어디에서 불러도 된다.
 	/// <para>
 	/// - 서버(호스트 포함)와 네트워크를 켜지 않은 테스트: 플레이어 오브젝트가 속한 씬의 이름으로 판단한다.<br/>

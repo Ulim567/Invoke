@@ -23,7 +23,7 @@ using UnityEngine.UI;
 ///   알림마다 반투명 상자 하나. 정해진 크기의 영역(noticePanel) 안에서 새 알림이 아래에서 부드럽게 밀어 올리고, 영역 위쪽은 마스크가 흐리게 잘라 낸다. 시간이 다 된 알림은 제자리에서 흐려진다.
 ///   시전 거부는 CastRejected(메모리 부족, 컴파일 오류), 내 작업의 실행 중단·runtime error는 FunctionExecutorNetwork.OwnTaskEnded.
 ///   출력은 FunctionExecutorNetwork.OwnOutput을 받아 「[Q] n = 3」.<br/>
-/// - 오른쪽 아래: 스킬 트리(1) · 레벨업(2) 바로가기. 누르거나 숫자 키를 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비에서만, 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
+/// - 오른쪽 아래: 스킬 트리(1) · 레벨업(2) 바로가기. 누르거나 숫자 키를 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비·연습장에서만(PlaceScenes.CanOpenSkillTree), 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
 /// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. HUD를 숨기는 창(InputBlockingPanel.HudHidden)이 열린 동안에도 숨긴다.
 ///   로비 창(입구, 스킬 트리)처럼 HUD를 남기는 창이 열린 동안은 보이기만 하고 누를 수 없다 (#431). HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
 /// </para>
@@ -516,11 +516,11 @@ public class HudView : MonoBehaviour
 				if (item != null && item.activeSelf == raid) item.SetActive(!raid);
 	}
 
-	// 받는 화면이 없으면 버튼을 끈다. 스킬 트리 창은 로비에만 있으므로 내 캐릭터가 로비에 있을 때만 켠다
-	// (호스트는 모든 장소 씬을 띄워 두어 다른 장소에서도 창이 살아 있으므로, 받는 쪽이 있는지만으로는 안 됨)
+	// 받는 화면이 없으면 버튼을 끈다. 스킬 트리는 내 캐릭터가 스킬 트리를 열 수 있는 장소(로비·연습장)에 있을 때만 켠다
+	// (스킬 트리 창은 Base 씬에 있어 어느 장소에서나 받는 쪽이 있으므로, 받는 쪽이 있는지만으로는 안 됨)
 	void RefreshShortcuts()
 	{
-		SetUsable(skillTreeButton, SkillTreeRequested != null && PlayerPlace.Of(player) == PlaceScenes.Lobby);
+		SetUsable(skillTreeButton, SkillTreeRequested != null && PlaceScenes.CanOpenSkillTree(PlayerPlace.Of(player)));
 		SetUsable(levelUpButton, LevelUpRequested != null);
 	}
 

@@ -8,6 +8,7 @@ using UnityEngine;
 /// <para>
 /// - 그림: Assets/_HW/Lobby/Gates/gate_{hunting, training, raid}.png (28×48픽셀 = 1.75×3칸). 남색 금속 문틀 + 이끼 덩굴 + 위의 작은 모니터, 안쪽은 가는 곳 분위기로 빛나는 화면 (노션 컨셉).
 ///   사냥터 청록 스캔 줄, 연습장 하늘색 격자, 레이드 마젠타 글리치 + 크리스털. 가져오기 설정(16 PPU, Point, 압축 없음, 기준점 아래 가운데)도 여기서 맞춘다.<br/>
+/// - 로비 상점 자리(이우림의 ShopStation, #534)는 상점 노점 그림 Assets/_HW/Lobby/Shop/shop_stall.png (44×48픽셀).<br/>
 /// - 로비 입구(LobbyEntrance)는 Destination에 맞는 그림, 출구(이우림의 PlaceExit)는 로비 귀환 문 그림 gate_lobby (갈색 나무 문틀 + 보라 화면, 노션 11/16). 지금 그림의 아래 끝(땅)에 문 아래 끝을 맞춘다.
 ///   색은 흰색(그림 그대로), 범위(콜라이더)와 ↑ 안내 자리는 문 크기에 맞춘다. 프리팹(Entrance, PlaceExit)은 그대로 두고 씬에 놓인 것만 바꾼다.
 /// </para>
@@ -17,6 +18,9 @@ public static class EntranceGateBuilder
 	const string Dir = "Assets/_HW/Lobby/Gates";
 	const float PixelsPerUnit = 16f;
 	const float GateHeight = 48f / PixelsPerUnit; // 3칸
+
+	// 상점 노점 그림 (44×48픽셀 = 2.75×3칸). 주황·크림 줄무늬 차양 + 민트 빛 계산대 + 버그 조각이 뜬 화면. 문과 같은 남색 금속·이끼 색
+	const string ShopSprite = "Assets/_HW/Lobby/Shop/shop_stall";
 
 	static readonly string[] Scenes = { "Lobby", "HuntingGround", "HuntingGround2", "HuntingGround3", "TrainingRoom", "RaidDungeon" };
 
@@ -52,6 +56,10 @@ public static class EntranceGateBuilder
 			string exitGate = "gate_lobby";
 			foreach (PlaceExit exit in Object.FindObjectsByType<PlaceExit>(FindObjectsInactive.Include, FindObjectsSortMode.None))
 				if (Apply(exit.transform, LoadGate(exitGate))) inScene++;
+
+			// 로비 상점 자리 (이우림의 ShopStation, #534): 상점 노점 그림 (shop.md 「임혜원과 맞출 것」)
+			GameObject shop = GameObject.Find("ShopStation");
+			if (shop != null && Apply(shop.transform, LoadGate(ShopSprite))) inScene++;
 
 			if (inScene > 0) EditorSceneManager.SaveScene(scene);
 			changed += inScene;
@@ -101,7 +109,7 @@ public static class EntranceGateBuilder
 	// 가져오기 설정: 16 PPU, 픽셀 그대로(Point, 압축 없음), 기준점 아래 가운데
 	static Sprite LoadGate(string name)
 	{
-		string path = $"{Dir}/{name}.png";
+		string path = name.StartsWith("Assets/") ? name + ".png" : $"{Dir}/{name}.png";
 		if (AssetImporter.GetAtPath(path) is TextureImporter importer)
 		{
 			var settings = new TextureImporterSettings();

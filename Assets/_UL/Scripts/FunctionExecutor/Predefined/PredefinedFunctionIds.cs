@@ -65,6 +65,9 @@ public static class PredefinedFunctionIds
 	public const string PyIsValidOrb = "py.is_valid_orb";
 	// 출력 함수 print(값) (#536). 스킬이 아니고 스킬 트리 노드도 없다. C의 printf와 하는 일이 같고, 값을 Python 표기로 보인다
 	public const string PyPrint = "py.print";
+	// 자세 함수 init_stance(), get_stance() (#546). 스킬이 아니고 스킬 트리 노드도 없다. C의 자세 함수와 하는 일이 같고, 효과 규칙만 Python 규칙이다
+	public const string PyInitStance = "py.init_stance";
+	public const string PyGetStance = "py.get_stance";
 	// 보조
 	public const string PyHex = "py.hex";
 	public const string PySnakeBind = "py.snake_bind";

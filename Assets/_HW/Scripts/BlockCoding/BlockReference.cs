@@ -377,11 +377,12 @@ public static class BlockReference
 	// BlockEditor.RebuildFunctionTab도 이 함수로 나눈다 (두 곳이 어긋나지 않게)
 	// py.is_valid_orb는 py.로 시작하지만 스킬이 아니라 기본 함수다 (#532, 이우림). is_valid_target과 같은 구역에 둔다
 	// 출력 함수(c.printf, py.print, #536)도 c.·py.로 시작하지만 기본 함수다
-	// 자세 함수(c.init_stance, c.get_stance, #538)도 기본 함수다
+	// 자세 함수(c.init_stance, c.get_stance #538, py.init_stance, py.get_stance #546)도 기본 함수다
 	internal static bool IsSkill(string id) =>
 		id != PredefinedFunctionIds.PyIsValidOrb
 		&& id != PredefinedFunctionIds.Printf && id != PredefinedFunctionIds.PyPrint
 		&& id != PredefinedFunctionIds.InitStance && id != PredefinedFunctionIds.GetStance
+		&& id != PredefinedFunctionIds.PyInitStance && id != PredefinedFunctionIds.PyGetStance
 		&& (id.StartsWith("c.", StringComparison.Ordinal) || id.StartsWith("py.", StringComparison.Ordinal) || id.StartsWith("common.", StringComparison.Ordinal));
 
 	static BlockReferenceEntry FunctionEntry(PredefinedFunction function)
@@ -604,6 +605,8 @@ public static class BlockReference
 		[PredefinedFunctionIds.PyPrint] = "출력",
 		[PredefinedFunctionIds.InitStance] = "자세 정하기",
 		[PredefinedFunctionIds.GetStance] = "자세 확인",
+		[PredefinedFunctionIds.PyInitStance] = "자세 정하기",
+		[PredefinedFunctionIds.PyGetStance] = "자세 확인",
 	};
 
 	/// <summary>

@@ -4,9 +4,9 @@ using UnityEngine;
 /// 플레이어 한 명의 자세 숫자를 가지는 컴포넌트 (#538). 자세 숫자는 이 컴포넌트만 바꾼다.
 /// <para>
 /// - 자세는 1~100의 int이고, 자세가 없으면 0이다. init_stance()가 Roll로 다시 뽑고, 장소를 옮기면 InvokeNetworkManager가 Clear로 없앤다.<br/>
-/// - 효과는 캐릭터 언어의 자세 규칙(StanceRule)이 정한다. 규칙이 없는 언어(지금은 Python)는 자세가 있어도 효과가 없다.<br/>
+/// - 효과는 캐릭터 언어의 자세 규칙(StanceRule)이 정한다. C는 CStanceRule, Python은 PythonStanceRule(#546).<br/>
 /// - 효과를 쓰는 곳: 데미지(DamageBonusOf), 받는 피해(ApplyReceivedDamage), 쿨타임(CooldownRateOf, CooldownTracker가 읽음),
-///   자해·회복(NotifySkillDealtDamage, 스킬이 데미지를 준 뒤 부름).
+///   상태 이상 지속 시간(StatusDurationRateOf, 보조 계열 스킬이 읽음, #546), 자해·회복(NotifySkillDealtDamage, 스킬이 데미지를 준 뒤 부름).
 /// </para>
 /// <para>
 /// 네트워크: 서버(또는 네트워크 없는 테스트)만 값을 가진다. 화면에 보이지 않는 값이고, 실행기와 데미지 판정이 서버에서 돌기 때문에 보내지 않는다.
@@ -124,7 +124,19 @@ public class PlayerStance : MonoBehaviour
 	public static float DamageBonusOf(GameObject attacker, SkillFamily? family = null) =>
 		attacker != null && attacker.TryGetComponent(out PlayerStance stance) ? stance.Effect.DamageBonusFor(family) : 0f;
 
-	/// <summary>caster의 지금 자세의 쿨타임 증감(-0.15면 15% 짧게). CooldownTracker가 쿨타임을 걸 때 곱한다. 자세가 없으면 0.</summary>
-	public static float CooldownRateOf(GameObject caster) =>
-		caster != null && caster.TryGetComponent(out PlayerStance stance) ? stance.Effect.CooldownRate : 0f;
+	/// <summary>
+	/// caster의 지금 자세가 skill에 거는 쿨타임 증감(-0.15면 15% 짧게). CooldownTracker가 쿨타임을 걸 때 곱한다. 자세가 없으면 0.<br/>
+	/// 모든 스킬 증감 + 그 스킬 계열(SkillTable의 Family)의 증감. 스킬 표에 없는 함수(init_stance 등)는 모든 스킬 증감만 받는다 (#546).
+	/// </summary>
+	// 스킬 ID가 아니라 함수를 받는 이유: 스킬 표에 없는 ID로 표를 찾으면 SkillTable이 콘솔 오류를 내기 때문. 스킬(DataDrivenSkill)만 계열을 묻는다
+	public static float CooldownRateOf(GameObject caster, PredefinedFunction skill) =>
+		caster != null && caster.TryGetComponent(out PlayerStance stance)
+			? stance.Effect.CooldownRateFor(skill is DataDrivenSkill dataSkill ? dataSkill.Family : null) : 0f;
+
+	/// <summary>
+	/// caster의 지금 자세가 family 계열 스킬이 거는 상태 이상의 지속 시간에 주는 증감(+0.3이면 30% 길게, #546). 자세가 없으면 0.<br/>
+	/// 스킬은 DataDrivenSkill.StanceStatusDurationRate로 읽어 StatusEffects.TryApply에 넘긴다.
+	/// </summary>
+	public static float StatusDurationRateOf(GameObject caster, SkillFamily? family) =>
+		caster != null && caster.TryGetComponent(out PlayerStance stance) ? stance.Effect.StatusDurationRateFor(family) : 0f;
 }

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 /// <para>
 /// - 문법 노드: 1차 기획서 4.3 해금 요소. 순차 실행 → 변수 → 연산 → if문 → 논리 연산 → for문 → while문 → 함수 → list → Type 정의<br/>
 /// - 스킬 노드: 「C 캐릭터 - 1차」 2. 해금 구조, 3. 스킬트리<br/>
-/// - 파이썬 마법사 스킬 노드 (#523, 박진우): 구슬·원소·범위·보조·이동. 구슬 생성·구슬 발사가 처음부터. 대시·더블점프는 C와 같은 공통 노드<br/>
+/// - 파이썬 마법사 스킬 노드 (#523, 박진우): 구슬·원소·범위·보조·이동. 매직 미사일·저주가 처음부터, 구슬 생성은 변수 문법 다음 (#548). 대시·더블점프는 C와 같은 공통 노드<br/>
 /// - 재료 수는 전부 임시. bug_fragment(버그 조각, 잡몹), field_boss_core(사냥터 보스 코어), boss_core(레이드 보스 코어)<br/>
 /// - 박진우와 맞춤 (#91): 패링은 검 소환 없이 재료만으로, 검 소환은 보스 재료가 있어야 열림 (사냥터 보스가 없는 동안은 레이드 보스 코어)
 /// </para>
@@ -103,7 +103,7 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.SwordRide, 8, PredefinedFunctionIds.DoubleJump, PredefinedFunctionIds.SummonSword));
 
 		// 파이썬 마법사 (#523, 박진우) ---------------------------------------------
-		// 구슬 (#532, 이우림 임시안. 스킬 트리 이슈에서 다시 정함): 구슬을 변수에 담아 넘기므로 변수 문법 뒤에 연다
+		// 구슬 (#532 이우림 안을 #548에서 박진우가 확정): 구슬을 변수에 담아 넘기므로 변수 문법 뒤에 연다
 		// 재료는 처음 노드가 된 매직 미사일(조각 2)·저주(조각 3)의 것을 옮겨 왔다
 		nodes.Add(Skill(PredefinedFunctionIds.PyOrbCreate, 2, Variable));
 		nodes.Add(Skill(PredefinedFunctionIds.PyOrbShot, 3, PredefinedFunctionIds.PyOrbCreate));
@@ -112,7 +112,7 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBarrage, 6, PredefinedFunctionIds.PyOrbShot, List));
 		nodes.Add(Skill(PredefinedFunctionIds.PyOrbBurst, 10, 1, PredefinedFunctionIds.PyOrbBarrage));
 		// 원소: 체인 라이트닝은 파이어볼과 얼음 창을 둘 다 해금해야 열린다
-		// 매직 미사일은 처음 슬롯 함수(magic_missile(get_bug()))와 같이 처음부터 열려 있다 (#532, 임시)
+		// 매직 미사일은 처음 슬롯 함수(magic_missile(get_bug()))와 같이 처음부터 열려 있다 (#532, #548 확정)
 		nodes.Add(Start(PredefinedFunctionIds.PyMagicMissile));
 		nodes.Add(Skill(PredefinedFunctionIds.PyFireball, 4, PredefinedFunctionIds.PyMagicMissile));
 		nodes.Add(Skill(PredefinedFunctionIds.PyIceSpear, 4, PredefinedFunctionIds.PyMagicMissile));
@@ -122,7 +122,7 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.PyBlizzard, 8, PredefinedFunctionIds.PyIceSpear));
 		nodes.Add(Skill(PredefinedFunctionIds.PyVenomMist, 6, PredefinedFunctionIds.PyHex));
 		// 보조
-		// 저주는 처음 슬롯 함수(hex(get_bug()))와 같이 처음부터 열려 있다 (#532, 임시)
+		// 저주는 처음 슬롯 함수(hex(get_bug()))와 같이 처음부터 열려 있다 (#532, #548 확정)
 		nodes.Add(Start(PredefinedFunctionIds.PyHex));
 		nodes.Add(Skill(PredefinedFunctionIds.PySnakeBind, 5, PredefinedFunctionIds.PyHex));
 		nodes.Add(Skill(PredefinedFunctionIds.PyFlash, 5, PredefinedFunctionIds.PyHex));

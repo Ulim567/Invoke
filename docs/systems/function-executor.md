@@ -435,7 +435,8 @@
   - 시작하지 못한 스킬(stack 부족 `Overflow`, 시작 전 실행 중단): 쿨타임 없음
   - 예: `{ A(); B(); }`에서 A가 끝난 뒤 B를 실행하기 전에 function이 끝나면 A만 쿨타임
 - 쿨타임 감소: 스킬이 끝날 때 `PlayerStats.ApplyCooldownReduction`을 한 번 적용하고 tick 수로 반올림. 스킬의 `CooldownTicks` 값은 그대로
-  - 자세의 쿨타임 증감 (#538, stance.md): 능력치 감소를 적용한 값에 (1 + `PlayerStance.CooldownRateOf(시전자)`)를 곱한 뒤 반올림. 예: 자세 15는 0.95배, 5는 1.1배. `CooldownTracker`가 `FunctionExecutor`에서 받은 함수로 그때그때 읽음
+  - 자세의 쿨타임 증감 (#538, stance.md): 능력치 감소를 적용한 값에 (1 + `PlayerStance.CooldownRateOf(시전자, 끝난 스킬)`)를 곱한 뒤 반올림. 예: C 자세 15는 0.95배, 5는 1.1배. `CooldownTracker`가 `FunctionExecutor`에서 받은 함수로 그때그때 읽음
+    - 끝난 스킬을 넘기는 이유 (#546): Python 7의 배수는 보조 계열 쿨타임만 늘리므로 스킬 계열마다 증감이 다름. 예: Python 자세 7은 저주 1.05배, 매직 미사일 0.85배
 - 같은 스킬이 실행 중이거나 쿨타임 중일 때
   - 슬롯에서 직접 시전: 시전 거부(`OnCooldown`)
   - function 안의 스킬: 실패 없이 쓸 수 있을 때까지 기다림. 기다린 tick도 function의 진행 tick에 들어감

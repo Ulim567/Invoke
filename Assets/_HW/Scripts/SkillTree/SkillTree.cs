@@ -80,7 +80,7 @@ public class SkillTree : ScriptableObject
 
 	/// <summary>
 	/// 처음부터 해금된 노드 ID들. 선행 조건이 없고 autoUnlock인 노드 가운데 그 언어의 노드 (#523).
-	/// C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 구슬 생성, 구슬 발사. 새 캐릭터를 만들 때 해금 목록에 넣는다.
+	/// C: 순차 실행, 검 찌르기, 검 던지기. Python: 순차 실행, 매직 미사일, 저주 (#548). 새 캐릭터를 만들 때 해금 목록에 넣는다.
 	/// </summary>
 	public static List<string> StartingNodes(string language = CharacterLanguages.C)
 	{

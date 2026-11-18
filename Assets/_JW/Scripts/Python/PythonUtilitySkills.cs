@@ -1,6 +1,7 @@
 using UnityEngine;
 
 // 파이썬 마법사의 보조·이동 계열 스킬. 보조는 약한 마법탄이나 번쩍임으로 상태 이상을 건다. 이동은 MovementSkill(스킬 동안 heap 1칸)을 따른다.
+// 보조 스킬의 상태 이상 지속 시간은 시전자의 자세가 늘릴 수 있다 (#546, Python 7의 배수 +30%). 그래서 시전자와 StanceStatusDurationRate를 넘긴다.
 
 /// <summary>
 /// 저주. 고른 대상 쪽으로 저주탄을 쏴, 처음 닿은 몬스터에게 약한 데미지와 표식을 건다 (단일). 표식이 걸린 대상은 그 다음 공격부터 데미지 2배.
@@ -10,7 +11,7 @@ public class PyHex : AimedBoltSkill
 	public override string Id => PredefinedFunctionIds.PyHex;
 
 	protected override void OnBoltHit(FunctionContext task, Monster monster, Vector2 point, DamageResult result) =>
-		StatusEffects.TryApply(monster.gameObject, StatusType.Mark);
+		StatusEffects.TryApply(monster.gameObject, StatusType.Mark, task.Caster, StanceStatusDurationRate(task.Caster));
 }
 
 /// <summary>
@@ -21,7 +22,7 @@ public class PySnakeBind : AimedBoltSkill
 	public override string Id => PredefinedFunctionIds.PySnakeBind;
 
 	protected override void OnBoltHit(FunctionContext task, Monster monster, Vector2 point, DamageResult result) =>
-		StatusEffects.TryApply(monster.gameObject, StatusType.Stun);
+		StatusEffects.TryApply(monster.gameObject, StatusType.Stun, task.Caster, StanceStatusDurationRate(task.Caster));
 }
 
 /// <summary>
@@ -36,7 +37,8 @@ public class PyFlash : MagicSkill
 		caster = task.Caster;
 		Vector2 center = BodyCenter(caster);
 		Effects(task)?.RaiseFired(Id, center, Vector2.zero);
-		foreach (Monster monster in MonstersInCircle(caster, center, Radius)) StatusEffects.TryApply(monster.gameObject, StatusType.Blind);
+		float durationRate = StanceStatusDurationRate(caster);
+		foreach (Monster monster in MonstersInCircle(caster, center, Radius)) StatusEffects.TryApply(monster.gameObject, StatusType.Blind, caster, durationRate);
 	}
 }
 

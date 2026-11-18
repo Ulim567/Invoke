@@ -159,7 +159,7 @@
     | 구역 | 항목 | 끌면 만드는 블록 |
     | --- | --- | --- |
     | 스킬 | 사전 정의 함수 중 고정 ID가 `c.`, `common.`인 것 | `BlockData.CallPredefinedFunction` |
-    | 기본 함수 | get_bug, is_valid_target, printf(Python은 print, #536), init_stance·get_stance(C, #538), wait | get_bug·is_valid_target·printf·자세 함수: `CallPredefinedFunction`, wait: `BlockData.Wait` (초 칸 비움) |
+    | 기본 함수 | get_bug, is_valid_target, printf(Python은 print, #536), init_stance·get_stance(C #538, Python #546), wait | get_bug·is_valid_target·printf·자세 함수: `CallPredefinedFunction`, wait: `BlockData.Wait` (초 칸 비움) |
     | 메모리 | malloc, free | `BlockData.Malloc(Sword)`, `BlockData.Free` |
     | 내가 만든 함수 | 페이지 함수 (슬롯 함수 제외) | `BlockData.CallUserFunction` |
 
@@ -183,7 +183,7 @@
   - 참고 카드를 펼친 내용의 줄 이름도 같은 규칙으로 칠함: 「슬롯」의 `condition`, 「파라미터」의 `target`(하늘색, 형식 줄·원형의 같은 글자와 같음), 「return 값」의 `Target`(청록, 원형의 반환 타입과 같음). 설명창의 파라미터 줄도 같음
   - 파라미터 이름은 핑크로 했다가 VS Code와 같은 하늘색으로 바꿈 (사용자가 정함)
   - 참고 카드를 펼쳤을 때의 「예시」 코드도 같은 규칙
-    - 한글 이름: 스킬은 스킬 표의 이름(`PredefinedFunction.Name`), get_bug 「버그 찾기」, is_valid_target 「대상 확인」, printf·print 「출력」(#536), init_stance 「자세 정하기」·get_stance 「자세 확인」(#538), wait 「기다리기」, malloc 「메모리 할당」, free 「메모리 해제」. 내가 만든 함수는 없음 (`BlockReference.KoreanNameOf`, `BuiltinOf`)
+    - 한글 이름: 스킬은 스킬 표의 이름(`PredefinedFunction.Name`), get_bug 「버그 찾기」, is_valid_target 「대상 확인」, printf·print 「출력」(#536), init_stance 「자세 정하기」·get_stance 「자세 확인」(C #538, Python #546), wait 「기다리기」, malloc 「메모리 할당」, free 「메모리 해제」. 내가 만든 함수는 없음 (`BlockReference.KoreanNameOf`, `BuiltinOf`)
     - 원형: 사전 정의 함수·내가 만든 함수는 파라미터에서 만듦(`BlockReference.PrototypeOf`). malloc `Sword* malloc(Sword);`, free `void free(Sword* pointer);`, wait `void wait(float seconds);` (파라미터 이름은 설명 표의 슬롯 이름과 같음)
     - 바탕: 함수 색(`#9E7BFF`)을 편집 영역 바탕(`#141823`)에 26% 섞은 불투명 색
   - 설명창: 항목에 마우스를 올리고 0.4초 멈추면 편집 영역의 같은 블록과 같은 설명창 (원형, 하는 일, 파라미터, return 값). 항목에는 설명을 넣지 않음 (목록이 길어지지 않게)

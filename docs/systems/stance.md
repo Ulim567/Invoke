@@ -4,7 +4,7 @@
 
 ## 하는 일
 - 플레이어 한 명의 자세 숫자(1~100, 자세가 없으면 0)를 가진다 (#538, Notion 「자세와 소환검 기획」 1. 자세). 자세 숫자는 `PlayerStance`만 바꾼다.
-- 자세 숫자의 효과(주는 데미지, 계열별 데미지, 받는 피해, 쿨타임, 자해, 회복)를 캐릭터 언어의 자세 규칙(`StanceRule`)으로 알려 준다.
+- 자세 숫자의 효과(주는 데미지, 계열별 데미지, 받는 피해, 쿨타임, 계열별 쿨타임, 계열별 상태 이상 지속 시간, 자해, 회복)를 캐릭터 언어의 자세 규칙(`StanceRule`)으로 알려 준다. C는 `CStanceRule`(#538), Python은 `PythonStanceRule`(#546, Notion 같은 문서 3. Python 자세).
 - 하지 않는 일
   - 자세 숫자를 화면에 보이지 않는다. 플레이어는 `printf`로 출력해서 확인한다.
   - 데미지를 직접 계산하지 않는다. 스킬과 출혈·중독이 `DamageBonusOf`를 읽어 `DamageRequest.BonusRate`에 더한다.
@@ -31,11 +31,25 @@
 - 「데미지」: 모든 스킬과 출혈·중독 도트. 「계열 데미지」: 스킬 표의 `family`가 그 계열인 스킬만 (이우림 결정 11/18). 던지기 계열은 계열 규칙이 없음
 - 겹침: 여러 규칙에 해당하면 효과를 더한다. 예(Notion): 5는 데미지 +30%, 찌르기 +5%(합 +35%), 휘두르기 -15%(합 +15%), 소환 +20%(합 +50%), 쿨타임 +10%, 자해. 15는 쿨타임 -15% + 10% = -5%
 - 0(자세 없음): 어떤 규칙도 적용하지 않음. 수학에서는 0이 짝수·3의 배수·5의 배수이지만 「자세 없음」에 효과가 붙지 않게 함
-- Python: 자세 규칙 없음(`StanceRule.For`가 null). 자세 숫자가 있어도 효과 없음. 기획이 정해지면 `StanceRule`을 상속한 규칙 하나와 Python용 함수만 더함
+- 자세 규칙 (Python, `PythonStanceRule`, #546, 수치는 모두 임시)
+
+| 숫자 조건 | 이득 | 손해 |
+| --- | --- | --- |
+| 큰 수 (51~100) | 원소 계열 데미지 +15% | 범위 계열 데미지 -15% |
+| 작은 수 (1~50) | 범위 계열 데미지 +15% | 원소 계열 데미지 -15% |
+| 4의 배수 | 구슬 계열 데미지 +20% | 원소 계열 데미지 -10% |
+| 회문수 (1~9, 11, 22, …, 99) | 쿨타임 -15% | 받는 피해 +10% |
+| 7의 배수 | 보조 계열 스킬이 거는 상태 이상(표식·기절·실명) 지속 시간 +30% | 보조 계열 쿨타임 +20% |
+| 완전제곱수 (1, 4, 9, …, 100) | 받는 피해 -15% | 데미지 -5% |
+| 세제곱수 (1, 8, 27, 64) | 데미지 +25% | 없음 |
+
+- Python 계열: 스킬 표의 `family`. 원소(매직 미사일·파이어볼·얼음 창·체인 라이트닝), 범위(메테오·블리자드·독 안개), 구슬(구슬 생성·발사·난사·폭발·보호막), 보조(저주·뱀 속박·섬광)
+- Python 예(Notion): 1은 범위 +15%, 원소 -15%, 쿨타임 -15%, 받는 피해 -5%, 데미지 +20%. 64는 원소 +5%, 범위 -15%, 구슬 +20%, 받는 피해 -15%, 데미지 +20%. 7은 모든 스킬 쿨타임 -15%, 보조 계열 쿨타임은 -15% + 20% = +5%
 - 효과가 쓰이는 곳
   - 주는 데미지: 스킬은 `DataDrivenSkill.StanceDamageBonus(caster)`(모든 스킬 + 그 스킬 계열 추가분), 출혈·중독 도트는 건 플레이어의 모든 스킬 추가분만(스킬 정보가 없음). 조건 배율처럼 `BonusRate`에 더함 (damage-calculation.md)
-  - 받는 피해: `PlayerHealth.TakeDamage`가 피해를 줄이기 전에 `ApplyReceivedDamage` (player-health.md)
-  - 쿨타임: `CooldownTracker`가 스킬이 끝날 때 능력치 감소를 적용한 값에 (1 + `CooldownRateOf(시전자)`)를 곱함 (function-executor.md). 능력치(`PlayerStats`)에는 넣지 않음: 능력치의 쿨타임 감소는 0~1로 잘려 쿨타임 증가를 표현할 수 없기 때문
+  - 받는 피해: `PlayerHealth.TakeDamage`가 피해를 줄이기 전에 `ApplyReceivedDamage` (player-health.md). 줄이는 규칙(Python 완전제곱수)도 같음
+  - 쿨타임: `CooldownTracker`가 스킬이 끝날 때 능력치 감소를 적용한 값에 (1 + `CooldownRateOf(시전자, 끝난 스킬)`)를 곱함 (function-executor.md). 모든 스킬 증감 + 그 스킬 계열 증감(지금은 Python 보조 계열만). 스킬 표에 없는 함수(init_stance 등)는 모든 스킬 증감만. 능력치(`PlayerStats`)에는 넣지 않음: 능력치의 쿨타임 감소는 0~1로 잘려 쿨타임 증가를 표현할 수 없기 때문
+  - 상태 이상 지속 시간 (#546): 보조 계열 스킬(저주·뱀 속박·섬광)이 상태를 걸 때 `DataDrivenSkill.StanceStatusDurationRate(caster)`를 `StatusEffects.TryApply`에 넘겨 기본 지속 시간 × (1 + 증감). 예: 표식 5초 → 6.5초 (status-effects.md)
   - 회복: 스킬이 맞힐 때마다(`DataDrivenSkill.NotifyDamageDealt`) 준 데미지 × 5%. 1 미만 부분은 모아 두었다가 1이 될 때마다 회복(이우림 결정 11/18, 공격력 10의 5%인 0.5를 버리거나 1로 올리지 않게). 자세가 바뀌면 모아 둔 부분은 버림. 다음 `Update`에 `PlayerHealth.Heal`(최대 체력을 넘지 않음). 도트는 회복 없음
   - 자해: 스킬 시전 하나가 처음 데미지(0보다 큼)를 준 순간 한 번. 최대 체력 × 1%를 데미지 계산과 같게 반올림(0보다 크면 최소 1). 다음 `Update`에 `PlayerHealth.TakeSelfDamage`로 깎음
     - 바로 바꾸지 않는 이유: 스킬 `OnTick` 안에서 자해로 죽으면 실행기가 모든 작업을 끊는데, 틱 도중에 그 스킬이 끊기면 남은 스킬 코드가 끊긴 스킬 위에서 돌기 때문
@@ -46,7 +60,7 @@
 
 ## 다른 시스템이 쓰는 것
 
-공용 `Player.prefab` 최상위(`PlayerStats`, `PlayerHealth`와 같은 곳)에 `PlayerStance`가 붙는다. 붙지 않은 프리팹은 자세 효과가 없고, `init_stance`·`get_stance`는 콘솔 오류를 내고 0을 돌려준다.
+공용 `Player.prefab` 최상위(`PlayerStats`, `PlayerHealth`와 같은 곳)에 `PlayerStance`가 붙는다. Python 플레이어 프리팹(`Player_Python.prefab`)은 `Player.prefab`의 변형이라 같이 붙어 있다. 붙지 않은 프리팹은 자세 효과가 없고, `init_stance`·`get_stance`는 콘솔 오류를 내고 0을 돌려준다.
 
 ### `PlayerStance`
 
@@ -59,22 +73,29 @@
 | `ApplyReceivedDamage(int damage)` | 받을 피해 | `int` | [서버] 받는 피해 증감을 적용한 값. `PlayerHealth.TakeDamage`가 부름 |
 | `NotifySkillDealtDamage(int damage, bool firstOfCast)` | 준 데미지, 이 시전의 첫 데미지인지 | - | [서버] 스킬이 데미지를 준 뒤. 회복이 있으면 데미지 × 비율을 모아 회복, `firstOfCast`이고 자해가 있으면 자해. 다음 `Update`에 바꿈. 보통은 `DataDrivenSkill.NotifyDamageDealt`를 거쳐 부름 |
 | `DamageBonusOf(GameObject attacker, SkillFamily? family = null)` (static) | 때린 플레이어, 스킬 계열 | `float` | 주는 데미지 추가분(모든 스킬 + 그 계열). 계열 없이 부르면(도트) 모든 스킬 추가분만. `BonusRate`에 더함. 자세·컴포넌트가 없으면 0 |
-| `CooldownRateOf(GameObject caster)` (static) | 시전자 | `float` | 쿨타임 증감(-0.15 = 15% 짧게). `CooldownTracker`가 곱함. 없으면 0 |
+| `CooldownRateOf(GameObject caster, PredefinedFunction skill)` (static) | 시전자, 끝난 스킬 | `float` | 쿨타임 증감(-0.15 = 15% 짧게). 모든 스킬 증감 + 그 스킬 계열 증감(#546). `CooldownTracker`가 곱함. 없으면 0 |
+| `StatusDurationRateOf(GameObject caster, SkillFamily? family)` (static) | 시전자, 스킬 계열 | `float` | 그 계열 스킬이 거는 상태 이상의 지속 시간 증감(+0.3 = 30% 길게, #546). 보통은 `DataDrivenSkill.StanceStatusDurationRate`를 거쳐 부름. 없으면 0 |
 | `NoStance`, `MinStance`, `MaxStance` | - | `int` | 0, 1, 100 |
 
 ### `StanceRule`, `StanceEffect`
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `StanceRule.For(string language)` (static) | 캐릭터 언어 | `StanceRule` | 그 언어의 자세 규칙. 지금 C만 있고 Python은 null |
+| `StanceRule.For(string language)` (static) | 캐릭터 언어 | `StanceRule` | 그 언어의 자세 규칙. C는 `CStanceRule`, Python은 `PythonStanceRule`(#546). 모르는 언어는 C |
 | `EffectOf(int stance)` | 자세 숫자 | `StanceEffect` | 그 숫자의 효과. 0 이하이면 효과 없음 |
 | `StanceRule.IsPrime`, `IsFibonacci`, `IsPerfect` (static) | 숫자 | `bool` | 소수(1은 아님), 피보나치 수, 완전수이면 true |
+| `StanceRule.IsPalindrome`, `IsSquare`, `IsCube` (static) | 숫자 | `bool` | 회문수, 완전제곱수, 세제곱수이면 true (#546). 0 이하는 false |
 | `CStanceRule.MiddleMin`, `MiddleMax` | - | `int` | 40~60 규칙의 범위 40, 60 (양 끝 포함) |
+| `PythonStanceRule.BigMin` | - | `int` | 큰 수 규칙의 가장 작은 숫자 51 (#546). 1~50은 작은 수 |
 | `StanceEffect.DamageBonusFor(SkillFamily? family)` | 스킬 계열 | `float` | 모든 스킬 추가분 + 그 계열 추가분. null이면 모든 스킬 추가분만 |
+| `StanceEffect.CooldownRateFor(SkillFamily? family)` | 스킬 계열 | `float` | 모든 스킬 쿨타임 증감 + 보조 계열 증감(보조 계열일 때만, #546). null이면 모든 스킬 증감만 |
+| `StanceEffect.StatusDurationRateFor(SkillFamily? family)` | 스킬 계열 | `float` | 보조 계열이면 상태 이상 지속 시간 증감, 그 밖은 0 (#546) |
 | `StanceEffect.DamageBonus` | - | `float` | 모든 스킬 데미지 추가분 (+0.1 = +10%) |
 | `StanceEffect.ThrustDamageBonus`, `SlashDamageBonus`, `SummonDamageBonus` | - | `float` | 찌르기·휘두르기·소환 계열에만 붙는 추가분 |
+| `StanceEffect.ElementDamageBonus`, `ZoneDamageBonus`, `OrbDamageBonus` | - | `float` | 원소·범위·구슬 계열에만 붙는 추가분 (#546) |
 | `StanceEffect.ReceivedDamageRate` | - | `float` | 받는 피해 증감 (+0.1 = 10% 더 아픔) |
-| `StanceEffect.CooldownRate` | - | `float` | 쿨타임 증감 (-0.15 = 15% 짧게, +0.1 = 10% 길게) |
+| `StanceEffect.CooldownRate` | - | `float` | 모든 스킬 쿨타임 증감 (-0.15 = 15% 짧게, +0.1 = 10% 길게) |
+| `StanceEffect.CurseCooldownRate`, `CurseDurationRate` | - | `float` | 보조 계열에만 붙는 쿨타임 증감, 상태 이상 지속 시간 증감 (#546) |
 | `StanceEffect.SelfDamageRate` | - | `float` | 자해량(최대 체력 비율) |
 | `StanceEffect.LifestealRate` | - | `float` | 스킬이 준 데미지 가운데 회복하는 비율 |
 
@@ -90,7 +111,13 @@
   - 이번에는 C만. 자세 상태·함수·효과 규칙은 Python에도 붙일 수 있게 언어별로 나눔
   - 해금은 정보: 규칙은 해금과 관계없이 처음부터 모두 적용. 스킬 트리에서 규칙을 해금하면 그 규칙의 내용(이름, 이득, 손해)을 볼 수 있음. 원하지 않는 자세는 다시 뽑음
   - 해금 전에 가리는 범위 (가): 효과가 있다는 사실과 규칙이 여덟 개라는 것만 보이고, 규칙 이름·수치는 「???」. `init_stance` 설명도 규칙 이름을 적지 않음(`ItemDescriptions`). 규칙 노드와 「???」 표시는 스킬 트리 작업 때 만듦
+- Python 자세 이우림 결정 (11/18, #546)
+  - 규칙 표: Notion 3. Python 자세의 효과 수치(임시) 그대로. 함수 이름·시전 시간·쿨타임·처음 개수 1개는 C와 같음
+  - 7의 배수의 지속 시간 증가는 보조 계열 스킬(저주·뱀 속박·섬광)의 표식·기절·실명만. 독 안개의 중독은 범위 계열이라 늘리지 않음 (Notion에는 「표식·기절·실명·중독」). 이유: 이득(지속 시간)과 손해(보조 계열 쿨타임)가 같은 스킬 묶음에 걸려야 선택이 되고, 독 안개는 안개 안에서 중독을 계속 다시 걸어 지속 시간 차이가 거의 없음
+  - 규칙 해금 노드(「???」)는 C와 함께 스킬 트리 이슈에서 만듦
 - 다른 담당자 코드에 넣은 것 (모든 파일 수정 허락, 11/8)
   - 박진우: 스킬 데미지 자리(`ThrustSkills`, `SlashSkills`, `ThrowSkills`, `SummonDamage`, `MagicSkill.Deal`)에 `StanceDamageBonus` 더하기와 `NotifyDamageDealt`, `DataDrivenSkill`의 `StanceDamageBonus`·`NotifyDamageDealt`, `StatusEffects`의 출혈·중독 도트 추가분, `SlotLoadout.IsEquippableSkill`에서 자세 함수 제외. `SummonDamage.Deal`의 첫 인자가 스킬 ID에서 스킬(`DataDrivenSkill`)로 바뀜
   - 김도훈: `PlayerHealth.TakeDamage`의 받는 피해 증감, `TakeSelfDamage`·`Heal` 추가
   - 임혜원: 함수 탭에서 자세 함수를 기본 함수로(`BlockReference.IsSkill`), 한글 이름 「자세 정하기」·「자세 확인」
+  - #546 박진우: `StatusEffects.TryApply`에 지속 시간 증감을 받는 오버로드, `PythonUtilitySkills`의 저주·뱀 속박·섬광이 시전자와 증감을 넘김, `DataDrivenSkill`의 `Family`·`StanceStatusDurationRate`, `SlotLoadout.IsEquippableSkill`에서 Python 자세 함수 제외
+  - #546 임혜원: `BlockReference`에 Python 자세 함수(기본 함수, 한글 이름), `ItemDescriptions.Python`에 설명

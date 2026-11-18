@@ -387,7 +387,7 @@ public class FunctionExecutor : MonoBehaviour
 			language = gameObject.AddComponent<LanguageRule>();
 		}
 		// 자세(#538)의 쿨타임 증감은 쿨타임을 걸 때마다 PlayerStance에서 읽는다. PlayerStance가 없으면 0
-		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick, () => PlayerStance.CooldownRateOf(gameObject));
+		cooldowns = new CooldownTracker(GetComponent<PlayerStats>(), () => CurrentTick, skill => PlayerStance.CooldownRateOf(gameObject, skill));
 		cooldowns.CooldownStarted += (skillId, endTick) => CooldownStarted?.Invoke(skillId, endTick - CurrentTick);
 		// 쿨타임을 먼저 검사한다. 둘 다 걸리면 「아직 쓸 수 없음」이 플레이어에게 더 정확한 이유이기 때문
 		castConditions.Add(new CooldownCondition(cooldowns));

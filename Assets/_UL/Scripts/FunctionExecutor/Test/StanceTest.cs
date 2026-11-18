@@ -7,9 +7,9 @@ using Mirror;
 using UnityEngine;
 
 /// <summary>
-/// 자세 시험 (#538). 자세 규칙의 효과 값, 계열 데미지, 쿨타임 증감, 받는 피해, 회복, 자해, init_stance·get_stance 시전을 확인한다.
+/// 자세 시험 (#538, Python #546). 자세 규칙의 효과 값, 계열 데미지, 쿨타임 증감, 받는 피해, 회복, 자해, 상태 이상 지속 시간, init_stance·get_stance 시전을 확인한다.
 /// <para>
-/// - 사용법: 네트워크를 켜지 않은 Play 중 Spawn(baseStatsPath)을 부른다. 콘솔에 「[StanceTest] … 통과/실패」, 마지막에 「전체 통과」.<br/>
+/// - 사용법: 네트워크를 켜지 않은 Play 중 Spawn(baseStatsPath, python)을 부른다. 콘솔에 「[StanceTest C] … 통과/실패」(Python은 [StanceTest Python]), 마지막에 「전체 통과」.<br/>
 /// - 몬스터를 실제로 때리지는 않는다. 스킬이 데미지를 준 뒤 부르는 알림(DataDrivenSkill.NotifyDamageDealt)을 직접 불러 자해를 본다.
 /// </para>
 /// </summary>
@@ -18,7 +18,8 @@ public class StanceTest : MonoBehaviour
 {
 	static readonly VariableType Int = new VariableType(VariableTypeKind.Int);
 
-	const string Tag = "[StanceTest]";
+	bool python;
+	string Tag => python ? "[StanceTest Python]" : "[StanceTest C]";
 	FunctionExecutor executor;
 	PlayerStance stance;
 	PlayerStats stats;
@@ -28,22 +29,37 @@ public class StanceTest : MonoBehaviour
 	FunctionTask endedTask;
 
 #if UNITY_EDITOR
-	/// <summary>시험 오브젝트를 만든다. baseStatsPath는 PlayerStats의 기본 능력치 에셋 경로(C_BaseStats).</summary>
-	public static GameObject Spawn(string baseStatsPath)
+	/// <summary>
+	/// 시험 오브젝트를 만든다. baseStatsPath는 PlayerStats의 기본 능력치 에셋 경로(C_BaseStats).
+	/// python이면 Python 캐릭터(PlayerCharacter의 언어 Python, Python 문법 규칙)로 Python 자세를 시험한다 (#546).
+	/// </summary>
+	public static GameObject Spawn(string baseStatsPath, bool python = false)
 	{
-		GameObject go = new GameObject("StanceTest");
+		GameObject go = new GameObject(python ? "StanceTest_Python" : "StanceTest_C");
 		go.SetActive(false);
 		PlayerStats stats = go.AddComponent<PlayerStats>();
 		FieldInfo baseStats = typeof(PlayerStats).GetField("baseStats", BindingFlags.NonPublic | BindingFlags.Instance);
 		baseStats?.SetValue(stats, UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableObject>(baseStatsPath));
 		LanguageRule language = go.AddComponent<LanguageRule>();
-		language.SetRuleDataForTest(UnityEditor.AssetDatabase.LoadAssetAtPath<LanguageRuleData>("Assets/_UL/Data/LanguageRule_C.asset"));
-		language.SetFamilyForTest(LanguageFamily.C);
+		if (python)
+		{
+			language.SetRuleDataForTest(LanguageRuleData.CreatePythonForTest());
+			language.SetFamilyForTest(LanguageFamily.Python);
+			// 자세 규칙은 PlayerCharacter의 언어로 고른다. 이 컴포넌트가 없으면 C로 본다
+			PlayerCharacter character = go.AddComponent<PlayerCharacter>();
+			typeof(PlayerCharacter).GetField("language", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(character, CharacterLanguages.Python);
+		}
+		else
+		{
+			language.SetRuleDataForTest(UnityEditor.AssetDatabase.LoadAssetAtPath<LanguageRuleData>("Assets/_UL/Data/LanguageRule_C.asset"));
+			language.SetFamilyForTest(LanguageFamily.C);
+		}
 		go.AddComponent<NetworkIdentity>();
 		go.AddComponent<PlayerHealth>();
 		go.AddComponent<PlayerStance>();
 		go.AddComponent<FunctionExecutor>();
-		go.AddComponent<StanceTest>();
+		StanceTest test = go.AddComponent<StanceTest>();
+		test.python = python;
 		go.SetActive(true);
 		return go;
 	}
@@ -59,14 +75,27 @@ public class StanceTest : MonoBehaviour
 		executor.Output += (task, text) => outputs.Add(text);
 		executor.TaskEnded += task => endedTask = task;
 
-		TestRule();
-		TestDamageBonus();
-		TestCooldown();
-		yield return TestReceivedDamage();
-		yield return TestLifesteal();
-		yield return TestSelfDamage();
-		yield return TestGetStance();
-		yield return TestInitStance();
+		if (python)
+		{
+			TestPythonRule();
+			TestPythonDamageBonus();
+			TestPythonCooldown();
+			yield return TestStatusDuration();
+			TestPythonFunctionSetup();
+			yield return TestGetStance();
+			yield return TestInitStance();
+		}
+		else
+		{
+			TestRule();
+			TestDamageBonus();
+			TestCooldown();
+			yield return TestReceivedDamage();
+			yield return TestLifesteal();
+			yield return TestSelfDamage();
+			yield return TestGetStance();
+			yield return TestInitStance();
+		}
 
 		if (failures == 0) Debug.Log($"{Tag} 전체 통과");
 		else Debug.LogError($"{Tag} 실패 {failures}개");
@@ -76,7 +105,8 @@ public class StanceTest : MonoBehaviour
 	void TestRule()
 	{
 		StanceRule c = StanceRule.For(CharacterLanguages.C);
-		Check("Python은 자세 규칙 없음", StanceRule.For(CharacterLanguages.Python) == null, "");
+		Check("C 캐릭터는 C 규칙, Python 캐릭터는 Python 규칙 (#546)",
+			c is CStanceRule && StanceRule.For(CharacterLanguages.Python) is PythonStanceRule, "");
 
 		int primes = 0, fibonacci = 0, perfect = 0;
 		for (int n = 1; n <= 100; n++)
@@ -109,10 +139,145 @@ public class StanceTest : MonoBehaviour
 		StanceEffect e = rule.EffectOf(n);
 		bool ok = Near(e.DamageBonus, expected.DamageBonus) && Near(e.ThrustDamageBonus, expected.ThrustDamageBonus)
 			&& Near(e.SlashDamageBonus, expected.SlashDamageBonus) && Near(e.SummonDamageBonus, expected.SummonDamageBonus)
+			&& Near(e.ElementDamageBonus, expected.ElementDamageBonus) && Near(e.ZoneDamageBonus, expected.ZoneDamageBonus)
+			&& Near(e.OrbDamageBonus, expected.OrbDamageBonus)
 			&& Near(e.ReceivedDamageRate, expected.ReceivedDamageRate) && Near(e.CooldownRate, expected.CooldownRate)
+			&& Near(e.CurseCooldownRate, expected.CurseCooldownRate) && Near(e.CurseDurationRate, expected.CurseDurationRate)
 			&& Near(e.SelfDamageRate, expected.SelfDamageRate) && Near(e.LifestealRate, expected.LifestealRate);
 		Check(name, ok, $"데미지 {e.DamageBonus}, 찌르기 {e.ThrustDamageBonus}, 휘두르기 {e.SlashDamageBonus}, 소환 {e.SummonDamageBonus}, "
-			+ $"받는 피해 {e.ReceivedDamageRate}, 쿨타임 {e.CooldownRate}, 자해 {e.SelfDamageRate}, 회복 {e.LifestealRate}");
+			+ $"원소 {e.ElementDamageBonus}, 범위 {e.ZoneDamageBonus}, 구슬 {e.OrbDamageBonus}, "
+			+ $"받는 피해 {e.ReceivedDamageRate}, 쿨타임 {e.CooldownRate}, 보조 쿨타임 {e.CurseCooldownRate}, 보조 지속 시간 {e.CurseDurationRate}, "
+			+ $"자해 {e.SelfDamageRate}, 회복 {e.LifestealRate}");
+	}
+
+	// Python 규칙 판별 (#546, Notion 예시 1, 4, 8, 64 포함)
+	void TestPythonRule()
+	{
+		StanceRule py = StanceRule.For(CharacterLanguages.Python);
+		Check("Python 캐릭터의 자세 효과는 Python 규칙", py is PythonStanceRule && PlayerCharacter.LanguageOf(gameObject) == CharacterLanguages.Python, "");
+
+		int palindromes = 0, squares = 0, cubes = 0;
+		for (int n = 1; n <= 100; n++)
+		{
+			if (StanceRule.IsPalindrome(n)) palindromes++;
+			if (StanceRule.IsSquare(n)) squares++;
+			if (StanceRule.IsCube(n)) cubes++;
+		}
+		Check("1~100에 회문수 18개, 완전제곱수 10개, 세제곱수 4개", palindromes == 18 && squares == 10 && cubes == 4,
+			$"회문수 {palindromes}, 완전제곱수 {squares}, 세제곱수 {cubes}");
+		Check("회문수 7·11·99, 아님 10·12·100 / 완전제곱수 1·100, 아님 2 / 세제곱수 1·64, 아님 9",
+			StanceRule.IsPalindrome(7) && StanceRule.IsPalindrome(11) && StanceRule.IsPalindrome(99)
+			&& !StanceRule.IsPalindrome(10) && !StanceRule.IsPalindrome(12) && !StanceRule.IsPalindrome(100)
+			&& StanceRule.IsSquare(1) && StanceRule.IsSquare(100) && !StanceRule.IsSquare(2)
+			&& StanceRule.IsCube(1) && StanceRule.IsCube(64) && !StanceRule.IsCube(9), "");
+
+		ExpectEffect(py, 0, new StanceEffect(), "0: 자세 없음, 효과 없음");
+		ExpectEffect(py, 1, new StanceEffect(zone: 0.15f, element: -0.15f, cooldown: -0.15f, received: -0.05f, damage: 0.2f),
+			"1: 작은 수 + 회문수 + 완전제곱수 + 세제곱수 (Notion 예시)");
+		ExpectEffect(py, 4, new StanceEffect(zone: 0.15f, element: -0.25f, orb: 0.2f, cooldown: -0.15f, received: -0.05f, damage: -0.05f),
+			"4: 작은 수 + 4의 배수 + 회문수 + 완전제곱수 (Notion 예시)");
+		ExpectEffect(py, 8, new StanceEffect(zone: 0.15f, element: -0.25f, orb: 0.2f, cooldown: -0.15f, received: 0.1f, damage: 0.25f),
+			"8: 작은 수 + 4의 배수 + 회문수 + 세제곱수 (Notion 예시)");
+		ExpectEffect(py, 64, new StanceEffect(element: 0.05f, zone: -0.15f, orb: 0.2f, received: -0.15f, damage: 0.2f),
+			"64: 큰 수 + 4의 배수 + 완전제곱수 + 세제곱수 (Notion 예시)");
+		ExpectEffect(py, 77, new StanceEffect(element: 0.15f, zone: -0.15f, cooldown: -0.15f, received: 0.1f, curseCooldown: 0.2f, curseDuration: 0.3f),
+			"77: 큰 수 + 회문수 + 7의 배수");
+		ExpectEffect(py, 50, new StanceEffect(zone: 0.15f, element: -0.15f), "50: 작은 수만 (51부터 큰 수)");
+		ExpectEffect(py, 51, new StanceEffect(element: 0.15f, zone: -0.15f), "51: 큰 수만");
+	}
+
+	// Python 계열 데미지: 자세 64는 데미지 +20%, 원소 +5%, 범위 -15%, 구슬 +20%
+	void TestPythonDamageBonus()
+	{
+		stance.SetStance(64);
+		float element = PlayerStance.DamageBonusOf(gameObject, SkillFamily.Element);
+		float zone = PlayerStance.DamageBonusOf(gameObject, SkillFamily.Zone);
+		float orb = PlayerStance.DamageBonusOf(gameObject, SkillFamily.Orb);
+		float curse = PlayerStance.DamageBonusOf(gameObject, SkillFamily.Curse);
+		float dot = PlayerStance.DamageBonusOf(gameObject);
+		Check("자세 64의 데미지 추가분: 원소 +25%, 범위 +5%, 구슬 +40%, 보조 +20%, 도트 +20%",
+			Near(element, 0.25f) && Near(zone, 0.05f) && Near(orb, 0.4f) && Near(curse, 0.2f) && Near(dot, 0.2f),
+			$"원소 {element}, 범위 {zone}, 구슬 {orb}, 보조 {curse}, 도트 {dot}");
+
+		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyMagicMissile, out PredefinedFunction missile);
+		float fromSkill = NewCast(missile).StanceDamageBonus(gameObject);
+		Check("매직 미사일은 원소 계열 추가분을 받음", Near(fromSkill, 0.25f), $"실제 {fromSkill}");
+		stance.Clear();
+	}
+
+	// 계열별 쿨타임: 자세 7(작은 수 + 회문수 + 7의 배수)은 모든 스킬 -15%, 보조 계열은 -15% + 20% = +5%
+	void TestPythonCooldown()
+	{
+		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyHex, out PredefinedFunction hex);
+		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyMagicMissile, out PredefinedFunction missile);
+		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyInitStance, out PredefinedFunction init);
+		stance.SetStance(7);
+		float hexRate = PlayerStance.CooldownRateOf(gameObject, hex);
+		float missileRate = PlayerStance.CooldownRateOf(gameObject, missile);
+		float initRate = PlayerStance.CooldownRateOf(gameObject, init);
+		Check("자세 7의 쿨타임 증감: 저주(보조) +5%, 매직 미사일(원소) -15%, init_stance(스킬 아님) -15%",
+			Near(hexRate, 0.05f) && Near(missileRate, -0.15f) && Near(initRate, -0.15f),
+			$"저주 {hexRate}, 매직 미사일 {missileRate}, init_stance {initRate}");
+
+		// CooldownTracker가 끝난 스킬마다 그 스킬의 증감을 곱하는지
+		foreach (PredefinedFunction skill in new[] { hex, init })
+		{
+			if (skill.CooldownTicks <= 0) continue;
+			int ended = -1;
+			var tracker = new CooldownTracker(stats, () => 0, s => PlayerStance.CooldownRateOf(gameObject, s));
+			tracker.CooldownStarted += (id, endTick) => ended = endTick;
+			tracker.SkillEnded(skill);
+			int expected = Mathf.RoundToInt(stats.ApplyCooldownReduction(skill.CooldownTicks) * (1f + PlayerStance.CooldownRateOf(gameObject, skill)));
+			Check($"{skill.Name} 쿨타임 {skill.CooldownTicks} tick, 자세 7 → {expected} tick", ended == expected, $"실제 {ended}");
+		}
+		stance.Clear();
+	}
+
+	// 상태 이상 지속 시간: 7의 배수이면 보조 계열 스킬이 거는 상태가 30% 길다. 표식 5초 → 6.5초. 범위 계열(독 안개)과 다른 자세는 그대로
+	IEnumerator TestStatusDuration()
+	{
+		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyHex, out PredefinedFunction hex);
+		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyVenomMist, out PredefinedFunction mist);
+		stance.SetStance(14);
+		float hexRate = NewCast(hex).StanceStatusDurationRate(gameObject);
+		float mistRate = NewCast(mist).StanceStatusDurationRate(gameObject);
+		stance.SetStance(15);
+		float otherRate = NewCast(hex).StanceStatusDurationRate(gameObject);
+		Check("지속 시간 증감: 자세 14의 저주 +30%, 자세 14의 독 안개(범위) 0, 자세 15의 저주 0",
+			Near(hexRate, 0.3f) && Near(mistRate, 0f) && Near(otherRate, 0f), $"저주 {hexRate}, 독 안개 {mistRate}, 자세 15 저주 {otherRate}");
+
+		// 실제로 상태를 걸어 남은 시간을 본다. 몬스터 없이 StatusEffects만 붙인 대상
+		GameObject target = new GameObject("StanceTest_StatusTarget");
+		target.AddComponent<NetworkIdentity>();
+		StatusEffects effects = target.AddComponent<StatusEffects>();
+		yield return null;
+		StatusEffects.TryApply(target, StatusType.Mark, gameObject, hexRate);
+		StatusEffects.TryApply(target, StatusType.Stun, gameObject, 0f);
+		float mark = effects.RemainingTime(StatusType.Mark);
+		float stun = effects.RemainingTime(StatusType.Stun);
+		Check($"표식 {StatusDefaults.MarkDuration}초 × 1.3 = {StatusDefaults.MarkDuration * 1.3f}초, 증감 0인 기절은 {StatusDefaults.StunDuration}초 그대로",
+			Mathf.Abs(mark - StatusDefaults.MarkDuration * 1.3f) < 0.05f && Mathf.Abs(stun - StatusDefaults.StunDuration) < 0.05f,
+			$"표식 {mark}, 기절 {stun}");
+		Destroy(target);
+		stance.Clear();
+	}
+
+	// Python 자세 함수가 등록되고, 슬롯에 넣을 수 없고, 새 캐릭터가 1개씩 받는지
+	void TestPythonFunctionSetup()
+	{
+		bool registered = PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyInitStance, out PredefinedFunction init)
+			& PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.PyGetStance, out PredefinedFunction get);
+		Check("py.init_stance·py.get_stance 등록, 이름 init_stance·get_stance, init_stance 시전 125 tick·쿨타임 150 tick",
+			registered && init.Name == "init_stance" && get.Name == "get_stance"
+			&& init.TickCount == InitStanceFunction.CastTicks && init.CooldownTicks == InitStanceFunction.Cooldown, "");
+		Check("자세 함수는 슬롯에 넣을 수 없음",
+			!SlotLoadout.IsEquippableSkill(PredefinedFunctionIds.PyInitStance) && !SlotLoadout.IsEquippableSkill(PredefinedFunctionIds.PyGetStance), "");
+
+		Dictionary<string, int> counts = ItemCountRules.Initial(CharacterLanguages.Python);
+		counts.TryGetValue(PredefinedFunctionIds.PyInitStance, out int initCount);
+		counts.TryGetValue(PredefinedFunctionIds.PyGetStance, out int getCount);
+		Check("새 Python 캐릭터는 py.init_stance·py.get_stance 1개씩, C 자세 함수는 없음",
+			initCount == 1 && getCount == 1 && !counts.ContainsKey(PredefinedFunctionIds.InitStance), $"init {initCount}, get {getCount}");
 	}
 
 	// 주는 데미지: 계열을 넘기면 모든 스킬 추가분 + 계열 추가분, 계열 없이(도트) 부르면 모든 스킬 추가분만
@@ -151,7 +316,7 @@ public class StanceTest : MonoBehaviour
 		{
 			stance.SetStance(n);
 			int ended = -1;
-			var tracker = new CooldownTracker(stats, () => 0, () => PlayerStance.CooldownRateOf(gameObject));
+			var tracker = new CooldownTracker(stats, () => 0, skill => PlayerStance.CooldownRateOf(gameObject, skill));
 			tracker.CooldownStarted += (id, endTick) => ended = endTick;
 			tracker.SkillEnded(init);
 			int expected = Mathf.RoundToInt(stats.ApplyCooldownReduction(init.CooldownTicks) * (1f + stance.Effect.CooldownRate));
@@ -262,26 +427,31 @@ public class StanceTest : MonoBehaviour
 	// 실행기가 시전할 때처럼 원본과 같은 종류의 새 스킬을 만든다. 원본에 「데미지를 줬음」이 남지 않게 하기 위함
 	static DataDrivenSkill NewCast(PredefinedFunction original) => (DataDrivenSkill)Activator.CreateInstance(original.GetType());
 
-	// get_stance: int s = get_stance(); printf(s);
+	// 언어마다 고정 ID와 문법만 다르다. C: int s = get_stance(); printf(s);  Python: s = get_stance(); print(s)
+	string GetStanceId => python ? PredefinedFunctionIds.PyGetStance : PredefinedFunctionIds.GetStance;
+	string InitStanceId => python ? PredefinedFunctionIds.PyInitStance : PredefinedFunctionIds.InitStance;
+	string PrintId => python ? PredefinedFunctionIds.PyPrint : PredefinedFunctionIds.Printf;
+	BlockData Store(string name, string functionId) => python
+		? BlockData.Assign(name, SlotData.FromBlock(Call(functionId)))
+		: BlockData.Declare(Int, name, SlotData.FromBlock(Call(functionId)));
+
+	// get_stance: s = get_stance() 후 출력
 	IEnumerator TestGetStance()
 	{
 		stance.SetStance(37);
-		yield return Run("get_stance 37", BlockData.Declare(Int, "s", SlotData.FromBlock(Call(PredefinedFunctionIds.GetStance))),
-			Call(PredefinedFunctionIds.Printf, SlotData.FromVariable("s")));
+		yield return Run("get_stance 37", Store("s", GetStanceId), Call(PrintId, SlotData.FromVariable("s")));
 		Check("get_stance는 지금 자세(37)", Completed() && Output() == "s = 37", Detail());
 
 		stance.Clear();
-		yield return Run("get_stance 0", BlockData.Declare(Int, "s", SlotData.FromBlock(Call(PredefinedFunctionIds.GetStance))),
-			Call(PredefinedFunctionIds.Printf, SlotData.FromVariable("s")));
+		yield return Run("get_stance 0", Store("s", GetStanceId), Call(PrintId, SlotData.FromVariable("s")));
 		Check("자세가 없으면 get_stance는 0", Completed() && Output() == "s = 0", Detail());
 	}
 
-	// init_stance: int n = init_stance(); printf(n); → 2.5초(125 tick) 뒤 1~100, 자세도 그 숫자, 쿨타임 3초(3의 배수면 감소)
+	// init_stance: n = init_stance() 후 출력 → 2.5초(125 tick) 뒤 1~100, 자세도 그 숫자, 쿨타임 3초(모든 스킬 쿨타임 증감만 받음)
 	IEnumerator TestInitStance()
 	{
 		int startTick = executor.CurrentTick;
-		yield return Run("init_stance", BlockData.Declare(Int, "n", SlotData.FromBlock(Call(PredefinedFunctionIds.InitStance))),
-			Call(PredefinedFunctionIds.Printf, SlotData.FromVariable("n")));
+		yield return Run("init_stance", Store("n", InitStanceId), Call(PrintId, SlotData.FromVariable("n")));
 		int elapsed = executor.CurrentTick - startTick;
 		string text = Output();
 		int n = -1;
@@ -289,7 +459,7 @@ public class StanceTest : MonoBehaviour
 		Check("init_stance는 1~100을 돌려주고 자세도 그 숫자", Completed() && n >= 1 && n <= 100 && stance.Stance == n, $"{Detail()}, 자세 {stance.Stance}");
 		Check($"init_stance는 {InitStanceFunction.CastTicks} tick 넘게 걸림", elapsed >= InitStanceFunction.CastTicks, $"{elapsed} tick");
 
-		PredefinedFunctionRegistry.TryGet(PredefinedFunctionIds.InitStance, out PredefinedFunction init);
+		PredefinedFunctionRegistry.TryGet(InitStanceId, out PredefinedFunction init);
 		int remaining = executor.GetRemainingCooldownTicks(init);
 		int expectedCooldown = Mathf.RoundToInt(stats.ApplyCooldownReduction(InitStanceFunction.Cooldown) * (1f + stance.Effect.CooldownRate));
 		// 끝난 뒤 이 코루틴이 돌기까지 몇 tick 지났을 수 있다
@@ -303,7 +473,8 @@ public class StanceTest : MonoBehaviour
 		data.Blocks.AddRange(blocks);
 		outputs.Clear();
 		endedTask = null;
-		if (!FunctionDataConverter.TryConvert(data, Array.Empty<FunctionData>(), LanguageFamily.C, out UserFunction function))
+		LanguageFamily family = python ? LanguageFamily.Python : LanguageFamily.C;
+		if (!FunctionDataConverter.TryConvert(data, Array.Empty<FunctionData>(), family, out UserFunction function))
 		{
 			Check($"{name}: 변환", false, "");
 			yield break;

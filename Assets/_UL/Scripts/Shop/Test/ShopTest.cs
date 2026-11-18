@@ -72,6 +72,11 @@ public class ShopTest : MonoBehaviour
 		Check("출력 함수는 언어마다 하나: C는 printf, Python은 print (#536)",
 			allFunctionsC.Contains(PredefinedFunctionIds.Printf) && !allFunctionsC.Contains(PredefinedFunctionIds.PyPrint)
 			&& allFunctionsPy.Contains(PredefinedFunctionIds.PyPrint) && !allFunctionsPy.Contains(PredefinedFunctionIds.Printf));
+		Check("자세 함수도 언어마다: C는 c.init_stance·c.get_stance, Python은 py.init_stance·py.get_stance (#546)",
+			allFunctionsC.Contains(PredefinedFunctionIds.InitStance) && allFunctionsC.Contains(PredefinedFunctionIds.GetStance)
+			&& !allFunctionsC.Contains(PredefinedFunctionIds.PyInitStance)
+			&& allFunctionsPy.Contains(PredefinedFunctionIds.PyInitStance) && allFunctionsPy.Contains(PredefinedFunctionIds.PyGetStance)
+			&& !allFunctionsPy.Contains(PredefinedFunctionIds.InitStance));
 		Check("무게 없는 Python 블록은 임시 무게 1",
 			ShopRoller.SyntaxCandidates(null, noItems, CharacterLanguages.Python).First(c => c.Id == "ListNew").Weight == ShopRules.DefaultSyntaxWeight);
 

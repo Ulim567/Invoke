@@ -238,8 +238,9 @@ public class SlotLoadout : MonoBehaviour
 		if (skillId == PredefinedFunctionIds.PyIsValidOrb) return false;
 		// 출력 함수(#536)도 슬롯에 넣지 않는다. 슬롯에서 바로 쓰면 출력할 값을 넘길 수 없기 때문
 		if (skillId == PredefinedFunctionIds.Printf || skillId == PredefinedFunctionIds.PyPrint) return false;
-		// 자세 함수(#538, 이우림)도 슬롯에 넣지 않는다. 돌려준 자세 숫자를 받아 판별하는 코드와 함께 함수 안에서 쓰는 함수이기 때문
-		if (skillId == PredefinedFunctionIds.InitStance || skillId == PredefinedFunctionIds.GetStance) return false;
+		// 자세 함수(C #538, Python #546, 이우림)도 슬롯에 넣지 않는다. 돌려준 자세 숫자를 받아 판별하는 코드와 함께 함수 안에서 쓰는 함수이기 때문
+		if (skillId == PredefinedFunctionIds.InitStance || skillId == PredefinedFunctionIds.GetStance
+			|| skillId == PredefinedFunctionIds.PyInitStance || skillId == PredefinedFunctionIds.PyGetStance) return false;
 		return PredefinedFunctionRegistry.TryGet(skillId, out _);
 	}
 

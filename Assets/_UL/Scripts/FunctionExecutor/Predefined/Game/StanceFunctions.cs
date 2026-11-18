@@ -5,7 +5,7 @@ using UnityEngine;
 /// <para>
 /// - 시전 시간 2.5초(125 tick), 쿨타임 3초(150 tick). 원하는 자세가 나올 때까지 다시 뽑으면 그만큼 시간이 든다.<br/>
 /// - 숫자는 마지막 tick에 정한다. 도중에 끊기면 자세는 그대로다.<br/>
-/// - 언어마다 고정 ID와 이름만 다르다. C는 CInitStance. Python 자세 기획이 정해지면 하위 클래스를 하나 더 만든다.
+/// - 언어마다 고정 ID만 다르다. C는 CInitStance, Python은 PyInitStance(#546). 효과는 시전자 언어의 자세 규칙(StanceRule.For)이 정한다.
 /// </para>
 /// </summary>
 // 스킬이 아니라 기본 함수다. 스킬 트리 노드가 없고, 슬롯에 직접 넣지 않는다(SlotLoadout.IsEquippableSkill). 그래서 자세의 stack +1칸·자해도 받지 않는다
@@ -54,6 +54,20 @@ public class CInitStance : InitStanceFunction
 public class CGetStance : GetStanceFunction
 {
 	public override string Id => PredefinedFunctionIds.GetStance;
+	public override string Name => "get_stance";
+}
+
+/// <summary>Python의 자세 다시 정하기 init_stance() (#546). 예: n = init_stance(); print(n)</summary>
+public class PyInitStance : InitStanceFunction
+{
+	public override string Id => PredefinedFunctionIds.PyInitStance;
+	public override string Name => "init_stance";
+}
+
+/// <summary>Python의 자세 확인 get_stance() (#546). 예: if get_stance() > 50: magic_missile(get_bug())</summary>
+public class PyGetStance : GetStanceFunction
+{
+	public override string Id => PredefinedFunctionIds.PyGetStance;
 	public override string Name => "get_stance";
 }
 

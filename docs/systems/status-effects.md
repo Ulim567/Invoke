@@ -57,6 +57,7 @@
 | `Apply(StatusType type, float duration)` | 상태, 초 | - | 지속 시간을 정해 건다 |
 | `Apply(StatusType type, GameObject source)` | 상태, 건 플레이어 | - | (#484) 기본 지속 시간으로 걸고 건 플레이어를 기억한다. 지금은 출혈만 건 플레이어를 쓴다 |
 | `StatusEffects.TryApply(GameObject target, StatusType type, GameObject source = null)` | 대상, 상태, 건 플레이어 | `bool` | 대상(또는 부모)의 `StatusEffects`로 건다. 없으면 `false`. 스킬이 맞은 대상에 쓴다. 출혈을 거는 스킬은 `source`에 시전자(`caster`)를 넘긴다 (#484) |
+| `StatusEffects.TryApply(GameObject target, StatusType type, GameObject source, float durationRate)` | 대상, 상태, 건 플레이어, 지속 시간 증감 | `bool` | 위와 같고 지속 시간만 기본 × (1 + `durationRate`). 시전자의 자세가 지속 시간을 늘릴 때 쓴다(#546, stance.md). Python 보조 계열 스킬(저주·뱀 속박·섬광)이 `DataDrivenSkill.StanceStatusDurationRate(시전자)`를 넘긴다 |
 | `Has(StatusType type)` | 상태 | `bool` | 걸려 있으면 `true` |
 | `RemainingTime(StatusType type)` | 상태 | `float` | 남은 시간(초). 없으면 0 |
 | `Clear(StatusType type)` / `ClearAll()` | 상태 / - | - | 바로 푼다 |

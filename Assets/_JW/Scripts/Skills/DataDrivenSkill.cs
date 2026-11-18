@@ -97,7 +97,17 @@ public abstract class DataDrivenSkill : PredefinedFunction
 	/// 시전자의 지금 자세가 이 스킬에 주는 데미지 추가분 (#538, 이우림). 모든 스킬 추가분 + 이 스킬 계열(표의 Family) 추가분. 데미지를 계산하기 전에 BonusRate에 더한다.
 	/// </summary>
 	internal float StanceDamageBonus(GameObject caster) =>
-		PlayerStance.DamageBonusOf(caster, Data != null ? Data.Family : (SkillFamily?)null);
+		PlayerStance.DamageBonusOf(caster, Family);
+
+	/// <summary>이 스킬의 계열 (표의 Family). 표에 없으면 null. 자세가 계열마다 다른 쿨타임 증감을 걸 때 읽는다 (#546, PlayerStance.CooldownRateOf).</summary>
+	internal SkillFamily? Family => Data != null ? Data.Family : (SkillFamily?)null;
+
+	/// <summary>
+	/// 시전자의 지금 자세가 이 스킬이 거는 상태 이상의 지속 시간에 주는 증감 (#546, 이우림). 지금은 보조 계열만 있다(Python 7의 배수 +30%).
+	/// 상태를 걸 때 StatusEffects.TryApply(대상, 종류, 시전자, 이 값)으로 넘긴다.
+	/// </summary>
+	internal float StanceStatusDurationRate(GameObject caster) =>
+		PlayerStance.StatusDurationRateOf(caster, Family);
 
 	/// <summary>
 	/// 몬스터에게 데미지를 준 뒤 부른다 (#538, 이우림). 시전자의 자세에 알려, 자세에 회복이 있으면 준 데미지의 일부를 회복하고,

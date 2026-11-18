@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 전역 변수 파일을 이 컴퓨터의 파일로 저장하고 불러온다. 서버 저장이 생기기 전까지 쓰는 임시 저장소.
 /// <para>
-/// - 저장 위치: Application.persistentDataPath/GlobalVariables.json. 이 컴퓨터에 파일 하나다.<br/>
+/// - 저장 위치: Application.persistentDataPath/Local/{내 캐릭터 언어}/GlobalVariables.json (LocalSaveFolder, #570). 캐릭터 언어마다 하나다.<br/>
 /// - 형식: FunctionDataJson.ToJson 그대로.<br/>
 /// - 내용은 검사하지 않는다. 저장하기 전에 GlobalVariablesConverter.TryConvert로 검사한다.<br/>
 /// - 서버 저장은 「만든 함수를 서버로 보내 검사·저장하기」 이슈에서 이 클래스를 바꾸거나 대신한다.
@@ -12,7 +12,7 @@ using UnityEngine;
 /// </summary>
 public static class GlobalVariablesStorage
 {
-	static string FilePath => Path.Combine(Application.persistentDataPath, "GlobalVariables.json");
+	static string FilePath => Path.Combine(LocalSaveFolder.Current, "GlobalVariables.json");
 
 	/// <summary>
 	/// 전역 변수 파일을 저장한다. 이미 있으면 덮어쓴다.

@@ -9,6 +9,7 @@ using UnityEngine.UI;
 /// - AccountFlow.Changed를 받을 때마다 AccountFlow의 값대로 다시 그린다. 버튼은 AccountFlow의 함수만 부른다. Mirror나 메시지는 직접 쓰지 않는다.<br/>
 /// - 입력 중인 글자(아이디, 비밀번호 등)는 이 화면의 입력칸이 들고 있다가 버튼을 누를 때 넘긴다. 서버 주소 칸만 AccountFlow.ServerAddress에 바로 쓴다.<br/>
 /// - 안내 문장(시안 5): 실패 이유는 빨간 문장(A) + 가리키는 칸의 빨간 테두리(B), 응답 기다리는 중은 회색 문장(C), 접속 끊김은 팝업(D).<br/>
+/// - 캐릭터 화면 왼쪽 위 「< 로그아웃」(#570): AccountFlow.Logout. 로그아웃할 수 없으면(에디터 Host) 숨긴다.<br/>
 /// - Enter: 입력칸에서 누르면 그 화면의 확인 버튼. 입력칸이 아닌 곳에서는 UIShortcut(이우림 #298)이 같은 함수를 부른다. ESC: 회원가입이면 로그인으로, 팝업이면 확인.<br/>
 /// - AccountCanvas 프리팹 최상위에 붙이고 Base 씬에 둔다. 프리팹은 메뉴 Invoke → UI → 접속 화면 만들기(AccountUIBuilder)가 만든다.<br/>
 /// - 이 화면을 쓰면 임시 OnGUI 화면(AccountScreen)은 꺼 둔다 (Base NetworkManager의 컴포넌트 체크 해제).
@@ -57,6 +58,7 @@ public class AccountView : MonoBehaviour
 	[SerializeField] Button confirmButton;
 	[SerializeField] TMP_Text confirmLabel;
 	[SerializeField] TMP_Text characterMessage;
+	[SerializeField, Tooltip("왼쪽 위 「< 로그아웃」 (#570). 로그아웃할 수 없으면(에디터 Host) 숨긴다")] Button logoutButton;
 	[SerializeField, Tooltip("언어 카드. AccountFlow.Languages 순서대로 쓴다 (C, Java, Python)")]
 	Button[] cards;
 	[SerializeField] Sprite cardSprite;
@@ -104,6 +106,7 @@ public class AccountView : MonoBehaviour
 		if (signUpButton != null) signUpButton.onClick.AddListener(SubmitSignUp);
 		if (toLoginButton != null) toLoginButton.onClick.AddListener(BackToLogin);
 		if (confirmButton != null) confirmButton.onClick.AddListener(Confirm);
+		if (logoutButton != null) logoutButton.onClick.AddListener(Logout);
 		if (popupButton != null) popupButton.onClick.AddListener(ClosePopup);
 		for (int i = 0; i < cards.Length; i++)
 		{
@@ -177,6 +180,12 @@ public class AccountView : MonoBehaviour
 	public void Confirm()
 	{
 		if (flow != null && flow.CanConfirm) flow.Confirm();
+	}
+
+	// 캐릭터 화면의 「< 로그아웃」 (#570). 접속을 끊고 로그인 화면으로 (AccountFlow.Logout)
+	public void Logout()
+	{
+		if (flow != null && flow.CanLogout) flow.Logout();
 	}
 
 	public void ClosePopup()
@@ -262,6 +271,8 @@ public class AccountView : MonoBehaviour
 		if (confirmHint != null) confirmHint.text = state == CharacterState.Owned ? "이 캐릭터로 게임에 들어갑니다" : $"{selected} 캐릭터를 만듭니다";
 		if (confirmLabel != null) confirmLabel.text = flow.ConfirmLabel;
 		SetInteractable(confirmButton, flow.CanConfirm);
+		// 서버를 켠 컴퓨터(에디터 Host)는 로그아웃하면 서버도 꺼지므로 버튼을 숨긴다. 기다리는 중에도 CanLogout이 false라 잠깐 숨는다
+		if (logoutButton != null) logoutButton.gameObject.SetActive(flow.CanLogout);
 
 		for (int i = 0; i < cards.Length; i++)
 		{

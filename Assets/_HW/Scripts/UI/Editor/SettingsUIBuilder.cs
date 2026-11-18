@@ -24,6 +24,10 @@ public static class SettingsUIBuilder
 	static readonly Color Track = Hex("3A3450");
 	static readonly Color Danger = Hex("F0907E");
 
+	// 캐릭터 선택·로그아웃 버튼 하나의 너비와 사이 간격. 둘을 합치면 창 안쪽 한 줄(184)과 같다
+	const float HalfButtonWidth = 90;
+	const float ButtonGap = 4;
+
 	static TMP_FontAsset font;
 
 	[MenuItem("Invoke/UI/설정 화면 만들기")]
@@ -86,16 +90,25 @@ public static class SettingsUIBuilder
 		TMP_Text escText = Text(esc, "Text", "ESC", 7, new Color(1f, 1f, 1f, 0.5f), TextAlignmentOptions.MidlineRight);
 		Stretch(escText.rectTransform, 0);
 
-		// 로그아웃 / 레이드 포기
-		Button exit = NewButton(window, "ExitButton", "set_danger", "set_danger_selected", new Vector2(18, -175));
+		// 캐릭터 선택 (#570) | 로그아웃 / 레이드 포기: 돌아가기 아래 한 줄에 반씩 나란히
+		Button characterSelect = NewButton(window, "CharacterSelectButton", "set_button", "set_button_selected", new Vector2(18, -175), HalfButtonWidth);
+		TMP_Text characterSelectText = Text(characterSelect.transform, "Text", "캐릭터 선택", 9, Color.white, TextAlignmentOptions.Center);
+		Stretch(characterSelectText.rectTransform, 0);
+
+		Button exit = NewButton(window, "ExitButton", "set_danger", "set_danger_selected", new Vector2(18 + HalfButtonWidth + ButtonGap, -175), HalfButtonWidth);
 		TMP_Text exitText = Text(exit.transform, "Text", "로그아웃", 9, Danger, TextAlignmentOptions.Center);
 		Stretch(exitText.rectTransform, 0);
 
 		TMP_Text hint = Text(window, "Hint", "방향키 고르기  -  Enter 확인  -  Esc 닫기", 7, Muted, TextAlignmentOptions.Center);
 		Place(hint.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -214), new Vector2(200, 10));
 
-		// ↑ ↓ 순서: 전체 → 배경음 → 효과음 → 콘솔 출력 표시 → 돌아가기 → 로그아웃
-		Chain(master, bgm, sfx, consoleOutput, back, exit);
+		// ↑ ↓ 순서: 전체 → 배경음 → 효과음 → 콘솔 출력 표시 → 돌아가기 → 캐릭터 선택. 캐릭터 선택 ← → 로그아웃
+		// 버튼이 꺼지면 SettingsView가 꺼진 버튼을 건너뛰도록 다시 잇는다
+		Chain(master, bgm, sfx, consoleOutput, back, characterSelect);
+		Navigation characterNav = characterSelect.navigation;
+		characterNav.selectOnRight = exit;
+		characterSelect.navigation = characterNav;
+		exit.navigation = new Navigation { mode = Navigation.Mode.Explicit, selectOnUp = back, selectOnLeft = characterSelect };
 
 		SettingsView view = canvasObject.AddComponent<SettingsView>();
 		var so = new SerializedObject(view);
@@ -111,6 +124,8 @@ public static class SettingsUIBuilder
 		so.FindProperty("sfxValueText").objectReferenceValue = sfxValue;
 		so.FindProperty("consoleOutputToggle").objectReferenceValue = consoleOutput;
 		so.FindProperty("backButton").objectReferenceValue = back;
+		so.FindProperty("characterSelectButton").objectReferenceValue = characterSelect;
+		so.FindProperty("characterSelectText").objectReferenceValue = characterSelectText;
 		so.FindProperty("exitButton").objectReferenceValue = exit;
 		so.FindProperty("exitText").objectReferenceValue = exitText;
 		so.ApplyModifiedPropertiesWithoutUndo();
@@ -236,11 +251,11 @@ public static class SettingsUIBuilder
 		return toggle;
 	}
 
-	// 테두리 그림이 고르면 바뀌는 버튼 (마우스를 올려도 같은 그림)
-	static Button NewButton(RectTransform window, string name, string normal, string selected, Vector2 topLeft)
+	// 테두리 그림이 고르면 바뀌는 버튼 (마우스를 올려도 같은 그림). 너비는 창 안쪽 한 줄(184)이 기본
+	static Button NewButton(RectTransform window, string name, string normal, string selected, Vector2 topLeft, float width = 184)
 	{
 		RectTransform r = NewUI(name, window);
-		Place(r, new Vector2(0, 1), new Vector2(0, 1), topLeft, new Vector2(184, 26));
+		Place(r, new Vector2(0, 1), new Vector2(0, 1), topLeft, new Vector2(width, 26));
 		Image image = SetImage(r.gameObject, normal);
 		Button button = r.gameObject.AddComponent<Button>();
 		button.targetGraphic = image;

@@ -134,6 +134,10 @@ public static class AccountUIBuilder
 			cards[i] = button;
 		}
 
+		// 왼쪽 위 「< 로그아웃」 (#570): 다른 칸과 겹치지 않는 모서리. ESC에는 연결하지 않는다 (실수로 로그아웃되지 않게)
+		Button logout = Link(characters, "LogoutButton", "< 로그아웃");
+		Place((RectTransform)logout.transform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24, -16), new Vector2(80, 12));
+
 		TMP_Text charMessage = Text(characters, "Message", "", 8, Red, TextAlignmentOptions.BottomRight);
 		Place(charMessage.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-24, 78), new Vector2(300, 12));
 		TMP_Text hint = Text(characters, "Hint", "C 캐릭터를 만듭니다", 8, Label, TextAlignmentOptions.BottomRight);
@@ -188,6 +192,7 @@ public static class AccountUIBuilder
 		Set(so, "confirmButton", confirm);
 		Set(so, "confirmLabel", confirmText);
 		Set(so, "characterMessage", charMessage);
+		Set(so, "logoutButton", logout);
 		SerializedProperty cardList = so.FindProperty("cards");
 		cardList.arraySize = cards.Length;
 		for (int i = 0; i < cards.Length; i++) cardList.GetArrayElementAtIndex(i).objectReferenceValue = cards[i];
@@ -216,6 +221,8 @@ public static class AccountUIBuilder
 		Object.DestroyImmediate(canvasObject);
 		AssetDatabase.SaveAssets();
 		Debug.Log($"[AccountUIBuilder] {PrefabPath}를 만듦. Base 씬에 끌어다 놓고, NetworkManager의 AccountScreen(OnGUI 임시 화면)은 체크를 끄세요.");
+		// 로그인·회원가입의 Tab 이동(TabFieldNavigator, #430)은 KeyBadgeInstaller가 붙이므로, 프리팹을 새로 만들면 다시 붙인다 (#570)
+		KeyBadgeInstaller.InstallLater();
 	}
 
 	// 부품 ---------------------------------------------------------------------

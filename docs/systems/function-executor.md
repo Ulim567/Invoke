@@ -291,7 +291,7 @@
   - 순서: 진행 중인 작업 모두 끊기(`Interrupted`) → heap 비우기(`Clear`, 숨은 시스템 전역 포함) → 전역 변수 파일의 초기값으로 전역 변수 다시 만들기
   - 부르는 곳: 전역 변수 파일 저장, 사망(박진우), 재부팅(재부팅 이슈), 로비 도착(`InvokeNetworkManager.TravelPlayer`가 갈 곳이 로비면 `InterruptAll` 대신 부름, #435), 연습장 초기화
   - 접속: `FunctionExecutor.Start`가 전역 변수만 만듦. 같은 오브젝트의 다른 컴포넌트가 `Start`에서 먼저 시전한 작업을 끊지 않기 위함
-- 전역 변수 파일 저장 위치: 이 컴퓨터의 `GlobalVariables.json` 하나(`GlobalVariablesStorage`). 서버 저장 전까지의 임시 저장소
+- 전역 변수 파일 저장 위치: 이 컴퓨터의 캐릭터 언어 폴더마다 `GlobalVariables.json` 하나(`GlobalVariablesStorage`, `LocalSaveFolder` #570). 임시 계정·오프라인 테스트용 저장소
 - 초기화 때 읽는 파일 (#173): `SetGlobalVariablesFile`로 정한 파일. 정하지 않았으면 이 컴퓨터의 파일
   - 서버: 플레이어가 접속할 때 보낸 파일(`FunctionExecutorNetwork`, [network.md](network.md))
 - 아직 없음: 전역 변수 파일 편집 화면, 서버 저장, Mirror 동기화

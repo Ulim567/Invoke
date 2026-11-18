@@ -10,6 +10,7 @@ using UnityEngine;
 /// 하는 일<br/>
 /// - 입력 규칙 검사(AccountRules) → AccountStore로 확인·저장 → 결과를 그 연결에 보낸다.<br/>
 /// - 들어가기에 성공하면 그 연결의 AccountSession에 캐릭터를 적는다. 플레이어를 만드는 일은 부르는 쪽이 한다.<br/>
+/// - 캐릭터 화면으로 돌아가기에 성공하면 AccountSession을 들어가기 전으로 되돌린다. 플레이어를 없애는 일은 부르는 쪽이 한다.<br/>
 /// - 어느 계정이 어느 연결로 접속 중인지 기억한다. 같은 계정이 다시 로그인하면 먼저 접속한 연결을 끊는다.
 /// </para>
 /// <para>
@@ -115,6 +116,30 @@ public class AccountServer : IDisposable
 
 		conn.Send(new EnterGameResultMessage { failure = AccountFailure.None });
 		Debug.Log($"[AccountServer] 들어가기: {session.LoginId} → [{request.language}] {session.Nickname} (connId={conn.connectionId})");
+		return true;
+	}
+
+	/// <summary>
+	/// 게임에 들어간 연결의 「캐릭터 화면으로 돌아가기」 요청을 처리한다 (#570). 세션을 들어가기 전으로 되돌리고, 결과와 캐릭터 목록을 conn에 보낸 뒤 true를 돌려준다.
+	/// 부르는 쪽은 true일 때 플레이어를 없앤다.<br/>
+	/// 들어가지 않은 연결, 곧 끊길 연결, canLeaveNow가 false(플레이어를 아직 만들지 않음, 서버가 알린 이동 중)인 요청은 RequestNotAllowed를 보내고 false를 돌려준다.
+	/// </summary>
+	public bool TryLeave(NetworkConnectionToClient conn, bool canLeaveNow)
+	{
+		if (!(conn.authenticationData is AccountSession session)) return false;
+		// 무시하면 내 화면이 결과를 기다리며 멈추므로, 받을 수 없는 요청에도 결과를 보낸다
+		if (!session.HasEntered || session.IsKicked || !canLeaveNow)
+		{
+			conn.Send(new LeaveGameResultMessage { failure = AccountFailure.RequestNotAllowed, characters = SummariesOf(session) });
+			return false;
+		}
+
+		CharacterSummary[] characters = SummariesOf(session);
+		string language = session.Language;
+		session.Leave();
+
+		conn.Send(new LeaveGameResultMessage { failure = AccountFailure.None, characters = characters });
+		Debug.Log($"[AccountServer] 캐릭터 화면으로: {session.LoginId} ← [{language}] {session.Nickname} (connId={conn.connectionId})");
 		return true;
 	}
 
@@ -267,6 +292,12 @@ public class AccountServer : IDisposable
 	// 임시 계정의 캐릭터 하나. 언어는 에디터 설정(InvokeAuthenticator.skipLoginLanguage)을 따르고, 모르는 언어면 C
 	static CharacterSummary[] TemporaryCharacters(string language = CharacterLanguages.C) =>
 		new[] { new CharacterSummary { language = CharacterLanguages.IsKnown(language) ? language : CharacterLanguages.C } };
+
+	// 캐릭터 화면으로 돌아갈 때 보여 줄 캐릭터 목록 (#570)
+	// 임시 계정(에디터 Host)은 DB에 캐릭터가 없으므로 만들 수 있는 언어(CharacterLanguages.All)를 모두 보유한 것으로 보여 준다.
+	// 처음에는 Skip Login Language 캐릭터로 바로 들어가고, 돌아온 뒤에는 다른 언어 캐릭터로 바꿔 시험할 수 있게 하기 위함 (사용자 결정 11/18)
+	CharacterSummary[] SummariesOf(AccountSession session) =>
+		session.IsTemporary ? Array.ConvertAll(CharacterLanguages.All, language => new CharacterSummary { language = language }) : GetSummaries(session.AccountKey);
 
 	CharacterSummary[] GetSummaries(string accountKey)
 	{

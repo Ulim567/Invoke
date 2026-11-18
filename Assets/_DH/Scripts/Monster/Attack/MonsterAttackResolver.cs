@@ -15,18 +15,19 @@ using UnityEngine;
 public static class MonsterAttackResolver
 {
 	/// <summary>
-	/// attack의 효과를 hit(맞은 Collider)의 주인에게 차례로 적용한다.
+	/// attack의 효과를 hit(맞은 Collider)의 주인에게 차례로 적용한다.<br/>
+	/// source는 때린 쪽 위치(투사체, 낙하 패킷 등). 주면 맞은 플레이어가 그 반대쪽으로 밀리고(PlayerKnockback), 없으면 바라보는 반대쪽으로 밀린다.
 	/// </summary>
-	public static void Apply(MonsterAttackData attack, Collider2D hit)
+	public static void Apply(MonsterAttackData attack, Collider2D hit, Vector2? source = null)
 	{
 		if (attack == null || hit == null) return;
 
 		var effects = attack.Effects;
 		for (int i = 0; i < effects.Count; i++)
-			ApplyEffect(effects[i], hit);
+			ApplyEffect(effects[i], hit, source);
 	}
 
-	static void ApplyEffect(in AttackEffect effect, Collider2D hit)
+	static void ApplyEffect(in AttackEffect effect, Collider2D hit, Vector2? source)
 	{
 		switch (effect.Type)
 		{
@@ -34,6 +35,7 @@ public static class MonsterAttackResolver
 				// Collider가 자식에 있어도 찾도록 부모까지 올라가며 찾는다. 맞을 대상이 없으면 계산도 하지 않는다
 				IDamageable target = hit.GetComponentInParent<IDamageable>();
 				if (target == null) break;
+				if (source.HasValue) PlayerKnockback.NotifySource(hit, source.Value);
 				target.TakeDamage(DamageCalculator.Calculate(DamageRequest.Flat(effect.Amount)).Damage);
 				break;
 

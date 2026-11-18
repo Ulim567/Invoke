@@ -14,10 +14,11 @@ using UnityEngine.UI;
 /// - 노드 위치는 SkillLayout·SyntaxLayout 표로 정한다. 표에 없는 노드는 맨 아래 「기타」 줄에 놓는다.<br/>
 /// - 스킬 탭은 내 캐릭터 언어(PlayerCharacter.LocalLanguage)의 노드만 보인다. C는 SkillLayout, Python은 PythonSkillLayout (#523). 문법 탭과 공통 이동은 두 언어 모두.<br/>
 /// - 자세 탭 (#545): 자세 정하기·자세 확인과 자세 규칙 노드(SkillTreeNodeKind.Rule). 규칙은 판별에 필요한 문법마다 한 줄(StanceLayout, PythonStanceLayout).
-///   해금 전 규칙 노드는 이름과 설명 카드가 「???」다.<br/>
+///   해금 전 규칙 노드는 이름이 「???」다.<br/>
 ///   문법은 세로 한 줄이고, 트리 칸보다 길면 세로 스크롤을 켠다 (UpdateScroll).<br/>
 ///   같은 계열 안의 선행은 선으로 잇고, 다른 계열의 선행(예: 검 소환)은 이름 아래 「+ 검 소환」으로 적는다.<br/>
 /// - 창이 열리면 내 캐릭터의 PlayerProgress에서 해금 목록과 재료를 읽고, PlayerProgress.Changed마다 다시 그린다. 내 캐릭터가 없으면(네트워크 없는 시험) SetUnlocked로 받은 목록, 그것도 없으면 처음부터 해금된 노드만.<br/>
+/// - 해금한 노드를 고르면 같은 버튼이 「자세히 보기」가 되어 가운데에 설명 카드를 띄운다 (#545).<br/>
 /// - 「해금」 버튼은 UnlockRequested(노드 ID)를 알리고, 내 캐릭터의 PlayerProgress.RequestUnlock(이우림 #315)으로 서버에 해금을 요청한다.
 ///   서버가 재료를 빼고 해금·저장하며, 결과는 PlayerProgress.UnlockAnswered로 받아 실패 이유를 설명 칸에 적는다.
 /// </para>
@@ -214,7 +215,7 @@ public class SkillTreeView : MonoBehaviour
 		// 자세 탭은 규칙 노드 종류(Rule)를 탭 이름으로 쓴다. 자세 함수(Skill)도 이 탭에 보인다(TabOf)
 		if (stanceTab != null) stanceTab.onClick.AddListener(() => ShowTab(SkillTreeNodeKind.Rule));
 		else Debug.LogWarning("[SkillTreeView] 자세 탭 버튼(stanceTab)이 연결되지 않아 자세 노드를 볼 수 없음");
-		if (unlockButton != null) unlockButton.onClick.AddListener(RequestUnlock);
+		if (unlockButton != null) unlockButton.onClick.AddListener(OnUnlockButtonClicked);
 	}
 
 	PlayerProgress progress; // 내 캐릭터의 진행도. 없으면 null
@@ -610,11 +611,14 @@ public class SkillTreeView : MonoBehaviour
 
 		if (unlockButton != null)
 		{
-			// 선행을 열면 저절로 같이 열리는 노드(해제 등)는 버튼이 없다
-			unlockButton.gameObject.SetActive(!(node.AutoUnlock && node.Cost.Count == 0));
-			unlockButton.interactable = available && enough;
+			// 해금한 노드는 같은 버튼이 「자세히 보기」가 되어 가운데에 설명 카드를 띄운다 (#545, 이우림 요청 11/19: 누를 때마다 카드가 뜨면 설명 칸만 보려 해도 매번 닫아야 함).
+			// 띄울 카드가 없는 노드(여는 것이 없는 노드)는 「해금됨」으로 막아 둔다
+			bool hasCard = isUnlocked && BlockReference.EntriesUnlockedBy(node).Count > 0;
+			// 선행을 열면 저절로 같이 열리는 노드(해제 등)는 해금 전에는 버튼이 없다
+			unlockButton.gameObject.SetActive(hasCard || !(node.AutoUnlock && node.Cost.Count == 0));
+			unlockButton.interactable = hasCard || (available && enough);
 			TMP_Text label = unlockButton.GetComponentInChildren<TMP_Text>();
-			if (label != null) label.text = isUnlocked ? "해금됨" : !available ? "선행 노드를 먼저 해금" : enough ? "해금" : "재료가 모자라요";
+			if (label != null) label.text = hasCard ? "자세히 보기" : isUnlocked ? "해금됨" : !available ? "선행 노드를 먼저 해금" : enough ? "해금" : "재료가 모자라요";
 		}
 	}
 
@@ -625,8 +629,14 @@ public class SkillTreeView : MonoBehaviour
 		selectedId = id;
 		Refresh();
 		ResetDetailScroll();
-		// 해금한 노드를 누르면 해금 직후와 같은 설명 카드를 가운데에 띄운다 (#544 뒤 이우림 피드백). 잠긴 노드는 오른쪽 설명 칸만
-		if (Unlocked.Contains(id)) ShowNodeCard(id, false);
+	}
+
+	// 설명 칸 아래 버튼: 해금한 노드는 설명 카드(「자세히 보기」), 아니면 해금 요청
+	void OnUnlockButtonClicked()
+	{
+		if (selectedId == null) return;
+		if (Unlocked.Contains(selectedId)) ShowNodeCard(selectedId, false);
+		else RequestUnlock();
 	}
 
 	// 다른 노드를 고르면 설명 칸을 맨 위부터 보이게 한다. 설명 칸 스크롤(DetailScroll, SkillTreeUIBuilder)이 없으면 아무것도 안 함.

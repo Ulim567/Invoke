@@ -265,6 +265,19 @@
 
 `SkillData`의 값은 위 「수치 표」의 칸과 같고, 이름은 PascalCase다 (예: `DisplayName`, `TickCount`, `NeedsSummonedSword`). 읽기만 할 수 있다.
 
+### `SkillFamilies` (#578, 이우림)
+- 위치: `Assets/_JW/Scripts/Skills/SkillData.cs` (`SkillFamily` 옆)
+- 계열의 화면 이름과 순서를 한곳에 둔다. 블록 편집 화면(함수 탭 계열 소구분, 참고 탭 카드 태그 「스킬 > 찌르기」), 스킬 트리의 계열 줄 이름, 자세 효과 글(「찌르기 계열 데미지」)이 같이 쓴다
+
+| 이름 | 받는 값 | 돌려주는 값 | 설명 |
+| --- | --- | --- | --- |
+| `SkillFamilies.KoreanName(SkillFamily family)` | 계열 | `string` | 한글 이름. 찌르기, 던지기, 휘두르기, 소환, 이동, 원소, 범위, 구슬, 보조 |
+| `SkillFamilies.COrder`, `PythonOrder` | - | `IReadOnlyList<SkillFamily>` | 캐릭터 언어별 계열 순서 = 스킬 트리 줄 순서. C 소환·찌르기·던지기·휘두르기·이동, Python 구슬·원소·범위·보조·이동 |
+| `SkillFamilies.KoreanNames(IReadOnlyList<SkillFamily> order)` | 계열 순서 | `string[]` | 순서대로 한글 이름 (스킬 트리 줄 이름) |
+| `SkillFamilies.Of(string skillId)` | 스킬 고정 ID | `SkillFamily?` | 스킬 표의 `family`. 표에 없으면 null (`SkillTable.TryGet`이 콘솔에 오류를 찍으므로 스킬인 ID만 넘김) |
+
+- 계열을 더하면 `SkillFamily` 맨 끝에 더하고(저장 값이 바뀌지 않게) `KoreanName`과 순서 목록에도 넣는다
+
 ### 연출 event (`SkillEffectEvents`, #152)
 
 플레이어 프리팹에 `SkillEffectEvents`가 붙어 있다. 이펙트·소리·애니메이션(임혜원)은 이 event만 받아서 튼다 (코드 작성 규칙 1). 모든 event는 스킬 고정 ID(`PredefinedFunctionIds`)를 같이 보낸다.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>스킬 계열 (노션 「C 캐릭터 - 1차」 3. 스킬트리)</summary>
@@ -14,6 +15,49 @@ public enum SkillFamily
 	Zone,     // 범위 (메테오, 블리자드, 독 안개)
 	Orb,      // 구슬 (구슬 생성, 발사, 난사, 폭발, 보호막)
 	Curse,    // 보조 (저주, 뱀 속박, 섬광)
+}
+
+/// <summary>
+/// 스킬 계열의 화면 이름과 캐릭터 언어별 순서 (#578).<br/>
+/// 블록 편집 화면(함수 탭, 참고 탭), 스킬 트리의 계열 줄, 자세 효과 글이 모두 이 이름을 쓴다. 이름을 바꾸면 화면 전체가 같이 바뀐다.
+/// </summary>
+public static class SkillFamilies
+{
+	/// <summary>C 캐릭터의 계열 순서. 스킬 트리의 계열 줄 순서와 같다 (위에서부터)</summary>
+	public static readonly IReadOnlyList<SkillFamily> COrder = new[] { SkillFamily.Summon, SkillFamily.Thrust, SkillFamily.Throw, SkillFamily.Slash, SkillFamily.Movement };
+
+	/// <summary>Python 캐릭터의 계열 순서. 스킬 트리의 계열 줄 순서와 같다 (위에서부터)</summary>
+	public static readonly IReadOnlyList<SkillFamily> PythonOrder = new[] { SkillFamily.Orb, SkillFamily.Element, SkillFamily.Zone, SkillFamily.Curse, SkillFamily.Movement };
+
+	/// <summary>계열의 한글 이름. 예: Thrust → 찌르기</summary>
+	public static string KoreanName(SkillFamily family) => family switch
+	{
+		SkillFamily.Thrust => "찌르기",
+		SkillFamily.Throw => "던지기",
+		SkillFamily.Slash => "휘두르기",
+		SkillFamily.Summon => "소환",
+		SkillFamily.Movement => "이동",
+		SkillFamily.Element => "원소",
+		SkillFamily.Zone => "범위",
+		SkillFamily.Orb => "구슬",
+		SkillFamily.Curse => "보조",
+		_ => family.ToString(),
+	};
+
+	/// <summary>계열 순서대로 한글 이름을 늘어놓는다. 스킬 트리의 계열 줄 이름</summary>
+	public static string[] KoreanNames(IReadOnlyList<SkillFamily> order)
+	{
+		var names = new string[order.Count];
+		for (int i = 0; i < names.Length; i++) names[i] = KoreanName(order[i]);
+		return names;
+	}
+
+	/// <summary>
+	/// 스킬의 계열 (스킬 표 SkillTable의 family). 표에 없는 ID면 null.<br/>
+	/// 스킬이 아닌 사전 정의 함수(get_bug 등)는 표에 없어 콘솔에 오류가 찍히므로, 스킬인 ID만 넘긴다.
+	/// </summary>
+	public static SkillFamily? Of(string skillId) =>
+		SkillTable.TryGet(skillId, out SkillData data) ? data.Family : (SkillFamily?)null;
 }
 
 /// <summary>

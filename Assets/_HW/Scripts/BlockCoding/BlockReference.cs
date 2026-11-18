@@ -50,10 +50,10 @@ public class BlockReferenceEntry
 	/// <summary>카드 제목. 블록 목록(팔레트)의 칩 이름과 같다. 예: If, Else If, thrust</summary>
 	public string Name;
 
-	/// <summary>분류 태그 (#489). 「분류 > 소분류」로 두 단계: 제어 > 조건, 변수 > 배열, 함수 > 스킬. 소분류가 없으면 분류만 (값, 함수)</summary>
+	/// <summary>분류 태그 (#489). 「분류 > 소분류」로 두 단계: 제어 > 조건, 변수 > 배열, 스킬 > 찌르기(#578). 소분류가 없으면 분류만 (값, 함수)</summary>
 	public string Category;
 
-	/// <summary>분류 태그의 앞 단계 (제어, 변수, 값, 함수). 참고 탭이 이 분류마다 머리글을 하나 둔다. 문법 탭의 분류와 같다</summary>
+	/// <summary>분류 태그의 앞 단계 (제어, 변수, 값, 함수, 스킬). 참고 탭이 이 분류마다 머리글을 하나 둔다. 스킬 말고는 문법 탭의 분류와 같다</summary>
 	public string Group;
 
 	/// <summary>분류 태그의 색을 정할 때 쓰는 견본 블록 (BlockLabels.ColorOf). 편집 영역에 놓지 않는다</summary>
@@ -101,7 +101,7 @@ public class BlockReferenceEntry
 /// <para>
 /// - 문법 블록(제어, 변수, 값, return)과 malloc·free·wait: 이 파일의 표에는 이름, 분류, 견본 블록만 적고, 형식과 설명은 ItemDescriptions.Of(견본 블록)에서 읽는다.
 ///   malloc·free·wait 카드는 함수 탭과 같이 함수 카드 모양(소문자 이름, 한글 이름, 원형)으로 보인다 (#489).<br/>
-/// - 분류 태그는 「분류 > 소분류」 두 단계 (제어 > 조건, 함수 > 스킬). 참고 탭은 앞 단계(Group)마다 머리글을 둔다 (#489).<br/>
+/// - 분류 태그는 「분류 > 소분류」 두 단계 (제어 > 조건, 함수 > 기본 함수, 스킬 > 찌르기). 참고 탭은 앞 단계(Group)마다 머리글을 둔다 (#489, 스킬은 #578).<br/>
 /// - 함수 블록(C 스킬, 공통 이동, 입력): 함수 탭에 나오는 사전 정의 함수(c., common., input., game.)마다 한 장.
 ///   설명은 ItemDescriptions.Get(고정 ID)에서 읽고, 원형·파라미터·동작 시간·쿨타임은 사전 정의 함수의 값에서 만든다.<br/>
 /// - 카드를 펼친 내용의 순서는 해금 설명 카드와 같다: 하는 일 → 용도 → 예시 → 슬롯 → (return 값) → 주의할 점 → (실행).<br/>
@@ -153,6 +153,14 @@ public static class BlockReference
 	const string CategorySeparator = " > ";
 
 	static string Category(string group, string subgroup) => group + CategorySeparator + subgroup;
+
+	/// <summary>분류 태그의 뒤 단계 (「스킬 > 찌르기」 → 찌르기). 한 단계뿐이면(값, 함수) 빈 글자. 참고 탭이 소구분을 나눌 때 쓴다 (#578)</summary>
+	internal static string SubgroupOf(string category)
+	{
+		if (string.IsNullOrEmpty(category)) return "";
+		int split = category.IndexOf(CategorySeparator, StringComparison.Ordinal);
+		return split < 0 ? "" : category.Substring(split + CategorySeparator.Length);
+	}
 
 	static bool Contains(string text, string query) =>
 		text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -283,12 +291,13 @@ public static class BlockReference
 			}
 		}
 
-		list.AddRange(skills);
+		// 스킬은 계열 순서로 (#578, 함수 탭과 같은 순서). 같은 계열 안에서는 등록 순서 그대로 (OrderBy는 순서를 지킨다)
+		list.AddRange(skills.OrderBy(entry => SkillFamilyRank(entry.FunctionId)));
 		list.AddRange(basics);
 		list.AddRange(builtinBasics);
 		list.AddRange(memory);
 		list.AddRange(TypeEntries());
-		// 머리글을 나눌 분류: 분류 태그의 앞 단계 (「함수 > 스킬」 → 함수)
+		// 머리글을 나눌 분류: 분류 태그의 앞 단계 (「함수 > 기본 함수」 → 함수, 「스킬 > 찌르기」 → 스킬)
 		foreach (BlockReferenceEntry entry in list)
 		{
 			int split = entry.Category.IndexOf(CategorySeparator, StringComparison.Ordinal);
@@ -427,6 +436,36 @@ public static class BlockReference
 	// py.is_valid_orb는 py.로 시작하지만 스킬이 아니라 기본 함수다 (#532, 이우림). is_valid_target과 같은 구역에 둔다
 	// 출력 함수(c.printf, py.print, #536)도 c.·py.로 시작하지만 기본 함수다
 	// 자세 함수(c.init_stance, c.get_stance #538, py.init_stance, py.get_stance #546)도 기본 함수다
+	/// <summary>
+	/// 내 캐릭터 언어의 스킬 계열 순서 (#578). 스킬 트리의 계열 줄 순서와 같다.
+	/// 함수 탭의 「스킬」 구역과 참고 탭의 스킬 카드가 이 순서로 놓인다.
+	/// </summary>
+	internal static IReadOnlyList<SkillFamily> SkillFamilyOrder => BlockLabels.IsPython ? SkillFamilies.PythonOrder : SkillFamilies.COrder;
+
+	/// <summary>
+	/// 스킬의 계열 순번 (SkillFamilyOrder 안의 자리). 스킬 표에 계열이 없거나 이 언어의 순서에 없는 계열이면 맨 뒤.
+	/// 함수 탭(BlockEditor)과 참고 탭이 같은 순서로 놓도록 둘 다 이 함수로 줄 세운다.
+	/// </summary>
+	internal static int SkillFamilyRank(string skillId)
+	{
+		SkillFamily? family = SkillFamilies.Of(skillId);
+		if (family == null) return int.MaxValue;
+		IReadOnlyList<SkillFamily> order = SkillFamilyOrder;
+		for (int i = 0; i < order.Count; i++)
+			if (order[i] == family.Value) return i;
+		return int.MaxValue;
+	}
+
+	// 스킬 카드의 분류 태그 (#578): 「스킬 > 찌르기」. 참고 탭은 앞 단계 「스킬」마다 머리글을 둔다. 스킬 표에 계열이 없으면 「스킬」만
+	static string SkillCategoryOf(string skillId)
+	{
+		SkillFamily? family = SkillFamilies.Of(skillId);
+		return family == null ? SkillGroup : Category(SkillGroup, SkillFamilies.KoreanName(family.Value));
+	}
+
+	/// <summary>스킬 카드의 분류 태그 앞 단계이자 함수 탭의 구역 이름 (#578)</summary>
+	internal const string SkillGroup = "스킬";
+
 	internal static bool IsSkill(string id) =>
 		id != PredefinedFunctionIds.PyIsValidOrb
 		&& id != PredefinedFunctionIds.Printf && id != PredefinedFunctionIds.PyPrint
@@ -453,7 +492,7 @@ public static class BlockReference
 		var entry = new BlockReferenceEntry
 		{
 			Name = name,
-			Category = Category("함수", IsSkill(id) ? "스킬" : "기본 함수"),
+			Category = IsSkill(id) ? SkillCategoryOf(id) : Category("함수", "기본 함수"),
 			Sample = sample,
 			Summary = description?.Summary,
 			CodeText = Prototype(function.ReturnType, name, parameters),

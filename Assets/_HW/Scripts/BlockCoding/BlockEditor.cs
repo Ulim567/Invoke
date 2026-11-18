@@ -337,6 +337,32 @@ public class BlockEditor : MonoBehaviour
 	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
 	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
 
+	// 함수 탭의 대구분(스킬, 기본 함수 …)과 소구분(찌르기 …) 모양 (#578, 사용자 결정 11/19)
+	// - 대구분: 「스킬 ────」 글자 + 가는 가로선. 글자는 소구분보다 조금 크게(11)
+	// - 소구분: 「▪ 찌르기」 작은 네모 점 + 글자(9), 대구분보다 안쪽으로
+	// 처음에는 대구분이 9 흐린 글자, 소구분이 11 회색 글자라 큰 분류가 더 작아 보여 구분이 안 됐고, 청록 띠는 원하지 않으셔서 이 모양으로 정함
+	// 대구분 바탕은 목록 바탕(ui_panel 그림의 색)과 같은 불투명한 색. 목록에서는 보이지 않고, 고정 머리글에서는 아래로 지나가는 항목을 가린다
+	static readonly Color SectionBackColor = new Color32(0x14, 0x0F, 0x23, 0xFF);
+	static readonly Color SectionTextColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
+	static readonly Color SectionLineColor = new Color32(0x8A, 0x84, 0xA0, 0x80);
+	static readonly Color SubsectionTextColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
+	static readonly Color SubsectionBulletColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
+	const float SectionFontSize = 11f; // 소구분 글자(머리글 프리팹의 9)보다 조금 크게
+	const float SectionHeight = 20f;   // 위쪽 6은 비워 앞 구역의 마지막 항목과 떨어뜨린다
+	const float SubsectionHeight = 17f;
+	const float SubsectionBulletSize = 3f;
+	const float SubsectionIndent = 4f;
+
+	StickyListHeader functionSticky; // 함수 탭 고정 머리글. 처음 함수 탭을 만들 때 붙인다
+
+	// 참고 탭 (#578): 카드는 한 번 만들어 두고 검색은 숨기기만 한다
+	StickyListHeader referenceSticky;                // 참고 탭 고정 머리글
+	IReadOnlyList<BlockReferenceEntry> referenceBuiltFor; // 카드를 만든 때의 카드 목록(BlockReference.All). 바뀌면(캐릭터 언어가 바뀜) 다시 만든다
+	readonly List<ReferenceItem> referenceItems = new List<ReferenceItem>(); // 목록에 만든 머리글·카드 (위에서부터)
+	HashSet<BlockReferenceEntry> referenceShown;     // 지금 검색 글자에 맞는 카드
+	GameObject referenceHint;                        // 맨 위 안내 「이름을 누르면 자세히 볼 수 있어요」
+	Coroutine referenceBuild;                        // 카드를 나눠 만드는 중이면 그 코루틴
+
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
 	static readonly string[] PaletteFunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
@@ -468,7 +494,16 @@ public class BlockEditor : MonoBehaviour
 
 	void OnDestroy() => UnbindServer();
 
-	void OnDisable() => ClearHover(); // 편집 화면을 닫으면 설명창을 지운다
+	void OnDisable()
+	{
+		ClearHover(); // 편집 화면을 닫으면 설명창을 지운다
+		// 참고 탭 카드를 나눠 만드는 중에 편집 화면을 닫으면 코루틴이 멈춘다. 다음에 열 때 처음부터 다시 만들게 한다 (#578)
+		if (referenceBuild != null)
+		{
+			referenceBuild = null;
+			referenceBuiltFor = null;
+		}
+	}
 
 	void Update()
 	{
@@ -1743,53 +1778,172 @@ public class BlockEditor : MonoBehaviour
 
 	const float ReferenceScrollSensitivity = 7f; // 참고 탭 휠 한 칸 (편집 화면 960 기준 단위)
 
-	// 참고 창: 검색 칸의 글자에 맞는 카드를 처음부터 다시 만든다 (BlockReference.Search)
+	// 참고 창 (#578): 카드는 한 번만 만들고, 검색은 맞지 않는 카드를 숨기기만 한다.
+	// 예전에는 탭을 열 때마다·검색 글자를 칠 때마다 카드 54장을 지우고 새로 만들어 한 번에 약 0.4초 멈췄다 (에디터에서 잰 값. 카드 한 장이 오브젝트 45개).
+	// 카드 목록(BlockReference.All)이 바뀌었을 때(캐릭터 언어가 바뀜)만 다시 만들고, 만들 때도 한 프레임에 몇 장씩 나눠 만들어 멈추지 않게 한다.
 	// 카드는 해금 카드·스킬 트리와 같은 설명 카드 (#544, ItemCardView). 처음에는 이름 줄과 형식만 접혀 있고, 누르면 그 카드만 첫 화면(기능 + 블록 그림)으로 펼친다
-	// 예전 참고 카드 프리팹(Reference Card Prefab)은 설명 카드 프리팹이 없을 때만 쓴다
+	// 머리글: 대구분(제어, 변수 … 「제어 ────」)과 소구분(카드 태그의 뒤 단계, 「▪ 조건」), 고정 머리글. 함수 탭과 같은 모양
 	void RebuildReference()
 	{
 		if (referenceList == null) return;
-		for (int i = referenceList.childCount - 1; i >= 0; i--) Destroy(referenceList.GetChild(i).gameObject);
 		// 휠 한 칸에 움직이는 양 (#544, 사용자 요청: 너무 빠름). 프리팹의 20은 카드가 길던 때 값이라 이름 한 줄 목록에는 너무 많이 넘어간다
 		ScrollRect referenceScroll = referenceList.GetComponentInParent<ScrollRect>();
 		if (referenceScroll != null) referenceScroll.scrollSensitivity = ReferenceScrollSensitivity;
-		string query = referenceSearch != null ? referenceSearch.text : "";
-		List<BlockReferenceEntry> found = BlockReference.Search(query);
+		if (referenceSticky == null) referenceSticky = StickyListHeader.Attach(referenceScroll, headerPrefab, StyleSectionHeader);
 
-		// 문법 탭과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
-		// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
-		// 문법 탭에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
-		IEnumerable<string> categories = CurrentPaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
+		IReadOnlyList<BlockReferenceEntry> all = BlockReference.All;
+		if (referenceBuiltFor != all)
+		{
+			if (referenceBuild != null) StopCoroutine(referenceBuild);
+			for (int i = referenceList.childCount - 1; i >= 0; i--) Destroy(referenceList.GetChild(i).gameObject);
+			referenceItems.Clear();
+			referenceHint = null;
+			if (referenceSticky != null) referenceSticky.Clear();
+			referenceBuiltFor = all;
+			referenceBuild = StartCoroutine(BuildReferenceCards(all));
+		}
+		else if (referenceBuild == null) SetReferenceListVisible(true);
+		ApplyReferenceFilter();
+	}
+
+	// 참고 탭 목록의 줄 하나: 대구분 머리글, 소구분 머리글, 카드. 머리글은 아래 카드가 하나라도 보이면 보인다
+	class ReferenceItem
+	{
+		public GameObject Go;
+		public BlockReferenceEntry Entry; // 카드만. 머리글은 null
+		public ReferenceItem Parent;      // 카드는 소구분(없으면 대구분) 머리글, 소구분은 대구분 머리글
+	}
+
+	// 한 프레임에 만드는 카드 수. 에디터에서 잰 값: 4장에 평균 25ms(최대 43ms)라 화면이 끊겨 2장(약 12ms)으로 줄임. 54장을 다 만드는 데 약 27프레임
+	const int ReferenceCardsPerFrame = 2;
+
+	// 문법 탭과 같은 분류 순서로, 분류마다 머리글을 하나 넣고 그 아래에 카드를 놓는다 (#476). 카드가 없는 분류는 머리글도 없다
+	// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
+	// 문법 탭에 없는 분류(스킬, type)가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
+	System.Collections.IEnumerator BuildReferenceCards(IReadOnlyList<BlockReferenceEntry> all)
+	{
 		// 맨 위 안내 (#544): 카드가 이름 한 줄로 접혀 있으니 눌러 보게 한다. 색 네모 없는 머리글 모양에 흐린 글자
-		if (found.Count > 0 && headerPrefab != null)
+		if (all.Count > 0 && headerPrefab != null)
 		{
 			ListHeaderView hint = Instantiate(headerPrefab, referenceList);
 			hint.Show("이름을 누르면 자세히 볼 수 있어요", null);
-			foreach (TMPro.TMP_Text label in hint.GetComponentsInChildren<TMPro.TMP_Text>(true)) label.color = new Color32(0x7C, 0x84, 0xA8, 0xFF);
+			foreach (TMP_Text label in hint.GetComponentsInChildren<TMP_Text>(true)) label.color = new Color32(0x7C, 0x84, 0xA8, 0xFF);
+			referenceHint = hint.gameObject;
 		}
-		foreach (string category in categories)
+
+		// 첫 화면만큼 찰 때까지 목록을 숨긴다. 카드가 한 장씩 붙으며 목록이 펼쳐지는 모습이 보였기 때문 (사용자 피드백).
+		// 화면이 차면 보이고, 나머지 카드는 화면 아래에 붙으므로 보이지 않는다
+		SetReferenceListVisible(false);
+		RectTransform viewport = ReferenceViewport();
+
+		int made = 0;
+		IEnumerable<string> categories = CurrentPaletteGroups.Select(group => group.Title).Concat(all.Select(entry => entry.Group)).Distinct();
+		foreach (string category in categories.ToList())
 		{
-			List<BlockReferenceEntry> cards = found.Where(entry => entry.Group == category).ToList();
-			if (cards.Count == 0) continue;
-			if (headerPrefab != null)
+			List<BlockReferenceEntry> entries = all.Where(entry => entry.Group == category).ToList();
+			if (entries.Count == 0) continue;
+			ReferenceItem section = AddReferenceHeader(AddSectionHeader(referenceList, referenceSticky, category), null);
+			// 소구분은 카드 태그의 뒤 단계(조건, 찌르기). 같은 소구분이 이어지는 동안 머리글은 한 번. 소구분이 없는 카드(Return 등)는 대구분 바로 아래
+			string subgroup = null;
+			ReferenceItem sub = null;
+			foreach (BlockReferenceEntry entry in entries)
 			{
-				// 분류 색 네모: 그 분류 블록의 색 (블록 목록의 머리글과 같다)
-				Color icon = cards[0].Sample != null ? BlockLabels.ColorOf(cards[0].Sample) : new Color(0, 0, 0, 0);
-				Instantiate(headerPrefab, referenceList).Show(category, null, icon);
-			}
-			foreach (BlockReferenceEntry entry in cards)
-			{
-				ItemCardView card = ItemCardView.Create(referenceList);
-				if (card != null)
+				string next = BlockReference.SubgroupOf(entry.Category);
+				if (next != subgroup)
 				{
-					card.Compact = true;
-					card.Collapsible = true; // 처음에는 이름과 형식만, 누르면 펼침 (검색해서 훑어보기 쉽게)
-					card.SetHeader(null, null);
-					card.Show(entry);
+					subgroup = next;
+					sub = next.Length > 0 ? AddReferenceHeader(AddSubsectionHeader(referenceList, referenceSticky, category, next), section) : null;
 				}
-				else if (referenceCardPrefab != null) Instantiate(referenceCardPrefab, referenceList).Show(entry);
+				GameObject card = CreateReferenceCard(entry);
+				if (card == null) continue;
+				var item = new ReferenceItem { Go = card, Entry = entry, Parent = sub ?? section };
+				referenceItems.Add(item);
+				card.SetActive(referenceShown == null || referenceShown.Contains(entry));
+				if (++made % ReferenceCardsPerFrame == 0)
+				{
+					RefreshReferenceHeaders();
+					yield return null;
+					// 지난 프레임의 배치가 끝난 뒤라 목록 높이가 맞다
+					if (viewport == null || referenceList.rect.height >= viewport.rect.height) SetReferenceListVisible(true);
+				}
 			}
 		}
+		RefreshReferenceHeaders();
+		SetReferenceListVisible(true);
+		referenceBuild = null;
+	}
+
+	// 참고 탭 목록을 보이거나 숨긴다. 끄지(SetActive) 않고 투명하게만 해서 카드는 계속 만들어지고 배치된다
+	void SetReferenceListVisible(bool visible)
+	{
+		if (referenceList == null) return;
+		if (!referenceList.TryGetComponent(out CanvasGroup group))
+		{
+			if (visible) return;
+			group = referenceList.gameObject.AddComponent<CanvasGroup>();
+		}
+		group.alpha = visible ? 1f : 0f;
+		group.blocksRaycasts = visible;
+	}
+
+	RectTransform ReferenceViewport()
+	{
+		ScrollRect scroll = referenceList != null ? referenceList.GetComponentInParent<ScrollRect>() : null;
+		if (scroll == null) return null;
+		return scroll.viewport != null ? scroll.viewport : (RectTransform)scroll.transform;
+	}
+
+	ReferenceItem AddReferenceHeader(ListHeaderView header, ReferenceItem parent)
+	{
+		if (header == null) return parent;
+		var item = new ReferenceItem { Go = header.gameObject, Parent = parent };
+		referenceItems.Add(item);
+		return item;
+	}
+
+	GameObject CreateReferenceCard(BlockReferenceEntry entry)
+	{
+		ItemCardView card = ItemCardView.Create(referenceList);
+		if (card != null)
+		{
+			// 가로를 먼저 목록 너비로 정한다. 정하지 않으면 다음 배치 전까지 카드가 가로 0이라 높이를 못 구해, 프리팹 높이(100)로 크게 보였다가 줄어들었다
+			if (referenceList.TryGetComponent(out VerticalLayoutGroup column))
+				((RectTransform)card.transform).SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, referenceList.rect.width - column.padding.horizontal);
+			card.Compact = true;
+			card.Collapsible = true; // 처음에는 이름과 형식만, 누르면 펼침 (검색해서 훑어보기 쉽게)
+			card.SetHeader(null, null);
+			card.Show(entry);
+			return card.gameObject;
+		}
+		// 예전 참고 카드 프리팹(Reference Card Prefab)은 설명 카드 프리팹이 없을 때만 쓴다
+		if (referenceCardPrefab == null) return null;
+		ReferenceCardView old = Instantiate(referenceCardPrefab, referenceList);
+		old.Show(entry);
+		return old.gameObject;
+	}
+
+	// 검색 칸의 글자에 맞는 카드만 보인다 (BlockReference.Search). 카드를 지우거나 새로 만들지 않는다
+	void ApplyReferenceFilter()
+	{
+		string query = referenceSearch != null ? referenceSearch.text : "";
+		referenceShown = new HashSet<BlockReferenceEntry>(BlockReference.Search(query));
+		foreach (ReferenceItem item in referenceItems)
+			if (item.Entry != null && item.Go != null) item.Go.SetActive(referenceShown.Contains(item.Entry));
+		RefreshReferenceHeaders();
+	}
+
+	// 머리글은 아래에 보이는 카드가 있을 때만 보인다. 안내 글은 보이는 카드가 하나라도 있을 때만
+	void RefreshReferenceHeaders()
+	{
+		var visible = new HashSet<ReferenceItem>();
+		foreach (ReferenceItem item in referenceItems)
+		{
+			if (item.Entry == null || item.Go == null || !item.Go.activeSelf) continue;
+			for (ReferenceItem parent = item.Parent; parent != null; parent = parent.Parent) visible.Add(parent);
+		}
+		foreach (ReferenceItem item in referenceItems)
+			if (item.Entry == null && item.Go != null) item.Go.SetActive(visible.Contains(item));
+		if (referenceHint != null) referenceHint.SetActive(visible.Count > 0);
 	}
 
 	static void SetTabLook(Button tab, bool active)
@@ -2397,13 +2551,15 @@ public class BlockEditor : MonoBehaviour
 	{
 		public readonly string Name, KoreanName, Prototype;
 		public readonly Func<BlockData> Factory;
+		public readonly string SkillId; // 「스킬」 구역의 항목이면 고정 ID (계열을 찾는 데 쓴다, #578). 아니면 null
 
-		public FunctionTabItem(string name, string koreanName, string prototype, Func<BlockData> factory)
+		public FunctionTabItem(string name, string koreanName, string prototype, Func<BlockData> factory, string skillId = null)
 		{
 			Name = name;
 			KoreanName = koreanName;
 			Prototype = prototype;
 			Factory = factory;
+			SkillId = skillId;
 		}
 	}
 
@@ -2414,6 +2570,9 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (functionTabList == null || functionTabItemPrefab == null) return;
 		for (int i = functionTabList.childCount - 1; i >= 0; i--) Destroy(functionTabList.GetChild(i).gameObject);
+		// 고정 머리글 (#578): 목록을 내려도 지금 구역(「스킬 > 찌르기」)이 맨 위에 보이게. 목록을 다시 만들 때마다 표시를 새로 모은다
+		if (functionSticky == null) functionSticky = StickyListHeader.Attach(functionTabList.GetComponentInParent<ScrollRect>(), headerPrefab, StyleSectionHeader);
+		if (functionSticky != null) functionSticky.Clear();
 
 		HashSet<string> unlocked = CurrentUnlocked();
 		bool Unlocked(BlockKind kind) => unlocked == null || SkillTree.IsBlockUnlocked(kind, unlocked);
@@ -2431,10 +2590,10 @@ public class BlockEditor : MonoBehaviour
 				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
 				int parameterCount = function.Parameters?.Count ?? 0;
-				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
-					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
 				// C·Python 스킬과 공통 이동(dash 등)은 스킬, 나머지(get_bug, is_valid_target)는 기본 함수
 				bool skill = BlockReference.IsSkill(id);
+				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
+					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)), skill ? id : null);
 				(skill ? skills : basics).Add(item);
 			}
 		}
@@ -2461,7 +2620,7 @@ public class BlockEditor : MonoBehaviour
 			}
 		}
 
-		AddFunctionSection("스킬", skills);
+		AddSkillSection(skills);
 		AddFunctionSection("기본 함수", basics);
 		AddFunctionSection("메모리", memory);
 		AddFunctionSection("내가 만든 함수", mine);
@@ -2484,11 +2643,79 @@ public class BlockEditor : MonoBehaviour
 		if (query.Length > 0 && !ContainsText(title, query))
 			items = items.Where(item => ContainsText(item.Name, query) || ContainsText(item.KoreanName, query)).ToList();
 		if (items.Count == 0) return;
-		if (headerPrefab != null) Instantiate(headerPrefab, functionTabList).Show(title, null); // 색 네모 없이 글자만 (시안 6-12)
-		// 제목은 한글 이름. 영문 이름은 원형에 들어 있으므로 따로 적지 않는다. 한글 이름이 없는 내가 만든 함수는 함수 이름
-		foreach (FunctionTabItem item in items)
-			Instantiate(functionTabItemPrefab, functionTabList).Show(this, string.IsNullOrEmpty(item.KoreanName) ? item.Name : item.KoreanName, item.Prototype, item.Factory);
+		AddFunctionSectionHeader(title);
+		foreach (FunctionTabItem item in items) AddFunctionTabItem(item);
 	}
+
+	// 함수 탭 대구분 머리글 (스킬, 기본 함수, 메모리, 내가 만든 함수). 「스킬 ────」 모양 (#578, 처음은 시안 6-12의 글자만)
+	void AddFunctionSectionHeader(string title) => AddSectionHeader(functionTabList, functionSticky, title);
+
+	// 대구분 머리글 하나를 list에 만들고 고정 머리글(sticky)에 알린다. 함수 탭과 참고 탭이 같이 쓴다 (#578). 머리글 프리팹이 없으면 null
+	ListHeaderView AddSectionHeader(Transform list, StickyListHeader sticky, string title)
+	{
+		if (headerPrefab == null) return null;
+		ListHeaderView header = Instantiate(headerPrefab, list);
+		header.Show(title, null);
+		StyleSectionHeader(header);
+		if (sticky != null) sticky.Mark((RectTransform)header.transform, title);
+		return header;
+	}
+
+	// 소구분 머리글 「▪ 찌르기」 하나를 list에 만들고 고정 머리글에 「대구분 > 소구분」으로 알린다. 클릭을 받지 않으므로 아래 항목 누르기를 막지 않는다
+	ListHeaderView AddSubsectionHeader(Transform list, StickyListHeader sticky, string section, string name)
+	{
+		if (headerPrefab == null) return null;
+		ListHeaderView divider = Instantiate(headerPrefab, list);
+		divider.Show(name, null);
+		divider.SetBulletStyle(SubsectionTextColor, SubsectionBulletColor, SubsectionBulletSize, SubsectionIndent, SubsectionHeight);
+		if (sticky != null) sticky.Mark((RectTransform)divider.transform, section, name);
+		return divider;
+	}
+
+	// 대구분 모양: 목록과 같은 바탕 + 「스킬 ────」. 고정 머리글도 같은 모양
+	static void StyleSectionHeader(ListHeaderView header)
+	{
+		header.SetBackground(SectionBackColor);
+		header.SetDividerStyle(SectionTextColor, SectionLineColor, SectionFontSize, SectionHeight);
+	}
+
+	// 함수 탭의 「스킬」 구역 (#578): 머리글 「스킬」 아래에 계열마다 회색 소분류 글씨(찌르기)와 그 계열의 스킬.
+	// 자세 규칙이 계열 단위로 효과를 주므로, 플레이어가 스킬을 고를 때 계열을 볼 수 있게 하기 위함.
+	// 계열 순서는 스킬 트리의 계열 줄 순서 (BlockReference.SkillFamilyOrder, 참고 탭과 같음). 같은 계열 안에서는 등록 순서 그대로
+	// 검색: 「스킬」이 맞으면 전체, 계열 이름(찌르기)이 맞으면 그 계열 전체, 아니면 한글·영문 이름이 맞는 스킬만. 남은 스킬이 없는 계열은 소분류 글씨도 없다
+	void AddSkillSection(List<FunctionTabItem> skills)
+	{
+		string title = BlockReference.SkillGroup;
+		string query = functionSearch != null ? functionSearch.text.Trim() : "";
+		bool showAll = query.Length == 0 || ContainsText(title, query);
+
+		var groups = new List<(string Name, List<FunctionTabItem> Items)>();
+		foreach (IGrouping<int, FunctionTabItem> group in skills.GroupBy(item => BlockReference.SkillFamilyRank(item.SkillId)).OrderBy(group => group.Key))
+		{
+			// 스킬 표에 계열이 없는 스킬(맨 뒤 묶음)은 소분류 글씨 없이 놓는다
+			SkillFamily? family = group.Key == int.MaxValue ? null : SkillFamilies.Of(group.First().SkillId);
+			string name = family == null ? "" : SkillFamilies.KoreanName(family.Value);
+			List<FunctionTabItem> items = showAll || (name.Length > 0 && ContainsText(name, query))
+				? group.ToList()
+				: group.Where(item => ContainsText(item.Name, query) || ContainsText(item.KoreanName, query)).ToList();
+			if (items.Count > 0) groups.Add((name, items));
+		}
+		if (groups.Count == 0) return;
+
+		AddFunctionSectionHeader(title);
+		foreach ((string name, List<FunctionTabItem> items) in groups)
+		{
+			if (name.Length > 0) AddFunctionDivider(title, name);
+			foreach (FunctionTabItem item in items) AddFunctionTabItem(item);
+		}
+	}
+
+	// 함수 탭 소구분 「▪ 찌르기」 (#578)
+	void AddFunctionDivider(string section, string name) => AddSubsectionHeader(functionTabList, functionSticky, section, name);
+
+	// 함수 탭 항목 한 줄. 제목은 한글 이름. 영문 이름은 원형에 들어 있으므로 따로 적지 않는다. 한글 이름이 없는 내가 만든 함수는 함수 이름
+	void AddFunctionTabItem(FunctionTabItem item) =>
+		Instantiate(functionTabItemPrefab, functionTabList).Show(this, string.IsNullOrEmpty(item.KoreanName) ? item.Name : item.KoreanName, item.Prototype, item.Factory);
 
 	void AddTemplate(Func<BlockData> template)
 	{

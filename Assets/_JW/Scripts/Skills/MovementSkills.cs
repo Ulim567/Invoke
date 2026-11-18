@@ -50,7 +50,8 @@ public abstract class MovementSkill : DataDrivenSkill
 }
 
 /// <summary>
-/// 대시 (#256). 바라보는 쪽으로 짧게 빠르게 이동한다 (PlayerMovement.StartDash, 임시 4칸 / 0.15초). 세 캐릭터 공통, 대상 없음, 공중 가능.
+/// 대시 (#256). 바라보는 쪽으로 짧게 빠르게 이동한다 (PlayerMovement.StartDash, 임시 4칸 / 0.15초). 세 캐릭터 공통, 대상 없음, 공중 가능.<br/>
+/// 플레이어는 스킬 트리에서 해금하면 ←← / →→ 로 쓴다 (#557, PlayerMovement가 스스로 함, 슬롯에는 못 넣음). 블록코딩에서 이 함수를 부르면 바라보는 쪽으로 대시한다.
 /// </summary>
 public class CommonDash : MovementSkill
 {

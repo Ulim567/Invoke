@@ -19,7 +19,7 @@
 | 칸 | 문법 블록 4칸(칸 번호 0~3) + 함수 4칸(4~7). 후보가 적어도 칸 수는 그대로 |
 | 문법 블록 후보 | 해금한 문법 블록 중 캐릭터 언어에서 쓸 수 있는 것. 상점 무게로 뽑음 |
 | 함수 후보 | 해금한 함수: 스킬, get_bug, is_valid_target(Python은 is_valid_orb도), 출력 함수(C printf, Python print, #536), 자세 함수(init_stance·get_stance, C #538, Python #546), wait, malloc·free(C만). 희귀도 무게로 뽑음. 출력·자세 함수는 `FunctionRarities`에 없어 Common |
-| 뺄 항목 | 99개(`ItemCountRules.MaxCount`) 가진 항목, 대시·더블점프(`common.*`, 나중에 키보드 고정 이동기로 바뀜), 테스트 함수 |
+| 뺄 항목 | 99개(`ItemCountRules.MaxCount`) 가진 항목, 대시·더블점프(`common.*`, 키로 쓰는 이동기. 대시 ←← / →→ #557, 더블점프 Space), 테스트 함수 |
 | 중복 | 허용. 같은 항목이 여러 칸에 올라올 수 있음 |
 | 후보가 없을 때 | 빈 칸. 예: 새 C 캐릭터는 문법 블록 4칸이 빈 칸 (처음 해금한 순차 실행은 함수 블록과 wait만 엶) |
 | 문법 블록 가격 | 칸에 올라올 때 버그 조각 7~13 중 무작위 |

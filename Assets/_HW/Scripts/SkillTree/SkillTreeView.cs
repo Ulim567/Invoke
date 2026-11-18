@@ -79,7 +79,8 @@ public class SkillTreeView : MonoBehaviour
 	static readonly Color SummaryColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
 
 	// 노드 위치: (계열, 칸, 줄). 줄은 위에서부터 --------------------------------------
-	static readonly string[] SkillLanes = { "소환", "찌르기", "던지기", "휘두르기", "이동" };
+	// 계열 이름과 순서는 SkillFamilies 한곳에서 읽는다 (#578). 블록 편집 화면의 함수 탭도 같은 순서로 스킬을 묶는다
+	static readonly string[] SkillLanes = SkillFamilies.KoreanNames(SkillFamilies.COrder);
 	static readonly Dictionary<string, (int lane, int col, int row)> SkillLayout = new Dictionary<string, (int, int, int)>
 	{
 		[PredefinedFunctionIds.SummonSword] = (0, 0, 0),
@@ -113,7 +114,7 @@ public class SkillTreeView : MonoBehaviour
 	};
 
 	// 파이썬 마법사의 스킬 탭 (#523, 박진우). 대시·더블점프는 C와 같은 공통 노드. 다른 계열의 선행(파이어볼 → 메테오 등)은 이름 아래 「+ 이름」
-	static readonly string[] PythonSkillLanes = { "구슬", "원소", "범위", "보조", "이동" };
+	static readonly string[] PythonSkillLanes = SkillFamilies.KoreanNames(SkillFamilies.PythonOrder);
 	static readonly Dictionary<string, (int lane, int col, int row)> PythonSkillLayout = new Dictionary<string, (int, int, int)>
 	{
 		[PredefinedFunctionIds.PyOrbCreate] = (0, 0, 0),

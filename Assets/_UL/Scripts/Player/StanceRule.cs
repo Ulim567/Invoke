@@ -89,16 +89,16 @@ public readonly struct StanceEffect
 	public void Describe(List<string> gains, List<string> losses)
 	{
 		AddRate(gains, losses, DamageBonus, "데미지", true);
-		AddRate(gains, losses, ThrustDamageBonus, "찌르기 계열 데미지", true);
-		AddRate(gains, losses, SlashDamageBonus, "휘두르기 계열 데미지", true);
-		AddRate(gains, losses, SummonDamageBonus, "소환 계열 데미지", true);
-		AddRate(gains, losses, ElementDamageBonus, "원소 계열 데미지", true);
-		AddRate(gains, losses, ZoneDamageBonus, "범위 계열 데미지", true);
-		AddRate(gains, losses, OrbDamageBonus, "구슬 계열 데미지", true);
+		AddRate(gains, losses, ThrustDamageBonus, FamilyText(SkillFamily.Thrust, "데미지"), true);
+		AddRate(gains, losses, SlashDamageBonus, FamilyText(SkillFamily.Slash, "데미지"), true);
+		AddRate(gains, losses, SummonDamageBonus, FamilyText(SkillFamily.Summon, "데미지"), true);
+		AddRate(gains, losses, ElementDamageBonus, FamilyText(SkillFamily.Element, "데미지"), true);
+		AddRate(gains, losses, ZoneDamageBonus, FamilyText(SkillFamily.Zone, "데미지"), true);
+		AddRate(gains, losses, OrbDamageBonus, FamilyText(SkillFamily.Orb, "데미지"), true);
 		AddRate(gains, losses, ReceivedDamageRate, "받는 피해", false);
 		AddRate(gains, losses, CooldownRate, "쿨타임", false);
-		AddRate(gains, losses, CurseDurationRate, "보조 계열 상태 이상 지속 시간", true);
-		AddRate(gains, losses, CurseCooldownRate, "보조 계열 쿨타임", false);
+		AddRate(gains, losses, CurseDurationRate, FamilyText(SkillFamily.Curse, "상태 이상 지속 시간"), true);
+		AddRate(gains, losses, CurseCooldownRate, FamilyText(SkillFamily.Curse, "쿨타임"), false);
 		if (LifestealRate > 0f) gains.Add($"스킬이 준 데미지의 {Percent(LifestealRate)}% 회복");
 		if (SelfDamageRate > 0f) losses.Add($"데미지를 준 스킬마다 자해 (최대 체력의 {Percent(SelfDamageRate)}%)");
 	}
@@ -112,6 +112,9 @@ public readonly struct StanceEffect
 	}
 
 	static int Percent(float rate) => (int)Math.Round(rate * 100f);
+
+	// 「찌르기 계열 데미지」. 계열 이름은 SkillFamilies에서 읽는다 (#578). 블록 편집 화면·스킬 트리와 같은 이름을 보이기 위함
+	static string FamilyText(SkillFamily family, string what) => $"{SkillFamilies.KoreanName(family)} 계열 {what}";
 
 	// 규칙 하나의 효과를 더해 겹친다. 기획: 숫자가 여러 규칙에 해당하면 효과가 모두 겹쳐서 적용된다
 	public static StanceEffect operator +(StanceEffect a, StanceEffect b) => new StanceEffect(

@@ -337,6 +337,24 @@ public class BlockEditor : MonoBehaviour
 	// 칩 줄 맨 앞의 소분류 글씨 색 (시안 6의 작은 회색 글씨)
 	static readonly Color SubgroupLabelColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
 
+	// 함수 탭의 대구분(스킬, 기본 함수 …)과 소구분(찌르기 …) 모양 (#578, 사용자 결정 11/19)
+	// - 대구분: 「스킬 ────」 글자 + 가는 가로선. 글자는 소구분보다 조금 크게(11)
+	// - 소구분: 「▪ 찌르기」 작은 네모 점 + 글자(9), 대구분보다 안쪽으로
+	// 처음에는 대구분이 9 흐린 글자, 소구분이 11 회색 글자라 큰 분류가 더 작아 보여 구분이 안 됐고, 청록 띠는 원하지 않으셔서 이 모양으로 정함
+	// 대구분 바탕은 목록 바탕(ui_panel 그림의 색)과 같은 불투명한 색. 목록에서는 보이지 않고, 고정 머리글에서는 아래로 지나가는 항목을 가린다
+	static readonly Color SectionBackColor = new Color32(0x14, 0x0F, 0x23, 0xFF);
+	static readonly Color SectionTextColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
+	static readonly Color SectionLineColor = new Color32(0x8A, 0x84, 0xA0, 0x80);
+	static readonly Color SubsectionTextColor = new Color32(0xB8, 0xB3, 0xC7, 0xFF);
+	static readonly Color SubsectionBulletColor = new Color32(0x8A, 0x84, 0xA0, 0xFF);
+	const float SectionFontSize = 11f; // 소구분 글자(머리글 프리팹의 9)보다 조금 크게
+	const float SectionHeight = 20f;   // 위쪽 6은 비워 앞 구역의 마지막 항목과 떨어뜨린다
+	const float SubsectionHeight = 17f;
+	const float SubsectionBulletSize = 3f;
+	const float SubsectionIndent = 4f;
+
+	StickyListHeader functionSticky; // 함수 탭 고정 머리글. 처음 함수 탭을 만들 때 붙인다
+
 	// 블록 목록에 보여 줄 사전 정의 함수의 분류 (고정 ID 앞부분). test.는 빼고 보여 준다
 	// game.은 게임 상태를 묻는 함수 (is_valid_target, #474)
 	static readonly string[] PaletteFunctionPrefixes = { "c.", "py.", "common.", "input.", "game." };
@@ -2397,13 +2415,15 @@ public class BlockEditor : MonoBehaviour
 	{
 		public readonly string Name, KoreanName, Prototype;
 		public readonly Func<BlockData> Factory;
+		public readonly string SkillId; // 「스킬」 구역의 항목이면 고정 ID (계열을 찾는 데 쓴다, #578). 아니면 null
 
-		public FunctionTabItem(string name, string koreanName, string prototype, Func<BlockData> factory)
+		public FunctionTabItem(string name, string koreanName, string prototype, Func<BlockData> factory, string skillId = null)
 		{
 			Name = name;
 			KoreanName = koreanName;
 			Prototype = prototype;
 			Factory = factory;
+			SkillId = skillId;
 		}
 	}
 
@@ -2414,6 +2434,9 @@ public class BlockEditor : MonoBehaviour
 	{
 		if (functionTabList == null || functionTabItemPrefab == null) return;
 		for (int i = functionTabList.childCount - 1; i >= 0; i--) Destroy(functionTabList.GetChild(i).gameObject);
+		// 고정 머리글 (#578): 목록을 내려도 지금 구역(「스킬 > 찌르기」)이 맨 위에 보이게. 목록을 다시 만들 때마다 표시를 새로 모은다
+		if (functionSticky == null) functionSticky = StickyListHeader.Attach(functionTabList.GetComponentInParent<ScrollRect>(), headerPrefab, StyleSectionHeader);
+		if (functionSticky != null) functionSticky.Clear();
 
 		HashSet<string> unlocked = CurrentUnlocked();
 		bool Unlocked(BlockKind kind) => unlocked == null || SkillTree.IsBlockUnlocked(kind, unlocked);
@@ -2431,10 +2454,10 @@ public class BlockEditor : MonoBehaviour
 				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
 				int parameterCount = function.Parameters?.Count ?? 0;
-				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
-					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)));
 				// C·Python 스킬과 공통 이동(dash 등)은 스킬, 나머지(get_bug, is_valid_target)는 기본 함수
 				bool skill = BlockReference.IsSkill(id);
+				var item = new FunctionTabItem(BlockLabels.PredefinedFunctionName(id), BlockReference.KoreanNameOf(id), BlockReference.PrototypeOf(id),
+					() => BlockData.CallPredefinedFunction(id, EmptySlots(parameterCount)), skill ? id : null);
 				(skill ? skills : basics).Add(item);
 			}
 		}
@@ -2461,7 +2484,7 @@ public class BlockEditor : MonoBehaviour
 			}
 		}
 
-		AddFunctionSection("스킬", skills);
+		AddSkillSection(skills);
 		AddFunctionSection("기본 함수", basics);
 		AddFunctionSection("메모리", memory);
 		AddFunctionSection("내가 만든 함수", mine);
@@ -2484,11 +2507,71 @@ public class BlockEditor : MonoBehaviour
 		if (query.Length > 0 && !ContainsText(title, query))
 			items = items.Where(item => ContainsText(item.Name, query) || ContainsText(item.KoreanName, query)).ToList();
 		if (items.Count == 0) return;
-		if (headerPrefab != null) Instantiate(headerPrefab, functionTabList).Show(title, null); // 색 네모 없이 글자만 (시안 6-12)
-		// 제목은 한글 이름. 영문 이름은 원형에 들어 있으므로 따로 적지 않는다. 한글 이름이 없는 내가 만든 함수는 함수 이름
-		foreach (FunctionTabItem item in items)
-			Instantiate(functionTabItemPrefab, functionTabList).Show(this, string.IsNullOrEmpty(item.KoreanName) ? item.Name : item.KoreanName, item.Prototype, item.Factory);
+		AddFunctionSectionHeader(title);
+		foreach (FunctionTabItem item in items) AddFunctionTabItem(item);
 	}
+
+	// 함수 탭 대구분 머리글 (스킬, 기본 함수, 메모리, 내가 만든 함수). 「스킬 ────」 모양 (#578, 처음은 시안 6-12의 글자만)
+	void AddFunctionSectionHeader(string title)
+	{
+		if (headerPrefab == null) return;
+		ListHeaderView header = Instantiate(headerPrefab, functionTabList);
+		header.Show(title, null);
+		StyleSectionHeader(header);
+		if (functionSticky != null) functionSticky.Mark((RectTransform)header.transform, title);
+	}
+
+	// 대구분 모양: 목록과 같은 바탕 + 「스킬 ────」. 고정 머리글도 같은 모양
+	static void StyleSectionHeader(ListHeaderView header)
+	{
+		header.SetBackground(SectionBackColor);
+		header.SetDividerStyle(SectionTextColor, SectionLineColor, SectionFontSize, SectionHeight);
+	}
+
+	// 함수 탭의 「스킬」 구역 (#578): 머리글 「스킬」 아래에 계열마다 회색 소분류 글씨(찌르기)와 그 계열의 스킬.
+	// 자세 규칙이 계열 단위로 효과를 주므로, 플레이어가 스킬을 고를 때 계열을 볼 수 있게 하기 위함.
+	// 계열 순서는 스킬 트리의 계열 줄 순서 (BlockReference.SkillFamilyOrder, 참고 탭과 같음). 같은 계열 안에서는 등록 순서 그대로
+	// 검색: 「스킬」이 맞으면 전체, 계열 이름(찌르기)이 맞으면 그 계열 전체, 아니면 한글·영문 이름이 맞는 스킬만. 남은 스킬이 없는 계열은 소분류 글씨도 없다
+	void AddSkillSection(List<FunctionTabItem> skills)
+	{
+		string title = BlockReference.SkillGroup;
+		string query = functionSearch != null ? functionSearch.text.Trim() : "";
+		bool showAll = query.Length == 0 || ContainsText(title, query);
+
+		var groups = new List<(string Name, List<FunctionTabItem> Items)>();
+		foreach (IGrouping<int, FunctionTabItem> group in skills.GroupBy(item => BlockReference.SkillFamilyRank(item.SkillId)).OrderBy(group => group.Key))
+		{
+			// 스킬 표에 계열이 없는 스킬(맨 뒤 묶음)은 소분류 글씨 없이 놓는다
+			SkillFamily? family = group.Key == int.MaxValue ? null : SkillFamilies.Of(group.First().SkillId);
+			string name = family == null ? "" : SkillFamilies.KoreanName(family.Value);
+			List<FunctionTabItem> items = showAll || (name.Length > 0 && ContainsText(name, query))
+				? group.ToList()
+				: group.Where(item => ContainsText(item.Name, query) || ContainsText(item.KoreanName, query)).ToList();
+			if (items.Count > 0) groups.Add((name, items));
+		}
+		if (groups.Count == 0) return;
+
+		AddFunctionSectionHeader(title);
+		foreach ((string name, List<FunctionTabItem> items) in groups)
+		{
+			if (name.Length > 0) AddFunctionDivider(title, name);
+			foreach (FunctionTabItem item in items) AddFunctionTabItem(item);
+		}
+	}
+
+	// 함수 탭 소구분 「▪ 찌르기」 (#578). 머리글 프리팹을 작은 네모 점 + 글자로 바꿔 쓴다. 클릭을 받지 않으므로 항목 끌기를 막지 않는다
+	void AddFunctionDivider(string section, string name)
+	{
+		if (headerPrefab == null) return;
+		ListHeaderView divider = Instantiate(headerPrefab, functionTabList);
+		divider.Show(name, null);
+		divider.SetBulletStyle(SubsectionTextColor, SubsectionBulletColor, SubsectionBulletSize, SubsectionIndent, SubsectionHeight);
+		if (functionSticky != null) functionSticky.Mark((RectTransform)divider.transform, section, name);
+	}
+
+	// 함수 탭 항목 한 줄. 제목은 한글 이름. 영문 이름은 원형에 들어 있으므로 따로 적지 않는다. 한글 이름이 없는 내가 만든 함수는 함수 이름
+	void AddFunctionTabItem(FunctionTabItem item) =>
+		Instantiate(functionTabItemPrefab, functionTabList).Show(this, string.IsNullOrEmpty(item.KoreanName) ? item.Name : item.KoreanName, item.Prototype, item.Factory);
 
 	void AddTemplate(Func<BlockData> template)
 	{

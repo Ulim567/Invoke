@@ -62,6 +62,7 @@
   - 문장: `FailureNotice`(이우림, [function-executor.md](function-executor.md))가 만들고, 슬롯·함수 이름은 HUD가 둘째 줄 앞에 붙임
 - 출력 알림 (#536): 한 줄. `[Q] n = 3`(`[Q]`만 청록, Inspector의 `Output Label Color`). 슬롯이 없는 작업은 `[함수 이름] …`. 출력 글은 `printf`·`print`가 만든 것(predefined-function.md 「출력 function」)
 - 플레이어가 정한 글(출력 값, 함수 이름)은 `<noparse>`로 감싸 TMP 서식으로 읽히지 않게 함
+- 설정 창의 「콘솔 출력 표시」를 끄면(`GameSettings.ShowConsoleOutput`이 false) 알림을 띄우지 않고, 끄는 순간 떠 있던 알림도 지움 (#536, settings.md)
 
 | 알리는 것 | 받는 곳 |
 | --- | --- |

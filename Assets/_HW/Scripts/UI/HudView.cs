@@ -180,7 +180,19 @@ public class HudView : MonoBehaviour
 		}
 	}
 
-	void OnDisable() => Unbind();
+	void OnEnable() => GameSettings.Changed += OnSettingsChanged;
+
+	void OnDisable()
+	{
+		GameSettings.Changed -= OnSettingsChanged;
+		Unbind();
+	}
+
+	// 설정에서 콘솔 출력 표시를 끄면 떠 있던 알림도 바로 지운다 (#536)
+	void OnSettingsChanged()
+	{
+		if (!GameSettings.ShowConsoleOutput) ClearNotices();
+	}
 
 	/// <summary>설정 버튼, Esc(UIShortcut). 설정 화면을 연다</summary>
 	public void OpenSettings() => SettingsRequested?.Invoke();
@@ -343,6 +355,8 @@ public class HudView : MonoBehaviour
 	void AddNotice(string text)
 	{
 		if (noticeTemplate == null || noticeContent == null) return;
+		// 설정에서 콘솔 출력 표시를 끄면 출력·오류 알림 모두 띄우지 않는다 (#536, settings.md)
+		if (!GameSettings.ShowConsoleOutput) return;
 		if (noticePanel != null && !noticePanel.activeSelf) noticePanel.SetActive(true);
 
 		Notice last = notices.Count > 0 ? notices[notices.Count - 1] : null;

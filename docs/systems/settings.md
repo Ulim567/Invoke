@@ -23,6 +23,11 @@
   - Audio Mixer `Assets/_HW/Audio/InvokeMixer`: Master 아래 `BGM`, `SFX` 그룹. 두 그룹의 Volume을 `BGMVolume`, `SFXVolume` 이름으로 노출했다.
   - 슬라이더 값을 데시벨로 바꿔 넣는다 (0% = -80dB, 100% = 0dB).
   - 시작할 때(SettingsView.Start) 저장된 음량을 Mixer에 넣는다. 파라미터가 노출되지 않았으면 Console에 경고를 남긴다.
+- 콘솔 출력 표시 (#536): 소리 상자 아래 「콘솔 출력 표시」 체크 칸. 끄면 HUD 왼쪽 아래 콘솔 출력(printf·print 출력, 오류 알림)을 띄우지 않고, 떠 있던 알림도 바로 지운다. 처음 값 켜짐, PlayerPrefs에 저장
+  - 체크 칸은 `SettingsToggle`(Toggle). Enter·클릭으로 켜고 끄고, 음량 줄처럼 방향키 왼쪽으로 끄고 오른쪽으로 켠다(EventSystem의 이동을 받음, 키를 직접 읽지 않음)
+  - 체크 그림은 블록 편집기의 「시전 가능」 표시와 같은 `Assets/_HW/UI/BlockCoding/Shapes/ui_check.png`를 청록으로 칠해 쓴다. Galmuri 글꼴에 「✓」가 없기 때문
+  - 끄는 것은 내 화면의 표시뿐이다. 출력 함수는 그대로 실행되고 개수도 그대로 센다. 시전 거부 빨간 테두리 같은 슬롯 표시는 그대로
+  - 오류까지 끌 수 있게 한 이유: 알림이 화면을 가리는 것이 싫은 플레이어에게 선택지를 주기 위함 (이우림 결정 11/18)
 - 화면 모드: 시안 8-2에 없어 창에서 뺐다. `GameSettings.SetFullscreen`은 남아 있다 (전체 화면: 테두리 없는 창, 모니터 크기 / 창 모드: 1280x720. 빌드에서만 바뀜).
 
 ## 다른 시스템이 쓰는 것
@@ -30,6 +35,7 @@
 | --- | --- | --- | --- |
 | `InvokeMixer`의 `BGM` / `SFX` 그룹 | - | - | BGM을 내는 AudioSource는 Output을 `BGM`, 효과음은 `SFX`로 둔다. 그러면 설정 음량을 따른다 |
 | `GameSettings.MasterVolume`, `BgmVolume`, `SfxVolume` | - | `float` (0~1) | 지금 음량. 읽기만 한다 |
+| `GameSettings.ShowConsoleOutput` | - | `bool` | HUD 콘솔 출력(출력·오류 알림)을 띄우는지 (#536). `HudView`가 읽는다. 바꾸는 것은 `SetShowConsoleOutput(bool)` |
 | `SettingsView.LogoutRequested` (static event) | - | - | [표시] 설정 창의 「로그아웃」. 계정 쪽이 받아서 접속을 끊고 로그인 화면으로 돌아간다 |
 | `GameSettings.Changed` (event) | - | - | [표시] 값이 바뀌었을 때 |
 

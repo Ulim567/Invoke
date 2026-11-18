@@ -86,6 +86,7 @@
 ## 맞춘 결과
 - 이우림이 고친 것 (#480): `HudView`에 실패 알림, `HudUIBuilder`에 알림 칸(`Notice`). HUD 프리팹은 메뉴로 다시 만듦
 - 김도훈이 고친 것 (경험치 바): `HudUIBuilder`에 Lv 옆 `ExpBar`(+`ExpBarView`, `Assets/_DH/Scripts/UI`)와 레이드에서 숨기기. `HudView`는 그대로. HUD 프리팹은 메뉴로 다시 만듦
+- 김도훈이 고친 것 (튜토리얼): `HudUIBuilder`에 장소 이름 아래 왼쪽 `Tutorial` 대사 창(`TutorialView`·`TutorialTracker`·`TutorialGuide`, `Assets/_DH/Scripts/UI/Tutorial`, [tutorial.md](tutorial.md)), 가야 할 곳을 가리키는 화면 가장자리 화살표 `TutorialEdgeArrow`, Memory 막대 뒤의 깜빡이는 테두리 `TutorialMemoryGlow`. 스스로 켜고 끄므로 `hideInRaid`에는 넣지 않음. `HudView`는 그대로
 - 소환검 개수(`SummonedSwordHud`, 박진우)와 체력 바(`TempHealthBar`, 김도훈)의 임시 표시는 이 HUD가 대신할 예정. 그때 각자 끈다
 
 ## 레이드 던전 (시안 8-3, #337)

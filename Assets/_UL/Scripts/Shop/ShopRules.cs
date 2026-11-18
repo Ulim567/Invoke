@@ -69,10 +69,11 @@ public static class ShopRules
 	/// <summary>희귀도마다 뽑는 무게와 가격. 값은 임시다 (박진우가 정함).</summary>
 	public static readonly IReadOnlyDictionary<ShopRarity, RarityRule> RarityRules = new Dictionary<ShopRarity, RarityRule>
 	{
-		// ---- 박진우가 채움 (임시 값, 11/18) ----
+		// ---- 박진우가 정함 (11/18, 수치는 임시) ----
 		[ShopRarity.Common] = new RarityRule(weight: 60, bugFragmentMin: 8, bugFragmentMax: 12, bossCore: 0),
 		[ShopRarity.Rare] = new RarityRule(weight: 30, bugFragmentMin: 15, bugFragmentMax: 20, bossCore: 0),
-		[ShopRarity.Epic] = new RarityRule(weight: 10, bugFragmentMin: 25, bugFragmentMax: 30, bossCore: 0),
+		// Epic 스킬(전장 휩쓸기, 검무, 메테오, 구슬 폭발)은 스킬 트리에서도 보스 코어가 든다. 상점에서 버그 조각만으로 계속 사지 못하게 코어 1개를 붙인다
+		[ShopRarity.Epic] = new RarityRule(weight: 10, bugFragmentMin: 25, bugFragmentMax: 30, bossCore: 1),
 		// ---------------------------------------
 	};
 
@@ -83,7 +84,7 @@ public static class ShopRules
 	// 임시 기준: 처음 스킬·기본 함수는 Common, 스킬 트리에서 재료를 많이 쓰는 스킬은 Rare, 보스 코어가 드는 마지막 스킬은 Epic
 	public static readonly IReadOnlyDictionary<string, ShopRarity> FunctionRarities = new Dictionary<string, ShopRarity>
 	{
-		// ---- 박진우가 채움 (임시 값, 11/18) ----
+		// ---- 박진우가 정함 (11/18, 우림이 임시 기준 그대로) ----
 		// C 스킬
 		[PredefinedFunctionIds.VitalStrike] = ShopRarity.Rare,
 		[PredefinedFunctionIds.WoundExploit] = ShopRarity.Rare,

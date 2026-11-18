@@ -16,7 +16,8 @@ public static class ItemCountRules
 	/// 새 캐릭터의 처음 개수 (항목 ID → 개수). 캐릭터 언어(language)마다 다르다. 모르는 언어는 C.<br/>
 	/// - C: thrust 1, sword_throw 1, get_bug 2<br/>
 	/// - Python (#532, 임시): py.magic_missile 1, py.hex 1, get_bug 2<br/>
-	/// 처음 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)가 쓰는 개수와 같아서, 처음 남은 개수는 모두 0이다.
+	/// 처음 슬롯 함수 8개(CharacterProgressData.NewSlotFunction)가 쓰는 개수와 같아서, 처음 남은 개수는 모두 0이다.<br/>
+	/// 예외: 출력 함수(C printf, Python print)는 1개 더 준다(남은 개수 1, #536).
 	/// </summary>
 	// 숫자를 직접 적지 않고 처음 슬롯 함수를 세어 만드는 이유: 처음 슬롯 함수를 바꿔도 처음 개수가 저절로 맞아,
 	// 슬롯 함수가 가진 것보다 많이 쓰는 캐릭터가 생기지 않게 하기 위함 (기획: 튜토리얼을 마치면 남는 개수 0)
@@ -30,8 +31,21 @@ public static class ItemCountRules
 			slots.Add(slot);
 			guids.Add(slot.Guid);
 		}
-		return BlockUsageCounter.Count(guids, slots, null);
+		Dictionary<string, int> counts = BlockUsageCounter.Count(guids, slots, null);
+
+		// 출력 함수는 해금 노드가 없어 상점·드랍으로만 얻는다. 0개로 시작하면 자세·소환검처럼 화면에 보이지 않는 값을 볼 방법이 없으므로 1개를 준다 (이우림 결정 11/18)
+		string print = PrintFunctionOf(language);
+		counts.TryGetValue(print, out int used);
+		counts[print] = used + InitialPrintCount;
+		return counts;
 	}
+
+	/// <summary>새 캐릭터가 슬롯 함수에 쓰는 것과 따로 받는 출력 함수 개수 (#536).</summary>
+	public const int InitialPrintCount = 1;
+
+	/// <summary>캐릭터 언어의 출력 함수 고정 ID (#536). C는 c.printf, Python은 py.print.</summary>
+	public static string PrintFunctionOf(string language) =>
+		LanguageFamilies.Of(language) == LanguageFamily.Python ? PredefinedFunctionIds.PyPrint : PredefinedFunctionIds.Printf;
 
 	/// <summary>
 	/// 저장하면 개수가 모자라는 항목을 하나 찾는다. 없으면 null. 서버의 저장 검사(FunctionExecutorNetwork.CheckItemCounts)와

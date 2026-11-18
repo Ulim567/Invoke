@@ -17,8 +17,12 @@ using UnityEngine.UI;
 /// - 슬롯 상태: 비어 있음 / 사용 가능 / 실행 중(밝게 덮음) / 쿨타임(어두운 덮개가 시계 방향으로 걷히고 「x.x sec」) / 시전 거부(잠깐 빨간 테두리).
 ///   공격할 수 없는 장소(로비)에서는 모두 무채색.<br/>
 ///   실행 중: FunctionExecutorNetwork.CastAccepted(슬롯, 작업) ~ TaskEnded(작업). 쿨타임: FunctionExecutor.GetRemainingCooldownTicks (함수 칸은 안의 C 스킬 중 가장 긴 것). 거부: CastRejected.<br/>
-/// - 실패 알림 (#480): 왼쪽 아래 띠 위에 「[Runtime Error] 이름」과 그 아래 「설명」을 잠깐 띄운다. 문장은 FailureNotice가 만든다.
-///   시전 거부는 CastRejected(메모리 부족만), 내 작업의 실행 중단·runtime error는 FunctionExecutorNetwork.OwnTaskEnded.<br/>
+/// - 알림 목록 (#480, #536): 왼쪽 아래 띠 위에 오류와 출력을 최대 5개 쌓고, 알림마다 3초 뒤 뺀다.
+///   오류는 「[Runtime Error] 이름」과 그 아래 「Q > 함수 이름 : 설명」. 문장은 FailureNotice가 만들고, 슬롯·함수 이름은 이 화면이 붙인다.
+///   바로 앞 알림과 글이 같으면 새로 쌓지 않고 첫 줄 끝에 「(x4)」처럼 횟수를 붙인다.
+///   알림마다 반투명 상자 하나. 정해진 크기의 영역(noticePanel) 안에서 새 알림이 아래에서 부드럽게 밀어 올리고, 영역 위쪽은 마스크가 흐리게 잘라 낸다. 시간이 다 된 알림은 제자리에서 흐려진다.
+///   시전 거부는 CastRejected(메모리 부족, 컴파일 오류), 내 작업의 실행 중단·runtime error는 FunctionExecutorNetwork.OwnTaskEnded.
+///   출력은 FunctionExecutorNetwork.OwnOutput을 받아 「[Q] n = 3」.<br/>
 /// - 오른쪽 아래: 스킬 트리(1) · 레벨업(2) 바로가기. 누르거나 숫자 키를 누르면 SkillTreeRequested / LevelUpRequested를 알린다. 스킬 트리는 로비에서만, 레벨업은 받는 화면이 있을 때만 켜진다.<br/>
 /// - 내 캐릭터는 들어간 뒤에 생기므로 매 프레임 찾고, 없으면 HUD를 숨긴다. HUD를 숨기는 창(InputBlockingPanel.HudHidden)이 열린 동안에도 숨긴다.
 ///   로비 창(입구, 스킬 트리)처럼 HUD를 남기는 창이 열린 동안은 보이기만 하고 누를 수 없다 (#431). HudCanvas 프리팹(Base 씬)에 붙인다. 프리팹은 메뉴 Invoke → UI → 게임 HUD 만들기.
@@ -85,10 +89,18 @@ public class HudView : MonoBehaviour
 	[SerializeField] Button levelUpButton;
 
 	[Header("실패 알림 (#480)")]
-	[SerializeField, Tooltip("왼쪽 아래 띠 위의 알림 바탕. 알림이 없으면 숨긴다")] GameObject noticePanel;
-	[SerializeField] TMP_Text noticeText;
-	[SerializeField, Min(0f), Tooltip("알림을 보여 주는 시간(초)")] float noticeTime = 3f;
+	[SerializeField, Tooltip("왼쪽 아래 띠 위의 알림 영역(정해진 크기, 위쪽이 흐려지는 마스크). 알림이 없으면 숨긴다")] GameObject noticePanel;
+	[SerializeField, Tooltip("알림 상자들을 세로로 쌓는 목록 (#536). 세로 위치를 움직여 새 알림이 부드럽게 밀어 올리게 한다")] RectTransform noticeContent;
+	[SerializeField, Tooltip("알림 상자 견본 (#536). 알림 하나에 하나씩 복사해 쓴다. 바탕 Image, CanvasGroup, 글자(TMP)를 가진다")] GameObject noticeTemplate;
+	[SerializeField, Min(0f), Tooltip("알림 하나를 보여 주는 시간(초)")] float noticeTime = 3f;
+	[SerializeField, Min(0.01f), Tooltip("시간이 다 된 알림이 제자리에서 흐려지는 시간(초, #536). 보여 주는 시간의 끝부분이다")] float noticeFadeTime = 0.4f;
+	[SerializeField, Min(0.1f), Tooltip("새 알림이 위 알림들을 밀어 올리는 빠르기 (#536). 클수록 빨리 제자리에 온다")] float noticeRiseSharpness = 12f;
 	[SerializeField, Tooltip("알림 앞의 [Runtime Error], [Cast Rejected] 글자 색")] Color noticeLabelColor = new Color32(0xE0, 0x70, 0x70, 0xFF);
+	[SerializeField, Tooltip("출력 알림 앞의 [Q] 글자 색 (#536). 오류와 구별되게 청록")] Color outputLabelColor = new Color32(0x5E, 0xF2, 0xD6, 0xFF);
+	[SerializeField, Tooltip("오류 알림 둘째 줄의 「Q > 함수 이름」 글자 색 (#536). 블록 편집기의 변수 색과 같은 하늘색")] Color noticeLocationColor = new Color32(0x5E, 0xB7, 0xF2, 0xFF);
+	[SerializeField, Min(1), Tooltip("한 번에 두는 알림 수 (#536). 넘치면 가장 오래된 알림부터 뺀다")] int maxNotices = 5;
+	[SerializeField, Min(0), Tooltip("알림 영역 위쪽에서 흐려지는 높이 (#536). 시작할 때 영역의 마스크(RectMask2D)에 넣는다")] int noticeFadeHeight = 45;
+	[SerializeField, Min(20f), Tooltip("알림 영역 너비 (#536). 시작할 때 영역에 넣는다. 이보다 넓은 글은 이 너비에서 줄을 바꾼다")] float noticeAreaWidth = 150f;
 
 	[Header("값")]
 	[SerializeField, Min(0f), Tooltip("시전 거부 빨간 테두리를 보여 주는 시간(초)")]
@@ -115,8 +127,25 @@ public class HudView : MonoBehaviour
 	readonly float[] rejectedUntil = new float[SlotCount];
 	readonly int[] cooldownTotal = new int[SlotCount]; // 이번 쿨타임이 처음 보였을 때의 tick 수 (덮개 비율의 기준)
 
-	// 실패 알림을 숨길 시각. 새 알림이 오면 이전 알림을 덮어쓰고 다시 센다
-	float noticeUntil;
+	// 알림 하나와 그 알림을 보여 주는 상자 (#536). 상자는 noticeTemplate을 복사한 것이다
+	// Count는 같은 알림이 연달아 온 횟수. 2 이상이면 첫 줄 끝에 「(x2)」를 붙인다
+	sealed class Notice
+	{
+		public string Text;
+		public int Count;
+		public float Until;
+		public GameObject Box;
+		public TMP_Text Label;
+		public CanvasGroup Group;
+	}
+
+	// 쌓인 알림(오류, 출력). 맨 앞이 가장 오래된 것(목록 맨 위), 맨 뒤가 가장 새 것(맨 아래)이다 (#536)
+	// 한 줄씩 덮어쓰지 않고 쌓는 이유: 반복문 안의 출력처럼 거의 동시에 여러 알림이 와도 모두 읽을 수 있게 하기 위함
+	readonly List<Notice> notices = new List<Notice>();
+	// 다 쓴 상자. 알림이 올 때마다 새로 만들지 않고 다시 쓴다
+	readonly List<GameObject> freeNoticeBoxes = new List<GameObject>();
+	// 목록의 세로 위치. 새 알림이 오면 그 높이만큼 아래로 내렸다가 0으로 부드럽게 돌아가, 위 알림들이 툭 튀지 않고 밀려 올라가게 한다
+	float noticeContentOffset;
 
 	// HP 잔상
 	float hpTrailValue = -1f;
@@ -130,6 +159,20 @@ public class HudView : MonoBehaviour
 		if (settingsButton != null) settingsButton.onClick.AddListener(OpenSettings);
 		if (skillTreeButton != null) skillTreeButton.onClick.AddListener(() => SkillTreeRequested?.Invoke());
 		if (levelUpButton != null) levelUpButton.onClick.AddListener(() => LevelUpRequested?.Invoke());
+		if (noticeTemplate != null) noticeTemplate.SetActive(false);
+		// 흐려지는 높이를 프리팹이 아니라 여기서 정한다. 값을 바꿔 볼 때 HUD 프리팹을 다시 만들지 않아도 되게 하기 위함
+		// softness는 위아래에 함께 걸리므로, 아래 경계를 같은 만큼 영역 밖으로 내려(padding 음수) 아래쪽은 흐려지지 않게 한다
+		// 영역 너비도 같은 이유로 여기서 정한다
+		if (noticePanel != null)
+		{
+			RectTransform area = (RectTransform)noticePanel.transform;
+			area.sizeDelta = new Vector2(noticeAreaWidth, area.sizeDelta.y);
+		}
+		if (noticePanel != null && noticePanel.TryGetComponent(out RectMask2D noticeMask))
+		{
+			noticeMask.softness = new Vector2Int(0, noticeFadeHeight);
+			noticeMask.padding = new Vector4(0, -noticeFadeHeight, 0, 0);
+		}
 		if (root != null)
 		{
 			root.SetActive(false);
@@ -137,7 +180,19 @@ public class HudView : MonoBehaviour
 		}
 	}
 
-	void OnDisable() => Unbind();
+	void OnEnable() => GameSettings.Changed += OnSettingsChanged;
+
+	void OnDisable()
+	{
+		GameSettings.Changed -= OnSettingsChanged;
+		Unbind();
+	}
+
+	// 설정에서 콘솔 출력 표시를 끄면 떠 있던 알림도 바로 지운다 (#536)
+	void OnSettingsChanged()
+	{
+		if (!GameSettings.ShowConsoleOutput) ClearNotices();
+	}
 
 	/// <summary>설정 버튼, Esc(UIShortcut). 설정 화면을 연다</summary>
 	public void OpenSettings() => SettingsRequested?.Invoke();
@@ -198,6 +253,7 @@ public class HudView : MonoBehaviour
 			network.CastRejected += OnCastRejected;
 			network.TaskEnded += OnTaskEnded;
 			network.OwnTaskEnded += OnOwnTaskEnded;
+			network.OwnOutput += OnOwnOutput;
 		}
 	}
 
@@ -209,12 +265,13 @@ public class HudView : MonoBehaviour
 			network.CastRejected -= OnCastRejected;
 			network.TaskEnded -= OnTaskEnded;
 			network.OwnTaskEnded -= OnOwnTaskEnded;
+			network.OwnOutput -= OnOwnOutput;
 		}
 		network = null;
 		player = null;
 		runningTaskSlot.Clear();
 		// 다른 캐릭터로 바뀌면(다시 접속 등) 이전 캐릭터의 알림을 남기지 않는다
-		noticeUntil = 0f;
+		ClearNotices();
 		hpTrailValue = hpLastValue = -1f;
 	}
 
@@ -230,30 +287,208 @@ public class HudView : MonoBehaviour
 		// 쿨타임 중에 누른 것은 덮개가 이미 보여 주므로 빨간 테두리를 띄우지 않는다
 		if (slot >= 0 && slot < SlotCount && reason != CastRejection.OnCooldown) rejectedUntil[slot] = Time.time + rejectFlashTime;
 		// 컴파일 오류 거부를 내 캐릭터 언어의 이름으로 보인다(Python은 SyntaxError, #532, 이우림)
-		ShowNotice(FailureNotice.ForRejection(reason, LanguageFamilies.Of(PlayerCharacter.LocalLanguage)));
+		// 함수 이름은 서버가 보내지 않으므로 내 슬롯 내용에서 찾는다 (#536)
+		ShowError(FailureNotice.ForRejection(reason, LanguageFamilies.Of(PlayerCharacter.LocalLanguage)), slot, SlotFunctionName(slot));
 	}
 
-	// [내 화면] 내 작업이 끝남. 실행 중단, runtime error면 이유를 알린다 (#480)
-	void OnOwnTaskEnded(int taskId, TaskEndInfo info) => ShowNotice(FailureNotice.ForTaskEnd(info));
+	// [내 화면] 내 작업이 끝남. 실행 중단, runtime error면 이유를 어느 슬롯·함수인지와 함께 알린다 (#480, #536)
+	void OnOwnTaskEnded(int taskId, TaskEndInfo info) => ShowError(FailureNotice.ForTaskEnd(info), info.Slot, info.FunctionName);
 
-	// 알림 문장을 띄운다. null이면(알리지 않는 이유) 아무것도 하지 않는다
-	// 앞의 [분류] 글자만 색을 바꾼다. 무엇이 일어났는지보다 에러라는 것을 먼저 보이게 하기 위함
-	void ShowNotice(string message)
+	// [내 화면] 내 작업의 출력 함수가 출력함 (#536). 「[Q] n = 3」, 슬롯이 없는 작업은 「[함수 이름] n = 3」
+	void OnOwnOutput(int slot, string functionName, string text)
 	{
-		if (string.IsNullOrEmpty(message) || noticeText == null) return;
+		string where = slot >= 0 && slot < SlotCount ? SlotKeys[slot] : functionName;
+		AddNotice($"<color=#{ColorUtility.ToHtmlStringRGB(outputLabelColor)}>[{NoParse(where)}]</color> {NoParse(text)}");
+	}
+
+	// 오류 알림을 띄운다. message가 null이면(알리지 않는 이유) 아무것도 하지 않는다
+	// message는 FailureNotice의 두 줄(「[분류] 이름」, 「설명」)이다. 둘째 줄 앞에 「Q > 함수 이름 : 」을 붙인다 (#536)
+	// 앞의 [분류] 글자만 색을 바꾼다. 무엇이 일어났는지보다 에러라는 것을 먼저 보이게 하기 위함
+	void ShowError(string message, int slot, string functionName)
+	{
+		if (string.IsNullOrEmpty(message)) return;
 		int labelEnd = message.StartsWith("[") ? message.IndexOf(']') : -1;
-		noticeText.text = labelEnd > 0
+		string text = labelEnd > 0
 			? $"<color=#{ColorUtility.ToHtmlStringRGB(noticeLabelColor)}>{message.Substring(0, labelEnd + 1)}</color>{message.Substring(labelEnd + 1)}"
 			: message;
-		noticeUntil = Time.time + noticeTime;
+
+		string location = LocationText(slot, functionName);
+		if (location.Length > 0)
+		{
+			// 어느 슬롯·함수인지를 설명과 구별되게 파란색으로 칠한다 (#536, 이우림 결정 11/18)
+			location = $"<color=#{ColorUtility.ToHtmlStringRGB(noticeLocationColor)}>{location}</color>";
+			int lineBreak = text.IndexOf('\n');
+			text = lineBreak >= 0
+				? $"{text.Substring(0, lineBreak)}\n{location} : {text.Substring(lineBreak + 1)}"
+				: $"{text}\n{location}";
+		}
+		AddNotice(text);
+	}
+
+	// 「Q > attack_combo」. 슬롯이 없으면 함수 이름만, 함수 이름이 없으면 슬롯 키만
+	// 「>」를 쓰는 이유: HUD 글꼴(Galmuri)에 「·」, 「—」가 없어 빈칸으로 보이기 때문. 블록 목록의 소분류 표기(「함수 > 스킬」)와도 같다 (이우림 결정 11/18)
+	static string LocationText(int slot, string functionName)
+	{
+		string key = slot >= 0 && slot < SlotCount ? SlotKeys[slot] : "";
+		string name = NoParse(functionName ?? "");
+		if (key.Length > 0 && name.Length > 0) return $"{key} > {name}";
+		return key.Length > 0 ? key : name;
+	}
+
+	// 슬롯에 넣은 것의 이름. 스킬을 바로 넣었으면 스킬 이름, 함수를 넣었으면 그 함수의 이름, 비었으면 빈 글자
+	string SlotFunctionName(int slot)
+	{
+		if (loadout == null || slot < 0 || slot >= SlotCount) return "";
+		SlotLoadout.Entry entry = loadout.GetEntry(slot);
+		if (entry.IsEmpty) return "";
+		if (entry.Kind == SlotLoadout.EntryKind.Skill) return SkillName(entry.Id);
+		FunctionData function = FindFunction(entry.Id);
+		return function != null ? function.Name : "";
+	}
+
+	// 플레이어가 정한 글(출력 값, 함수 이름)을 글자 그대로 보인다. 「<b>」 같은 글이 TMP 서식으로 읽혀 알림 모양이 깨지지 않게 하기 위함
+	static string NoParse(string text) => string.IsNullOrEmpty(text) ? "" : $"<noparse>{text}</noparse>";
+
+	// 알림을 목록 맨 뒤에 붙인다. 최대 수를 넘으면 가장 오래된 알림부터 뺀다
+	// 바로 앞 알림과 글이 같으면 새 줄을 만들지 않고 횟수만 늘리고 3초를 다시 센다 (#536)
+	// 합치는 이유: 반복문 안에서 실패하거나 같은 슬롯을 여러 번 눌러 같은 오류가 이어지면, 같은 줄이 목록을 채워 화면을 가리기 때문
+	void AddNotice(string text)
+	{
+		if (noticeTemplate == null || noticeContent == null) return;
+		// 설정에서 콘솔 출력 표시를 끄면 출력·오류 알림 모두 띄우지 않는다 (#536, settings.md)
+		if (!GameSettings.ShowConsoleOutput) return;
+		if (noticePanel != null && !noticePanel.activeSelf) noticePanel.SetActive(true);
+
+		Notice last = notices.Count > 0 ? notices[notices.Count - 1] : null;
+		if (last != null && last.Text == text)
+		{
+			last.Count++;
+			last.Until = Time.time + noticeTime;
+			last.Group.alpha = 1f;
+			SetNoticeLabel(last.Label, NoticeText(last.Text, last.Count));
+			return;
+		}
+
+		// 붙이기 전의 목록 높이. 붙인 뒤의 높이와의 차이만큼만 목록을 내린다
+		LayoutRebuilder.ForceRebuildLayoutImmediate(noticeContent);
+		float heightBefore = noticeContent.rect.height;
+
+		var notice = new Notice { Text = text, Count = 1, Until = Time.time + noticeTime, Box = TakeNoticeBox() };
+		notice.Label = notice.Box.GetComponentInChildren<TMP_Text>(true);
+		if (!notice.Box.TryGetComponent(out notice.Group)) notice.Group = notice.Box.AddComponent<CanvasGroup>();
+		notice.Group.alpha = 1f;
+		// 다시 쓰는 상자는 이전 글(예: 두 줄 오류)의 크기를 기억하고 있다. 바로 다시 계산해야 아래에서 잰 높이가 새 글의 높이가 된다
+		SetNoticeLabel(notice.Label, NoticeText(text, 1));
+		// 목록 맨 아래(마지막 자식)에 둔다. 세로로 쌓는 목록은 자식 순서대로 위에서 아래로 놓기 때문
+		notice.Box.transform.SetAsLastSibling();
+		notices.Add(notice);
+
+		// 늘어난 높이만큼 목록을 내렸다가 RefreshNotice가 0으로 되돌린다. 그래서 위 알림들은 처음 자리에서 그대로 밀려 올라가고 새 상자는 아래에서 올라온다
+		// 상자 하나의 높이가 아니라 목록 전체 높이 차이를 쓰는 이유: 상자 사이 간격까지 정확히 들어가고, 상자 크기를 잘못 재도 위 알림이 아래로 튀지 않게 하기 위함
+		// 넘친 알림을 빼기 전에 잰다. 맨 위 알림을 빼도 아래 기준인 목록에서 다른 알림은 움직이지 않으므로 계산에 넣지 않는다
+		LayoutRebuilder.ForceRebuildLayoutImmediate(noticeContent);
+		noticeContentOffset -= Mathf.Max(0f, noticeContent.rect.height - heightBefore);
+		// 내린 위치를 바로 적용한다. RefreshNotice까지 기다리면, 그 사이 화면이 한 번 그려질 때 위 알림들이 새 높이만큼 먼저 튀어 올랐다가
+		// 다음 프레임에 다시 내려온 뒤 올라가, 아래로 내려가는 것처럼 보인다 (#536, 위치를 재어 확인)
+		noticeContent.anchoredPosition = new Vector2(0f, noticeContentOffset);
+		while (notices.Count > maxNotices) RemoveNotice(0);
+	}
+
+	// 상자 글자를 넣는다. 글이 영역보다 넓으면 영역 너비에서 줄을 바꾼다 (#536, 이우림 결정 11/18 (가))
+	// 넓은 상자가 영역 밖으로 나가 잘리지 않게 하기 위함. 줄바꿈은 넓을 때만 켠다: 늘 켜 두면 짧은 글도 상자가 영역 너비만큼 넓어지기 때문
+	void SetNoticeLabel(TMP_Text label, string text)
+	{
+		if (label == null) return;
+		if (!label.TryGetComponent(out LayoutElement size)) size = label.gameObject.AddComponent<LayoutElement>();
+
+		label.text = text;
+		float maxWidth = NoticeMaxTextWidth();
+		bool wide = maxWidth > 0f && label.GetPreferredValues(text, float.PositiveInfinity, float.PositiveInfinity).x > maxWidth;
+		label.textWrappingMode = wide ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+		// 넓으면 상자 목록이 글자에 이 너비를 주고, 그 너비에서 줄을 바꾼 높이를 쓴다. 넓지 않으면 -1(정하지 않음)로 글자 길이에 맞춘다
+		size.preferredWidth = wide ? maxWidth : -1f;
+		label.ForceMeshUpdate();
+	}
+
+	// 상자 안 글자가 쓸 수 있는 최대 너비. 영역 너비에서 상자 안쪽 여백(좌우)을 뺀다
+	float NoticeMaxTextWidth()
+	{
+		if (noticePanel == null || noticeTemplate == null) return 0f;
+		float width = ((RectTransform)noticePanel.transform).rect.width;
+		if (noticeTemplate.TryGetComponent(out VerticalLayoutGroup boxLayout)) width -= boxLayout.padding.left + boxLayout.padding.right;
+		return width;
+	}
+
+	// 다 쓴 상자가 있으면 다시 쓰고, 없으면 견본을 복사한다
+	GameObject TakeNoticeBox()
+	{
+		GameObject box;
+		if (freeNoticeBoxes.Count > 0)
+		{
+			box = freeNoticeBoxes[freeNoticeBoxes.Count - 1];
+			freeNoticeBoxes.RemoveAt(freeNoticeBoxes.Count - 1);
+		}
+		else
+		{
+			box = Instantiate(noticeTemplate, noticeContent);
+			box.name = "Notice";
+		}
+		box.SetActive(true);
+		return box;
+	}
+
+	// index번 알림을 빼고 상자를 돌려 놓는다. 목록은 아래쪽 기준이라 위 알림을 빼도 아래 알림들은 움직이지 않는다
+	void RemoveNotice(int index)
+	{
+		GameObject box = notices[index].Box;
+		box.SetActive(false);
+		freeNoticeBoxes.Add(box);
+		notices.RemoveAt(index);
+	}
+
+	// 알림을 모두 빼고 목록 위치를 처음으로 되돌린다. 다른 캐릭터로 바뀌었을 때 부른다
+	void ClearNotices()
+	{
+		while (notices.Count > 0) RemoveNotice(notices.Count - 1);
+		noticeContentOffset = 0f;
+		if (noticeContent != null) noticeContent.anchoredPosition = Vector2.zero;
+		if (noticePanel != null) noticePanel.SetActive(false);
+	}
+
+	// 알림 하나의 글. 2번 이상 왔으면 첫 줄 끝에 「(x2)」를 붙인다
+	// 「×」 대신 「x」: HUD 글꼴(Galmuri)에 없는 글자일 수 있어 ASCII만 쓴다
+	static string NoticeText(string text, int count)
+	{
+		if (count <= 1) return text;
+		int lineBreak = text.IndexOf('\n');
+		return lineBreak >= 0
+			? $"{text.Substring(0, lineBreak)} (x{count}){text.Substring(lineBreak)}"
+			: $"{text} (x{count})";
 	}
 
 	// 그리기 -------------------------------------------------------------------
 
+	// 알림마다: 보여 주는 시간의 끝부분(noticeFadeTime)에 제자리에서 흐려지고, 시간이 다 되면 뺀다 (#536, 이우림 결정 11/18 (가))
+	// 목록: 새 알림 때문에 내려 둔 위치를 0으로 부드럽게 되돌린다. 영역 위쪽을 지나는 알림은 마스크가 흐리게 잘라 낸다(HudUIBuilder)
 	void RefreshNotice()
 	{
+		for (int i = notices.Count - 1; i >= 0; i--)
+		{
+			float remaining = notices[i].Until - Time.time;
+			if (remaining <= 0f) RemoveNotice(i);
+			else notices[i].Group.alpha = Mathf.Clamp01(remaining / noticeFadeTime);
+		}
+
+		if (noticeContent != null && noticeContentOffset != 0f)
+		{
+			// 남은 거리의 일정 비율씩 다가가 처음엔 빠르고 끝에선 천천히 멈춘다. 프레임 빠르기와 상관없이 같은 모양이 되게 시간으로 비율을 정한다
+			noticeContentOffset = Mathf.Lerp(noticeContentOffset, 0f, 1f - Mathf.Exp(-noticeRiseSharpness * Time.deltaTime));
+			if (Mathf.Abs(noticeContentOffset) < 0.5f) noticeContentOffset = 0f;
+			noticeContent.anchoredPosition = new Vector2(0f, noticeContentOffset);
+		}
+
 		if (noticePanel == null) return;
-		bool show = Time.time < noticeUntil;
+		bool show = notices.Count > 0;
 		if (noticePanel.activeSelf != show) noticePanel.SetActive(show);
 	}
 

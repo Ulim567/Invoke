@@ -270,7 +270,22 @@ protected override void OnEnd(FunctionContext context)
 | `py.is_valid_orb` (#532) | `PyIsValidOrb` (`_JW/Scripts/Python/PythonOrbSkills.cs`) | `orb`(`Any`) | `bool` | 아직 쓰지 않은 마나 구슬이면 true. 다 쓴 구슬, None, 구슬이 아닌 값은 false. `py.`라서 Python 캐릭터에게만 보이고, 스킬 트리 노드가 없어 늘 보임. 슬롯에 넣을 수 없음(`SlotLoadout.IsEquippableSkill`). `TickCount` 1 |
 | `game.is_valid_target` | `IsValidTarget` | `target`(`Target`, 종류 없음) | `bool` | 스킬에 넘길 수 있는 대상이면 true. 「대상 없음」·죽음·없어짐이면 false. 값을 넘기지 않으면(슬롯 직접 시전) false. `TickCount` 1 |
 
-- `ValidatesTargets` (`PredefinedFunction`, 기본 true): false면 시작 전 Target argument 검사(`InvalidTarget`)를 건너뜀. `is_valid_target`만 false. 쓸 수 없는 대상을 받아 false를 돌려줘야 하기 때문
+- `ValidatesTargets` (`PredefinedFunction`, 기본 true): false면 시작 전 Target argument 검사(`InvalidTarget`)를 건너뜀. `is_valid_target`과 출력 함수만 false. 쓸 수 없는 대상을 받아 false를 돌려주거나 그대로 출력해야 하기 때문
+
+### 출력 function (#536)
+- 값 하나를 시전한 플레이어의 화면 왼쪽 아래 알림 목록에 한 줄로 보임. 스킬이 아니라 기본 function. 스킬 트리 노드가 없어 늘 보이고, 슬롯에 넣을 수 없음(`SlotLoadout.IsEquippableSkill`)
+
+| 고정 ID | 클래스 | 파라미터 | 반환 타입 | 하는 일 |
+| --- | --- | --- | --- | --- |
+| `c.printf` | `CPrintf` | `value`(`Any`) | `void` | C 모양으로 출력. bool `true`·`false`, char·문자열은 따옴표 없이, 포인터는 번호(0이면 `NULL`), array는 `{1, 2, 3}`. `TickCount` 1 |
+| `py.print` | `PyPrint` | `value`(`Any`) | `void` | Python 모양으로 출력. `True`·`False`, `None`, 소수 `3.0`, 문자열은 따옴표 없이, 리스트는 `[1, 'a']`. `TickCount` 1 |
+
+- 출력 글: argument 칸에 변수나 expression을 넣었으면 `n = 3`, `x + 1 = 4`처럼 편집 화면의 글을 앞에 붙임. 값을 직접 적었으면 값만
+  - 값 부분은 100자(`PrintFunction.MaxValueLength`)까지. 넘으면 잘라 끝에 `...`. 서버에서 잘라 보내는 글과 HUD 상자가 끝없이 커지지 않게 함
+  - argument 칸의 글: `FunctionDataConverter`가 출력 함수를 부르는 호출에만 만들어 `CallBlock` → `FunctionBlock.ArgumentTexts`로 넘김(시전자 언어 모양, `BlockLabels.SlotTextOf`)
+- 화면까지: 출력 함수는 실행 문맥에 기록만 함(`FunctionContext.RequestOutput`) → 실행기가 틱마다 꺼내 `FunctionExecutor.Output` event → `FunctionExecutorNetwork.OwnOutput`(network.md) → HUD 알림 목록(hud.md)
+  - 같은 틱에 실패한 작업도 실패 전에 출력한 글은 보임
+- 클래스 위치: `Assets/_UL/Scripts/FunctionExecutor/Predefined/Game/PrintFunctions.cs`. 공통 부분은 `PrintFunction`, 값 모양만 언어마다(`Format`)
 
 ```csharp
 // GetBug의 실행 단계

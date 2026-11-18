@@ -7,7 +7,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
-/// 설정 창 (우림이 시안 8-2, 8-4). 전체·배경음·효과음 음량, 「돌아가기」, 「로그아웃」(레이드 던전에서는 「레이드 포기」). 화면만 맡고 값은 GameSettings가 갖는다 (#292).
+/// 설정 창 (우림이 시안 8-2, 8-4). 전체·배경음·효과음 음량, 콘솔 출력 표시 체크 칸(#536), 「돌아가기」, 「로그아웃」(레이드 던전에서는 「레이드 포기」). 화면만 맡고 값은 GameSettings가 갖는다 (#292).
 /// <para>
 /// - 여는 법: HUD의 「설정」 버튼이나 Esc (HudView.SettingsRequested). 닫는 법: 「돌아가기」, Esc.<br/>
 /// - 열려 있는 동안 내 캐릭터의 Player·Attack 맵을 끈다 (InputBlockingPanel). 뒤의 HUD는 숨기지 않고 어둡게 덮는다.<br/>
@@ -39,6 +39,7 @@ public class SettingsView : InputBlockingPanel
 	[SerializeField] TMP_Text bgmValueText;
 	[SerializeField] Slider sfxSlider;
 	[SerializeField] TMP_Text sfxValueText;
+	[SerializeField, Tooltip("「콘솔 출력 표시」 체크 칸 (#536). 끄면 HUD 왼쪽 아래의 출력·오류 알림을 띄우지 않는다")] Toggle consoleOutputToggle;
 	[SerializeField, Tooltip("돌아가기 (창 닫기)")] Button backButton;
 	[SerializeField, Tooltip("로그아웃 / 레이드 포기")] Button exitButton;
 	[SerializeField] TMP_Text exitText;
@@ -56,6 +57,7 @@ public class SettingsView : InputBlockingPanel
 		if (masterSlider != null) masterSlider.onValueChanged.AddListener(GameSettings.SetMasterVolume);
 		if (bgmSlider != null) bgmSlider.onValueChanged.AddListener(GameSettings.SetBgmVolume);
 		if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(GameSettings.SetSfxVolume);
+		if (consoleOutputToggle != null) consoleOutputToggle.onValueChanged.AddListener(GameSettings.SetShowConsoleOutput);
 		if (backButton != null) backButton.onClick.AddListener(Close);
 		if (exitButton != null) exitButton.onClick.AddListener(OnExit);
 
@@ -115,6 +117,7 @@ public class SettingsView : InputBlockingPanel
 		Set(masterSlider, masterValueText, GameSettings.MasterVolume);
 		Set(bgmSlider, bgmValueText, GameSettings.BgmVolume);
 		Set(sfxSlider, sfxValueText, GameSettings.SfxVolume);
+		if (consoleOutputToggle != null) consoleOutputToggle.SetIsOnWithoutNotify(GameSettings.ShowConsoleOutput);
 		RefreshExit();
 	}
 

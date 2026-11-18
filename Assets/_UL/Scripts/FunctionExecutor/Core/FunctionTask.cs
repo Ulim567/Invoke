@@ -174,6 +174,9 @@ public class FunctionTask
 	// 이번 틱에 블록이 요청한 비동기 시전을 꺼낸다. 실행기가 Step 다음에 부른다
 	internal IReadOnlyList<FunctionBlock> TakeAsyncRequests() => context.TakeAsyncRequests();
 
+	// 이번 틱에 출력 함수가 요청한 출력 글을 꺼낸다 (#536). 실행기가 Step 다음에 부른다
+	internal IReadOnlyList<string> TakeOutputs() => context.TakeOutputs();
+
 	// 이번 틱에 새로 입력을 요청했으면 요청한 입력 함수를 돌려준다. 실행기가 Step 다음에 부르고, 요청 하나에 한 번만 true다
 	internal bool TryTakeNewInputRequest(out PredefinedFunction requester)
 	{

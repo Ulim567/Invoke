@@ -21,14 +21,20 @@ public struct TaskEndInfo
 	public LanguageFamily Family;
 	// Overflow가 재귀 호출에서 났으면 true (#532). Python 캐릭터는 재귀면 RecursionError, 아니면 MemoryError로 보인다
 	public bool RecursiveOverflow;
+	// 작업을 시전한 슬롯 번호 (#536). 슬롯에서 시전하지 않은 작업(함수 안에서 비동기로 시전)은 -1. HUD가 오류 알림에 「Q」처럼 보인다
+	// 슬롯은 실행기가 모르므로 FunctionExecutorNetwork가 채운다
+	public int Slot;
+	// 작업의 함수 이름 (#536). 슬롯에 넣은 함수의 이름, 또는 스킬 이름. HUD가 오류 알림에 보인다
+	public string FunctionName;
 
 	/// <summary>
-	/// 끝난 작업 task에서 알릴 값을 모은다. 분류는 시전자 캐릭터의 언어 language가 정한다(없으면 RuntimeError).
+	/// 끝난 작업 task에서 알릴 값을 모은다. 분류는 시전자 캐릭터의 언어 language가 정한다(없으면 RuntimeError). Slot은 -1로 두고 부르는 쪽이 채운다.
 	/// </summary>
 	public static TaskEndInfo From(FunctionTask task, LanguageRule language)
 	{
 		var info = new TaskEndInfo { EndReason = task.EndReason, InterruptCause = task.InterruptCause, ErrorName = "", ErrorMessage = "",
-			Family = language != null ? language.Family : LanguageFamily.C, RecursiveOverflow = task.OverflowWasRecursive };
+			Family = language != null ? language.Family : LanguageFamily.C, RecursiveOverflow = task.OverflowWasRecursive,
+			Slot = -1, FunctionName = task.Name ?? "" };
 		if (task.Failure is FunctionFailure failure)
 		{
 			info.Failure = failure;

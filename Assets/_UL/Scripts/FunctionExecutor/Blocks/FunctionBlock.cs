@@ -46,6 +46,10 @@ public abstract class FunctionBlock : Block
 	// argument 없이 시전했으면 배열 자체가 null이다. 실행하는 복사본에만 넘기고 원본에는 넘기지 않는다
 	internal RuntimeValue?[] Arguments { get; private set; }
 
+	// argument 칸에 플레이어가 적은 글(변수 이름, expression 글자). Parameters와 같은 순서이고, 값을 직접 적은 칸과 비운 칸은 null이다 (#536)
+	// 출력 함수가 「n = 3」처럼 무엇을 출력했는지 보이려고 쓴다. 출력 함수를 부르는 함수 호출 블록만 넘기므로, 그 밖에는 null이다
+	internal string[] ArgumentTexts { get; private set; }
+
 	// 이 함수가 돌려준 값. 끝까지 실행한 뒤 TryValidateEnd가 반환 타입으로 맞춰 둔다. 정하지 않았으면 null
 	// 함수 호출 블록(CallBlock)이 이 함수가 끝난 뒤 받아 간다
 	internal RuntimeValue? ReturnValue { get; private protected set; }
@@ -108,6 +112,12 @@ public abstract class FunctionBlock : Block
 	internal void SetArguments(RuntimeValue?[] values)
 	{
 		Arguments = values;
+	}
+
+	// 함수 호출 블록이 실행할 복사본에 argument 칸의 글을 넘긴다 (#536)
+	internal void SetArgumentTexts(string[] texts)
+	{
+		ArgumentTexts = texts;
 	}
 
 	// 프레임을 받은 직후에 한 번 불린다. 프레임을 받지 못해(Overflow) 시작하지 않은 함수에는 불리지 않는다

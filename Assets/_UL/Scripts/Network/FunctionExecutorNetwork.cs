@@ -28,7 +28,8 @@ using UnityEngine;
 /// - 내 화면은 RequestCast(슬롯, 대상) 또는 RequestCast(슬롯, 대상 배열), RequestCancel(슬롯)로 서버에 부탁한다. FunctionExecutor.Cast, Cancel을 직접 부르지 않는다.<br/>
 /// - 서버의 답은 시전한 사람에게만 온다: 성공이면 CastAccepted(슬롯, 작업 번호), 거부면 CastRejected(슬롯, 이유).<br/>
 /// - 작업이 시작하고 끝나면 모든 화면에 TaskStarted(작업 번호, 슬롯, 함수 이름), TaskEnded(작업 번호, 끝난 이유)가 불린다.<br/>
-/// - 작업이 끝나면 시전한 사람의 화면에만 그보다 먼저 OwnTaskEnded(작업 번호, 끝난 이유와 실패 내용)가 불린다 (#480).<br/>
+/// - 작업이 끝나면 시전한 사람의 화면에만 그보다 먼저 OwnTaskEnded(작업 번호, 끝난 이유와 실패 내용, 슬롯·함수 이름)가 불린다 (#480, #536).<br/>
+/// - 출력 함수(printf, print)가 출력하면 시전한 사람의 화면에만 OwnOutput(슬롯, 함수 이름, 출력 글)이 불린다 (#536).<br/>
 /// - 네트워크를 켜지 않은 테스트에서도 같은 함수와 event로 동작한다. 이때는 서버로 보내지 않고 그 자리에서 실행기를 부른다.
 /// </para>
 /// <para>
@@ -196,6 +197,13 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	public event Action<int, TaskEndInfo> OwnTaskEnded;
 
 	/// <summary>
+	/// [표시] 내 작업의 출력 함수(printf, print)가 글 한 줄을 출력했을 때 (슬롯 번호, 작업의 함수 이름, 출력 글) (#536). 시전한 사람의 화면에서만 불린다.<br/>
+	/// 슬롯 번호는 함수 안에서 비동기로 시전된 작업이면 -1이다. HUD가 왼쪽 아래 알림 목록에 「[Q] n = 3」처럼 보이고, 슬롯이 없으면 함수 이름을 보인다.
+	/// </summary>
+	// 출력은 시전한 사람만 보면 된다. 다른 플레이어의 출력이 내 화면에 섞이지 않게 하기 위함
+	public event Action<int, string, string> OwnOutput;
+
+	/// <summary>
 	/// [로직] 내 작업이 입력 함수를 만나 입력을 기다리기 시작했을 때 (작업 번호, 입력 함수 ID, 슬롯 번호). 시전한 사람의 화면에서만 불린다.<br/>
 	/// 입력 함수 ID로 자기가 맡은 입력인지 확인한다(예: input.get_bug). 슬롯 번호는 비동기로 시전된 작업이면 -1이다.<br/>
 	/// 값을 정하면 ProvideTarget을 부른다. 이 event 안에서 바로 불러도 된다.
@@ -222,6 +230,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded += OnExecutorTaskEnded;
 		executor.InputRequested += OnExecutorInputRequested;
 		executor.CooldownStarted += OnExecutorCooldownStarted;
+		executor.Output += OnExecutorOutput;
 		if (health != null) health.Died += OnPlayerDied;
 	}
 
@@ -231,6 +240,7 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		executor.TaskEnded -= OnExecutorTaskEnded;
 		executor.InputRequested -= OnExecutorInputRequested;
 		executor.CooldownStarted -= OnExecutorCooldownStarted;
+		executor.Output -= OnExecutorOutput;
 		if (health != null) health.Died -= OnPlayerDied;
 	}
 
@@ -1123,15 +1133,31 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 		// 끝난 이유는 실패 내용(OwnTaskEnded)을 먼저 보낸다. 화면이 TaskEnded에서 작업 기록을 지우기 전에 알림을 띄울 수 있게 하기 위함
 		if (IsOffline)
 		{
-			OwnTaskEnded?.Invoke(task.Id, TaskEndInfo.From(task, language));
+			OwnTaskEnded?.Invoke(task.Id, OwnEndInfo(task));
 			TaskEnded?.Invoke(task.Id, task.EndReason);
 		}
 		else if (isServer)
 		{
 			// 서버만 있는 오브젝트(접속한 사람이 없음)에는 보낼 곳이 없다
-			if (connectionToClient != null) TargetOwnTaskEnded(task.Id, TaskEndInfo.From(task, language));
+			if (connectionToClient != null) TargetOwnTaskEnded(task.Id, OwnEndInfo(task));
 			RpcTaskEnded(task.Id, task.EndReason);
 		}
+	}
+
+	// 시전한 사람에게 보낼 끝난 이유. 실행기가 모르는 슬롯 번호를 여기서 채운다 (#536)
+	TaskEndInfo OwnEndInfo(FunctionTask task)
+	{
+		TaskEndInfo info = TaskEndInfo.From(task, language);
+		info.Slot = SlotOf(task);
+		return info;
+	}
+
+	// 출력 글은 그 작업을 시전한 사람에게만 보낸다 (#536)
+	void OnExecutorOutput(FunctionTask task, string text)
+	{
+		string functionName = task.Name ?? "";
+		if (IsOffline) OwnOutput?.Invoke(SlotOf(task), functionName, text);
+		else if (isServer && connectionToClient != null) TargetOwnOutput(SlotOf(task), functionName, text);
 	}
 
 	// 입력 요청은 그 작업을 시전한 사람에게만 보낸다. 고르는 일은 그 사람의 화면에서 하기 때문
@@ -1170,6 +1196,9 @@ public class FunctionExecutorNetwork : NetworkBehaviour
 	// 실패 내용은 시전한 사람에게만 보낸다. 다른 플레이어의 실패 이유는 내 화면에 알릴 필요가 없기 때문
 	[TargetRpc]
 	void TargetOwnTaskEnded(int taskId, TaskEndInfo info) => OwnTaskEnded?.Invoke(taskId, info);
+
+	[TargetRpc]
+	void TargetOwnOutput(int slot, string functionName, string text) => OwnOutput?.Invoke(slot, functionName, text);
 
 	[TargetRpc]
 	void TargetInputRequested(int taskId, string inputFunctionId, int slot) => InputRequested?.Invoke(taskId, inputFunctionId, slot);

@@ -120,12 +120,28 @@ public class BlockField : MonoBehaviour
 		Resize();
 	}
 
+	// 잴 글자가 바뀌었으면 너비를 다시 잰다 (#536). 입력 중이면 화면에 그려진 글자, 아니면 확정된 글자
+	// 한글은 「ㅇ → 아 → 안」처럼 조합하는 동안 onValueChanged가 불리지 않으므로, 그것만 기다리면 조합 중인 글자가 칸 밖으로 나가기 때문
+	// 입력이 끝난 뒤에도 보는 이유: 마지막으로 잰 글자가 조합 중의 글자이면, 확정된 글자 너비로 되돌려야 하기 때문
+	void Update()
+	{
+		if (input == null || input.textComponent == null) return;
+		string shown = input.isFocused ? input.textComponent.text : input.text;
+		if (shown != measuredText) Resize();
+	}
+
+	// 마지막으로 너비를 잰 글자. 같은 글자로 매 프레임 다시 재지 않으려고 기억한다
+	string measuredText;
+
 	void Resize()
 	{
 		if (input == null || layout == null || input.textComponent == null) return;
-		float width = input.textComponent.GetPreferredValues(input.text).x;
+		// 입력 중이면 화면에 그려진 글자(조합 중인 한글 포함)로 잰다. 조합 글자는 아직 input.text에 들어가지 않기 때문
+		string shown = input.isFocused ? input.textComponent.text : input.text;
+		measuredText = shown;
+		float width = input.textComponent.GetPreferredValues(shown).x;
 		// 비어 있으면 안내 글자(Placeholder)만큼 넓힌다
-		if (string.IsNullOrEmpty(input.text) && input.placeholder is TMP_Text placeholder && !string.IsNullOrEmpty(placeholder.text))
+		if (string.IsNullOrEmpty(input.text) && string.IsNullOrEmpty(shown?.Trim('​')) && input.placeholder is TMP_Text placeholder && !string.IsNullOrEmpty(placeholder.text))
 			width = placeholder.GetPreferredValues(placeholder.text).x;
 		layout.minWidth = minWidth;
 		layout.preferredWidth = Mathf.Max(minWidth, width + padding);

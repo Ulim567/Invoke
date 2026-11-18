@@ -470,6 +470,7 @@
 | `SecondsPerTick` | - | `float` | 1 tick의 길이(초). 스킬 애니메이션 길이를 `TickCount`에 맞추거나, 쿨타임을 초로 보여 줄 때 쓴다. |
 | `GetRemainingCooldownTicks(FunctionBlock function)` | 슬롯의 function (원본) | `int` | 남은 쿨타임(tick 수). 쿨타임 중이 아니면 0. 스킬이면 그 스킬(고정 ID)의 쿨타임, 사용자 정의 함수는 자기 쿨타임이 없으므로 0. 쿨타임 UI에서 쓴다. `SetDisplayedCooldown`을 받은 실행기(클라이언트)는 받은 끝 시각으로 답한다 (#173) |
 | `CooldownStarted` (event) | `string` 스킬 고정 ID, `int` 지금부터 남은 tick 수 | - | 스킬의 쿨타임이 시작되거나 늘어났을 때. 서버가 소유 클라이언트에 쿨타임을 알릴 때 쓴다 (#173) |
+| `Output` (event) | `FunctionTask`, `string` 출력 글 | - | 출력 함수(`printf`, `print`)가 글 한 줄을 출력한 틱에 불린다. 같은 틱에 실패한 작업도 실패 처리 전에 불린다. 서버가 소유 클라이언트에 출력 글을 보낼 때 쓴다 (#536, predefined-function.md 「출력 function」) |
 | `SetDisplayedCooldown(string skillId, float endTime)` | 스킬 고정 ID, 끝 시각(`Time.time` 기준) | - | 클라이언트의 실행기에 서버가 알려 준 쿨타임 끝 시각을 넣는다. 처음 부른 뒤로 `GetRemainingCooldownTicks`가 받은 시각으로 답한다. `FunctionExecutorNetwork`만 부른다 (#173) |
 | `TickEnabled` | - | `bool` (읽기·쓰기) | tick을 진행하는지. false이면 tick을 세지 않고 작업도 진행하지 않는다. 처음 값 true. 클라이언트의 실행기를 멈출 때 `FunctionExecutorNetwork`가 쓴다 (#173) |
 | `TryGetTask(int id, out FunctionTask task)` | 작업 번호(`FunctionTask.Id`) | `bool` | 진행 중인 작업과 다음 tick을 기다리는 작업에서 번호로 찾는다. 목록에서 빠졌거나 없는 번호면 `false`. 클라이언트가 보낸 작업 번호를 서버의 작업으로 바꿀 때 쓴다 (#173) |
@@ -538,7 +539,9 @@
 | `InterruptCause` | `InterruptCause` | 끊은 원인(`MonsterAttack`, `System`). `EndReason`이 `Interrupted`일 때만 뜻이 있음 (#504) |
 | `Family` | `LanguageFamily` | 시전자 캐릭터의 언어 방식. HUD가 실패 이름을 그 언어의 이름으로 보임 (#532) |
 | `RecursiveOverflow` | `bool` | `Overflow`가 재귀 호출(이미 호출 중인 함수를 다시 부름)에서 났으면 true (`FunctionTask.OverflowWasRecursive`, #532) |
-| `From(FunctionTask task, LanguageRule language)` (static) | `TaskEndInfo` | 끝난 작업에서 값을 모음. `language`가 없으면 분류는 `RuntimeError` |
+| `Slot` | `int` | 작업을 시전한 슬롯 번호. 슬롯에서 시전하지 않은 작업은 -1. 실행기는 슬롯을 모르므로 `FunctionExecutorNetwork`가 채움. HUD가 오류 알림에 `Q`처럼 보임 (#536) |
+| `FunctionName` | `string` | 작업의 함수 이름(`FunctionTask.Name`). HUD가 오류 알림에 보임 (#536) |
+| `From(FunctionTask task, LanguageRule language)` (static) | `TaskEndInfo` | 끝난 작업에서 값을 모음. `language`가 없으면 분류는 `RuntimeError`. `Slot`은 -1 |
 
 ### `FailureNotice` (실패 알림 문장, #480)
 

@@ -45,9 +45,9 @@ public class ShopTest : MonoBehaviour
 		Check("새 C 캐릭터는 문법 블록 후보가 없음 (순차 실행은 함수·wait만 엶)",
 			ShopRoller.SyntaxCandidates(cStart, noItems, CharacterLanguages.C).Count == 0);
 		HashSet<string> cFunctions = Ids(ShopRoller.FunctionCandidates(cStart, noItems, CharacterLanguages.C));
-		Check("새 C 캐릭터의 함수 후보 = thrust, sword_throw, get_bug, is_valid_target, Wait",
+		Check("새 C 캐릭터의 함수 후보 = thrust, sword_throw, get_bug, is_valid_target, printf(#536), Wait",
 			cFunctions.SetEquals(new[] { PredefinedFunctionIds.Thrust, PredefinedFunctionIds.SwordThrow, PredefinedFunctionIds.GetBug,
-				PredefinedFunctionIds.IsValidTarget, "Wait" }));
+				PredefinedFunctionIds.IsValidTarget, PredefinedFunctionIds.Printf, "Wait" }));
 		Check("대시·더블점프는 후보가 아님",
 			!cFunctions.Contains(PredefinedFunctionIds.Dash) && !cFunctions.Contains(PredefinedFunctionIds.DoubleJump));
 
@@ -69,6 +69,9 @@ public class ShopTest : MonoBehaviour
 		Check("Python: ListNew 있음, Declare 없음, Malloc 없음, 구슬 확인 있음",
 			allSyntaxPy.Contains("ListNew") && !allSyntaxPy.Contains("Declare") && !allFunctionsPy.Contains("Malloc")
 			&& allFunctionsPy.Contains(PredefinedFunctionIds.PyIsValidOrb) && !allFunctionsPy.Contains(PredefinedFunctionIds.Thrust));
+		Check("출력 함수는 언어마다 하나: C는 printf, Python은 print (#536)",
+			allFunctionsC.Contains(PredefinedFunctionIds.Printf) && !allFunctionsC.Contains(PredefinedFunctionIds.PyPrint)
+			&& allFunctionsPy.Contains(PredefinedFunctionIds.PyPrint) && !allFunctionsPy.Contains(PredefinedFunctionIds.Printf));
 		Check("무게 없는 Python 블록은 임시 무게 1",
 			ShopRoller.SyntaxCandidates(null, noItems, CharacterLanguages.Python).First(c => c.Id == "ListNew").Weight == ShopRules.DefaultSyntaxWeight);
 

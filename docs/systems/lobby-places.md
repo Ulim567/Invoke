@@ -74,6 +74,12 @@
   - 메뉴 Invoke → 맵 → 문 위치·행선지 표시 맞추기(`DoorSignBuilder`): 장소 씬 네 개를 열어 로비 문을 옮기고, 모든 문에 Sign을 만들어 `PlaceInteractable.sign`에 넣고 저장
   - 사냥터 사이 포탈은 글씨 없이 큰 ↑ 키만 (포탈을 만들 때 `Key Scale`을 크게, Sign 비움)
 
+## 로비 상점 자리 (#534, 이우림)
+- 로비의 상점 자리 `ShopStation`: `PanelStation`이 ↑에 상점 창(`ShopPanel`, LobbyUI 프리팹 안)을 엶. 상점 규칙과 창은 [shop.md](shop.md)
+- 범위·안내판은 문과 같음: 범위 1.5×2.75칸, 가까이 가면 「[↑] 상점」 (`DoorSignBuilder.MakeSignFor`, 이우림이 더함)
+- 그림은 아직 없음. SpriteRenderer는 문과 같은 그리기 층만 맞춰 둠 (마름모 표시가 하늘 뒤에 가리지 않게)
+- 메뉴 Invoke → 맵 → 로비 상점 자리 놓기(`ShopUIBuilder`): Lobby 씬에 만들고 저장. 처음 자리는 가장 오른쪽 문에서 6칸 오른쪽, 실제 자리(캔버스 17의 상점)는 Scene 창에서 옮김. 다시 눌러도 자리는 그대로
+
 ## 사냥터 사이 포탈 (#518, 노션 11/16 맵 확장, 캔버스 17-1~17-4·17-7)
 - 사냥터가 셋: 사냥터1(`HuntingGround`, 로비 문이 있는 예전 사냥터), 사냥터2(`HuntingGround2`, 세로로 긴 맵), 사냥터3(`HuntingGround3`, 가로로 긴 맵). 맵 모양은 [map-background.md](map-background.md)
 - 연결 (주황 화살표, 양쪽으로 오감)

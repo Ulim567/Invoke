@@ -17,6 +17,10 @@ public static class KeyBadgeInstaller
 		{
 			("EntrancePanel/Window/EnterButton", "Enter"),
 			("EntrancePanel/Window/CloseButton", "ESC"),
+			// 상점 창 (#534, ShopUIBuilder)
+			("ShopPanel/Root/Window/Header/CloseButton", "ESC"),
+			("ShopPanel/Root/Confirm/Window/YesButton", "Enter"),
+			("ShopPanel/Root/Confirm/Window/NoButton", "ESC"),
 		}, new string[0]),
 		("Assets/_HW/UI/Raid/RaidLobbyCanvas.prefab", 1f, new[]
 		{

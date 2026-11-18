@@ -144,7 +144,7 @@ C·Python 캐릭터마다 9~10개. 자세 함수는 처음 개수가 없어(prog
 ### 스킬 트리 화면 (#184)
 - 스크립트: `SkillTreeView`(화면), `SkillTreeNodeView`(노드 프리팹). 로비 스킬 트리 창(`LobbyUI` 프리팹의 SkillTreePanel → Window) 안에 둔다
 - 노드·선·계열 이름은 프리팹(`Assets/_HW/UI/SkillTree`)으로 만든다. 탭 버튼, 설명 글자, 해금 버튼은 창 안에 미리 놓아 둔다
-- 탭: 문법 / 스킬 / 자세(#545). 스킬·자세 탭은 내 캐릭터 언어(`PlayerCharacter.LocalLanguage`)의 노드만 (#523). C 스킬 탭은 계열별 줄(소환, 찌르기, 던지기, 휘두르기, 이동), Python은 구슬, 원소, 범위, 보조, 이동. 위치는 `SkillTreeView`의 `SkillLayout`·`PythonSkillLayout`·`SyntaxLayout`·`StanceLayout`·`PythonStanceLayout` 표. 표에 없는 노드는 맨 아래 「기타」 줄 (노드를 늘리면 표에도 넣는다)
+- 탭: 문법 / 스킬 / 자세(#545). 스킬·자세 탭은 내 캐릭터 언어(`PlayerCharacter.LocalLanguage`)의 노드만 (#523). C 스킬 탭은 계열별 줄(소환, 찌르기, 던지기, 휘두르기, 이동), Python은 구슬, 원소, 범위, 보조, 이동. 줄 이름과 순서는 `SkillFamilies.COrder`·`PythonOrder`·`KoreanName`에서 읽음 (#578, 블록 편집 화면 함수 탭의 계열 소구분과 같은 이름·순서). 위치는 `SkillTreeView`의 `SkillLayout`·`PythonSkillLayout`·`SyntaxLayout`·`StanceLayout`·`PythonStanceLayout` 표. 표에 없는 노드는 맨 아래 「기타」 줄 (노드를 늘리면 표에도 넣는다)
   - 문법: 위에서 아래로 세로 한 줄 (순차 실행 → … → Type 정의), 줄 간격은 스킬 탭보다 넓음. 트리 칸보다 길면 세로 스크롤과 오른쪽 스크롤 막대 (#433)
 - 같은 계열의 선행은 선으로 잇고, 다른 계열의 선행(검 소환)은 이름 아래 「+ 검 소환」
 - 자세 탭 (#545, 이우림 결정 11/18: 처음에는 스킬 탭의 「자세」 계열이었으나, 규칙 노드를 한 줄에 놓고 선으로 이으면 앞 노드를 열어야 하는 줄처럼 보여 탭을 나눔)

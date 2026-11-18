@@ -92,6 +92,12 @@ public static class ShopItemInfo
 		_ => materialId,
 	};
 
+	/// <summary>
+	/// 가격 한 줄의 글자 (「버그 조각 <b>8</b>」). 카드·구매 확인 창·새로고침 버튼이 함께 쓴다.
+	/// 게임 글꼴 Galmuri11에는 ×, → 글자가 없어 빈칸으로 보이므로 기호 없이 숫자만 적는다.
+	/// </summary>
+	public static string PriceLineOf(ShopPrice price) => $"{MaterialNameOf(price.MaterialId)} <b>{price.Count}</b>";
+
 	// 항목 ID의 블록 종류. If·ElseIf·Else는 조건문, 사전 정의 함수는 함수 블록
 	static BlockKind KindOf(string itemId)
 	{

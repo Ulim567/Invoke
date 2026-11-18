@@ -137,7 +137,7 @@ public static class ShopUIBuilder
 			refreshButton.colors = refreshColors;
 			TMP_Text refreshLabel = Text(refresh, "Label", "새로고침", 27, Dark, TextAlignmentOptions.MidlineLeft, true);
 			Place(refreshLabel.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(27, 0), new Vector2(150, 66));
-			TMP_Text refreshCost = Text(refresh, "Cost", "버그 조각 ×10", 21, Dark, TextAlignmentOptions.MidlineRight, false);
+			TMP_Text refreshCost = Text(refresh, "Cost", "버그 조각 10", 21, Dark, TextAlignmentOptions.MidlineRight, false);
 			Place(refreshCost.rectTransform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-27, 0), new Vector2(200, 66));
 
 			// 알림 칩: 위 줄 바로 아래 가운데. 「상처 가르기 함수를 구매했습니다.」 글자 길이에 맞춰 넓어진다
@@ -306,7 +306,7 @@ public static class ShopUIBuilder
 		{
 			priceIcons[i] = Icon(prices, $"PriceIcon{i}", null, 27);
 			Place((RectTransform)priceIcons[i].transform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, -i * 30), new Vector2(27, 27));
-			priceTexts[i] = Text(prices, $"Price{i}", "버그 조각 ×7", 21, Color.white, TextAlignmentOptions.MidlineLeft, false);
+			priceTexts[i] = Text(prices, $"Price{i}", "버그 조각 7", 21, Color.white, TextAlignmentOptions.MidlineLeft, false);
 			Place(priceTexts[i].rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(36, -i * 30), new Vector2(CardW - 66, 27));
 		}
 
@@ -371,7 +371,7 @@ public static class ShopUIBuilder
 		Solid(boxFill, CardFill, false);
 		TMP_Text costLabel = Text(box, "CostLabel", "소비하는 재료", 19, Muted, TextAlignmentOptions.MidlineLeft, false);
 		TopStretch(costLabel.rectTransform, 24, 24, 12, 27);
-		// 재료 줄 두 개 (버그 조각, 보스 코어): 재료마다 그림 + 「버그 조각 ×12」. 쓰지 않는 줄은 ShopConfirmDialog가 끈다
+		// 재료 줄 두 개 (버그 조각, 보스 코어): 재료마다 그림 + 「버그 조각 12」. 쓰지 않는 줄은 ShopConfirmDialog가 끈다
 		var costIcons = new Image[2];
 		var costTexts = new TMP_Text[2];
 		for (int i = 0; i < 2; i++)
@@ -379,10 +379,10 @@ public static class ShopUIBuilder
 			float top = 45 + i * 36;
 			costIcons[i] = Icon(box, $"CostIcon{i}", null, 30);
 			Place((RectTransform)costIcons[i].transform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24, -top), new Vector2(30, 30));
-			costTexts[i] = Text(box, $"Cost{i}", "버그 조각 ×11", 24, Color.white, TextAlignmentOptions.MidlineLeft, false);
+			costTexts[i] = Text(box, $"Cost{i}", "버그 조각 11", 24, Color.white, TextAlignmentOptions.MidlineLeft, false);
 			Place(costTexts[i].rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(24 + 40, -top), new Vector2(W - 84 - 48 - 40, 30));
 		}
-		TMP_Text owned = Text(box, "Owned", "가진 개수 3 → 4", 21, Muted, TextAlignmentOptions.BottomLeft, false);
+		TMP_Text owned = Text(box, "Owned", "가진 개수 3 > 4", 21, Muted, TextAlignmentOptions.BottomLeft, false);
 		Place(owned.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(24, 12), new Vector2(W - 84 - 48, 30));
 
 		float buttonW = (W - 84 - 18) / 2;

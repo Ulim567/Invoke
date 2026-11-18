@@ -163,7 +163,8 @@ public class ShopPanel : InputBlockingPanel
 		string name = ShopItemInfo.DisplayNameOf(offer.ItemId);
 		string kind = ShopItemInfo.KindWordOf(slot);
 		string titleText = $"<color={AccentHex}>{name}</color> {kind} 1개를 구매하시겠습니까?";
-		string ownedLine = counts ? $"가진 개수 {have} → {Math.Min(have + 1, ItemCountRules.MaxCount)}" : "";
+		// 게임 글꼴에 → 글자가 없어서 >로 적는다 (ShopItemInfo.PriceLineOf)
+		string ownedLine = counts ? $"가진 개수 {have} > {Math.Min(have + 1, ItemCountRules.MaxCount)}" : "";
 		if (confirm != null) confirm.Open(titleText, offer.Price, IconOf, ownedLine, () => Buy(slot, $"{name} {kind}"));
 		else Buy(slot, $"{name} {kind}");
 	}
@@ -282,7 +283,7 @@ public class ShopPanel : InputBlockingPanel
 
 	static IEnumerable<string> PriceLines(IReadOnlyList<ShopPrice> price)
 	{
-		foreach (ShopPrice line in price) yield return $"{ShopItemInfo.MaterialNameOf(line.MaterialId)} <b>×{line.Count}</b>";
+		foreach (ShopPrice line in price) yield return ShopItemInfo.PriceLineOf(line);
 	}
 
 	static string PriceLine(IReadOnlyList<ShopPrice> price) => string.Join("  ", PriceLines(price));

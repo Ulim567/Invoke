@@ -26,7 +26,7 @@ public class ShopCardView : MonoBehaviour
 	[SerializeField, Tooltip("이름·표기 칸 왼쪽의 세로 띠. 블록 분류 색")] Image stripe;
 	[SerializeField] TMP_Text title;
 	[SerializeField] TMP_Text notation;
-	[SerializeField, Tooltip("가격 줄 (재료 그림 + 「버그 조각 ×7」). 가격 재료 수만큼 켠다")] Image[] priceIcons;
+	[SerializeField, Tooltip("가격 줄 (재료 그림 + 「버그 조각 7」). 가격 재료 수만큼 켠다")] Image[] priceIcons;
 	[SerializeField] TMP_Text[] priceTexts;
 	[SerializeField] TMP_Text owned;
 	[SerializeField, Tooltip("이름·가격·가진 개수를 담은 부분. 빈 칸이면 끈다")] GameObject content;
@@ -158,7 +158,7 @@ public class ShopCardView : MonoBehaviour
 			if (i < priceIcons.Length && priceIcons[i] != null) priceIcons[i].gameObject.SetActive(used);
 			if (!used) continue;
 			ShopPrice line = shownPrice[i];
-			priceTexts[i].text = $"{ShopItemInfo.MaterialNameOf(line.MaterialId)} <b>×{line.Count}</b>";
+			priceTexts[i].text = ShopItemInfo.PriceLineOf(line);
 			priceTexts[i].color = shortMaterials != null && shortMaterials.Contains(line.MaterialId) ? ShortColor : Color.white;
 		}
 	}

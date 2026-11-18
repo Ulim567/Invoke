@@ -16,8 +16,8 @@ public class ShopConfirmDialog : MonoBehaviour
 {
 	[SerializeField] TMP_Text title;
 	[SerializeField, Tooltip("소비하는 재료 줄의 재료 그림. 가격 재료 수만큼 켠다")] Image[] costIcons;
-	[SerializeField, Tooltip("소비하는 재료 줄의 글자 (「버그 조각 ×12」)")] TMP_Text[] costTexts;
-	[SerializeField, Tooltip("「가진 개수 3 → 4」. 비우면 숨긴다")] TMP_Text owned;
+	[SerializeField, Tooltip("소비하는 재료 줄의 글자 (「버그 조각 12」)")] TMP_Text[] costTexts;
+	[SerializeField, Tooltip("「가진 개수 3 > 4」. 비우면 숨긴다")] TMP_Text owned;
 	[SerializeField] Button yesButton;
 	[SerializeField] Button noButton;
 
@@ -44,7 +44,7 @@ public class ShopConfirmDialog : MonoBehaviour
 			if (costTexts[i] != null)
 			{
 				costTexts[i].gameObject.SetActive(used);
-				if (used) costTexts[i].text = $"{ShopItemInfo.MaterialNameOf(price[i].MaterialId)} <b>×{price[i].Count}</b>";
+				if (used) costTexts[i].text = ShopItemInfo.PriceLineOf(price[i]);
 			}
 			if (i < costIcons.Length && costIcons[i] != null)
 			{

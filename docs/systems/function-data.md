@@ -274,7 +274,7 @@
 - 저장: 편집 화면이 함수와 함께 저장 버튼으로 저장 (#506, block-editor.md 「저장 버튼」). 오류가 있어도 저장하고 빌드가 실패함. 임시 계정은 `GlobalVariablesStorage.Save` 뒤 `FunctionExecutorNetwork.ResendLocalGlobals`로 서버가 초기화
 
 ### `GlobalVariablesStorage` (전역 변수 파일 저장소, #139)
-- 이 컴퓨터의 `Application.persistentDataPath/GlobalVariables.json` 하나. 서버 저장 전까지의 임시 저장소
+- 이 컴퓨터의 `Application.persistentDataPath/Local/{내 캐릭터 언어}/GlobalVariables.json` (`LocalSaveFolder`, #570). 캐릭터 언어마다 하나. 임시 계정·오프라인 테스트용 저장소
 - 내용 검사 없음
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |

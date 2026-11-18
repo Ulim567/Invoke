@@ -58,7 +58,7 @@
 - 넣을 수 있는 블록 함수: `FunctionStorage`에 저장된 함수.
 - 같은 함수·스킬은 한 슬롯에만. 다른 슬롯에 넣으면 원래 슬롯은 빈다(옮겨짐).
 - 시전할 원본: 같은 슬롯은 같은 원본 객체를 계속 쓴다. 그래야 쿨타임, 실행 중 검사, 캔슬이 이어진다 (function-executor.md). 블록 함수는 장착할 때(또는 `ReloadFunctions`) `FunctionDataConverter`로 한 번 바꿔 둔다. 실행할 수 없는 함수면 변환기가 콘솔 오류를 내고 그 슬롯은 눌러도 시전되지 않는다.
-- 저장: 이 컴퓨터 파일 `persistentDataPath/SlotLoadout.json`. 장착을 바꿀 때마다 저장하고, 켤 때 불러온다. 파일이 없으면(처음) Inspector의 `Default Skill Ids`로 채운다. 임시 계정(로그인 건너뛰기)과 오프라인 테스트만 이 방식이다.
+- 저장: 이 컴퓨터 파일 `persistentDataPath/Local/{그 캐릭터의 언어}/SlotLoadout.json` (`LocalSaveFolder`, #570: C·Python 장착 내용이 따로). 장착을 바꿀 때마다 저장하고, 켤 때 불러온다. 파일이 없으면(처음) Inspector의 `Default Skill Ids`로 채운다. 임시 계정(로그인 건너뛰기)과 오프라인 테스트만 이 방식이다.
 
 ### 실제 계정 슬롯 (`SetEntries`, #263)
 - 실제 계정(로그인한 계정)은 슬롯·함수의 원본이 서버 DB다 (progress-store.md). 슬롯 8칸은 늘 그 캐릭터의 슬롯 함수(slot1 ~ slot8)이고 장착을 바꾸지 않는다 (이우림 #239).

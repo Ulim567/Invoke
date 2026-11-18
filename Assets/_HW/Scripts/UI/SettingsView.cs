@@ -7,11 +7,12 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
-/// 설정 창 (우림이 시안 8-2, 8-4). 전체·배경음·효과음 음량, 콘솔 출력 표시 체크 칸(#536), 「돌아가기」, 「로그아웃」(레이드 던전에서는 「레이드 포기」). 화면만 맡고 값은 GameSettings가 갖는다 (#292).
+/// 설정 창 (우림이 시안 8-2, 8-4). 전체·배경음·효과음 음량, 콘솔 출력 표시 체크 칸(#536), 「돌아가기」, 「캐릭터 선택」(#570), 「로그아웃」(레이드 던전에서는 「레이드 포기」). 화면만 맡고 값은 GameSettings가 갖는다 (#292).
 /// <para>
 /// - 여는 법: HUD의 「설정」 버튼이나 Esc (HudView.SettingsRequested). 닫는 법: 「돌아가기」, Esc.<br/>
 /// - 열려 있는 동안 내 캐릭터의 Player·Attack 맵을 끈다 (InputBlockingPanel). 뒤의 HUD는 숨기지 않고 어둡게 덮는다.<br/>
 /// - 방향키 위·아래로 고르고 왼쪽·오른쪽으로 음량을 바꾸고 Enter로 누른다 (EventSystem 이동). 열 때 「돌아가기」를 고른다.<br/>
+/// - 캐릭터 선택: CharacterSelectRequested를 알린다 (#570). 받는 쪽(계정)이 없거나 레이드 던전에 있으면 버튼을 끈다.<br/>
 /// - 로그아웃: LogoutRequested를 알린다. 받는 쪽(계정)이 없으면 버튼을 끈다.<br/>
 /// - 레이드 포기: 내 캐릭터가 레이드 던전에 있으면 로그아웃 자리에 나온다. RaidParties.RequestGiveUp()을 부른다.<br/>
 /// - SettingsCanvas 프리팹 최상위에 붙이고 Base 씬에 둔다. 프리팹은 메뉴 Invoke → UI → 설정 화면 만들기(SettingsUIBuilder).
@@ -21,6 +22,9 @@ public class SettingsView : InputBlockingPanel
 {
 	/// <summary>[표시] 설정 창의 「로그아웃」을 눌렀을 때. 계정 쪽이 받아서 접속을 끊고 로그인 화면으로 돌아간다. 받는 쪽이 없으면 버튼이 꺼진다</summary>
 	public static event Action LogoutRequested;
+
+	/// <summary>[표시] 설정 창의 「캐릭터 선택」을 눌렀을 때 (#570). 계정 쪽이 받아서 접속은 둔 채 캐릭터 화면으로 돌아간다. 받는 쪽이 없으면 버튼이 꺼진다</summary>
+	public static event Action CharacterSelectRequested;
 
 	[Header("소리")]
 	[SerializeField, Tooltip("BGM·SFX 그룹이 있는 Audio Mixer (Assets/_HW/Audio/InvokeMixer)")]
@@ -41,6 +45,9 @@ public class SettingsView : InputBlockingPanel
 	[SerializeField] TMP_Text sfxValueText;
 	[SerializeField, Tooltip("「콘솔 출력 표시」 체크 칸 (#536). 끄면 HUD 왼쪽 아래의 출력·오류 알림을 띄우지 않는다")] Toggle consoleOutputToggle;
 	[SerializeField, Tooltip("돌아가기 (창 닫기)")] Button backButton;
+	[SerializeField, Tooltip("캐릭터 선택 (#570). 로그아웃 버튼 왼쪽")] Button characterSelectButton;
+	[SerializeField] TMP_Text characterSelectText;
+	[SerializeField] Color characterSelectColor = Color.white;
 	[SerializeField, Tooltip("로그아웃 / 레이드 포기")] Button exitButton;
 	[SerializeField] TMP_Text exitText;
 	[SerializeField] Color exitColor = new Color32(0xF0, 0x90, 0x7E, 0xFF);
@@ -59,6 +66,7 @@ public class SettingsView : InputBlockingPanel
 		if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(GameSettings.SetSfxVolume);
 		if (consoleOutputToggle != null) consoleOutputToggle.onValueChanged.AddListener(GameSettings.SetShowConsoleOutput);
 		if (backButton != null) backButton.onClick.AddListener(Close);
+		if (characterSelectButton != null) characterSelectButton.onClick.AddListener(OnCharacterSelect);
 		if (exitButton != null) exitButton.onClick.AddListener(OnExit);
 
 		HudView.SettingsRequested += Open;
@@ -112,6 +120,14 @@ public class SettingsView : InputBlockingPanel
 		else LogoutRequested?.Invoke();
 	}
 
+	void OnCharacterSelect()
+	{
+		// 레이드 중에는 버튼이 꺼져 있지만, 같은 프레임에 장소가 바뀌었을 수 있으므로 한 번 더 막는다
+		if (InRaid) return;
+		Close();
+		CharacterSelectRequested?.Invoke();
+	}
+
 	void Refresh()
 	{
 		Set(masterSlider, masterValueText, GameSettings.MasterVolume);
@@ -123,25 +139,52 @@ public class SettingsView : InputBlockingPanel
 
 	void RefreshExit()
 	{
-		if (exitButton == null) return;
 		bool raid = InRaid;
-		bool usable = raid || LogoutRequested != null;
-		if (exitButton.interactable != usable)
-		{
-			exitButton.interactable = usable;
-			// 꺼진 버튼으로는 ↓로 내려가지 않게
-			if (backButton != null)
-			{
-				Navigation nav = backButton.navigation;
-				nav.selectOnDown = usable ? exitButton : null;
-				backButton.navigation = nav;
-			}
-		}
+		bool exitUsable = exitButton != null && (raid || LogoutRequested != null);
+		// 레이드 중에는 「레이드 포기」로 먼저 나온다. 로그아웃이 레이드 중에 나오지 않는 것과 같다
+		bool characterUsable = characterSelectButton != null && !raid && CharacterSelectRequested != null;
+
+		bool changed = SetUsable(exitButton, exitUsable);
+		changed |= SetUsable(characterSelectButton, characterUsable);
+		if (changed) RefreshNavigation(exitUsable, characterUsable);
+
 		if (exitText != null)
 		{
 			string label = raid ? "레이드 포기" : "로그아웃";
 			if (exitText.text != label) exitText.text = label;
-			exitText.color = usable ? exitColor : exitDisabledColor;
+			exitText.color = exitUsable ? exitColor : exitDisabledColor;
+		}
+		if (characterSelectText != null) characterSelectText.color = characterUsable ? characterSelectColor : exitDisabledColor;
+	}
+
+	// 버튼의 interactable을 바꾸고, 바뀌었으면 true
+	static bool SetUsable(Button button, bool usable)
+	{
+		if (button == null || button.interactable == usable) return false;
+		button.interactable = usable;
+		return true;
+	}
+
+	// 꺼진 버튼으로는 방향키로 옮겨 가지 않게 한다. 돌아가기 ↓ → 캐릭터 선택(꺼졌으면 로그아웃), 캐릭터 선택 ↔ 로그아웃
+	void RefreshNavigation(bool exitUsable, bool characterUsable)
+	{
+		if (backButton != null)
+		{
+			Navigation nav = backButton.navigation;
+			nav.selectOnDown = characterUsable ? characterSelectButton : exitUsable ? exitButton : null;
+			backButton.navigation = nav;
+		}
+		if (characterSelectButton != null)
+		{
+			Navigation nav = characterSelectButton.navigation;
+			nav.selectOnRight = exitUsable ? exitButton : null;
+			characterSelectButton.navigation = nav;
+		}
+		if (exitButton != null)
+		{
+			Navigation nav = exitButton.navigation;
+			nav.selectOnLeft = characterUsable ? characterSelectButton : null;
+			exitButton.navigation = nav;
 		}
 	}
 

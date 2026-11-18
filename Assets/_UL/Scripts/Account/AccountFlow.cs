@@ -40,7 +40,7 @@ public enum CharacterState
 /// <para>
 /// 하는 일<br/>
 /// - 지금 화면, 응답을 기다리는 중인지, 안내 문장과 강조할 칸, 계정 닉네임, 언어 카드마다 상태와 선택한 언어, 팝업 문장을 들고 있다.<br/>
-/// - 버튼이 부를 함수(Login, SignUp, Select, Confirm 등)를 준다. 회원가입은 서버에 보내기 전에 규칙과 비밀번호 확인을 먼저 검사한다.<br/>
+/// - 버튼이 부를 함수(Login, SignUp, Select, Confirm, ReturnToCharacters 등)를 준다. 회원가입은 서버에 보내기 전에 규칙과 비밀번호 확인을 먼저 검사한다.<br/>
 /// - 서버의 결과, 쫓겨남, 접속 실패, 연결 끊김을 상태에 반영한다. 캐릭터 화면이나 게임 중에 끊기면 팝업 문장을 채운다.
 /// </para>
 /// <para>
@@ -69,6 +69,8 @@ public class AccountFlow : MonoBehaviour
 	bool loggingOut;
 	// SettingsView.LogoutRequested를 받고 있는지. 받는 쪽이 없으면 설정 창의 로그아웃 버튼이 꺼지므로, 로그아웃할 수 있을 때만 받는다
 	bool listeningLogout;
+	// SettingsView.CharacterSelectRequested를 받고 있는지. 로그아웃과 같은 방식으로, 돌아갈 수 있을 때만 받는다 (#570)
+	bool listeningCharacterSelect;
 
 	/// <summary>Base 씬 NetworkManager에 붙은 AccountFlow. 없으면 null.</summary>
 	public static AccountFlow Current { get; private set; }
@@ -111,10 +113,16 @@ public class AccountFlow : MonoBehaviour
 	public bool CanEditServerAddress => !NetworkClient.active;
 
 	/// <summary>
-	/// 로그아웃할 수 있으면 true. 게임에 들어간 상태이고 이 컴퓨터가 서버를 켜지 않았을 때만.
+	/// 로그아웃할 수 있으면 true. 게임에 들어간 상태나 캐릭터 화면(#570)이고, 응답을 기다리는 중이 아니고, 이 컴퓨터가 서버를 켜지 않았을 때만.
 	/// 서버를 켠 컴퓨터(에디터 Host)가 로그아웃하면 서버도 꺼져 다른 접속자가 모두 끊기므로 막는다.
 	/// </summary>
-	public bool CanLogout => Page == AccountPage.Hidden && NetworkClient.active && !NetworkServer.active;
+	public bool CanLogout => (Page == AccountPage.Hidden || Page == AccountPage.Characters) && !IsWaiting && NetworkClient.active && !NetworkServer.active;
+
+	/// <summary>
+	/// 게임에서 나와 캐릭터 화면으로 돌아갈 수 있으면 true (#570). 게임에 들어간 상태이고 응답을 기다리는 중이 아닐 때.
+	/// 접속을 끊지 않으므로 서버를 켠 컴퓨터(에디터 Host)도 true다.
+	/// </summary>
+	public bool CanReturnToCharacters => Page == AccountPage.Hidden && NetworkClient.isConnected && !IsWaiting;
 
 	/// <summary>에디터 전용 Host 버튼을 보여 줄지. 빌드에서는 늘 false.</summary>
 	public bool CanStartHost => Application.isEditor && !NetworkClient.active && !NetworkServer.active;
@@ -160,6 +168,7 @@ public class AccountFlow : MonoBehaviour
 		authenticator.AuthResultReceived += OnAuthResult;
 		authenticator.CreateCharacterResultReceived += OnCreateCharacterResult;
 		authenticator.EnterGameResultReceived += OnEnterGameResult;
+		authenticator.LeaveGameResultReceived += OnLeaveGameResult;
 		authenticator.Kicked += OnKicked;
 	}
 
@@ -167,10 +176,12 @@ public class AccountFlow : MonoBehaviour
 	{
 		if (Current == this) Current = null;
 		SetListeningLogout(false);
+		SetListeningCharacterSelect(false);
 		if (authenticator == null) return;
 		authenticator.AuthResultReceived -= OnAuthResult;
 		authenticator.CreateCharacterResultReceived -= OnCreateCharacterResult;
 		authenticator.EnterGameResultReceived -= OnEnterGameResult;
+		authenticator.LeaveGameResultReceived -= OnLeaveGameResult;
 		authenticator.Kicked -= OnKicked;
 	}
 
@@ -182,6 +193,7 @@ public class AccountFlow : MonoBehaviour
 		wasClientActive = clientActive;
 
 		SetListeningLogout(CanLogout);
+		SetListeningCharacterSelect(CanReturnToCharacters);
 	}
 
 	#region 버튼이 부르는 함수
@@ -252,7 +264,7 @@ public class AccountFlow : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 설정 창의 「로그아웃」(SettingsView.LogoutRequested). 서버와 접속을 끊고 로그인 화면으로 돌아간다.
+	/// 설정 창의 「로그아웃」(SettingsView.LogoutRequested)과 캐릭터 화면의 「로그아웃」(#570). 서버와 접속을 끊고 로그인 화면으로 돌아간다.
 	/// 스스로 끊는 것이므로 팝업은 띄우지 않는다. CanLogout이 false이면 아무것도 하지 않는다.
 	/// </summary>
 	public void Logout()
@@ -260,6 +272,17 @@ public class AccountFlow : MonoBehaviour
 		if (!CanLogout) return;
 		loggingOut = true;
 		NetworkManager.singleton.StopClient();
+	}
+
+	/// <summary>
+	/// 설정 창의 「캐릭터 선택」(SettingsView.CharacterSelectRequested) (#570). 접속은 둔 채 게임에서 나와 캐릭터 화면으로 돌아간다.
+	/// 결과는 Changed로 알린다. 성공하면 Page가 Characters가 된다. CanReturnToCharacters가 false이면 아무것도 하지 않는다.
+	/// </summary>
+	public void ReturnToCharacters()
+	{
+		if (!CanSend() || !CanReturnToCharacters) return;
+		BeginWaiting();
+		if (!authenticator.RequestLeave()) StopWaiting();
 	}
 
 	/// <summary>[에디터 전용] Host 버튼. 서버와 클라이언트를 함께 켠다. Skip Login In Editor가 켜져 있으면 로그인을 건너뛴다.</summary>
@@ -304,6 +327,21 @@ public class AccountFlow : MonoBehaviour
 		SetMessage(result.Success ? "" : result.failure.ToMessage(), AccountField.None);
 	}
 
+	void OnLeaveGameResult(LeaveGameResultMessage result)
+	{
+		IsWaiting = false;
+		SetOwnedLanguages(result.characters);
+		if (result.Success)
+		{
+			// 방금 플레이한 캐릭터를 고른 채로 돌아간다. 그 캐릭터가 목록에 없으면 처음 로그인했을 때처럼 고른다
+			if (GetCharacterState(SelectedLanguage) != CharacterState.Owned) SelectFirstOwned();
+			Page = AccountPage.Characters;
+		}
+		// 실패하면 게임 화면에 남으므로(Page가 Hidden) 화면에 보이지 않는다. 원인을 찾을 수 있게 로그로 남긴다
+		else Debug.LogWarning($"[AccountFlow] 캐릭터 화면으로 돌아가지 못했습니다: {result.failure.ToMessage()}");
+		SetMessage("", AccountField.None);
+	}
+
 	void OnKicked(AccountFailure reason)
 	{
 		kickedReason = reason;
@@ -342,6 +380,15 @@ public class AccountFlow : MonoBehaviour
 		listeningLogout = listen;
 		if (listen) SettingsView.LogoutRequested += Logout;
 		else SettingsView.LogoutRequested -= Logout;
+	}
+
+	// 캐릭터 화면으로 돌아갈 수 있는 동안만 SettingsView.CharacterSelectRequested를 받는다 (CanReturnToCharacters 설명 참고)
+	void SetListeningCharacterSelect(bool listen)
+	{
+		if (listen == listeningCharacterSelect) return;
+		listeningCharacterSelect = listen;
+		if (listen) SettingsView.CharacterSelectRequested += ReturnToCharacters;
+		else SettingsView.CharacterSelectRequested -= ReturnToCharacters;
 	}
 
 	void ShowPage(AccountPage page)

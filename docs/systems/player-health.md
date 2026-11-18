@@ -51,7 +51,9 @@
 
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
-| `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0 이하이거나, 죽었거나, 경직·무적 중이면 무시한다. 보호막(`DamageBlocking`)이 막아도 무시한다. |
+| `TakeDamage(int damage)` | 데미지 | - | 체력을 줄인다. 0 이하이거나, 죽었거나, 경직·무적 중이면 무시한다. 보호막(`DamageBlocking`)이 막아도 무시한다. 자세(`PlayerStance`)가 있으면 받는 피해 증감(C: 3의 배수 +10%)을 보호막보다 먼저 적용한다 (#538) |
+| `Heal(int amount)` | 회복량 | - | [서버] 체력을 회복한다 (#538, stance.md). 최대 체력을 넘지 않고, 0 이하이거나 죽었으면 무시. `HpChanged`는 불림. 자세의 회복(40~60: 스킬이 준 데미지의 5%)이 부름 |
+| `TakeSelfDamage(int damage)` | 자해량 | - | [서버] 자해로 체력을 줄인다 (#538, stance.md). 경직·무적을 걸지 않고, 무적 중에도 깎고, 피격 연출·보호막·받는 피해 증감을 거치지 않는다. `Damaged`, `HpChanged`는 불림. 0이 되면 사망. 0 이하이거나 죽었으면 무시 |
 | `DamageBlocking` (event) | `int` (들어올 피해) | `bool` | [서버] 피해가 들어오기 직전. 받은 쪽이 `true`를 돌려주면 그 피해를 막는다(체력·경직·무적 모두 그대로). 받은 쪽을 차례로 묻고 처음 `true`에서 멈춘다. 파이썬 마법사의 구슬 보호막(`OrbShield`)이 받는다 (#486) |
 | `Hp` | - | `int` | 지금 체력 |
 | `MaxHp` | - | `int` | 최대 체력 (`PlayerStats.MaxHp`) |
@@ -99,6 +101,7 @@
 - 다른 시스템이 쓰는 곳
   - 몬스터 AI(`GroundChaseAI`)가 `IsDead`를 읽어 죽은 플레이어는 쫓지 않는다.
   - 사망 화면 효과(`DeathScreenEffect`, 이우림 #424): 내 캐릭터의 `IsDead`, `RespawnDelay`를 매 프레임 읽어, 내 화면만 무채색으로 바꾸고 어둡게 하며 「사망했습니다」 글자를 띄운다 (Base 씬 Global Volume의 weight, 글자 Canvas의 alpha). 레이드에서 죽으면 `RespawnDelay` 동안만, 그 밖의 장소에서는 부활할 때까지. 레이드 실패 결과 화면 동안(`RaidResultView.MyFailureShowing`, raid.md)은 살아 있든 죽었든 파티원 모두 무채색이고 글자는 숨긴다. `RespawnDelay` 읽기 속성은 이때 이우림이 추가함 (모든 파일 수정 허락, 11/8)
+- 자세 (#538, 이우림 추가, 모든 파일 수정 허락): `TakeDamage`가 받는 피해 증감을 적용하고, 자세의 자해는 `TakeSelfDamage`로 깎고, 회복은 `Heal`로 채운다. 일반 피격처럼 처리하면 0.3초 경직 동안 시전이 막히고, 몬스터에게 맞은 직후의 자해가 무시되기 때문 (기획)
 - 공용 Player 합치기 (#268, 박진우 정리)
   - 김도훈이 공용 `Player.prefab`에 `PlayerHealth`, `PlayerHealthEffects`를 붙인다. 값은 기본값(경직 0.3초, 무적 1초, 숨김 1초, 부활 3초)
   - 변형 프리팹에 따로 붙어 있던 것은 각 담당자가 지운다 (`Player_DH`: 김도훈, `Player_JW`: 박진우, `Player_HW`: 임혜원)

@@ -307,7 +307,9 @@ public class StatusEffects : NetworkBehaviour
 	{
 		if (damageable == null || (monster != null && monster.IsDead)) return;
 		DamageRequest request = DamageRequest.Flat(StatusDefaults.BleedDamage);
-		request.BonusRate = bleedBonusRate;
+		// 출혈을 건 플레이어의 지금 자세 데미지 추가분도 더한다 (#538, 이우림 결정 11/18). 스킬 정보가 없으므로 계열 추가분(찌르기 등)은 빼고 모든 스킬 추가분만.
+		// 자해·회복은 스킬 시전이 아니므로 붙지 않는다
+		request.BonusRate = bleedBonusRate + PlayerStance.DamageBonusOf(bleedSource);
 		int damage = DamageCalculator.Calculate(request).Damage;
 		damageable.TakeDamage(damage, bleedSource);
 		BleedTicked?.Invoke(damage);
@@ -318,6 +320,8 @@ public class StatusEffects : NetworkBehaviour
 	{
 		if (damageable == null || (monster != null && monster.IsDead)) return;
 		DamageRequest request = DamageRequest.Flat(StatusDefaults.PoisonDamage * Mathf.Max(1, poisonStacks));
+		// 중독을 건 플레이어의 지금 자세 데미지 추가분 (#538). 출혈과 같은 규칙
+		request.BonusRate = PlayerStance.DamageBonusOf(poisonSource);
 		int damage = DamageCalculator.Calculate(request).Damage;
 		damageable.TakeDamage(damage, poisonSource);
 		PoisonTicked?.Invoke(damage);

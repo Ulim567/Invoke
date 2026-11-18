@@ -77,6 +77,7 @@
   - `PlayerMove`가 `PlayerStats.MoveSpeed`를 이동 속도로 읽는다 (#25)
   - `ProcessMemory`가 `PlayerStats.MemorySize`를 메모리 전체 칸 수로 읽는다 (#35)
   - `FunctionExecutor`가 쿨타임이 시작될 때 `ApplyCooldownReduction`을 한 번 적용하고, tick 수로 반올림한다 (#38)
+  - 자세(#538, stance.md)의 쿨타임 증감은 능력치에 넣지 않는다. `CooldownTracker`가 능력치 감소를 적용한 뒤 따로 곱한다(function-executor.md). 능력치의 쿨타임 감소는 0~1로 잘려 쿨타임 증가(5의 배수 +10%)를 표현할 수 없기 때문
   - 레벨업은 `PlayerProgress.AddExp`에 김도훈이 `LevelRules`로 레벨을 올리는 코드와 `LeveledUp` 이벤트를 넣는다 (이우림 허락)
 - 이우림과 정해야 할 것
   - 함수 실행기가 `PredefinedFunction.TickCount`에 `ApplyAttackSpeed`를 적용하는지

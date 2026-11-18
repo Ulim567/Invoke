@@ -111,10 +111,12 @@ public abstract class ThrustSkill : DataDrivenSkill
 		foreach (Monster monster in CollectHits(caster, target, dir))
 		{
 			if (monster == null || monster.IsDead) continue;
-			DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = BonusRate(monster), CritChance = CritChance, CritBonusRate = CritBonusRate };
+			// 자세(#538)의 데미지 추가분을 조건 배율에 더한다
+			DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = BonusRate(monster) + StanceDamageBonus(caster), CritChance = CritChance, CritBonusRate = CritBonusRate };
 			DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 			Vector2 point = ClosestPoint(monster, caster.transform.position);
 			monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
+			NotifyDamageDealt(caster, result.Damage);
 			OnHitMonster(task, monster, result);
 			effects?.RaiseHit(Id, monster.gameObject, point, result);
 		}
@@ -331,8 +333,10 @@ public class CSummonedThrust : DataDrivenSkill
 		PlayerStats stats = caster.GetComponent<PlayerStats>();
 		int attackPower = stats != null ? stats.AttackPower : 0;
 		float multiplier = Data != null ? Data.DamageMultiplier : 1f;
-		DamageResult result = DamageCalculator.Calculate(new DamageRequest(attackPower, multiplier), DamageTarget.FromMonster(monster));
+		DamageRequest request = new DamageRequest(attackPower, multiplier) { BonusRate = StanceDamageBonus(caster) };
+		DamageResult result = DamageCalculator.Calculate(request, DamageTarget.FromMonster(monster));
 		monster.GetComponentInParent<IDamageable>()?.TakeDamage(result.Damage, caster);
+		NotifyDamageDealt(caster, result.Damage);
 		caster.GetComponent<SkillEffectEvents>()?.RaiseHit(Id, monster.gameObject, hitSword.transform.position, result);
 	}
 }

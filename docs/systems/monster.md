@@ -182,7 +182,7 @@
   - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴린다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다. 개수는 `Count`~`Max Count` 사이에서 무작위(`Max Count`가 `Count` 이하면 늘 `Count`개)
   - 버그 조각은 나중에 상점 등에서 많이 쓰도록 잡몹마다 2~3개씩 넉넉히 준다 (김도훈 결정)
   - 블록·함수 드롭: 받는 플레이어마다 `Item Chance`로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목 중 무작위로 `Item Count`개의 가진 개수를 1씩 늘린다 (`PlayerProgress.AddItem`, 이우림 #500)
-    - 쓸 수 있는 항목: 새 캐릭터 처음 항목(`ItemCountRules.Initial`의 키: thrust, sword_throw, get_bug) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
+    - 쓸 수 있는 항목: 그 플레이어 캐릭터 언어의 처음 항목(`ItemCountRules.Initial(언어)`의 키, `PlayerCharacter.LanguageOf`. C는 thrust, sword_throw, get_bug 등, Python은 py.* 등. 처음 항목을 C 것으로만 센 탓에 Python 마법사가 C 블록을 받던 문제를 고침, #550) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
     - 여러 개면 하나씩 따로 고른다 (같은 항목이 겹칠 수 있음). 항목당 최대 99개에서 멈춘다(`ItemCountRules.MaxCount`)
     - 화면에는 무엇인지 알리지 않고 「블록 ×N」으로만 알린다(`LocalRewardReceived`의 블록 수). 무엇을 받았는지는 블록 편집 화면의 「남은/가진」 개수로 확인한다
   - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`, `AddItem`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.

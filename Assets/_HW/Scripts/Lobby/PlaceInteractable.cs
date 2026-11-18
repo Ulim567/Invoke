@@ -254,6 +254,33 @@ public abstract class PlaceInteractable : MonoBehaviour
 		textPosition.x = Mathf.Round(textPosition.x / Px) * Px;
 		textPosition.y = Mathf.Round(textPosition.y / Px) * Px;
 		label.rectTransform.localPosition = textPosition;
+
+		// 맵 끝 벽 가까이 있는 문(사냥터1 로비 문)은 안내판이 화면 밖으로 잘린다 (임혜원 11/18). 화면이 보여 주는 맵 안쪽으로 밀어 넣는다
+		float shift = ShiftIntoMap(sign.transform.position.x + left, sign.transform.position.x + left + width);
+		if (shift != 0f)
+		{
+			shift = Mathf.Round(shift / Px) * Px;
+			foreach (Transform part in new[] { pill, keyIcon, textTransform }) part.localPosition += new Vector3(shift, 0f, 0f);
+		}
+	}
+
+	// 카메라가 보여 주는 맵 가로 범위: 이 장소 씬의 땅(Ground) 타일맵에서 양 끝 벽(CameraBounds의 Edge Inset 2칸)을 뺀 곳. 그 안에 들도록 밀 양
+	float ShiftIntoMap(float worldLeft, float worldRight)
+	{
+		const float WallInset = 2f, Margin = 0.25f;
+		foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+		{
+			foreach (UnityEngine.Tilemaps.TilemapRenderer ground in root.GetComponentsInChildren<UnityEngine.Tilemaps.TilemapRenderer>(true))
+			{
+				if (ground.name != "Ground") continue;
+				Bounds map = ground.bounds;
+				float min = map.min.x + WallInset + Margin, max = map.max.x - WallInset - Margin;
+				if (worldLeft < min) return min - worldLeft;
+				if (worldRight > max) return max - worldRight;
+				return 0f;
+			}
+		}
+		return 0f;
 	}
 
 	void Update()

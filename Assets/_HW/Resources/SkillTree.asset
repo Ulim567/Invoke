@@ -570,3 +570,225 @@ MonoBehaviour:
       count: 8
     unlocksBlocks: 
     note: 
+  - id: c.init_stance
+    kind: 1
+    displayName: "\uC790\uC138 \uC815\uD558\uAE30"
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 3
+    unlocksBlocks: 
+    note: 
+  - id: c.get_stance
+    kind: 1
+    displayName: "\uC790\uC138 \uD655\uC778"
+    prerequisites:
+    - c.init_stance
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 2
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.odd
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.if
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.even
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.if
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.three
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.logic
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.five
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.if
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.middle
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.logic
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.prime
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.for
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.fibonacci
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.for
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: c.stance.perfect
+    kind: 2
+    displayName: 
+    prerequisites:
+    - c.init_stance
+    - syntax.for
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.init_stance
+    kind: 1
+    displayName: "\uC790\uC138 \uC815\uD558\uAE30"
+    prerequisites: []
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 3
+    unlocksBlocks: 
+    note: 
+  - id: py.get_stance
+    kind: 1
+    displayName: "\uC790\uC138 \uD655\uC778"
+    prerequisites:
+    - py.init_stance
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 2
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.big
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.if
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.small
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.if
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.four
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.arithmetic
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.seven
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.arithmetic
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.palindrome
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.while
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.square
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.for
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 
+  - id: py.stance.cube
+    kind: 2
+    displayName: 
+    prerequisites:
+    - py.init_stance
+    - syntax.for
+    autoUnlock: 0
+    cost:
+    - materialId: bug_fragment
+      count: 4
+    unlocksBlocks: 
+    note: 

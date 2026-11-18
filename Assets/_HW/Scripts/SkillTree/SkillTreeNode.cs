@@ -7,6 +7,9 @@ public enum SkillTreeNodeKind
 {
 	Syntax, // 문법 요소 (변수, if문, for문 ...). 해금하면 편집 화면에서 그 블록을 쓸 수 있다
 	Skill,  // C 스킬, 공통 이동. 해금하면 그 사전 정의 함수를 쓸 수 있다
+	// 자세 규칙 (#545). 해금하면 그 규칙의 이름·조건·이득·손해를 볼 수 있다. 함수 개수는 주지 않는다.
+	// 규칙 효과는 해금과 관계없이 처음부터 적용된다. 스킬 탭의 「자세」 계열에 보인다
+	Rule,
 }
 
 /// <summary>
@@ -38,10 +41,10 @@ public class MaterialCost
 [Serializable]
 public class SkillTreeNode
 {
-	[Tooltip("고정 ID. 스킬은 PredefinedFunctionIds의 값 (예: c.thrust), 문법은 syntax.이름 (예: syntax.if). 한 번 정하면 바꾸지 않는다")]
+	[Tooltip("고정 ID. 스킬은 PredefinedFunctionIds의 값 (예: c.thrust), 문법은 syntax.이름 (예: syntax.if), 자세 규칙은 c.stance.이름 (예: c.stance.odd). 한 번 정하면 바꾸지 않는다")]
 	[SerializeField] string id;
 	[SerializeField] SkillTreeNodeKind kind;
-	[Tooltip("화면 이름. 스킬은 비워 두면 SkillTable(박진우)의 이름을 쓴다")]
+	[Tooltip("화면 이름. 스킬은 비워 두면 SkillTable(박진우)의 이름, 규칙은 자세 규칙 표(StanceRule)의 이름을 쓴다")]
 	[SerializeField] string displayName;
 
 	[Tooltip("선행 노드 ID. 모두 해금해야 이 노드를 해금할 수 있다. 비우면 선행 조건 없음")]
@@ -66,7 +69,8 @@ public class SkillTreeNode
 	public string Note => note;
 
 	/// <summary>
-	/// 화면 이름. 스킬이고 displayName이 비어 있으면 SkillTable의 이름, 그것도 없으면 ID.
+	/// 화면 이름. displayName이 비어 있으면 스킬은 SkillTable의 이름, 규칙은 자세 규칙 표의 이름(#545), 그것도 없으면 ID.<br/>
+	/// 규칙 노드는 해금 전에 이름을 가린다(「???」). 가리는 일은 화면(SkillTreeView)이 한다.
 	/// </summary>
 	public string DisplayName
 	{
@@ -74,6 +78,7 @@ public class SkillTreeNode
 		{
 			if (!string.IsNullOrEmpty(displayName)) return displayName;
 			if (kind == SkillTreeNodeKind.Skill && SkillTable.TryGet(id, out SkillData data)) return data.DisplayName;
+			if (kind == SkillTreeNodeKind.Rule && StanceRule.TryGetRule(id, out StanceRuleEntry rule)) return rule.Name;
 			return id;
 		}
 	}

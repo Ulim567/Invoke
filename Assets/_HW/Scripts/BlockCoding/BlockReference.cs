@@ -88,6 +88,12 @@ public class BlockReferenceEntry
 
 	/// <summary>사용 방법의 나머지 글 (#544). 예: 「에서 코드로 끌어다 놓기」</summary>
 	public string UsageText;
+
+	/// <summary>
+	/// true면 Summary에 색 태그(&lt;color&gt;)를 쓴다 (#545 자세 규칙 카드). 카드는 「기능」 줄 이름을 숨기고 Summary를 태그대로 보인다.
+	/// false(다른 카드)면 설명의 &lt; &gt;(예: a &lt; b)를 태그로 읽지 않게 글자 그대로 보인다
+	/// </summary>
+	public bool RichSummary;
 }
 
 /// <summary>
@@ -314,13 +320,21 @@ public static class BlockReference
 	/// <para>
 	/// - 스킬 노드: 그 스킬 함수. 검 소환처럼 블록도 여는 노드는 그 블록(malloc, free)도 뒤에 붙인다.<br/>
 	/// - 문법 노드: 여는 블록 종류(UnlocksBlocks)의 카드. 조건문은 If·Else If·Else 셋. 함수 블록 종류(Function)는 스킬마다 따로 열리므로 빼고, return만.<br/>
+	/// - 자세 규칙 노드 (#545): 그 규칙의 카드 한 장. revealed가 false(해금 전)이면 이름·기능이 「???」인 카드.<br/>
 	/// - 순서는 참고 탭과 같다. 내 캐릭터 언어에 없는 블록은 빠진다 (Python의 선언 등).
 	/// </para>
 	/// </summary>
-	public static List<BlockReferenceEntry> EntriesUnlockedBy(SkillTreeNode node)
+	/// <param name="revealed">규칙 노드의 내용을 보여 줄지. 스킬 트리 설명 칸은 해금 여부를, 해금 직후 카드는 true를 넘긴다</param>
+	public static List<BlockReferenceEntry> EntriesUnlockedBy(SkillTreeNode node, bool revealed = true)
 	{
 		var result = new List<BlockReferenceEntry>();
 		if (node == null) return result;
+		if (node.Kind == SkillTreeNodeKind.Rule)
+		{
+			BlockReferenceEntry rule = RuleEntryOf(node.Id, revealed);
+			if (rule != null) result.Add(rule);
+			return result;
+		}
 		if (node.Kind == SkillTreeNodeKind.Skill)
 		{
 			BlockReferenceEntry skill = EntryOf(node.Id);
@@ -332,6 +346,41 @@ public static class BlockReference
 			if (node.UnlocksBlocks.Contains(entry.Picture.Kind) && !result.Contains(entry)) result.Add(entry);
 		}
 		return result;
+	}
+
+	/// <summary>자세 규칙 카드의 분류 태그 (#545)</summary>
+	public const string RuleCategory = "자세 규칙";
+
+	// 규칙 카드의 효과 색: 좋은 효과는 청록(스킬 트리의 「해금됨」 색), 나쁜 효과는 빨강(「재료가 모자라요」 색)
+	const string GoodEffectColor = "#5EF2D6", BadEffectColor = "#E07070";
+
+	/// <summary>
+	/// 자세 규칙 카드 한 장 (#545). 규칙 노드 ID가 규칙 표에 없으면 null.<br/>
+	/// revealed면 「자세 숫자가 홀수일 때 아래 효과가 붙습니다.」와 「효과:」 아래 좋은 효과(청록)·나쁜 효과(빨강) 목록. 아니면 이름·내용 모두 「???」
+	/// </summary>
+	// 글은 설명 표가 아니라 자세 규칙 표(StanceRule)에서 읽는다: 효과 계산과 같은 줄이라 수치가 어긋나지 않는다.
+	// 블록이 아니므로 그림·형식·사용 방법이 없다
+	public static BlockReferenceEntry RuleEntryOf(string nodeId, bool revealed)
+	{
+		if (!StanceRule.TryGetRule(nodeId, out StanceRuleEntry rule)) return null;
+		const string Hidden = "???";
+		string summary = Hidden;
+		if (revealed)
+		{
+			// 문장과 효과 목록 사이는 한 줄 띄운다 (이우림 요청 11/18)
+			var lines = new List<string> { $"자세 숫자가 {rule.Condition}일 때 아래 효과가 붙습니다.", "", "효과:" };
+			lines.AddRange(rule.Gains.Select(text => $"<color={GoodEffectColor}>- {text}</color>"));
+			lines.AddRange(rule.Losses.Select(text => $"<color={BadEffectColor}>- {text}</color>"));
+			summary = string.Join("\n", lines);
+		}
+		return new BlockReferenceEntry
+		{
+			Name = revealed ? rule.Name : Hidden,
+			Category = RuleCategory,
+			Summary = summary,
+			Key = nodeId,
+			RichSummary = true,
+		};
 	}
 
 	// type 카드 (#544): 설명 표의 type 다섯 개. C 캐릭터만 (Python은 type을 적지 않는다)

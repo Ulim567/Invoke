@@ -78,6 +78,7 @@ public class StanceTest : MonoBehaviour
 		if (python)
 		{
 			TestPythonRule();
+			TestPythonRuleText();
 			TestPythonDamageBonus();
 			TestPythonCooldown();
 			yield return TestStatusDuration();
@@ -88,6 +89,7 @@ public class StanceTest : MonoBehaviour
 		else
 		{
 			TestRule();
+			TestCRuleText();
 			TestDamageBonus();
 			TestCooldown();
 			yield return TestReceivedDamage();
@@ -276,8 +278,67 @@ public class StanceTest : MonoBehaviour
 		Dictionary<string, int> counts = ItemCountRules.Initial(CharacterLanguages.Python);
 		counts.TryGetValue(PredefinedFunctionIds.PyInitStance, out int initCount);
 		counts.TryGetValue(PredefinedFunctionIds.PyGetStance, out int getCount);
-		Check("새 Python 캐릭터는 py.init_stance·py.get_stance 1개씩, C 자세 함수는 없음",
-			initCount == 1 && getCount == 1 && !counts.ContainsKey(PredefinedFunctionIds.InitStance), $"init {initCount}, get {getCount}");
+		// 자세 함수는 스킬 트리에서 해금해야 받는다 (#545)
+		Check("새 Python 캐릭터의 자세 함수 처음 개수는 0, C 자세 함수도 없음 (#545)",
+			initCount == 0 && getCount == 0 && !counts.ContainsKey(PredefinedFunctionIds.InitStance), $"init {initCount}, get {getCount}");
+	}
+
+	// 규칙 표 (#545): 노드 ID·이름·조건, 이득·손해 글이 효과 값에서 나오는지
+	void TestRuleTable(StanceRule rule, string[] expectedNames, string prefix)
+	{
+		var names = new List<string>();
+		bool idsOk = true;
+		foreach (StanceRuleEntry entry in rule.Rules)
+		{
+			names.Add(entry.Name);
+			idsOk &= entry.NodeId.StartsWith(prefix, StringComparison.Ordinal)
+				&& StanceRule.TryGetRule(entry.NodeId, out StanceRuleEntry found) && found == entry;
+		}
+		Check($"규칙 표 이름 = {string.Join("·", expectedNames)}", string.Join("·", names) == string.Join("·", expectedNames), string.Join("·", names));
+		Check($"규칙 노드 ID는 {prefix}로 시작하고 TryGetRule로 찾음", idsOk, "");
+		Check("없는 노드 ID는 못 찾음", !StanceRule.TryGetRule("c.stance.none", out _) && !StanceRule.TryGetRule(PredefinedFunctionIds.Thrust, out _), "");
+	}
+
+	void TestCRuleText()
+	{
+		TestRuleTable(StanceRule.For(CharacterLanguages.C), new[] { "적중", "일망타진", "조급함", "신중함", "흡혈", "혹사", "지휘", "완벽" }, "c.stance.");
+		StanceRuleEntry odd = Rule(CStanceRule.OddNode), middle = Rule(CStanceRule.MiddleNode), prime = Rule(CStanceRule.PrimeNode),
+			three = Rule(CStanceRule.ThreeNode), perfect = Rule(CStanceRule.PerfectNode);
+		ExpectText(odd, "홀수", "찌르기 계열 데미지 +15%", "휘두르기 계열 데미지 -15%");
+		ExpectText(three, "3의 배수", "쿨타임 -15%", "받는 피해 +10%");
+		ExpectText(middle, "40~60 사이", "스킬이 준 데미지의 5% 회복", "데미지 -5%");
+		ExpectText(prime, "소수", "데미지 +20%", "데미지를 준 스킬마다 자해 (최대 체력의 1%)");
+		ExpectText(perfect, "완전수(6, 28)", "데미지 +30%", "");
+
+		// 스킬 트리 규칙 카드 글 (#545): 문장 한 줄 + 「효과:」 + 좋은 효과(청록)·나쁜 효과(빨강) 목록
+		BlockReferenceEntry oddCard = BlockReference.RuleEntryOf(CStanceRule.OddNode, true);
+		string oddExpected = "자세 숫자가 홀수일 때 아래 효과가 붙습니다.\n\n효과:\n"
+			+ "<color=#5EF2D6>- 찌르기 계열 데미지 +15%</color>\n<color=#E07070>- 휘두르기 계열 데미지 -15%</color>";
+		Check("적중 카드: 이름 적중, 문장 + 효과 목록, 색 태그 사용", oddCard != null && oddCard.Name == "적중" && oddCard.RichSummary && oddCard.Summary == oddExpected,
+			oddCard?.Summary);
+		BlockReferenceEntry perfectCard = BlockReference.RuleEntryOf(CStanceRule.PerfectNode, true);
+		Check("완벽 카드: 나쁜 효과가 없으면 빨간 줄 없음", perfectCard != null && perfectCard.Summary.EndsWith("<color=#5EF2D6>- 데미지 +30%</color>")
+			&& !perfectCard.Summary.Contains("#E07070"), perfectCard?.Summary);
+		BlockReferenceEntry hiddenCard = BlockReference.RuleEntryOf(CStanceRule.OddNode, false);
+		Check("해금 전 카드: 이름·내용 ???", hiddenCard != null && hiddenCard.Name == "???" && hiddenCard.Summary == "???", hiddenCard?.Summary);
+	}
+
+	void TestPythonRuleText()
+	{
+		TestRuleTable(StanceRule.For(CharacterLanguages.Python), new[] { "직격", "포화", "응축", "경솔", "집요함", "비늘", "각성" }, "py.stance.");
+		ExpectText(Rule(PythonStanceRule.BigNode), "큰 수(51~100)", "원소 계열 데미지 +15%", "범위 계열 데미지 -15%");
+		ExpectText(Rule(PythonStanceRule.SevenNode), "7의 배수", "보조 계열 상태 이상 지속 시간 +30%", "보조 계열 쿨타임 +20%");
+		ExpectText(Rule(PythonStanceRule.SquareNode), "완전제곱수(1, 4, 9, …, 100)", "받는 피해 -15%", "데미지 -5%");
+	}
+
+	static StanceRuleEntry Rule(string nodeId) => StanceRule.TryGetRule(nodeId, out StanceRuleEntry rule) ? rule : null;
+
+	// gains·losses는 「, 」로 이은 글. 손해가 없으면 ""
+	void ExpectText(StanceRuleEntry rule, string condition, string gains, string losses)
+	{
+		bool ok = rule != null && rule.Condition == condition && string.Join(", ", rule.Gains) == gains && string.Join(", ", rule.Losses) == losses;
+		Check($"{rule?.Name} 글: 조건 {condition} / 이득 {gains} / 손해 {(losses.Length > 0 ? losses : "없음")}", ok,
+			rule == null ? "규칙 없음" : $"조건 {rule.Condition} / 이득 {string.Join(", ", rule.Gains)} / 손해 {string.Join(", ", rule.Losses)}");
 	}
 
 	// 주는 데미지: 계열을 넘기면 모든 스킬 추가분 + 계열 추가분, 계열 없이(도트) 부르면 모든 스킬 추가분만

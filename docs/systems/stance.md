@@ -8,7 +8,7 @@
 - 하지 않는 일
   - 자세 숫자를 화면에 보이지 않는다. 플레이어는 `printf`로 출력해서 확인한다.
   - 데미지를 직접 계산하지 않는다. 스킬과 출혈·중독이 `DamageBonusOf`를 읽어 `DamageRequest.BonusRate`에 더한다.
-  - 규칙의 효과를 켜고 끄지 않는다. 규칙은 처음부터 모두 적용된다. 스킬 트리 해금은 규칙 내용을 보여 주는 일만 한다(아직 없음, 아래 「맞춘 결과」).
+  - 규칙의 효과를 켜고 끄지 않는다. 규칙은 처음부터 모두 적용된다. 스킬 트리의 규칙 노드(#545, skill-tree.md 「자세 노드」)는 규칙 내용을 보여 주는 일만 한다.
 
 ## 동작 규칙
 - 자세 바뀜
@@ -28,6 +28,8 @@
 | 피보나치 수 (1, 2, 3, 5, 8, 13, 21, 34, 55, 89) | 소환 계열 데미지 +20% | 찌르기 계열 데미지 -10% |
 | 완전수 (6, 28) | 데미지 +30% | 없음 |
 
+- 규칙 이름과 스킬 트리 규칙 노드 ID (#545, Notion 「자세 규칙」 표): 홀수 적중 `c.stance.odd`, 짝수 일망타진 `c.stance.even`, 3의 배수 조급함 `c.stance.three`, 5의 배수 신중함 `c.stance.five`, 40~60 흡혈 `c.stance.middle`, 소수 혹사 `c.stance.prime`, 피보나치 수 지휘 `c.stance.fibonacci`, 완전수 완벽 `c.stance.perfect`
+- 규칙 표: 규칙마다 한 줄(`StanceRuleEntry`: 노드 ID, 이름, 조건 글, 숫자 조건, 효과 값). 효과는 조건에 맞는 줄의 효과를 모두 더한 것. 스킬 트리의 규칙 카드에 보이는 효과 글(좋은 효과·나쁜 효과)도 같은 효과 값에서 만든다(`StanceEffect.Describe`, 예: 「찌르기 계열 데미지 +15%」). 카드 문장은 「자세 숫자가 {조건 글}일 때 아래 효과가 붙습니다.」 수치를 고치면 화면 글도 같이 바뀐다 (#545)
 - 「데미지」: 모든 스킬과 출혈·중독 도트. 「계열 데미지」: 스킬 표의 `family`가 그 계열인 스킬만 (이우림 결정 11/18). 던지기 계열은 계열 규칙이 없음
 - 겹침: 여러 규칙에 해당하면 효과를 더한다. 예(Notion): 5는 데미지 +30%, 찌르기 +5%(합 +35%), 휘두르기 -15%(합 +15%), 소환 +20%(합 +50%), 쿨타임 +10%, 자해. 15는 쿨타임 -15% + 10% = -5%
 - 0(자세 없음): 어떤 규칙도 적용하지 않음. 수학에서는 0이 짝수·3의 배수·5의 배수이지만 「자세 없음」에 효과가 붙지 않게 함
@@ -43,6 +45,7 @@
 | 완전제곱수 (1, 4, 9, …, 100) | 받는 피해 -15% | 데미지 -5% |
 | 세제곱수 (1, 8, 27, 64) | 데미지 +25% | 없음 |
 
+- Python 규칙 이름과 노드 ID (#545): 큰 수 직격 `py.stance.big`, 작은 수 포화 `py.stance.small`, 4의 배수 응축 `py.stance.four`, 회문수 경솔 `py.stance.palindrome`, 7의 배수 집요함 `py.stance.seven`, 완전제곱수 비늘 `py.stance.square`, 세제곱수 각성 `py.stance.cube`
 - Python 계열: 스킬 표의 `family`. 원소(매직 미사일·파이어볼·얼음 창·체인 라이트닝), 범위(메테오·블리자드·독 안개), 구슬(구슬 생성·발사·난사·폭발·보호막), 보조(저주·뱀 속박·섬광)
 - Python 예(Notion): 1은 범위 +15%, 원소 -15%, 쿨타임 -15%, 받는 피해 -5%, 데미지 +20%. 64는 원소 +5%, 범위 -15%, 구슬 +20%, 받는 피해 -15%, 데미지 +20%. 7은 모든 스킬 쿨타임 -15%, 보조 계열 쿨타임은 -15% + 20% = +5%
 - 효과가 쓰이는 곳
@@ -82,7 +85,16 @@
 | 이름 | 받는 값 | 돌려주는 값 | 설명 |
 | --- | --- | --- | --- |
 | `StanceRule.For(string language)` (static) | 캐릭터 언어 | `StanceRule` | 그 언어의 자세 규칙. C는 `CStanceRule`, Python은 `PythonStanceRule`(#546). 모르는 언어는 C |
-| `EffectOf(int stance)` | 자세 숫자 | `StanceEffect` | 그 숫자의 효과. 0 이하이면 효과 없음 |
+| `EffectOf(int stance)` | 자세 숫자 | `StanceEffect` | 그 숫자의 효과(규칙 표에서 조건에 맞는 줄의 합). 0 이하이면 효과 없음 |
+| `Rules` | - | `IReadOnlyList<StanceRuleEntry>` | 그 언어의 규칙 표 (#545). 화면에 보이는 순서 |
+| `StanceRule.All` (static) | - | `IReadOnlyList<StanceRule>` | 모든 언어의 규칙 (C, Python, #545) |
+| `StanceRule.TryGetRule(string nodeId, out StanceRuleEntry rule)` (static) | 규칙 노드 ID | `bool` | 모든 언어의 표에서 그 노드의 줄을 찾음. 없으면 false (#545) |
+| `StanceRule.FunctionIds` (static) | - | `IReadOnlyList<string>` | 자세 함수 고정 ID 4개 (C·Python의 init_stance, get_stance). 스킬 트리 검사가 SkillTable 비교에서 뺄 때 씀 (#545) |
+| `StanceRuleEntry.NodeId`, `Name`, `Condition`, `Effect` | - | - | 규칙 노드 ID(`c.stance.odd`), 이름(적중), 조건 글(홀수), 효과 값 (#545) |
+| `StanceRuleEntry.Gains`, `Losses` | - | `IReadOnlyList<string>` | 좋은 효과·나쁜 효과 글. 나쁜 효과가 없으면 Losses가 비어 있음. 화면에는 「이득·손해」라는 말을 쓰지 않음 (#545) |
+| `StanceRuleEntry.Matches(int stance)` | 자세 숫자(1 이상) | `bool` | 이 규칙의 조건에 맞으면 true (#545) |
+| `CStanceRule.OddNode` … `PerfectNode`, `PythonStanceRule.BigNode` … `CubeNode` | - | `string` | 규칙 노드 ID 상수 (#545) |
+| `StanceEffect.Describe(List<string> gains, List<string> losses)` | 좋은 효과·나쁜 효과를 넣을 목록 | - | 효과 값을 화면 글로 나눔. 받는 피해·쿨타임은 줄어야 좋은 효과 (#545) |
 | `StanceRule.IsPrime`, `IsFibonacci`, `IsPerfect` (static) | 숫자 | `bool` | 소수(1은 아님), 피보나치 수, 완전수이면 true |
 | `StanceRule.IsPalindrome`, `IsSquare`, `IsCube` (static) | 숫자 | `bool` | 회문수, 완전제곱수, 세제곱수이면 true (#546). 0 이하는 false |
 | `CStanceRule.MiddleMin`, `MiddleMax` | - | `int` | 40~60 규칙의 범위 40, 60 (양 끝 포함) |
@@ -107,14 +119,19 @@
   - 출혈·중독 도트에는 계열이 없는 규칙만 적용(모든 스킬 추가분). 자해·회복은 없음
   - 회복은 스킬이 준 데미지만, 1 미만은 모아 두었다가 1이 되면 회복
   - 쿨타임 증감은 `CooldownTracker`에서 곱함(능력치에 넣지 않음)
-  - `init_stance`·`get_stance` 처음 개수 1개씩 (progress-store.md)
+  - ~~`init_stance`·`get_stance` 처음 개수 1개씩~~: #545에서 없앰. 스킬 트리의 자세 정하기·자세 확인 노드를 해금하면 1개씩 받음 (progress-store.md)
   - 이번에는 C만. 자세 상태·함수·효과 규칙은 Python에도 붙일 수 있게 언어별로 나눔
   - 해금은 정보: 규칙은 해금과 관계없이 처음부터 모두 적용. 스킬 트리에서 규칙을 해금하면 그 규칙의 내용(이름, 이득, 손해)을 볼 수 있음. 원하지 않는 자세는 다시 뽑음
-  - 해금 전에 가리는 범위 (가): 효과가 있다는 사실과 규칙이 여덟 개라는 것만 보이고, 규칙 이름·수치는 「???」. `init_stance` 설명도 규칙 이름을 적지 않음(`ItemDescriptions`). 규칙 노드와 「???」 표시는 스킬 트리 작업 때 만듦
+  - 해금 전에 가리는 범위 (가): 효과가 있다는 사실과 규칙이 여덟 개라는 것만 보이고, 규칙 이름·수치는 「???」. `init_stance` 설명도 규칙 이름을 적지 않음(`ItemDescriptions`). 규칙 노드와 「???」 표시는 #545에서 만듦 (skill-tree.md 「자세 노드」)
 - Python 자세 이우림 결정 (11/18, #546)
   - 규칙 표: Notion 3. Python 자세의 효과 수치(임시) 그대로. 함수 이름·시전 시간·쿨타임·처음 개수 1개는 C와 같음
   - 7의 배수의 지속 시간 증가는 보조 계열 스킬(저주·뱀 속박·섬광)의 표식·기절·실명만. 독 안개의 중독은 범위 계열이라 늘리지 않음 (Notion에는 「표식·기절·실명·중독」). 이유: 이득(지속 시간)과 손해(보조 계열 쿨타임)가 같은 스킬 묶음에 걸려야 선택이 되고, 독 안개는 안개 안에서 중독을 계속 다시 걸어 지속 시간 차이가 거의 없음
-  - 규칙 해금 노드(「???」)는 C와 함께 스킬 트리 이슈에서 만듦
+  - 규칙 해금 노드(「???」)는 C와 함께 #545에서 만듦. Python 자세 함수의 처음 개수 1개도 C와 같이 없앰 (이우림 결정 11/18)
+- 스킬 트리 자세 노드 이우림 결정 (11/18, #545)
+  - 규칙 노드는 규칙마다 1개(C 8개, Python 7개), 새 노드 종류 `SkillTreeNodeKind.Rule`. 스킬 트리의 새 「자세」 탭에 보이고, 규칙은 필요한 문법마다 한 줄 (처음에는 스킬 탭의 한 계열로 정했으나 바꿈, skill-tree.md 「자세 탭」)
+  - init_stance·get_stance는 Skill 노드, get_stance의 선행은 init_stance. 처음 개수는 없앰
+  - 규칙 노드의 선행: init_stance + 그 규칙을 판별하는 데 필요한 문법 (Notion 「해금」). 재료는 임시
+  - 해금 전 규칙 노드는 이름·설명 「???」, 해금 뒤 이름과 「자세 숫자가 홀수일 때 아래 효과가 붙습니다.」·「효과:」 목록(좋은 효과 청록, 나쁜 효과 빨강, 화면에 「이득·손해」라는 말은 쓰지 않음). 설명은 #544의 설명 카드로 보임
 - 다른 담당자 코드에 넣은 것 (모든 파일 수정 허락, 11/8)
   - 박진우: 스킬 데미지 자리(`ThrustSkills`, `SlashSkills`, `ThrowSkills`, `SummonDamage`, `MagicSkill.Deal`)에 `StanceDamageBonus` 더하기와 `NotifyDamageDealt`, `DataDrivenSkill`의 `StanceDamageBonus`·`NotifyDamageDealt`, `StatusEffects`의 출혈·중독 도트 추가분, `SlotLoadout.IsEquippableSkill`에서 자세 함수 제외. `SummonDamage.Deal`의 첫 인자가 스킬 ID에서 스킬(`DataDrivenSkill`)로 바뀜
   - 김도훈: `PlayerHealth.TakeDamage`의 받는 피해 증감, `TakeSelfDamage`·`Heal` 추가

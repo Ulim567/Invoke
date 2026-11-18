@@ -7,6 +7,7 @@ using System.Collections.Generic;
 /// - 문법 노드: 1차 기획서 4.3 해금 요소. 순차 실행 → 변수 → 연산 → if문 → 논리 연산 → for문 → while문 → 함수 → list → Type 정의<br/>
 /// - 스킬 노드: 「C 캐릭터 - 1차」 2. 해금 구조, 3. 스킬트리<br/>
 /// - 파이썬 마법사 스킬 노드 (#523, 박진우): 구슬·원소·범위·보조·이동. 매직 미사일·저주가 처음부터, 구슬 생성은 변수 문법 다음 (#548). 대시·더블점프는 C와 같은 공통 노드<br/>
+/// - 자세 노드 (#545): C·Python마다 자세 정하기 → 자세 확인, 규칙 노드(Rule) C 8개·Python 7개. 규칙 노드는 자세 정하기와 판별에 필요한 문법이 선행<br/>
 /// - 재료 수는 전부 임시. bug_fragment(버그 조각, 잡몹), field_boss_core(사냥터 보스 코어), boss_core(레이드 보스 코어)<br/>
 /// - 박진우와 맞춤 (#91): 패링은 검 소환 없이 재료만으로, 검 소환은 보스 재료가 있어야 열림 (사냥터 보스가 없는 동안은 레이드 보스 코어)
 /// </para>
@@ -102,6 +103,20 @@ public static class SkillTreeDefaults
 		nodes.Add(Skill(PredefinedFunctionIds.DoubleJump, 4, PredefinedFunctionIds.Dash));
 		nodes.Add(Skill(PredefinedFunctionIds.SwordRide, 8, PredefinedFunctionIds.DoubleJump, PredefinedFunctionIds.SummonSword));
 
+		// 자세 (#545) ---------------------------------------------------------
+		// 자세 정하기 → 자세 확인. 자세 함수는 SkillTable에 없으므로 화면 이름을 노드에 적는다 (BlockReference의 한글 이름과 같게)
+		// 규칙 노드는 자세 정하기 다음이고, 그 규칙을 판별하는 데 필요한 문법도 열어야 한다 (Notion 「캐릭터 자세와 소환검 기획」 1. C 자세 「해금」)
+		nodes.Add(Stance(PredefinedFunctionIds.InitStance, "자세 정하기", 3));
+		nodes.Add(Stance(PredefinedFunctionIds.GetStance, "자세 확인", 2, PredefinedFunctionIds.InitStance));
+		nodes.Add(Rule(CStanceRule.OddNode, PredefinedFunctionIds.InitStance, If));
+		nodes.Add(Rule(CStanceRule.EvenNode, PredefinedFunctionIds.InitStance, If));
+		nodes.Add(Rule(CStanceRule.ThreeNode, PredefinedFunctionIds.InitStance, Logic));
+		nodes.Add(Rule(CStanceRule.FiveNode, PredefinedFunctionIds.InitStance, If));
+		nodes.Add(Rule(CStanceRule.MiddleNode, PredefinedFunctionIds.InitStance, Logic));
+		nodes.Add(Rule(CStanceRule.PrimeNode, PredefinedFunctionIds.InitStance, For));
+		nodes.Add(Rule(CStanceRule.FibonacciNode, PredefinedFunctionIds.InitStance, For));
+		nodes.Add(Rule(CStanceRule.PerfectNode, PredefinedFunctionIds.InitStance, For));
+
 		// 파이썬 마법사 (#523, 박진우) ---------------------------------------------
 		// 구슬 (#532 이우림 안을 #548에서 박진우가 확정): 구슬을 변수에 담아 넘기므로 변수 문법 뒤에 연다
 		// 재료는 처음 노드가 된 매직 미사일(조각 2)·저주(조각 3)의 것을 옮겨 왔다
@@ -129,6 +144,16 @@ public static class SkillTreeDefaults
 		// 이동: 대시 → 더블점프(공통 노드) 다음
 		nodes.Add(Skill(PredefinedFunctionIds.PyBlink, 6, PredefinedFunctionIds.DoubleJump));
 		nodes.Add(Skill(PredefinedFunctionIds.PyLevitate, 8, PredefinedFunctionIds.PyBlink));
+		// 자세 (#545): C와 같은 모양. 규칙의 선행 문법은 Notion 같은 문서 3. Python 자세 「해금」
+		nodes.Add(Stance(PredefinedFunctionIds.PyInitStance, "자세 정하기", 3));
+		nodes.Add(Stance(PredefinedFunctionIds.PyGetStance, "자세 확인", 2, PredefinedFunctionIds.PyInitStance));
+		nodes.Add(Rule(PythonStanceRule.BigNode, PredefinedFunctionIds.PyInitStance, If));
+		nodes.Add(Rule(PythonStanceRule.SmallNode, PredefinedFunctionIds.PyInitStance, If));
+		nodes.Add(Rule(PythonStanceRule.FourNode, PredefinedFunctionIds.PyInitStance, Arithmetic));
+		nodes.Add(Rule(PythonStanceRule.SevenNode, PredefinedFunctionIds.PyInitStance, Arithmetic));
+		nodes.Add(Rule(PythonStanceRule.PalindromeNode, PredefinedFunctionIds.PyInitStance, While));
+		nodes.Add(Rule(PythonStanceRule.SquareNode, PredefinedFunctionIds.PyInitStance, For));
+		nodes.Add(Rule(PythonStanceRule.CubeNode, PredefinedFunctionIds.PyInitStance, For));
 		// 노드 설명은 여기에 적지 않는다. 설명 표(ItemDescriptions)가 노드 ID로 찾아 보여 준다
 		return nodes;
 	}
@@ -154,6 +179,17 @@ public static class SkillTreeDefaults
 	// 마지막 단계 스킬: 보스 재료도 든다
 	static SkillTreeNode Skill(string id, int fragments, int cores, params string[] prerequisites) =>
 		new SkillTreeNode(id, SkillTreeNodeKind.Skill, null, prerequisites, false, Cost(fragments, cores));
+
+	// 자세 함수 노드 (#545). 이름을 직접 적는 것 말고는 일반 스킬 노드와 같다
+	static SkillTreeNode Stance(string id, string name, int fragments, params string[] prerequisites) =>
+		new SkillTreeNode(id, SkillTreeNodeKind.Skill, name, prerequisites, false, Cost(fragments, 0));
+
+	/// <summary>자세 규칙 노드 하나의 재료 (버그 조각, 임시)</summary>
+	public const int RuleFragments = 4;
+
+	// 자세 규칙 노드 (#545): 자세 정하기 + 판별에 필요한 문법이 선행. 이름은 자세 규칙 표(StanceRule)에서 읽으므로 비워 둔다
+	static SkillTreeNode Rule(string id, string initStance, string syntax) =>
+		new SkillTreeNode(id, SkillTreeNodeKind.Rule, null, new[] { initStance, syntax }, false, Cost(RuleFragments, 0));
 
 	static MaterialCost[] Cost(int fragments, int cores)
 	{

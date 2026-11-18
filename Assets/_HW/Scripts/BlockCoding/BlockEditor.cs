@@ -1730,11 +1730,29 @@ public class BlockEditor : MonoBehaviour
 		CreateView(data, dragLayer).BeginDragAsNew(eventData, finished);
 	}
 
+	/// <summary>
+	/// 블록 목록의 칩이나 함수 탭 항목을 눌렀을 때 그 블록의 설명 카드를 가운데에 띄운다 (#544). 내가 만든 함수는 카드가 없어 띄우지 않는다.
+	/// </summary>
+	public void ShowItemCard(BlockData data)
+	{
+		BlockReferenceEntry entry = BlockReference.EntryOf(data);
+		if (entry == null) return;
+		ClearHover();
+		ItemCardPopup.Show(entry, entry.UsageTab == "함수 탭" ? "> 함수 설명" : "> 블록 설명");
+	}
+
+	const float ReferenceScrollSensitivity = 7f; // 참고 탭 휠 한 칸 (편집 화면 960 기준 단위)
+
 	// 참고 창: 검색 칸의 글자에 맞는 카드를 처음부터 다시 만든다 (BlockReference.Search)
+	// 카드는 해금 카드·스킬 트리와 같은 설명 카드 (#544, ItemCardView). 처음에는 이름 줄과 형식만 접혀 있고, 누르면 그 카드만 첫 화면(기능 + 블록 그림)으로 펼친다
+	// 예전 참고 카드 프리팹(Reference Card Prefab)은 설명 카드 프리팹이 없을 때만 쓴다
 	void RebuildReference()
 	{
-		if (referenceList == null || referenceCardPrefab == null) return;
+		if (referenceList == null) return;
 		for (int i = referenceList.childCount - 1; i >= 0; i--) Destroy(referenceList.GetChild(i).gameObject);
+		// 휠 한 칸에 움직이는 양 (#544, 사용자 요청: 너무 빠름). 프리팹의 20은 카드가 길던 때 값이라 이름 한 줄 목록에는 너무 많이 넘어간다
+		ScrollRect referenceScroll = referenceList.GetComponentInParent<ScrollRect>();
+		if (referenceScroll != null) referenceScroll.scrollSensitivity = ReferenceScrollSensitivity;
 		string query = referenceSearch != null ? referenceSearch.text : "";
 		List<BlockReferenceEntry> found = BlockReference.Search(query);
 
@@ -1742,6 +1760,13 @@ public class BlockEditor : MonoBehaviour
 		// 분류는 카드 태그의 앞 단계(Group): 「제어 > 조건」, 「제어 > 반복」은 「제어」 머리글 아래 (#489)
 		// 문법 탭에 없는 분류가 생겨도 카드가 빠지지 않게 그 분류는 맨 뒤에 둔다
 		IEnumerable<string> categories = CurrentPaletteGroups.Select(group => group.Title).Concat(found.Select(entry => entry.Group)).Distinct();
+		// 맨 위 안내 (#544): 카드가 이름 한 줄로 접혀 있으니 눌러 보게 한다. 색 네모 없는 머리글 모양에 흐린 글자
+		if (found.Count > 0 && headerPrefab != null)
+		{
+			ListHeaderView hint = Instantiate(headerPrefab, referenceList);
+			hint.Show("이름을 누르면 자세히 볼 수 있어요", null);
+			foreach (TMPro.TMP_Text label in hint.GetComponentsInChildren<TMPro.TMP_Text>(true)) label.color = new Color32(0x7C, 0x84, 0xA8, 0xFF);
+		}
 		foreach (string category in categories)
 		{
 			List<BlockReferenceEntry> cards = found.Where(entry => entry.Group == category).ToList();
@@ -1752,7 +1777,18 @@ public class BlockEditor : MonoBehaviour
 				Color icon = cards[0].Sample != null ? BlockLabels.ColorOf(cards[0].Sample) : new Color(0, 0, 0, 0);
 				Instantiate(headerPrefab, referenceList).Show(category, null, icon);
 			}
-			foreach (BlockReferenceEntry entry in cards) Instantiate(referenceCardPrefab, referenceList).Show(entry);
+			foreach (BlockReferenceEntry entry in cards)
+			{
+				ItemCardView card = ItemCardView.Create(referenceList);
+				if (card != null)
+				{
+					card.Compact = true;
+					card.Collapsible = true; // 처음에는 이름과 형식만, 누르면 펼침 (검색해서 훑어보기 쉽게)
+					card.SetHeader(null, null);
+					card.Show(entry);
+				}
+				else if (referenceCardPrefab != null) Instantiate(referenceCardPrefab, referenceList).Show(entry);
+			}
 		}
 	}
 

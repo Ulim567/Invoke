@@ -142,7 +142,8 @@ public sealed class StanceRuleEntry
 	public readonly string NodeId;
 	/// <summary>규칙 이름 (예: 적중)</summary>
 	public readonly string Name;
-	/// <summary>숫자 조건 글. 카드 문장 「자세 숫자가 ○○일 때」의 ○○ 자리 (예: 홀수, 40~60 사이)</summary>
+	/// <summary>숫자 조건 글. 카드 문장 「자세 숫자가 ○○인 경우, 아래 효과가 적용됩니다.」의 ○○ 자리 (예: 2로 나누어떨어지지 않는 수, 40 이상 60 이하).<br/>
+	/// 조건에 맞는 숫자를 늘어놓지 않고 뜻을 풀어 쓴다. 뜻이 바로 떠오르지 않는 용어는 「용어(설명)」 (이우림 결정 11/19)</summary>
 	public readonly string Condition;
 	/// <summary>이 규칙 하나의 효과</summary>
 	public readonly StanceEffect Effect;
@@ -333,17 +334,17 @@ public class CStanceRule : StanceRule
 	// 규칙 이름은 Notion 「캐릭터 자세와 소환검 기획」 1. C 자세의 「자세 규칙」 표
 	static readonly StanceRuleEntry[] Table =
 	{
-		new StanceRuleEntry(OddNode, "적중", "홀수", n => n % 2 == 1, new StanceEffect(thrust: 0.15f, slash: -0.15f)),
-		new StanceRuleEntry(EvenNode, "일망타진", "짝수", n => n % 2 == 0, new StanceEffect(slash: 0.15f, thrust: -0.15f)),
-		new StanceRuleEntry(ThreeNode, "조급함", "3의 배수", n => n % 3 == 0, new StanceEffect(cooldown: -0.15f, received: 0.1f)),
-		new StanceRuleEntry(FiveNode, "신중함", "5의 배수", n => n % 5 == 0, new StanceEffect(damage: 0.1f, cooldown: 0.1f)),
-		new StanceRuleEntry(MiddleNode, "흡혈", $"{MiddleMin}~{MiddleMax} 사이", n => n >= MiddleMin && n <= MiddleMax,
+		new StanceRuleEntry(OddNode, "적중", "2로 나누어떨어지지 않는 수", n => n % 2 == 1, new StanceEffect(thrust: 0.15f, slash: -0.15f)),
+		new StanceRuleEntry(EvenNode, "일망타진", "2로 나누어떨어지는 수", n => n % 2 == 0, new StanceEffect(slash: 0.15f, thrust: -0.15f)),
+		new StanceRuleEntry(ThreeNode, "조급함", "3으로 나누어떨어지는 수", n => n % 3 == 0, new StanceEffect(cooldown: -0.15f, received: 0.1f)),
+		new StanceRuleEntry(FiveNode, "신중함", "5로 나누어떨어지는 수", n => n % 5 == 0, new StanceEffect(damage: 0.1f, cooldown: 0.1f)),
+		new StanceRuleEntry(MiddleNode, "흡혈", $"{MiddleMin} 이상 {MiddleMax} 이하", n => n >= MiddleMin && n <= MiddleMax,
 			new StanceEffect(lifesteal: 0.05f, damage: -0.05f)),
-		new StanceRuleEntry(PrimeNode, "혹사", "소수", IsPrime, new StanceEffect(damage: 0.2f, selfDamage: 0.01f)),
-		new StanceRuleEntry(FibonacciNode, "지휘", "피보나치 수(1, 2, 3, 5, 8, 13, 21, 34, 55, 89)", IsFibonacci,
+		new StanceRuleEntry(PrimeNode, "혹사", "1을 제외한, 1과 자기 자신으로만 나누어떨어지는 수", IsPrime, new StanceEffect(damage: 0.2f, selfDamage: 0.01f)),
+		new StanceRuleEntry(FibonacciNode, "지휘", "피보나치 수(앞의 두 수를 더해 다음 수를 만드는 수열의 수)", IsFibonacci,
 			new StanceEffect(summon: 0.2f, thrust: -0.1f)),
 		// 평균 50번을 뽑아야 나오므로 손해를 두지 않는다 (기획)
-		new StanceRuleEntry(PerfectNode, "완벽", "완전수(6, 28)", IsPerfect, new StanceEffect(damage: 0.3f)),
+		new StanceRuleEntry(PerfectNode, "완벽", "완전수(자기 자신을 제외한 약수의 합이 자기 자신과 같은 수)", IsPerfect, new StanceEffect(damage: 0.3f)),
 	};
 
 	public override IReadOnlyList<StanceRuleEntry> Rules => Table;
@@ -380,14 +381,14 @@ public class PythonStanceRule : StanceRule
 	// 규칙 이름은 Notion 「캐릭터 자세와 소환검 기획」 3. Python 자세의 「자세 규칙」 표
 	static readonly StanceRuleEntry[] Table =
 	{
-		new StanceRuleEntry(BigNode, "직격", $"큰 수({BigMin}~100)", n => n >= BigMin, new StanceEffect(element: 0.15f, zone: -0.15f)),
-		new StanceRuleEntry(SmallNode, "포화", $"작은 수(1~{BigMin - 1})", n => n < BigMin, new StanceEffect(zone: 0.15f, element: -0.15f)),
-		new StanceRuleEntry(FourNode, "응축", "4의 배수", n => n % 4 == 0, new StanceEffect(orb: 0.2f, element: -0.1f)),
-		new StanceRuleEntry(PalindromeNode, "경솔", "회문수(1~9, 11, 22, …, 99)", IsPalindrome, new StanceEffect(cooldown: -0.15f, received: 0.1f)),
-		new StanceRuleEntry(SevenNode, "집요함", "7의 배수", n => n % 7 == 0, new StanceEffect(curseDuration: 0.3f, curseCooldown: 0.2f)),
-		new StanceRuleEntry(SquareNode, "비늘", "완전제곱수(1, 4, 9, …, 100)", IsSquare, new StanceEffect(received: -0.15f, damage: -0.05f)),
+		new StanceRuleEntry(BigNode, "직격", $"{BigMin} 이상 100 이하", n => n >= BigMin, new StanceEffect(element: 0.15f, zone: -0.15f)),
+		new StanceRuleEntry(SmallNode, "포화", $"1 이상 {BigMin - 1} 이하", n => n < BigMin, new StanceEffect(zone: 0.15f, element: -0.15f)),
+		new StanceRuleEntry(FourNode, "응축", "4로 나누어떨어지는 수", n => n % 4 == 0, new StanceEffect(orb: 0.2f, element: -0.1f)),
+		new StanceRuleEntry(PalindromeNode, "경솔", "회문수(앞에서 읽어도 뒤에서 읽어도 같은 수)", IsPalindrome, new StanceEffect(cooldown: -0.15f, received: 0.1f)),
+		new StanceRuleEntry(SevenNode, "집요함", "7로 나누어떨어지는 수", n => n % 7 == 0, new StanceEffect(curseDuration: 0.3f, curseCooldown: 0.2f)),
+		new StanceRuleEntry(SquareNode, "비늘", "제곱수(같은 수를 두 번 곱한 수)", IsSquare, new StanceEffect(received: -0.15f, damage: -0.05f)),
 		// 평균 25번을 뽑아야 나오므로 손해를 두지 않는다 (기획)
-		new StanceRuleEntry(CubeNode, "각성", "세제곱수(1, 8, 27, 64)", IsCube, new StanceEffect(damage: 0.25f)),
+		new StanceRuleEntry(CubeNode, "각성", "세제곱수(같은 수를 세 번 곱한 수)", IsCube, new StanceEffect(damage: 0.25f)),
 	};
 
 	public override IReadOnlyList<StanceRuleEntry> Rules => Table;

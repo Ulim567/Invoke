@@ -90,7 +90,7 @@
 | `StanceRule.All` (static) | - | `IReadOnlyList<StanceRule>` | 모든 언어의 규칙 (C, Python, #545) |
 | `StanceRule.TryGetRule(string nodeId, out StanceRuleEntry rule)` (static) | 규칙 노드 ID | `bool` | 모든 언어의 표에서 그 노드의 줄을 찾음. 없으면 false (#545) |
 | `StanceRule.FunctionIds` (static) | - | `IReadOnlyList<string>` | 자세 함수 고정 ID 4개 (C·Python의 init_stance, get_stance). 스킬 트리 검사가 SkillTable 비교에서 뺄 때 씀 (#545) |
-| `StanceRuleEntry.NodeId`, `Name`, `Condition`, `Effect` | - | - | 규칙 노드 ID(`c.stance.odd`), 이름(적중), 조건 글(홀수), 효과 값 (#545) |
+| `StanceRuleEntry.NodeId`, `Name`, `Condition`, `Effect` | - | - | 규칙 노드 ID(`c.stance.odd`), 이름(적중), 조건 글(2로 나누어떨어지지 않는 수), 효과 값 (#545) |
 | `StanceRuleEntry.Gains`, `Losses` | - | `IReadOnlyList<string>` | 좋은 효과·나쁜 효과 글. 나쁜 효과가 없으면 Losses가 비어 있음. 화면에는 「이득·손해」라는 말을 쓰지 않음 (#545) |
 | `StanceRuleEntry.Matches(int stance)` | 자세 숫자(1 이상) | `bool` | 이 규칙의 조건에 맞으면 true (#545) |
 | `CStanceRule.OddNode` … `PerfectNode`, `PythonStanceRule.BigNode` … `CubeNode` | - | `string` | 규칙 노드 ID 상수 (#545) |
@@ -131,7 +131,7 @@
   - 규칙 노드는 규칙마다 1개(C 8개, Python 7개), 새 노드 종류 `SkillTreeNodeKind.Rule`. 스킬 트리의 새 「자세」 탭에 보이고, 규칙은 필요한 문법마다 한 줄 (처음에는 스킬 탭의 한 계열로 정했으나 바꿈, skill-tree.md 「자세 탭」)
   - init_stance·get_stance는 Skill 노드, get_stance의 선행은 init_stance. 처음 개수는 없앰
   - 규칙 노드의 선행: init_stance + 그 규칙을 판별하는 데 필요한 문법 (Notion 「해금」). 재료는 임시
-  - 해금 전 규칙 노드는 이름·설명 「???」, 해금 뒤 이름과 「자세 숫자가 홀수일 때 아래 효과가 붙습니다.」·「효과:」 목록(좋은 효과 청록, 나쁜 효과 빨강, 화면에 「이득·손해」라는 말은 쓰지 않음). 설명은 #544의 설명 카드로 보임
+  - 해금 전 규칙 노드는 이름·설명 「???」, 해금 뒤 이름과 「자세 숫자가 2로 나누어떨어지지 않는 수인 경우, 아래 효과가 적용됩니다.」·「효과:」 목록(좋은 효과 청록, 나쁜 효과 빨강, 화면에 「이득·손해」라는 말은 쓰지 않음). 설명은 #544의 설명 카드로 보임
 - 다른 담당자 코드에 넣은 것 (모든 파일 수정 허락, 11/8)
   - 박진우: 스킬 데미지 자리(`ThrustSkills`, `SlashSkills`, `ThrowSkills`, `SummonDamage`, `MagicSkill.Deal`)에 `StanceDamageBonus` 더하기와 `NotifyDamageDealt`, `DataDrivenSkill`의 `StanceDamageBonus`·`NotifyDamageDealt`, `StatusEffects`의 출혈·중독 도트 추가분, `SlotLoadout.IsEquippableSkill`에서 자세 함수 제외. `SummonDamage.Deal`의 첫 인자가 스킬 ID에서 스킬(`DataDrivenSkill`)로 바뀜
   - 김도훈: `PlayerHealth.TakeDamage`의 받는 피해 증감, `TakeSelfDamage`·`Heal` 추가

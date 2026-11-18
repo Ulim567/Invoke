@@ -356,7 +356,7 @@ public static class BlockReference
 
 	/// <summary>
 	/// 자세 규칙 카드 한 장 (#545). 규칙 노드 ID가 규칙 표에 없으면 null.<br/>
-	/// revealed면 「자세 숫자가 홀수일 때 아래 효과가 붙습니다.」와 「효과:」 아래 좋은 효과(청록)·나쁜 효과(빨강) 목록. 아니면 이름·내용 모두 「???」
+	/// revealed면 「자세 숫자가 2로 나누어떨어지지 않는 수인 경우, 아래 효과가 적용됩니다.」와 「효과:」 아래 좋은 효과(청록)·나쁜 효과(빨강) 목록. 아니면 이름·내용 모두 「???」
 	/// </summary>
 	// 글은 설명 표가 아니라 자세 규칙 표(StanceRule)에서 읽는다: 효과 계산과 같은 줄이라 수치가 어긋나지 않는다.
 	// 블록이 아니므로 그림·형식·사용 방법이 없다
@@ -368,7 +368,7 @@ public static class BlockReference
 		if (revealed)
 		{
 			// 문장과 효과 목록 사이는 한 줄 띄운다 (이우림 요청 11/18)
-			var lines = new List<string> { $"자세 숫자가 {rule.Condition}일 때 아래 효과가 붙습니다.", "", "효과:" };
+			var lines = new List<string> { $"자세 숫자가 {rule.Condition}인 경우, 아래 효과가 적용됩니다.", "", "효과:" };
 			lines.AddRange(rule.Gains.Select(text => $"<color={GoodEffectColor}>- {text}</color>"));
 			lines.AddRange(rule.Losses.Select(text => $"<color={BadEffectColor}>- {text}</color>"));
 			summary = string.Join("\n", lines);

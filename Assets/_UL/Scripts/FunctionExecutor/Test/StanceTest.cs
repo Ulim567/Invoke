@@ -304,15 +304,15 @@ public class StanceTest : MonoBehaviour
 		TestRuleTable(StanceRule.For(CharacterLanguages.C), new[] { "적중", "일망타진", "조급함", "신중함", "흡혈", "혹사", "지휘", "완벽" }, "c.stance.");
 		StanceRuleEntry odd = Rule(CStanceRule.OddNode), middle = Rule(CStanceRule.MiddleNode), prime = Rule(CStanceRule.PrimeNode),
 			three = Rule(CStanceRule.ThreeNode), perfect = Rule(CStanceRule.PerfectNode);
-		ExpectText(odd, "홀수", "찌르기 계열 데미지 +15%", "휘두르기 계열 데미지 -15%");
-		ExpectText(three, "3의 배수", "쿨타임 -15%", "받는 피해 +10%");
-		ExpectText(middle, "40~60 사이", "스킬이 준 데미지의 5% 회복", "데미지 -5%");
-		ExpectText(prime, "소수", "데미지 +20%", "데미지를 준 스킬마다 자해 (최대 체력의 1%)");
-		ExpectText(perfect, "완전수(6, 28)", "데미지 +30%", "");
+		ExpectText(odd, "2로 나누어떨어지지 않는 수", "찌르기 계열 데미지 +15%", "휘두르기 계열 데미지 -15%");
+		ExpectText(three, "3으로 나누어떨어지는 수", "쿨타임 -15%", "받는 피해 +10%");
+		ExpectText(middle, "40 이상 60 이하", "스킬이 준 데미지의 5% 회복", "데미지 -5%");
+		ExpectText(prime, "1을 제외한, 1과 자기 자신으로만 나누어떨어지는 수", "데미지 +20%", "데미지를 준 스킬마다 자해 (최대 체력의 1%)");
+		ExpectText(perfect, "완전수(자기 자신을 제외한 약수의 합이 자기 자신과 같은 수)", "데미지 +30%", "");
 
 		// 스킬 트리 규칙 카드 글 (#545): 문장 한 줄 + 「효과:」 + 좋은 효과(청록)·나쁜 효과(빨강) 목록
 		BlockReferenceEntry oddCard = BlockReference.RuleEntryOf(CStanceRule.OddNode, true);
-		string oddExpected = "자세 숫자가 홀수일 때 아래 효과가 붙습니다.\n\n효과:\n"
+		string oddExpected = "자세 숫자가 2로 나누어떨어지지 않는 수인 경우, 아래 효과가 적용됩니다.\n\n효과:\n"
 			+ "<color=#5EF2D6>- 찌르기 계열 데미지 +15%</color>\n<color=#E07070>- 휘두르기 계열 데미지 -15%</color>";
 		Check("적중 카드: 이름 적중, 문장 + 효과 목록, 색 태그 사용", oddCard != null && oddCard.Name == "적중" && oddCard.RichSummary && oddCard.Summary == oddExpected,
 			oddCard?.Summary);
@@ -326,9 +326,9 @@ public class StanceTest : MonoBehaviour
 	void TestPythonRuleText()
 	{
 		TestRuleTable(StanceRule.For(CharacterLanguages.Python), new[] { "직격", "포화", "응축", "경솔", "집요함", "비늘", "각성" }, "py.stance.");
-		ExpectText(Rule(PythonStanceRule.BigNode), "큰 수(51~100)", "원소 계열 데미지 +15%", "범위 계열 데미지 -15%");
-		ExpectText(Rule(PythonStanceRule.SevenNode), "7의 배수", "보조 계열 상태 이상 지속 시간 +30%", "보조 계열 쿨타임 +20%");
-		ExpectText(Rule(PythonStanceRule.SquareNode), "완전제곱수(1, 4, 9, …, 100)", "받는 피해 -15%", "데미지 -5%");
+		ExpectText(Rule(PythonStanceRule.BigNode), "51 이상 100 이하", "원소 계열 데미지 +15%", "범위 계열 데미지 -15%");
+		ExpectText(Rule(PythonStanceRule.SevenNode), "7로 나누어떨어지는 수", "보조 계열 상태 이상 지속 시간 +30%", "보조 계열 쿨타임 +20%");
+		ExpectText(Rule(PythonStanceRule.SquareNode), "제곱수(같은 수를 두 번 곱한 수)", "받는 피해 -15%", "데미지 -5%");
 	}
 
 	static StanceRuleEntry Rule(string nodeId) => StanceRule.TryGetRule(nodeId, out StanceRuleEntry rule) ? rule : null;

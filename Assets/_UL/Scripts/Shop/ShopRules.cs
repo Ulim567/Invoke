@@ -39,7 +39,7 @@ public static class ShopRules
 
 	/// <summary>
 	/// 문법 블록의 상점 무게 (항목 ID → 무게). 클수록 자주 올라온다. 값은 Notion 「블록 표」의 「상점 무게」.
-	/// 표에 없는 블록(Python의 global, del, 리스트 블록)은 DefaultSyntaxWeight로 뽑는다.
+	/// 표에 없는 블록은 DefaultSyntaxWeight로 뽑는다. 몬스터 드롭(ShopRoller.RollDrop)도 이 무게를 쓴다.
 	/// </summary>
 	public static readonly IReadOnlyDictionary<string, int> SyntaxWeights = new Dictionary<string, int>
 	{
@@ -60,10 +60,16 @@ public static class ShopRules
 		["Logic"] = 3,
 		["Not"] = 3,
 		["Return"] = 2,
-		// Python 블록(Global, Del, ListNew, ListAppend, ListPop, ListLen)의 무게는 아직 없다 (기획 11/18: 나중에 추가)
+		// ---- Python 블록 (이우림 11/19). 비슷한 C 블록의 무게에 맞추고, 구슬 list에 꼭 필요한 append만 높였다 ----
+		["ListAppend"] = 6, // 구슬 난사·구슬 폭발이 구슬 list를 받는다
+		["ListNew"] = 3,    // C ArrayDeclare와 같은 자리
+		["Global"] = 3,     // 구슬을 function 밖에 남길 때
+		["ListLen"] = 2,
+		["ListPop"] = 2,
+		["Del"] = 1,        // C Break·Continue처럼 드물게 쓴다
 	};
 
-	/// <summary>상점 무게가 아직 없는 문법 블록의 임시 무게.</summary>
+	/// <summary>표에 없는 문법 블록의 임시 무게. 새 블록을 더하고 무게를 아직 정하지 않았을 때 쓴다.</summary>
 	public const int DefaultSyntaxWeight = 1;
 
 	/// <summary>희귀도마다 뽑는 무게와 가격. 값은 임시다 (박진우가 정함).</summary>

@@ -10,8 +10,9 @@ using UnityEngine;
 ///   그 플레이어가 죽었거나 몬스터의 씬을 떠났으면 다음 순위. 받을 수 있는 플레이어가 없으면 아무도 받지 않는다.<br/>
 ///   Whole Scene을 켜면(레이드 보스) 같은 씬의 플레이어 모두에게 준다. 죽어서 관전 중인 파티원도 받는다.<br/>
 /// - 재료는 몬스터가 죽을 때 한 번 굴린다. 확률(Chance) 1이면 반드시 나온다.<br/>
-/// - 블록·함수 드롭: 받는 플레이어마다 Item Chance로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목(해금한 스킬 트리 노드가 여는 항목 + 그 캐릭터 언어의 처음 항목) 중
-///   무작위로 Item Count개(하나씩 따로 고름)의 가진 개수를 1씩 늘린다 (ItemCountRules, 이우림 #500). 획득 표시(시안 8-5)에는 받은 항목의 이름까지 알린다(LocalRewardReceived의 항목 ID 목록).<br/>
+/// - 블록·함수 드롭: 받는 플레이어마다 Item Chance로 굴려서, 나오면 Item Count개(하나씩 따로 고름)의 가진 개수를 1씩 늘린다 (이우림 #500).
+///   무엇을 줄지는 상점과 같은 후보·무게로 뽑는다 (ShopRoller.RollDrop): 그 캐릭터 언어에서 쓸 수 있고 해금한 블록·함수 가운데,
+///   문법 블록과 함수를 반반으로 고른 뒤 상점 무게(ShopRules)로 고른다. 획득 표시(시안 8-5)에는 받은 항목의 이름까지 알린다(LocalRewardReceived의 항목 ID 목록).<br/>
 ///   받은 블록·함수는 재료처럼 블록 아이콘(ItemDropIconId)이 날아와 보인다. 아이콘은 무엇을 받았든 같다.<br/>
 /// - 값은 PlayerProgress(이우림)의 AddExp, AddMoney, AddMaterial, AddItem으로만 바꾼다. PlayerProgress가 없는 플레이어(테스트용 프리팹)는 건너뛴다.<br/>
 /// - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다. 판정은 몬스터가 속한 씬의 물리 세계에 한다.<br/>
@@ -58,7 +59,7 @@ public class MonsterReward : NetworkBehaviour
 
 	[Header("블록·함수 드롭")]
 	[SerializeField, Range(0f, 1f), Tooltip("받는 플레이어마다 블록·함수가 나올 확률 (1이면 반드시)")]
-	float itemChance = 0.1f;
+	float itemChance = 0.33f;
 
 	[SerializeField, Min(0), Tooltip("나올 때 주는 블록·함수 수. 하나씩 따로 무작위로 고른다")]
 	int itemCount = 1;
@@ -71,11 +72,6 @@ public class MonsterReward : NetworkBehaviour
 	static readonly List<GameObject> ranking = new List<GameObject>(8);
 	static readonly List<GameObject> roots = new List<GameObject>(64);
 	static readonly HashSet<PlayerProgress> rewarded = new HashSet<PlayerProgress>();
-	// 블록·함수 드롭 후보 (받는 플레이어마다 다시 채움)
-	static readonly List<string> itemPool = new List<string>(32);
-	static readonly HashSet<string> itemPoolSet = new HashSet<string>();
-	// 새 캐릭터 처음 항목 (ItemCountRules.Initial의 키). 캐릭터 언어마다 다르므로(C: thrust…, Python: py.*) 언어별로 한 번씩만 센다
-	static readonly Dictionary<string, string[]> initialItemsByLanguage = new Dictionary<string, string[]>(2);
 
 	Monster monster;
 	// 이번에 나온 재료. 받는 플레이어 모두에게 같은 것을 준다
@@ -113,7 +109,6 @@ public class MonsterReward : NetworkBehaviour
 	static void ResetStatics()
 	{
 		LocalRewardReceived = null;
-		initialItemsByLanguage.Clear();
 	}
 
 	void Awake()
@@ -196,44 +191,16 @@ public class MonsterReward : NetworkBehaviour
 		if (itemCount <= 0 || itemChance <= 0f) return;
 		if (itemChance < 1f && UnityEngine.Random.value >= itemChance) return;
 
-		FillItemPool(player);
-		if (itemPool.Count == 0) return;
+		// 상점과 같은 후보(그 캐릭터 언어에서 쓸 수 있고 해금한 것)와 무게로 뽑는다.
+		// 해금한 노드가 여는 블록을 그대로 후보로 쓰면, 노드 하나가 두 언어의 블록을 함께 열어서 쓸 수 없는 블록(C 캐릭터의 global·리스트 블록 등)이 나왔다
+		string language = PlayerCharacter.LanguageOf(player.gameObject);
 		for (int i = 0; i < itemCount; i++)
 		{
-			string itemId = itemPool[UnityEngine.Random.Range(0, itemPool.Count)];
+			string itemId = ShopRoller.RollDrop(player.RollUnlocked, player.ItemCounts, language);
+			if (itemId == null) return;
 			player.AddItem(itemId, 1);
 			givenItems.Add(itemId);
 		}
-	}
-
-	// 그 플레이어가 쓸 수 있는 항목: 처음 항목 + 해금한 노드가 여는 항목 (해금 안 한 블록은 받아도 저장할 때 막혀서 빼둔다)
-	static void FillItemPool(PlayerProgress player)
-	{
-		itemPool.Clear();
-		itemPoolSet.Clear();
-		// 처음 항목은 그 플레이어의 캐릭터 언어 것만 (Python 마법사가 C 항목을 받던 문제)
-		string language = PlayerCharacter.LanguageOf(player.gameObject);
-		if (!initialItemsByLanguage.TryGetValue(language, out string[] initialItems))
-		{
-			var initial = ItemCountRules.Initial(language);
-			initialItems = new string[initial.Count];
-			initial.Keys.CopyTo(initialItems, 0);
-			initialItemsByLanguage[language] = initialItems;
-		}
-		for (int i = 0; i < initialItems.Length; i++) AddToPool(initialItems[i]);
-
-		IReadOnlyList<string> unlocked = player.Unlocked;
-		for (int i = 0; i < unlocked.Count; i++)
-		{
-			if (!SkillTree.TryGet(unlocked[i], out SkillTreeNode node)) continue;
-			List<string> keys = ItemCountRules.KeysUnlockedBy(node);
-			for (int k = 0; k < keys.Count; k++) AddToPool(keys[k]);
-		}
-	}
-
-	static void AddToPool(string itemId)
-	{
-		if (!string.IsNullOrEmpty(itemId) && itemPoolSet.Add(itemId)) itemPool.Add(itemId);
 	}
 
 	// 연출만 한다 (코드 작성 규칙 1). 받은 플레이어의 화면에만 보낸다. 네트워크를 켜지 않은 테스트는 [TargetRpc]를 보낼 수 없으므로 그 자리에서 부른다

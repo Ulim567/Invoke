@@ -58,7 +58,7 @@
 
 ## 남은 일
 1. 마법사 SimTest(`[XxxTest] 전체 통과` 형식, #533 구슬 방식 기준): 구슬 최대 5개(다 쓴 구슬 포함), 담지 않은 구슬은 사라짐, 다 쓴 구슬 → UsedManaOrbError, is_valid_orb, 구슬 보호막 한 번 막기, 중독 겹침, 공중 부양 타이머(RideDuration 6초)
-2. 몬스터 드롭 후보 언어별: 김도훈 `MonsterReward`가 `ItemCountRules.Initial()`(C)을 씀 → `Initial(언어)`. PR #520에 적어 둠, 아직 안 고쳐짐
+2. ~~몬스터 드롭 후보 언어별~~: 고침. 처음 항목은 #550, 해금 노드가 여는 블록은 상점과 같은 후보로 뽑게 바꿈 (`ShopRoller.RollDrop`, monster.md)
 3. 기획 문서에 중독 추가
 4. 그림
    - 아쉬운 아이콘: `py.chain_lightning`(지그재그), `py.blink`(어두움). 게임에서 보고 다시 뽑을지 정함

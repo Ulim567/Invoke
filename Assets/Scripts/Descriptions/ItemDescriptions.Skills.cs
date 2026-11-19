@@ -210,16 +210,18 @@ public static partial class ItemDescriptions
 		// 이동 -----------------------------------------------------------
 		[PredefinedFunctionIds.Dash] = new ItemDescription
 		{
-			Summary = "바라보는 쪽으로 짧은 거리를 빠르게 이동합니다.",
-			Purpose = "해금하면 ← 나 → 를 빠르게 두 번 눌러 그쪽으로 대시합니다. 공격을 피하거나 빠르게 다가갈 때 씁니다.",
+			// 짧게 키 쓰는 법만 (이우림 11/19). 화살표 글자(← →)는 Galmuri11 글꼴에 없어 빈칸으로 보이므로 「방향키」로 쓴다
+			Summary = "방향키를 빠르게 두 번 누르면 그쪽으로 대시합니다.",
+			Purpose = "",
 			Example = "",
 			ExampleCode = "",
 			ExampleResult = "",
-			Caution = "방향키 대시는 0.5초에 한 번, 공중에서는 땅에 닿을 때까지 한 번 쓸 수 있습니다. 슬롯에는 넣을 수 없습니다.",
+			Caution = "",
 		},
 		[PredefinedFunctionIds.DoubleJump] = new ItemDescription
 		{
-			Summary = "공중에서 한 번 더 점프합니다.",
+			// 대시와 같이 키 쓰는 법만 (이우림 11/19)
+			Summary = "공중에서 Space를 한 번 더 누르면 한 번 더 점프합니다.",
 			Purpose = "",
 			Example = "",
 			ExampleCode = "",

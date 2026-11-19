@@ -15,6 +15,7 @@ using UnityEngine.UI;
 /// - 캐릭터 선택: CharacterSelectRequested를 알린다 (#570). 받는 쪽(계정)이 없거나 레이드 던전에 있으면 버튼을 끈다.<br/>
 /// - 로그아웃: LogoutRequested를 알린다. 받는 쪽(계정)이 없으면 버튼을 끈다.<br/>
 /// - 레이드 포기: 내 캐릭터가 레이드 던전에 있으면 로그아웃 자리에 나온다. RaidParties.RequestGiveUp()을 부른다.<br/>
+/// - 튜토리얼 건너뛰기 (#597): 확인창에서 「건너뛰기」를 고르면 TutorialSkipRequested를 알린다. 튜토리얼이 진행 중이 아니면(TutorialView.IsRunning) 버튼을 숨기고 아래 줄들을 올린다.<br/>
 /// - SettingsCanvas 프리팹 최상위에 붙이고 Base 씬에 둔다. 프리팹은 메뉴 Invoke → UI → 설정 화면 만들기(SettingsUIBuilder).
 /// </para>
 /// </summary>
@@ -25,6 +26,9 @@ public class SettingsView : InputBlockingPanel
 
 	/// <summary>[표시] 설정 창의 「캐릭터 선택」을 눌렀을 때 (#570). 계정 쪽이 받아서 접속은 둔 채 캐릭터 화면으로 돌아간다. 받는 쪽이 없으면 버튼이 꺼진다</summary>
 	public static event Action CharacterSelectRequested;
+
+	/// <summary>[표시] 설정 창의 「튜토리얼 건너뛰기」를 확인창에서 골랐을 때 (#597). 튜토리얼(TutorialView)이 받아서 끝낸 것으로 저장한다</summary>
+	public static event Action TutorialSkipRequested;
 
 	[Header("소리")]
 	[SerializeField, Tooltip("BGM·SFX 그룹이 있는 Audio Mixer (Assets/_HW/Audio/InvokeMixer)")]
@@ -45,6 +49,9 @@ public class SettingsView : InputBlockingPanel
 	[SerializeField] TMP_Text sfxValueText;
 	[SerializeField, Tooltip("「콘솔 출력 표시」 체크 칸 (#536). 끄면 HUD 왼쪽 아래의 출력·오류 알림을 띄우지 않는다")] Toggle consoleOutputToggle;
 	[SerializeField, Tooltip("돌아가기 (창 닫기)")] Button backButton;
+	[SerializeField, Tooltip("튜토리얼 건너뛰기 (#597). 돌아가기 아래")] Button tutorialSkipButton;
+	[SerializeField] TMP_Text tutorialSkipText;
+	[SerializeField, Tooltip("튜토리얼 건너뛰기를 묻는 확인창 (#597)")] ConfirmDialog confirmDialog;
 	[SerializeField, Tooltip("캐릭터 선택 (#570). 로그아웃 버튼 왼쪽")] Button characterSelectButton;
 	[SerializeField] TMP_Text characterSelectText;
 	[SerializeField] Color characterSelectColor = Color.white;
@@ -52,6 +59,15 @@ public class SettingsView : InputBlockingPanel
 	[SerializeField] TMP_Text exitText;
 	[SerializeField] Color exitColor = new Color32(0xF0, 0x90, 0x7E, 0xFF);
 	[SerializeField] Color exitDisabledColor = new Color32(0x6A, 0x60, 0x78, 0xFF);
+
+	// 「튜토리얼 건너뛰기」 한 줄의 높이 (버튼 26 + 간격 9). 버튼을 숨기면 그 아래 줄들을 이만큼 올리고 창을 줄인다 (SettingsUIBuilder와 맞춘다)
+	const float SkipRowHeight = 35f;
+
+	// 버튼을 숨길 때 올릴 것들(캐릭터 선택, 로그아웃, 아래 안내 글)과 창. 처음 위치·크기를 기억해 두고 그 기준으로 옮긴다
+	RectTransform window;
+	Vector2 windowSize;
+	RectTransform[] belowSkip;
+	Vector2[] belowSkipPositions;
 
 	// 뒤의 HUD는 어둡게 덮기만 한다 (시안 8-2)
 	protected override bool HidesHud => false;
@@ -66,8 +82,11 @@ public class SettingsView : InputBlockingPanel
 		if (sfxSlider != null) sfxSlider.onValueChanged.AddListener(GameSettings.SetSfxVolume);
 		if (consoleOutputToggle != null) consoleOutputToggle.onValueChanged.AddListener(GameSettings.SetShowConsoleOutput);
 		if (backButton != null) backButton.onClick.AddListener(Close);
+		if (tutorialSkipButton != null) tutorialSkipButton.onClick.AddListener(OnTutorialSkip);
 		if (characterSelectButton != null) characterSelectButton.onClick.AddListener(OnCharacterSelect);
 		if (exitButton != null) exitButton.onClick.AddListener(OnExit);
+
+		CacheSkipLayout();
 
 		HudView.SettingsRequested += Open;
 		GameSettings.Changed += OnSettingsChanged;
@@ -84,6 +103,8 @@ public class SettingsView : InputBlockingPanel
 	public void Open()
 	{
 		if (IsOpen) return;
+		// 확인창을 연 채 창이 닫혔으면 다시 열 때 확인창이 남아 있지 않게 한다
+		if (confirmDialog != null) confirmDialog.Hide();
 		GameObject me = NetworkClient.localPlayer != null ? NetworkClient.localPlayer.gameObject : null;
 		Show(me != null ? me.GetComponentInChildren<PlayerInputReader>() : null);
 		Refresh();
@@ -102,7 +123,9 @@ public class SettingsView : InputBlockingPanel
 		if (!IsOpen) return;
 		RefreshExit();
 		// 마우스로 빈 곳을 눌러 고른 것이 없어지면 방향키가 먹지 않으므로 「돌아가기」를 다시 고른다
-		if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == null && backButton != null)
+		// 확인창이 열려 있는 동안은 고르지 않는다 (#597). 확인창이 일부러 선택을 비워 두었는데 「돌아가기」를 고르면, Enter가 확인창의 「건너뛰기」 대신 「돌아가기」를 눌러 설정 창만 닫힌다
+		bool confirmOpen = confirmDialog != null && confirmDialog.IsOpen;
+		if (!confirmOpen && EventSystem.current != null && EventSystem.current.currentSelectedGameObject == null && backButton != null)
 			EventSystem.current.SetSelectedGameObject(backButton.gameObject);
 	}
 
@@ -128,6 +151,19 @@ public class SettingsView : InputBlockingPanel
 		CharacterSelectRequested?.Invoke();
 	}
 
+	void OnTutorialSkip()
+	{
+		if (!TutorialView.IsRunning) return;
+		if (confirmDialog == null) { SkipTutorial(); return; }
+		confirmDialog.Show("튜토리얼을 건너뛰시겠습니까?\n건너뛴 튜토리얼은 다시 표시되지 않습니다.", SkipTutorial, "건너뛰기 (Enter)", "취소 (Esc)");
+	}
+
+	void SkipTutorial()
+	{
+		Close();
+		TutorialSkipRequested?.Invoke();
+	}
+
 	void Refresh()
 	{
 		Set(masterSlider, masterValueText, GameSettings.MasterVolume);
@@ -144,9 +180,15 @@ public class SettingsView : InputBlockingPanel
 		// 레이드 중에는 「레이드 포기」로 먼저 나온다. 로그아웃이 레이드 중에 나오지 않는 것과 같다
 		bool characterUsable = characterSelectButton != null && !raid && CharacterSelectRequested != null;
 
+		// 튜토리얼이 진행 중이고 받는 쪽(TutorialView)이 있을 때만 (#597)
+		bool skipUsable = tutorialSkipButton != null && TutorialView.IsRunning && TutorialSkipRequested != null;
+
 		bool changed = SetUsable(exitButton, exitUsable);
 		changed |= SetUsable(characterSelectButton, characterUsable);
-		if (changed) RefreshNavigation(exitUsable, characterUsable);
+		changed |= SetUsable(tutorialSkipButton, skipUsable);
+		if (changed) RefreshNavigation(exitUsable, characterUsable, skipUsable);
+		SetSkipVisible(skipUsable);
+		if (tutorialSkipText != null) tutorialSkipText.color = skipUsable ? characterSelectColor : exitDisabledColor;
 
 		if (exitText != null)
 		{
@@ -157,6 +199,36 @@ public class SettingsView : InputBlockingPanel
 		if (characterSelectText != null) characterSelectText.color = characterUsable ? characterSelectColor : exitDisabledColor;
 	}
 
+	void CacheSkipLayout()
+	{
+		if (tutorialSkipButton == null) return;
+		window = tutorialSkipButton.transform.parent as RectTransform;
+		if (window == null) return;
+		windowSize = window.sizeDelta;
+		Transform hint = window.Find("Hint");
+		belowSkip = new[]
+		{
+			characterSelectButton != null ? (RectTransform)characterSelectButton.transform : null,
+			exitButton != null ? (RectTransform)exitButton.transform : null,
+			hint as RectTransform,
+		};
+		belowSkipPositions = new Vector2[belowSkip.Length];
+		for (int i = 0; i < belowSkip.Length; i++)
+			if (belowSkip[i] != null) belowSkipPositions[i] = belowSkip[i].anchoredPosition;
+	}
+
+	// 튜토리얼이 진행 중일 때만 「튜토리얼 건너뛰기」를 보인다 (#597). 숨기면 빈 줄이 남지 않게 아래 줄들을 올리고 창을 줄인다
+	void SetSkipVisible(bool visible)
+	{
+		if (tutorialSkipButton == null || tutorialSkipButton.gameObject.activeSelf == visible) return;
+		tutorialSkipButton.gameObject.SetActive(visible);
+		if (window == null) return;
+		float lift = visible ? 0f : SkipRowHeight;
+		window.sizeDelta = windowSize - new Vector2(0f, lift);
+		for (int i = 0; i < belowSkip.Length; i++)
+			if (belowSkip[i] != null) belowSkip[i].anchoredPosition = belowSkipPositions[i] + new Vector2(0f, lift);
+	}
+
 	// 버튼의 interactable을 바꾸고, 바뀌었으면 true
 	static bool SetUsable(Button button, bool usable)
 	{
@@ -165,24 +237,36 @@ public class SettingsView : InputBlockingPanel
 		return true;
 	}
 
-	// 꺼진 버튼으로는 방향키로 옮겨 가지 않게 한다. 돌아가기 ↓ → 캐릭터 선택(꺼졌으면 로그아웃), 캐릭터 선택 ↔ 로그아웃
-	void RefreshNavigation(bool exitUsable, bool characterUsable)
+	// 꺼진 버튼으로는 방향키로 옮겨 가지 않게 한다.
+	// 돌아가기 ↓ 튜토리얼 건너뛰기(꺼졌으면 건너뜀) ↓ 캐릭터 선택(꺼졌으면 로그아웃), 캐릭터 선택 ↔ 로그아웃
+	void RefreshNavigation(bool exitUsable, bool characterUsable, bool skipUsable)
 	{
+		Selectable bottomRow = characterUsable ? characterSelectButton : exitUsable ? exitButton : null;
+		Selectable aboveBottom = skipUsable ? tutorialSkipButton : backButton;
 		if (backButton != null)
 		{
 			Navigation nav = backButton.navigation;
-			nav.selectOnDown = characterUsable ? characterSelectButton : exitUsable ? exitButton : null;
+			nav.selectOnDown = skipUsable ? tutorialSkipButton : bottomRow;
 			backButton.navigation = nav;
+		}
+		if (tutorialSkipButton != null)
+		{
+			Navigation nav = tutorialSkipButton.navigation;
+			nav.selectOnUp = backButton;
+			nav.selectOnDown = bottomRow;
+			tutorialSkipButton.navigation = nav;
 		}
 		if (characterSelectButton != null)
 		{
 			Navigation nav = characterSelectButton.navigation;
+			nav.selectOnUp = aboveBottom;
 			nav.selectOnRight = exitUsable ? exitButton : null;
 			characterSelectButton.navigation = nav;
 		}
 		if (exitButton != null)
 		{
 			Navigation nav = exitButton.navigation;
+			nav.selectOnUp = aboveBottom;
 			nav.selectOnLeft = characterUsable ? characterSelectButton : null;
 			exitButton.navigation = nav;
 		}

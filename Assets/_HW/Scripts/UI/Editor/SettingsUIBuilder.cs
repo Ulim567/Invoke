@@ -55,7 +55,8 @@ public static class SettingsUIBuilder
 		dim.color = new Color(0.04f, 0.03f, 0.08f, 0.6f); // 클릭이 뒤로 가지 않게 막기도 한다
 
 		RectTransform window = NewUI("Window", panel);
-		Place(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220, 232));
+		// 높이 267: 돌아가기 아래 「튜토리얼 건너뛰기」 한 줄(35)을 넣으며 늘림 (#597)
+		Place(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220, 267));
 		SetImage(window.gameObject, "set_panel");
 
 		TMP_Text title = Text(window, "Title", "> 설정", 11, Teal, TextAlignmentOptions.MidlineLeft);
@@ -90,25 +91,33 @@ public static class SettingsUIBuilder
 		TMP_Text escText = Text(esc, "Text", "ESC", 7, new Color(1f, 1f, 1f, 0.5f), TextAlignmentOptions.MidlineRight);
 		Stretch(escText.rectTransform, 0);
 
-		// 캐릭터 선택 (#570) | 로그아웃 / 레이드 포기: 돌아가기 아래 한 줄에 반씩 나란히
-		Button characterSelect = NewButton(window, "CharacterSelectButton", "set_button", "set_button_selected", new Vector2(18, -175), HalfButtonWidth);
+		// 튜토리얼 건너뛰기 (#597): 돌아가기 아래 한 줄. 튜토리얼이 진행 중이 아니면 SettingsView가 끈다
+		Button tutorialSkip = NewButton(window, "TutorialSkipButton", "set_button", "set_button_selected", new Vector2(18, -175));
+		TMP_Text tutorialSkipText = Text(tutorialSkip.transform, "Text", "튜토리얼 건너뛰기", 9, Color.white, TextAlignmentOptions.MidlineLeft);
+		Stretch(tutorialSkipText.rectTransform, 0);
+		tutorialSkipText.rectTransform.offsetMin = new Vector2(10, 0);
+
+		// 캐릭터 선택 (#570) | 로그아웃 / 레이드 포기: 튜토리얼 건너뛰기 아래 한 줄에 반씩 나란히
+		Button characterSelect = NewButton(window, "CharacterSelectButton", "set_button", "set_button_selected", new Vector2(18, -210), HalfButtonWidth);
 		TMP_Text characterSelectText = Text(characterSelect.transform, "Text", "캐릭터 선택", 9, Color.white, TextAlignmentOptions.Center);
 		Stretch(characterSelectText.rectTransform, 0);
 
-		Button exit = NewButton(window, "ExitButton", "set_danger", "set_danger_selected", new Vector2(18 + HalfButtonWidth + ButtonGap, -175), HalfButtonWidth);
+		Button exit = NewButton(window, "ExitButton", "set_danger", "set_danger_selected", new Vector2(18 + HalfButtonWidth + ButtonGap, -210), HalfButtonWidth);
 		TMP_Text exitText = Text(exit.transform, "Text", "로그아웃", 9, Danger, TextAlignmentOptions.Center);
 		Stretch(exitText.rectTransform, 0);
 
 		TMP_Text hint = Text(window, "Hint", "방향키 고르기  -  Enter 확인  -  Esc 닫기", 7, Muted, TextAlignmentOptions.Center);
-		Place(hint.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -214), new Vector2(200, 10));
+		Place(hint.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -249), new Vector2(200, 10));
 
-		// ↑ ↓ 순서: 전체 → 배경음 → 효과음 → 콘솔 출력 표시 → 돌아가기 → 캐릭터 선택. 캐릭터 선택 ← → 로그아웃
+		// ↑ ↓ 순서: 전체 → 배경음 → 효과음 → 콘솔 출력 표시 → 돌아가기 → 튜토리얼 건너뛰기 → 캐릭터 선택. 캐릭터 선택 ← → 로그아웃
 		// 버튼이 꺼지면 SettingsView가 꺼진 버튼을 건너뛰도록 다시 잇는다
-		Chain(master, bgm, sfx, consoleOutput, back, characterSelect);
+		Chain(master, bgm, sfx, consoleOutput, back, tutorialSkip, characterSelect);
 		Navigation characterNav = characterSelect.navigation;
 		characterNav.selectOnRight = exit;
 		characterSelect.navigation = characterNav;
-		exit.navigation = new Navigation { mode = Navigation.Mode.Explicit, selectOnUp = back, selectOnLeft = characterSelect };
+		exit.navigation = new Navigation { mode = Navigation.Mode.Explicit, selectOnUp = tutorialSkip, selectOnLeft = characterSelect };
+
+		ConfirmDialog confirm = BuildConfirmDialog(panel);
 
 		SettingsView view = canvasObject.AddComponent<SettingsView>();
 		var so = new SerializedObject(view);
@@ -124,6 +133,9 @@ public static class SettingsUIBuilder
 		so.FindProperty("sfxValueText").objectReferenceValue = sfxValue;
 		so.FindProperty("consoleOutputToggle").objectReferenceValue = consoleOutput;
 		so.FindProperty("backButton").objectReferenceValue = back;
+		so.FindProperty("tutorialSkipButton").objectReferenceValue = tutorialSkip;
+		so.FindProperty("tutorialSkipText").objectReferenceValue = tutorialSkipText;
+		so.FindProperty("confirmDialog").objectReferenceValue = confirm;
 		so.FindProperty("characterSelectButton").objectReferenceValue = characterSelect;
 		so.FindProperty("characterSelectText").objectReferenceValue = characterSelectText;
 		so.FindProperty("exitButton").objectReferenceValue = exit;
@@ -249,6 +261,44 @@ public static class SettingsUIBuilder
 		colors.fadeDuration = 0f;
 		toggle.colors = colors;
 		return toggle;
+	}
+
+	// 튜토리얼 건너뛰기를 묻는 확인창 (#597): 설정 창 위를 한 번 더 어둡게 덮고 가운데에 문구와 「건너뛰기」 「취소」.
+	// 버튼은 방향키로 고르지 않는다. 고른 버튼이 있으면 그 버튼이 Enter를 먼저 받아 확인창의 Enter(예)가 눌리지 않기 때문 (ConfirmDialog 규칙)
+	static ConfirmDialog BuildConfirmDialog(RectTransform panel)
+	{
+		RectTransform root = NewUI("ConfirmDialog", panel);
+		Stretch(root, 0);
+		Image dim = root.gameObject.AddComponent<Image>();
+		dim.sprite = LoadSprite("set_white");
+		dim.color = new Color(0.04f, 0.03f, 0.08f, 0.6f); // 뒤의 설정 창 버튼을 누르지 못하게 막기도 한다
+
+		RectTransform box = NewUI("Box", root);
+		Place(box, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220, 96));
+		SetImage(box.gameObject, "set_panel");
+
+		TMP_Text message = Text(box, "Message", "", 9, Color.white, TextAlignmentOptions.Center);
+		message.textWrappingMode = TextWrappingModes.Normal;
+		Place(message.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -14), new Vector2(196, 40));
+
+		Button no = NewButton(box, "NoButton", "set_button", "set_button_selected", new Vector2(18, -60), HalfButtonWidth);
+		TMP_Text noText = Text(no.transform, "Text", "아니오 (Esc)", 9, Color.white, TextAlignmentOptions.Center);
+		Stretch(noText.rectTransform, 0);
+		no.navigation = new Navigation { mode = Navigation.Mode.None };
+
+		Button yes = NewButton(box, "YesButton", "set_danger", "set_danger_selected", new Vector2(18 + HalfButtonWidth + ButtonGap, -60), HalfButtonWidth);
+		TMP_Text yesText = Text(yes.transform, "Text", "예 (Enter)", 9, Danger, TextAlignmentOptions.Center);
+		Stretch(yesText.rectTransform, 0);
+		yes.navigation = new Navigation { mode = Navigation.Mode.None };
+
+		ConfirmDialog dialog = root.gameObject.AddComponent<ConfirmDialog>();
+		var so = new SerializedObject(dialog);
+		so.FindProperty("messageText").objectReferenceValue = message;
+		so.FindProperty("yesButton").objectReferenceValue = yes;
+		so.FindProperty("noButton").objectReferenceValue = no;
+		so.ApplyModifiedPropertiesWithoutUndo();
+		root.gameObject.SetActive(false); // 처음엔 꺼 둔다. SettingsView가 필요할 때 켠다
+		return dialog;
 	}
 
 	// 테두리 그림이 고르면 바뀌는 버튼 (마우스를 올려도 같은 그림). 너비는 창 안쪽 한 줄(184)이 기본

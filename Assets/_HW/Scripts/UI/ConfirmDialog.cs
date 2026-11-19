@@ -26,6 +26,9 @@ public class ConfirmDialog : MonoBehaviour
 
 	Action onYes;
 	bool initialized;
+	// 연 프레임. 이 프레임의 Enter·ESC는 받지 않는다 (#597)
+	// 이유: 버튼을 Enter로 눌러 확인창을 열면, 같은 프레임에 이 확인창의 UIShortcut이 그 Enter를 또 받아 「예」를 바로 눌러 버린다
+	int shownFrame = -1;
 	TMP_Text yesLabel, noLabel;
 	string defaultYesLabel, defaultNoLabel; // 프리팹에 적힌 버튼 글자 (「예 (Enter)」, 「아니오 (Esc)」)
 
@@ -48,8 +51,8 @@ public class ConfirmDialog : MonoBehaviour
 		defaultNoLabel = noLabel != null ? noLabel.text : null;
 
 		if (!TryGetComponent(out UIShortcut shortcut)) shortcut = gameObject.AddComponent<UIShortcut>();
-		shortcut.OnSubmit.AddListener(Yes);
-		shortcut.OnCancel.AddListener(No);
+		shortcut.OnSubmit.AddListener(() => { if (Time.frameCount != shownFrame) Yes(); });
+		shortcut.OnCancel.AddListener(() => { if (Time.frameCount != shownFrame) No(); });
 	}
 
 	/// <summary>
@@ -60,6 +63,7 @@ public class ConfirmDialog : MonoBehaviour
 	{
 		Initialize();
 		this.onYes = onYes;
+		shownFrame = Time.frameCount;
 		if (messageText != null) messageText.text = message;
 		if (yesLabel != null) yesLabel.text = yesText ?? defaultYesLabel;
 		if (noLabel != null) noLabel.text = noText ?? defaultNoLabel;

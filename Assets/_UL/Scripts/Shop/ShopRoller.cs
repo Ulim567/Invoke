@@ -7,7 +7,8 @@ using System.Collections.Generic;
 /// - 문법 블록 칸: 해금한 문법 블록 가운데 그 캐릭터 언어에서 쓸 수 있는 것을 상점 무게(ShopRules.SyntaxWeights)로 뽑는다.<br/>
 /// - 함수 칸: 해금한 함수(스킬, get_bug, is_valid_target, wait, malloc, free)를 희귀도 무게로 뽑는다. 대시·더블점프(common.)와 테스트 함수는 뺀다.<br/>
 /// - 이미 ItemCountRules.MaxCount(99)개 가진 항목은 뽑지 않는다. 같은 항목이 여러 칸에 올라와도 된다. 후보가 없으면 빈 칸.<br/>
-/// - unlocked가 null이면 모든 노드를 해금한 것으로 본다 (「로그인 건너뛰기」 임시 계정은 편집 화면도 해금을 보지 않는다).
+/// - unlocked가 null이면 모든 노드를 해금한 것으로 본다 (「로그인 건너뛰기」 임시 계정은 편집 화면도 해금을 보지 않는다).<br/>
+/// - 몬스터 드롭(RollDrop)도 같은 후보와 무게로 뽑는다.
 /// </para>
 /// </summary>
 public static class ShopRoller
@@ -49,6 +50,27 @@ public static class ShopRoller
 			: FunctionCandidates(unlocked, owned, language);
 		string itemId = Pick(candidates, randomRange);
 		return itemId == null ? ShopOffer.Empty : new ShopOffer(itemId, ShopRules.RollPrice(slot, itemId, randomRange));
+	}
+
+	/// <summary>
+	/// 몬스터 드롭으로 줄 블록·함수 하나를 뽑는다. 후보와 무게는 상점과 같다(SyntaxCandidates, FunctionCandidates). 후보가 없으면 null.<br/>
+	/// 문법 블록과 함수 가운데 하나를 반반으로 고르고(한쪽 후보가 없으면 다른 쪽), 그 안에서 무게로 뽑는다.
+	/// MonsterReward(김도훈)가 서버에서 받는 플레이어마다 부른다.
+	/// </summary>
+	/// <param name="unlocked">해금한 노드 ID (PlayerProgress.RollUnlocked). null이면 모두 해금한 것으로 본다</param>
+	/// <param name="owned">가진 개수. 99개인 항목은 뽑지 않는다</param>
+	/// <param name="language">받는 캐릭터의 언어. 그 언어에서 쓸 수 있는 블록·함수만 뽑는다</param>
+	/// <param name="randomRange">최소~최대(포함) 정수를 고르는 함수. null이면 UnityEngine.Random</param>
+	public static string RollDrop(ICollection<string> unlocked, IReadOnlyDictionary<string, int> owned, string language,
+		Func<int, int, int> randomRange = null)
+	{
+		randomRange ??= DefaultRange;
+		List<(string Id, int Weight)> syntax = SyntaxCandidates(unlocked, owned, language);
+		List<(string Id, int Weight)> functions = FunctionCandidates(unlocked, owned, language);
+		// 문법 블록 무게(1~10)와 함수 무게(희귀도 10~60)는 크기가 달라 한 목록에 섞으면 거의 함수만 나온다.
+		// 그래서 상점이 문법 4칸·함수 4칸으로 나뉜 것처럼 먼저 반반으로 나눈다
+		bool pickSyntax = syntax.Count > 0 && (functions.Count == 0 || randomRange(0, 1) == 0);
+		return Pick(pickSyntax ? syntax : functions, randomRange);
 	}
 
 	/// <summary>문법 블록 칸의 후보와 무게.</summary>

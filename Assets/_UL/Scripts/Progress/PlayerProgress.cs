@@ -51,6 +51,12 @@ public class PlayerProgress : NetworkBehaviour
 	public IReadOnlyList<string> Unlocked => unlocked;
 
 	/// <summary>
+	/// [서버] 상점과 몬스터 드롭이 후보를 뽑을 때 넘기는 해금 목록 (ShopRoller). 「로그인 건너뛰기」 임시 계정(DB를 쓰지 않음)은 null = 모두 해금으로 본다.
+	/// </summary>
+	// 임시 계정을 null로 두는 이유: 편집 화면도 임시 계정은 해금을 보지 않아서, 해금 안 한 블록도 쓸 수 있다
+	public ICollection<string> RollUnlocked => UsesStore ? unlocked : null;
+
+	/// <summary>
 	/// <summary>
 	/// 블록·함수의 항목 ID → 가진 개수 (#500). 0개인 항목은 없다. 항목 ID는 BlockUsageCounter.KeyOf와 같다.<br/>
 	/// 남은 개수 = 가진 개수 − BlockUsageCounter.Count로 센 개수. 「로그인 건너뛰기」 임시 계정은 개수를 쓰지 않는다.
@@ -318,7 +324,7 @@ public class PlayerProgress : NetworkBehaviour
 	public void PrepareShop()
 	{
 		if (!CanChange(nameof(PrepareShop)) || shopOffers.Count == ShopRules.SlotCount) return;
-		ShopOffer[] offers = ShopRoller.RollAll(ShopUnlocked, itemCounts, PlayerCharacter.LanguageOf(gameObject));
+		ShopOffer[] offers = ShopRoller.RollAll(RollUnlocked, itemCounts, PlayerCharacter.LanguageOf(gameObject));
 		var bySlot = new Dictionary<int, ShopOffer>();
 		for (int i = 0; i < offers.Length; i++) bySlot[i] = offers[i];
 #if UNITY_SERVER || UNITY_EDITOR
@@ -355,7 +361,7 @@ public class PlayerProgress : NetworkBehaviour
 			ownedAfter[offer.ItemId] = newCount;
 		}
 		// 산 뒤의 개수로 뽑는다. 방금 99개가 된 항목이 그 칸에 다시 올라오지 않게
-		ShopOffer next = ShopRoller.RollSlot(slot, ShopUnlocked, ownedAfter, PlayerCharacter.LanguageOf(gameObject));
+		ShopOffer next = ShopRoller.RollSlot(slot, RollUnlocked, ownedAfter, PlayerCharacter.LanguageOf(gameObject));
 
 		// DB에 먼저 쓰고, 성공한 뒤에 메모리를 바꾼다 (TryUnlock과 같은 이유)
 #if UNITY_SERVER || UNITY_EDITOR
@@ -380,7 +386,7 @@ public class PlayerProgress : NetworkBehaviour
 		if (!CanChange(nameof(TryRefreshShop))) return ShopResult.NotAllowed;
 		if (!TrySubtract(ShopRules.RefreshCost, out Dictionary<string, int> newMaterials)) return ShopResult.MaterialShort;
 
-		ShopOffer[] offers = ShopRoller.RollAll(ShopUnlocked, itemCounts, PlayerCharacter.LanguageOf(gameObject));
+		ShopOffer[] offers = ShopRoller.RollAll(RollUnlocked, itemCounts, PlayerCharacter.LanguageOf(gameObject));
 		var bySlot = new Dictionary<int, ShopOffer>();
 		for (int i = 0; i < offers.Length; i++) bySlot[i] = offers[i];
 #if UNITY_SERVER || UNITY_EDITOR
@@ -445,9 +451,6 @@ public class PlayerProgress : NetworkBehaviour
 			Debug.LogWarning($"[PlayerProgress] {name}: 서버가 상점 {request}(칸 {slot})을 거부했습니다: {result}", this);
 		ShopAnswered?.Invoke(request, slot, result);
 	}
-
-	// 상점이 보는 해금 목록. 임시 계정(DB를 쓰지 않음)은 null = 모두 해금으로 본다 (편집 화면도 임시 계정은 해금을 보지 않음)
-	ICollection<string> ShopUnlocked => UsesStore ? unlocked : null;
 
 	// 서버 DB에 쓰는 실제 계정이면 true. 임시 계정과 네트워크를 켜지 않은 테스트는 false
 	bool UsesStore

@@ -8,7 +8,7 @@
 - 상점 칸은 서버 DB에 저장. 구매·새로고침 때만 바뀌고, 상점을 열 때는 바뀌지 않음
 - 하지 않는 일
   - 가진 개수의 저장·남은 개수 계산: 진행도 저장소 (progress-store.md, #500)
-  - 잡몹 블록·함수 드랍: `MonsterReward`(김도훈, monster.md)
+  - 잡몹 블록·함수 드랍: `MonsterReward`(김도훈, monster.md). 무엇을 줄지는 상점과 같은 후보·무게로 뽑음 (`ShopRoller.RollDrop`)
   - 상점 문 그림: 임혜원에게 부탁
 
 ## 동작 규칙
@@ -44,7 +44,18 @@
 | `Break` | 1 | `Compare` | 6 |
 | `Continue` | 1 | `Logic` | 3 |
 | `Declare` | 10 | `Not` | 3 |
-| `Return` | 2 | 그 밖 (Python의 `Global`, `Del`, `ListNew`, `ListAppend`, `ListPop`, `ListLen`) | 임시 1 |
+| `Return` | 2 | 그 밖 (표에 없는 새 블록) | 임시 1 |
+
+- Python 블록 상점 무게 (이우림 11/19): 비슷한 C 블록에 맞추고, 구슬 list에 꼭 필요한 append만 높임
+
+| 항목 ID | 무게 | 기준 |
+| --- | --- | --- |
+| `ListAppend` | 6 | 구슬 난사·구슬 폭발이 구슬 list를 받음 |
+| `ListNew` | 3 | C `ArrayDeclare`와 같음 |
+| `Global` | 3 | 구슬을 function 밖에 남길 때 |
+| `ListLen` | 2 | C `Return`처럼 가끔 |
+| `ListPop` | 2 | 가끔 |
+| `Del` | 1 | C `Break`·`Continue`처럼 드물게 |
 
 - 희귀도 (`ShopRarity`, 박진우가 정함 11/18, 수치는 임시)
 
@@ -120,16 +131,19 @@
 | `PlayerProgress.PrepareShop()`, `TryBuyShopItem(int)`, `TryRefreshShop()` | | `ShopResult` | [서버] 위 요청을 처리하는 함수. 테스트가 직접 부름 |
 | `ShopRules` | - | - | 칸 수, 무게, 희귀도, 가격, 새로고침 비용 |
 | `ShopRoller.RollAll`, `RollSlot`, `SyntaxCandidates`, `FunctionCandidates` | 해금 목록(null이면 모두), 가진 개수, 캐릭터 언어 | 칸, 후보 | 뽑기. 네트워크·DB 없이 부를 수 있음 |
+| `ShopRoller.RollDrop` | 해금 목록(null이면 모두), 가진 개수, 캐릭터 언어 | 항목 ID (후보가 없으면 null) | 몬스터 드롭 하나. 문법 블록·함수를 반반으로 고른 뒤 상점 무게로 뽑음. `MonsterReward`(김도훈)가 부름 |
+| `PlayerProgress.RollUnlocked` | - | `ICollection<string>` | [서버] 위 뽑기에 넘기는 해금 목록. 임시 계정은 null(모두 해금) |
 
 - `ShopResult`: `Done`, `NotAllowed`(서버가 아닌 곳에서 부름), `InvalidSlot`, `EmptySlot`, `MaxCount`, `MaterialShort`. 새 값은 맨 끝에만 더함 (네트워크로 보냄)
 - `ShopRequest`: `Open`, `Buy`, `Refresh`
-- 테스트: `ShopTest` (Play → 호스트로 시작한 뒤 아무 오브젝트에 붙임, 「[ShopTest] 35/35 통과」). 테스트 전용 `ShopTest.db`
+- 테스트: `ShopTest` (Play → 호스트로 시작한 뒤 아무 오브젝트에 붙임, 「[ShopTest] 45/45 통과」. 몬스터 드롭(`RollDrop`) 시험 포함). 테스트 전용 `ShopTest.db`
 
 ## 맞춘 결과
 - 이우림이 정함 (11/18): 위 「정한 기획」
 - 박진우가 정함 (11/18): 함수의 희귀도는 이우림 임시 기준 그대로, 희귀도별 무게·가격은 위 표 (Epic만 보스 코어 1)
 - 김도훈과 맞출 것
-  - 잡몹 드랍 후보에 get_bug, is_valid_target 넣기 (`MonsterReward.FillItemPool`은 노드 없는 함수를 처음 개수에만 넣음)
+  - 잡몹 드랍을 상점과 같은 후보·무게로 뽑도록 `MonsterReward.GiveItems`를 고침 (`ShopRoller.RollDrop`, 이우림 11/19). get_bug, is_valid_target도 이제 드랍 후보
+  - Leak의 `Item Chance`를 0.33, Loop를 0.4로 올림 (monster.md 보상 표)
 - 임혜원과 맞출 것
   - 로비 상점 문 그림 (`ShopStation`의 SpriteRenderer는 그림 없이 그리기 층만 맞춰 둠)
   - `DoorSignBuilder.MakeSignFor`(안내판 만들기를 상점 자리에도 쓰도록 더함), `KeyBadgeInstaller`의 상점 버튼 세 줄

@@ -85,8 +85,11 @@ public class ShopTest : MonoBehaviour
 			&& !allFunctionsC.Contains(PredefinedFunctionIds.PyInitStance)
 			&& allFunctionsPy.Contains(PredefinedFunctionIds.PyInitStance) && allFunctionsPy.Contains(PredefinedFunctionIds.PyGetStance)
 			&& !allFunctionsPy.Contains(PredefinedFunctionIds.InitStance));
-		Check("무게 없는 Python 블록은 임시 무게 1",
-			ShopRoller.SyntaxCandidates(null, noItems, CharacterLanguages.Python).First(c => c.Id == "ListNew").Weight == ShopRules.DefaultSyntaxWeight);
+		List<(string Id, int Weight)> pySyntax = ShopRoller.SyntaxCandidates(null, noItems, CharacterLanguages.Python);
+		Check("Python 블록 무게: ListAppend 6, ListNew 3, Global 3, ListLen 2, ListPop 2, Del 1",
+			pySyntax.First(c => c.Id == "ListAppend").Weight == 6 && pySyntax.First(c => c.Id == "ListNew").Weight == 3
+			&& pySyntax.First(c => c.Id == "Global").Weight == 3 && pySyntax.First(c => c.Id == "ListLen").Weight == 2
+			&& pySyntax.First(c => c.Id == "ListPop").Weight == 2 && pySyntax.First(c => c.Id == "Del").Weight == 1);
 
 		var fullThrust = new Dictionary<string, int> { [PredefinedFunctionIds.Thrust] = ItemCountRules.MaxCount };
 		Check("99개 가진 thrust는 후보가 아님", !Ids(ShopRoller.FunctionCandidates(cStart, fullThrust, CharacterLanguages.C)).Contains(PredefinedFunctionIds.Thrust));
@@ -97,6 +100,8 @@ public class ShopTest : MonoBehaviour
 		ShopOffer last = ShopRoller.RollSlot(4, cStart, noItems, CharacterLanguages.C, (min, max) => max);
 		Check("무게대로 뽑음 (가장 작은 값 → 첫 후보, 가장 큰 값 → 마지막 후보)",
 			first.ItemId == candidates[0].Id && last.ItemId == candidates[candidates.Count - 1].Id);
+
+		TestDrop(cStart, noItems, cFunctions, allSyntaxC, allFunctionsC, allSyntaxPy, allFunctionsPy);
 
 		ShopPrice[] cheap = ShopRules.RollPrice(0, "If", (min, max) => min);
 		ShopPrice[] dear = ShopRules.RollPrice(0, "If", (min, max) => max);
@@ -109,6 +114,42 @@ public class ShopTest : MonoBehaviour
 		ShopPrice[] back = ShopPrices.FromText(ShopPrices.ToText(price));
 		Check("가격 글자를 저장했다 읽으면 같음 (보스 코어 줄 포함)",
 			back.Length == 2 && back[0].MaterialId == ShopRules.BugFragment && back[0].Count == 7 && back[1].MaterialId == ShopRules.BossCore && back[1].Count == 1);
+	}
+
+	// 몬스터 드롭 (ShopRoller.RollDrop): 상점과 같은 후보, 문법 블록·함수 반반, 언어 구분
+	void TestDrop(List<string> cStart, Dictionary<string, int> noItems, HashSet<string> cFunctions,
+		HashSet<string> allSyntaxC, HashSet<string> allFunctionsC, HashSet<string> allSyntaxPy, HashSet<string> allFunctionsPy)
+	{
+		// 반반 고르기는 randomRange(0, 1)이 0이면 문법 블록, 1이면 함수. 그 뒤 무게 뽑기도 같은 함수를 쓴다
+		string cStartDrop = ShopRoller.RollDrop(cStart, noItems, CharacterLanguages.C, (min, max) => min);
+		Check("드롭: 새 C 캐릭터는 문법 블록 후보가 없어 반반에서 문법이 나와도 함수를 줌",
+			cStartDrop != null && cFunctions.Contains(cStartDrop));
+
+		string syntaxSide = ShopRoller.RollDrop(null, noItems, CharacterLanguages.C, (min, max) => min);
+		string functionSide = ShopRoller.RollDrop(null, noItems, CharacterLanguages.C, (min, max) => max);
+		Check("드롭: 0이면 문법 블록 쪽, 1이면 함수 쪽에서 뽑음",
+			allSyntaxC.Contains(syntaxSide) && allFunctionsC.Contains(functionSide));
+
+		// 실제 무작위로 여러 번 뽑아도 다른 언어의 블록·함수가 나오지 않는지 (전에는 C 캐릭터가 Global·리스트 블록을 받았음)
+		var pythonOnly = new HashSet<string> { "Global", "Del", "ListNew", "ListAppend", "ListPop", "ListLen", PredefinedFunctionIds.PyMagicMissile };
+		var cOnly = new HashSet<string> { "Declare", "ArrayDeclare", "Malloc", "Free", PredefinedFunctionIds.Thrust };
+		bool cClean = true, pyClean = true, cSawSyntax = false, cSawFunction = false;
+		for (int i = 0; i < 300; i++)
+		{
+			string c = ShopRoller.RollDrop(null, noItems, CharacterLanguages.C);
+			string py = ShopRoller.RollDrop(null, noItems, CharacterLanguages.Python);
+			if (c == null || pythonOnly.Contains(c) || !(allSyntaxC.Contains(c) || allFunctionsC.Contains(c))) cClean = false;
+			if (py == null || cOnly.Contains(py) || !(allSyntaxPy.Contains(py) || allFunctionsPy.Contains(py))) pyClean = false;
+			if (allSyntaxC.Contains(c)) cSawSyntax = true;
+			if (allFunctionsC.Contains(c)) cSawFunction = true;
+		}
+		Check("드롭 300번: C 캐릭터는 C 후보만 받음 (Python 블록 없음)", cClean);
+		Check("드롭 300번: Python 캐릭터는 Python 후보만 받음 (Declare·Malloc·thrust 없음)", pyClean);
+		Check("드롭 300번: 문법 블록과 함수가 둘 다 나옴 (반반)", cSawSyntax && cSawFunction);
+
+		var allFull = new Dictionary<string, int>();
+		foreach (string id in cFunctions) allFull[id] = ItemCountRules.MaxCount;
+		Check("드롭: 후보를 모두 99개 가졌으면 null", ShopRoller.RollDrop(cStart, allFull, CharacterLanguages.C) == null);
 	}
 
 	// 실제 계정: DB에 저장하고 다시 읽어 같은지

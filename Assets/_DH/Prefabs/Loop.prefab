@@ -413,7 +413,7 @@ MonoBehaviour:
     count: 2
     maxCount: 3
     chance: 1
-  itemChance: 0.15
+  itemChance: 0.4
   itemCount: 1
   wholeScene: 0
 --- !u!114 &2646029998434878842
@@ -448,11 +448,13 @@ MonoBehaviour:
   slowTint: {r: 0.6, g: 0.75, b: 1, a: 1}
   bleedFlashColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   bleedFlashSeconds: 0.15
+  poisonFlashColor: {r: 0.45, g: 1, b: 0.35, a: 1}
   bleedEffect: {fileID: 0}
   markEffect: {fileID: 0}
   stunEffect: {fileID: 0}
   blindEffect: {fileID: 0}
   slowEffect: {fileID: 0}
+  poisonEffect: {fileID: 0}
   headEffectHeight: 0.2
 --- !u!114 &-47089953546891509
 MonoBehaviour:

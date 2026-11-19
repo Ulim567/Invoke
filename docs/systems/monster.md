@@ -185,8 +185,12 @@
   - `Whole Scene`을 켜면(레이드 보스) 피해량·거리·생사와 상관없이 같은 씬의 플레이어 모두가 받는다. 죽어서 관전 중인 파티원도 받는다.
   - 드롭은 땅에 떨어지지 않고 바로 가방에 들어간다. 재료는 죽을 때 한 번 굴린다. 줄마다 확률(`Chance`)을 따로 굴리고, 1이면 반드시 나온다. 개수는 `Count`~`Max Count` 사이에서 무작위(`Max Count`가 `Count` 이하면 늘 `Count`개)
   - 버그 조각은 나중에 상점 등에서 많이 쓰도록 잡몹마다 2~3개씩 넉넉히 준다 (김도훈 결정)
-  - 블록·함수 드롭: 받는 플레이어마다 `Item Chance`로 굴려서, 나오면 그 플레이어가 쓸 수 있는 항목 중 무작위로 `Item Count`개의 가진 개수를 1씩 늘린다 (`PlayerProgress.AddItem`, 이우림 #500)
-    - 쓸 수 있는 항목: 그 플레이어 캐릭터 언어의 처음 항목(`ItemCountRules.Initial(언어)`의 키, `PlayerCharacter.LanguageOf`. C는 thrust, sword_throw, get_bug 등, Python은 py.* 등. 처음 항목을 C 것으로만 센 탓에 Python 마법사가 C 블록을 받던 문제를 고침, #550) + 해금한 스킬 트리 노드마다 `ItemCountRules.KeysUnlockedBy`. 해금 안 한 블록은 받아도 저장할 때 막혀서(`BlockLocked`) 뺀다
+  - 블록·함수 드롭: 받는 플레이어마다 `Item Chance`로 굴려서, 나오면 `Item Count`개의 가진 개수를 1씩 늘린다 (`PlayerProgress.AddItem`, 이우림 #500)
+    - 고르는 법: 상점과 같은 후보·무게 (`ShopRoller.RollDrop`, [shop.md](shop.md))
+      - 후보: 그 캐릭터 언어에서 쓸 수 있고 해금한 블록·함수 (`PlayerProgress.RollUnlocked`, `PlayerCharacter.LanguageOf`). 99개 가진 항목, 대시·더블점프는 뺌
+      - 문법 블록과 함수 가운데 하나를 반반으로 고른 뒤(한쪽 후보가 없으면 다른 쪽), 그 안에서 상점 무게로 뽑음. 문법 블록은 `ShopRules.SyntaxWeights`, 함수는 희귀도 무게
+      - 반반으로 나누는 이유: 문법 블록 무게(1~10)와 함수 무게(10~60)는 크기가 달라 한 목록에 섞으면 거의 함수만 나옴
+      - 전에는 해금한 노드가 여는 블록(`ItemCountRules.KeysUnlockedBy`)을 언어 구분 없이 균등하게 뽑아서, C 캐릭터가 Python의 global·리스트 블록을 받았음
     - 여러 개면 하나씩 따로 고른다 (같은 항목이 겹칠 수 있음). 항목당 최대 99개에서 멈춘다(`ItemCountRules.MaxCount`)
     - 획득 표시(시안 8-5, [hud.md](hud.md) 「획득 표시」)에 받은 항목의 이름까지 알린다. `LocalRewardReceived`가 받은 항목 ID를 받은 수만큼 넘긴다(서버는 `[TargetRpc]`로 항목 ID 배열을 보냄)
     - 받으면 버그 조각처럼 블록 아이콘(`item_block`, 주황 코드 블록)이 튀어 올라 내 캐릭터로 날아온다. 아이콘은 무엇을 받았든 같고, 받은 수만큼 띄운다. `RewardEffectPlayed`의 재료 목록 끝에 (`MonsterReward.ItemDropIconId`, 받은 수) 한 줄을 붙여서 `MaterialDropView`(박진우)가 그대로 띄우게 한다. 진짜 재료가 아니라 가방에는 들어가지 않고, `LocalRewardReceived`의 재료 목록에는 붙지 않는다
@@ -194,12 +198,12 @@
   - 값은 `PlayerProgress.AddExp`, `AddMoney`, `AddMaterial`, `AddItem`(이우림)로만 바꾼다. `PlayerProgress`가 없는 플레이어는 건너뛴다.
   - 서버(Host 포함)이거나 네트워크를 켜지 않은 테스트에서만 준다.
   - 재료 ID: `bug_fragment`(버그 조각), `boss_core`(보스 코어). 이름표는 `SkillTreeDefaults`(임혜원)와 같다.
-  - 몬스터별 보상 (임시)
+  - 몬스터별 보상 (임시). 블록·함수 드롭은 Leak 33%(「3마리에 하나」), Loop 40% (이우림 11/19, 전에는 10%·15%)
 
     | 몬스터 | 경험치 | 돈 | 재료 | 블록·함수 | 받는 플레이어 |
     | --- | --- | --- | --- | --- | --- |
-    | Leak | 10 | 5 | 버그 조각 2~3개 (100%) | 1개 (10%) | 가장 많이 때린 플레이어 한 명 |
-    | Loop | 15 | 8 | 버그 조각 2~3개 (100%) | 1개 (15%) | 가장 많이 때린 플레이어 한 명 |
+    | Leak | 10 | 5 | 버그 조각 2~3개 (100%) | 1개 (33%) | 가장 많이 때린 플레이어 한 명 |
+    | Loop | 15 | 8 | 버그 조각 2~3개 (100%) | 1개 (40%) | 가장 많이 때린 플레이어 한 명 |
     | Gateway | 200 | 100 | 보스 코어 1개 (100%), 버그 조각 5개 (100%) | 2개 (100%, 사람마다 따로) | 같은 씬 모두 (`Whole Scene`) |
 
   - 기둥·분신·웜·허수아비에는 `MonsterReward`를 붙이지 않는다 (보상 없음).

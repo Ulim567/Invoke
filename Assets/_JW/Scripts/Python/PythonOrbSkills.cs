@@ -21,11 +21,16 @@ public class PyOrbCreate : MagicSkill
 	public override VariableType ReturnType => PythonObjects.OrbType;
 
 	// 만든 구슬은 플레이어가 담는다. 숨은 시스템 전역에 두면 이름이 없어도 사라지지 않기 때문 (이우림 결정 11/18 (나))
-	protected override bool MovesMallocedToSystemGlobals => false;
+	// 다만 슬롯에서 바로 시전하면(사용자 함수 밖) 돌려받을 곳이 없어 만들자마자 사라지므로, 그때만 숨은 시스템 전역에 둔다 (#593, 이우림 허락 11/19)
+	protected override bool MovesMallocedToSystemGlobals => keptBySlot;
+
+	// 이번 시전이 슬롯에서 바로 한 것인지. 사용자 함수 안이면 지역 변수(CurrentVariables)가 있다
+	bool keptBySlot;
 
 	protected override void OnSkillStart(FunctionContext task)
 	{
 		caster = task.Caster;
+		keptBySlot = task.CurrentVariables == null;
 		ManaOrbs orbs = caster.GetComponent<ManaOrbs>();
 		if (orbs == null)
 		{
@@ -40,7 +45,7 @@ public class PyOrbCreate : MagicSkill
 			return;
 		}
 
-		int pointer = Malloc(task, new ManaOrb(), Data != null ? Data.HeapSize : 2);
+		int pointer = Malloc(task, new ManaOrb(keptBySlot), Data != null ? Data.HeapSize : 2);
 		if (pointer == HeapStorage.NullPointer)
 		{
 			FailWith(FunctionFailure.OutOfMemory);
@@ -57,6 +62,7 @@ public class PyOrbCreate : MagicSkill
 /// <para>
 /// - 쓸 구슬: 파라미터로 넘긴 Orb 값(orb) 또는 리스트(orbs). 파라미터 값이 없으면(슬롯에서 바로 시전) 쓸 수 있는 구슬 중 먼저 만든 것부터 고른다.<br/>
 /// - 구슬을 쓰면 「다 쓴 구슬」(ManaOrb.Spend)로 바꾼다. 해제하지 않는다. 쓸 수 있는 개수에서 빠지고, 머리 위와 HUD에 빨갛게 남는다.<br/>
+/// - 슬롯에서 바로 만든 구슬(ManaOrb.KeptBySlot)은 담은 곳이 없으므로 쓰는 순간 바로 해제한다 (#593).<br/>
 /// - 다 쓴 구슬 하나를 넘기면 UsedManaOrbError, 리스트에 쓸 구슬이 없으면 NoManaOrbError, 리스트에 구슬이 아닌 값이 있으면 TypeError(TypeMismatch).
 /// </para>
 /// </summary>
@@ -156,6 +162,8 @@ public abstract class OrbSkill : MagicBoltSkill
 		int index = orbs != null ? orbs.IndexOf(pointer) : -1;
 		position = orbs != null && index >= 0 ? orbs.OrbPosition(index, orbs.TotalCount) : StaffTip(caster);
 		orb.Spend();
+		// 슬롯에서 바로 만든 구슬은 숨은 시스템 전역에 있어 가비지 컬렉션이 해제하지 못한다. 다 쓴 구슬로 남으면 5개 자리를 영영 차지하므로 바로 해제한다
+		if (orb.KeptBySlot) Free(task, pointer);
 		orbs?.Refresh();
 		return true;
 	}

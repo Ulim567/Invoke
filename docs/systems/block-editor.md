@@ -175,9 +175,9 @@
 
     | 구역 | 항목 | 끌면 만드는 블록 |
     | --- | --- | --- |
-    | 스킬 | 사전 정의 함수 중 `BlockReference.IsSkill`인 것 (C·Python 스킬, 공통 이동). 계열 소구분 (#578) | `BlockData.CallPredefinedFunction` |
+    | 스킬 | 사전 정의 함수 중 `BlockReference.IsSkill`인 것 (C·Python 스킬). 계열 소구분 (#578). 공통 이동(dash·double_jump)은 #598부터 숨김 | `BlockData.CallPredefinedFunction` |
     | 기본 함수 | get_bug, is_valid_target, printf(Python은 print, #536), init_stance·get_stance(C #538, Python #546), wait | get_bug·is_valid_target·printf·자세 함수: `CallPredefinedFunction`, wait: `BlockData.Wait` (초 칸 비움) |
-    | 메모리 | malloc, free | `BlockData.Malloc(Sword)`, `BlockData.Free` |
+    | 메모리 | malloc, free (#598부터 숨김. 항목이 없어 구역도 없음) | `BlockData.Malloc(Sword)`, `BlockData.Free` |
     | 내가 만든 함수 | 페이지 함수 (슬롯 함수 제외) | `BlockData.CallUserFunction` |
 
   - 항목 한 줄(`FunctionItem` 프리팹, `FunctionItemView`): 굵은 제목(한글 이름), 아래에 함수 원형(`void thrust(Target target);`). 영문 이름은 원형에 들어 있으므로 따로 적지 않음
@@ -206,6 +206,10 @@
   - 설명창: 항목에 마우스를 올리고 0.4초 멈추면 편집 영역의 같은 블록과 같은 설명창 (원형, 하는 일, 파라미터, return 값). 항목에는 설명을 넣지 않음 (목록이 길어지지 않게)
   - 끄는 동안 (시안 6-8): 목록의 그 항목은 바탕 8%와 점선 테두리(`blk_round_dashed`, 함수 색 70%)로 비워 둠. 블록을 놓으면 원래대로
   - 해금: 블록 목록과 같은 규칙. 사전 정의 함수와 내가 만든 함수는 함수 블록(`BlockKind.Function`)을 해금해야 보이고, 스킬 트리에 노드가 있는 스킬은 그 노드도 해금해야 보임. malloc·free·wait는 각자의 블록 종류를 해금해야 보임. 임시 계정은 모두 보임. 항목이 없는 구역은 머리글도 없음
+  - 숨기는 블록·함수 (#598, `HiddenBlocks`): malloc, free, dash(`common.dash`), double_jump(`common.double_jump`)
+    - 빠지는 곳: 함수 탭(검색 결과 포함), 참고 탭 카드, 스킬 트리 노드 카드(`EntriesUnlockedBy`), 스킬 트리 설명의 「여는 블록」 줄, 값 칸 안내 글(`SlotRules`), 연습장 슬롯 장착 목록(`SlotEquipPanel`), 상점·몬스터 드롭 후보(`ShopRoller`)
+    - 그대로인 것: 스킬 트리 데이터(검 소환이 malloc·free를 엶), 실행기(저장된 함수 속 malloc·free 실행), 대시·더블 점프 노드 해금과 키 입력(←← / →→, Space)
+    - 대시·더블 점프 노드는 해금해도 카드가 없어 해금 카드가 뜨지 않음
   - 함수 탭을 열 때와 저장한 함수 목록이 바뀔 때 목록을 다시 만듦
 - 「남은/가진」 개수 (#500, 시안 6·6-12): 함수 탭 항목의 제목 줄 오른쪽 끝과 문법 탭 칩의 이름 뒤에 `2/3`(남은/가진)
   - 남은 개수 = 가진 개수(`PlayerProgress.ItemCounts`) − 쓴 개수. 쓴 개수는 저장된 함수에 저장하지 않은 작업본(다른 페이지, Global Variables)과 지금 고치는 내용을 넣어 `BlockUsageCounter.Count`로 셈 (사용자 결정: 고친 그대로 숫자가 바뀌게)
@@ -233,7 +237,7 @@
     | Declare, Assign / Array, Array Get, Array Set | 변수 > 변수 / 변수 > 배열 |
     | Arithmetic, Compare, Logic, Not | 값 |
     | Return | 함수 |
-    | get_bug, is_valid_target, printf·print, init_stance·get_stance, wait / malloc, free | 함수 > 기본 함수 / 함수 > 메모리 |
+    | get_bug, is_valid_target, printf·print, init_stance·get_stance, wait / malloc, free(#598부터 숨김) | 함수 > 기본 함수 / 함수 > 메모리 |
     | 스킬 (#578) | 스킬 > 계열 (스킬 > 찌르기). 스킬 표에 계열이 없으면 「스킬」 |
 
     - 스킬 태그 (#578): 「함수 > 스킬」에서 바꿈. 같은 카드를 쓰는 스킬 트리 「자세히 보기」·해금 카드의 태그도 같이 바뀜. 참고 탭에서 스킬 카드는 계열 순서(함수 탭과 같음)

@@ -168,6 +168,8 @@ public class SlotEquipPanel : InputBlockingPanel
 				string id = skill.Id;
 				// 내 캐릭터 언어의 스킬(C는 c.*, 파이썬은 py.*)과 공통 이동만
 				if (!(id.StartsWith(PlayerCharacter.SkillPrefixOf(PlayerCharacter.LocalLanguage)) || id.StartsWith("common.")) || !SlotLoadout.IsEquippableSkill(id)) continue;
+				// dash·double_jump는 키 입력 이동기라 슬롯 목록에도 보이지 않게 한다 (#598)
+				if (HiddenBlocks.IsHidden(id)) continue;
 				string name = SkillName(id);
 				Color tag = id.StartsWith("common.") ? commonTagColor : skillTagColor;
 				CreateItem(skillList, name, "", tag, () => Equip(loadout.EquipSkill(selectedSlot, id), name));

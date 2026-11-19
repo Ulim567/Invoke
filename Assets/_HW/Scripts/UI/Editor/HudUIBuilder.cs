@@ -293,7 +293,7 @@ public static class HudUIBuilder
 		// 상자 견본. HudView가 복사해 알림 하나에 하나씩 쓴다. 크기는 글자에 맞춘다(목록이 상자의 preferred size를 씀)
 		RectTransform notice = NewUI("NoticeTemplate", noticeContent);
 		Image noticeImage = SetImage(notice.gameObject, "hud_gauge"); // 슬롯 말풍선과 같은 바탕
-		noticeImage.color = new Color(1f, 1f, 1f, 0.7f); // 반투명 70%: 알림이 쌓여도 뒤 화면이 조금 비치게
+		noticeImage.color = new Color(1f, 1f, 1f, 0.85f); // 불투명도 85%: 획득 표시 줄과 같게 (#597). 알림이 쌓여도 뒤 화면이 조금 비치게
 		noticeImage.raycastTarget = false;
 		VerticalLayoutGroup noticeLayout = notice.gameObject.AddComponent<VerticalLayoutGroup>();
 		noticeLayout.padding = new RectOffset(6, 6, 3, 3);

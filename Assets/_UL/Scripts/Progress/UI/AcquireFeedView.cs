@@ -8,7 +8,7 @@ using UnityEngine.UI;
 /// [표시] 획득 표시 (시안 8-5). 내 캐릭터가 받은 경험치·재료·블록을 HUD 왼쪽 위, 장소 이름 아래에 한 줄씩 쌓는다. 값은 바꾸지 않고 보여 주기만 한다.
 /// <para>
 /// - 받는 곳: MonsterReward.LocalRewardReceived(김도훈). 받은 플레이어의 화면에서만 불린다.<br/>
-/// - 한 줄: 왼쪽 아래 알림과 같은 반투명 상자 안에 아이콘 8×8 + 글. 경험치는 아이콘 없이 「EX +50」, 재료는 「버그 조각 x3」, 블록·함수는 「If 블록 x1」, 「검 찌르기 함수 x1」.<br/>
+/// - 한 줄: 왼쪽 아래 알림과 같은 반투명 상자 안에 아이콘 8×8 + 글. 경험치는 아이콘 없이 「EXP +50」, 재료는 「버그 조각 x3」, 블록·함수는 「If 블록 x1」, 「검 찌르기 함수 x1」.<br/>
 ///   아이콘은 드랍될 때 날아오는 그림과 같다 (Resources/MaterialDrops/{재료 ID} 프리팹의 SpriteRenderer, 블록·함수는 item_block).<br/>
 /// - 쌓기: 왼쪽 아래 알림 목록(HudView)과 방향만 반대(위 → 아래)다. 새 줄은 장소 이름 바로 아래(영역 맨 위)에 나타나 아래 줄들을 부드럽게 밀어 내리고,
 ///   영역 아래쪽에 닿은 줄은 마스크가 흐리게 잘라 낸다. 줄마다 Row Time이 지나면 제자리에서 흐려지고 빠진다.<br/>
@@ -42,7 +42,7 @@ public class AcquireFeedView : MonoBehaviour
 	[SerializeField, Min(0f), Tooltip("모아 둔 것을 한 줄씩 띄우는 간격(초). 한 마리를 잡아 여러 가지를 받아도 한꺼번에 뜨지 않고 차례로 밀려 내려간다")] float rowInterval = 0.15f;
 	[SerializeField, Min(1), Tooltip("한 번에 두는 줄 수. 넘치면 가장 오래된 줄부터 뺀다")] int maxRows = 6;
 	[SerializeField, Min(0), Tooltip("영역 아래쪽에서 줄이 흐려지는 높이. 시작할 때 영역의 마스크(RectMask2D)에 넣는다")] int fadeHeight = 20;
-	[SerializeField, Tooltip("경험치 줄의 글자 (아이콘 없음)")] string expLabel = "EX";
+	[SerializeField, Tooltip("경험치 줄의 글자 (아이콘 없음)")] string expLabel = "EXP";
 
 	// 받은 것 한 가지 (종류, 재료·항목 ID, 개수). 줄 하나, 또는 모아 둔 것 하나
 	struct Gain

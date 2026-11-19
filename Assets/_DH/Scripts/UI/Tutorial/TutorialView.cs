@@ -8,7 +8,10 @@ using UnityEngine.UI;
 /// <para>
 /// - 해 볼 일을 하면 TutorialTracker가 알려 주고, 줄 앞 [ ]가 바로 [x]로 바뀐다.<br/>
 /// - 그 쪽의 일을 모두 하면 잠깐(Next Delay) 뒤 다음 쪽의 대사로 넘어간다. 일이 없는 설명 쪽은 Enter로 넘긴다. 시작 연출 쪽만 저절로 넘어간다.<br/>
-/// - Enter는 일을 안 했어도 그 쪽을 넘긴다 (GameInput.UI.SubmitPressed, 창이 열려 있으면 반응하지 않는다). 마지막 쪽을 넘기면 끝이다.<br/>
+/// - Enter로 넘길 수 있는 때 (GameInput.UI.SubmitPressed, 창이 열려 있으면 반응하지 않는다, #597). 마지막 쪽을 넘기면 끝이다.<br/>
+///   일이 있는 쪽: 일을 모두 한 뒤에만. 일이 없는 쪽: 쪽이 뜨고 Enter Lock Time(2초)이 지난 뒤에만.<br/>
+///   「Enter 넘기기」 안내(KeyHint)도 Enter로 넘길 수 있을 때만 보인다.<br/>
+/// - 설정 창의 「튜토리얼 건너뛰기」(SettingsView.TutorialSkipRequested)를 받으면 끝낸 것으로 저장한다 (#597).<br/>
 /// - 쪽마다 가야 할 곳을 TutorialGuide로 가리키고, 메모리 쪽에서는 HUD의 Memory 막대 테두리를 깜빡인다.<br/>
 /// - 끝내면 이 컴퓨터에 저장한다 (PlayerPrefs, 계정 닉네임별). 다시 접속해도 안 뜬다. 진행 중인 쪽은 저장하지 않는다 (접속하면 처음부터).<br/>
 /// - 내 캐릭터가 있고 레이드 던전이 아닐 때만 보인다. HUD 안에 있어서 큰 창이 열리면 HUD와 같이 숨는다.<br/>
@@ -28,9 +31,10 @@ public class TutorialView : MonoBehaviour
 	[SerializeField] Color doneColor = new Color32(0x9B, 0xE1, 0x5D, 0xFF);
 	[SerializeField] Color todoColor = Color.white;
 	[SerializeField, Min(0f), Tooltip("그 쪽의 일을 모두 한 뒤 다음 쪽으로 넘어가기까지 기다리는 시간(초)")] float nextDelay = 1.2f;
+	[SerializeField, Min(0f), Tooltip("일이 없는 쪽(설명만 하는 쪽)이 뜬 뒤 Enter를 받지 않는 시간(초). 대사를 읽기 전에 넘기거나, 저절로 넘어간 직후 누른 Enter가 새 쪽까지 넘기지 않게 한다 (#597)")] float enterLockTime = 2f;
 
 	[Header("창 모양 (HUD 프리팹 값을 Play 때 덮어쓴다)")]
-	[SerializeField, Range(0f, 1f), Tooltip("대사 창 바탕의 불투명도. 1이면 불투명")] float panelOpacity = 0.6f;
+	[SerializeField, Range(0f, 1f), Tooltip("대사 창 바탕의 불투명도. 1이면 불투명. 획득 표시 줄·알림 상자와 같은 0.85 (#597)")] float panelOpacity = 0.85f;
 	[SerializeField, Min(1f), Tooltip("글자 크기. 폰트(Galmuri11)가 픽셀 폰트라 7처럼 작게 줄이면 획이 뭉개진다. 다른 HUD 글자와 같은 8 권장")] float fontSize = 8f;
 	[SerializeField, Min(60f), Tooltip("창 너비. 글이 길면 줄을 바꾸고 창 높이가 늘어난다")] float panelWidth = 240f;
 
@@ -47,12 +51,29 @@ public class TutorialView : MonoBehaviour
 	float nextAt = -1f;
 	// HUD와 함께 꺼진 때 (-1 = 꺼진 적 없음). 다시 켜지면 꺼져 있던 시간만큼 넘어가는 시간을 미룬다
 	float hiddenAt = -1f;
+	// 지금 쪽을 펼친 때. 일이 없는 쪽은 이때부터 enterLockTime 동안 Enter로 넘기지 않는다
+	float pageShownAt;
+	// 「Enter 넘기기」 안내. Enter로 넘길 수 있을 때만 켠다
+	GameObject keyHint;
+	// 튜토리얼을 보여 주고 있는 대사 창 (없으면 null). 설정 창이 건너뛰기 버튼을 켤지 정할 때 읽는다
+	static TutorialView running;
+
+	/// <summary>내 화면에서 튜토리얼이 진행 중이면 true. 설정 창이 「튜토리얼 건너뛰기」 버튼을 켜고 끌 때 읽는다 (#597)</summary>
+	public static bool IsRunning => running != null;
 
 	void Awake()
 	{
 		if (panel != null) panel.SetActive(false);
 		if (memoryHighlight != null) memoryHighlight.gameObject.SetActive(false);
 		ApplyStyle();
+		// HUD와 함께 꺼져 있어도 건너뛰기를 받도록 OnEnable이 아니라 Awake에서 붙인다
+		SettingsView.TutorialSkipRequested += Skip;
+	}
+
+	void OnDestroy()
+	{
+		SettingsView.TutorialSkipRequested -= Skip;
+		if (running == this) running = null;
 	}
 
 	// 창 바탕을 반투명하게, 글자는 또렷한 크기로 줄바꿈해서 쓴다
@@ -68,6 +89,7 @@ public class TutorialView : MonoBehaviour
 		for (int i = 0; taskRows != null && i < taskRows.Length; i++) StyleText(taskRows[i]);
 
 		Transform hintTransform = panel != null ? panel.transform.Find(KeyHintName) : null;
+		if (hintTransform != null) keyHint = hintTransform.gameObject;
 		if (hintTransform != null && hintTransform.TryGetComponent(out TMP_Text hint))
 		{
 			hint.fontSize = KeyHintFontSize;
@@ -110,7 +132,7 @@ public class TutorialView : MonoBehaviour
 			key = null;
 			finished = true;
 		}
-		if (player == null) { SetVisible(false); return; }
+		if (player == null) { SetRunning(false); SetVisible(false); return; }
 
 		if (key == null)
 		{
@@ -122,12 +144,16 @@ public class TutorialView : MonoBehaviour
 			if (!finished) ApplyPage();
 		}
 
-		if (finished) { SetVisible(false); return; }
+		if (finished) { SetRunning(false); SetVisible(false); return; }
+		SetRunning(true);
 
 		// 창(상점처럼 HUD를 남기는 창 포함)이 열려 있는 동안은 시간으로 넘어가지 않는다. 닫으면 남은 시간부터 다시 센다
 		if (nextAt >= 0f && InputBlockingPanel.AnyOpen) nextAt += Time.unscaledDeltaTime;
 		else if (nextAt >= 0f && Time.unscaledTime >= nextAt) GoNext();
-		else if (!InputBlockingPanel.AnyOpen && GameInput.UI.SubmitPressed) GoNext();
+		else if (!InputBlockingPanel.AnyOpen && GameInput.UI.SubmitPressed && CanGoNextByEnter()) GoNext();
+		if (finished) return;
+
+		if (keyHint != null && keyHint.activeSelf != CanGoNextByEnter()) keyHint.SetActive(!keyHint.activeSelf);
 
 		bool visible = !finished && PlayerPlace.Mine != PlaceScenes.RaidDungeon;
 		SetVisible(visible);
@@ -142,6 +168,28 @@ public class TutorialView : MonoBehaviour
 		if (progress.PageCompleted && nextAt < 0f) nextAt = Time.unscaledTime + nextDelay;
 	}
 
+	// Enter로 지금 쪽을 넘길 수 있는지 (#597). 일이 있는 쪽은 일을 모두 한 뒤, 일이 없는 쪽은 뜨고 enterLockTime이 지난 뒤
+	// 일이 있는 쪽을 Enter로 못 넘기게 한 이유: 실수로 누른 Enter, 저절로 넘어간 직후 누른 Enter가 할 일을 건너뛰지 않게 하기 위함. 튜토리얼 전체는 설정 창에서 건너뛴다
+	bool CanGoNextByEnter()
+	{
+		if (progress.Finished) return false;
+		if (progress.Page.Tasks.Length > 0) return progress.PageCompleted;
+		return Time.unscaledTime >= pageShownAt + enterLockTime;
+	}
+
+	// 설정 창의 「튜토리얼 건너뛰기」. 진행 중이 아니면 아무것도 하지 않는다
+	void Skip()
+	{
+		if (finished || key == null) return;
+		Finish();
+	}
+
+	void SetRunning(bool on)
+	{
+		if (on) running = this;
+		else if (running == this) running = null;
+	}
+
 	void GoNext()
 	{
 		nextAt = -1f;
@@ -154,6 +202,7 @@ public class TutorialView : MonoBehaviour
 	void ApplyPage()
 	{
 		if (CannotDo(progress.Page)) { GoNext(); return; }
+		pageShownAt = Time.unscaledTime;
 		Redraw();
 		TutorialScript.Page page = progress.Page;
 		if (page.AutoSeconds > 0f) nextAt = Time.unscaledTime + page.AutoSeconds;
@@ -178,6 +227,7 @@ public class TutorialView : MonoBehaviour
 			PlayerPrefs.Save();
 		}
 		if (tracker != null) tracker.enabled = false;
+		SetRunning(false);
 		SetVisible(false);
 		ShowGuides(false);
 	}

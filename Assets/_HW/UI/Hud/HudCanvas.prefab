@@ -700,7 +700,7 @@ MonoBehaviour:
   rowInterval: 0.15
   maxRows: 6
   fadeHeight: 20
-  expLabel: EX
+  expLabel: EXP
 --- !u!1 &637271426853941530
 GameObject:
   m_ObjectHideFlags: 0
@@ -1427,7 +1427,8 @@ MonoBehaviour:
   doneColor: {r: 0.60784316, g: 0.88235295, b: 0.3647059, a: 1}
   todoColor: {r: 1, g: 1, b: 1, a: 1}
   nextDelay: 1.2
-  panelOpacity: 0.6
+  enterLockTime: 2
+  panelOpacity: 0.85
   fontSize: 8
   panelWidth: 240
 --- !u!1 &943101896711923894
@@ -14881,7 +14882,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.7}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.85}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

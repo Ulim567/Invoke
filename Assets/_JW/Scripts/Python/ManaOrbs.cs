@@ -16,6 +16,14 @@ public class ManaOrb
 	/// <summary>구슬 스킬이 이미 쓴 구슬이면 true. 다시 넘기면 UsedManaOrbError.</summary>
 	public bool IsSpent { get; private set; }
 
+	/// <summary>
+	/// 슬롯에서 바로 시전한 구슬 생성이 만든 구슬이면 true (#593). 돌려받을 변수·리스트가 없어서 숨은 시스템 전역에 둔다.
+	/// 담은 곳이 없어 다 쓴 구슬로 남기면 가비지 컬렉션이 영영 해제하지 못하므로, 구슬 스킬이 쓰는 순간 바로 해제한다.
+	/// </summary>
+	public bool KeptBySlot { get; }
+
+	public ManaOrb(bool keptBySlot = false) => KeptBySlot = keptBySlot;
+
 	/// <summary>[서버] 구슬을 「다 쓴 구슬」로 바꾼다. 구슬 스킬(OrbSkill)만 부른다.</summary>
 	public void Spend() => IsSpent = true;
 }

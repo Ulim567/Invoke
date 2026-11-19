@@ -16,6 +16,7 @@ using UnityEngine;
 /// 4. 구슬 보호막: 켜진 뒤 첫 피해는 막고(체력 그대로) 꺼짐, 다음 피해는 들어감<br/>
 /// 5. 중독: 3번 걸면 3겹, 4번째도 3겹<br/>
 /// 6. 공중 부양: 떠 있고 타이머 전체 시간 6초, 끝나면 내려옴. 경직 중에는 떠 있던 것이 끝나므로 보호막 테스트의 경직이 풀린 뒤 시전한다<br/>
+/// 7. 슬롯 구슬 (#593, 에디터 Host에서만): 구슬 생성을 슬롯에서처럼 바로 시전하면 담지 않아도 구슬이 남고, 구슬 보호막으로 쓰면 다 쓴 구슬로 남지 않고 바로 해제된다<br/>
 /// 구슬 만들기·다 쓴 구슬·None·NoManaOrbError 같은 규칙은 이우림 PythonOrbTest(#532, 네트워크 없이)가 본다. 자세는 0으로 두고 본다 (자세가 데미지·시간을 바꾸므로).
 /// 「[PythonTest] 전체 통과」면 통과. 평소에는 꺼 둔다.
 /// </para>
@@ -125,6 +126,29 @@ public class PythonWizardSimTest : MonoBehaviour
 		Check($"공중 부양: 타이머 전체 시간 {PyLevitate.LevitateSeconds}초 (실제 {movement.RideDuration:0.0}초)", Mathf.Abs(movement.RideDuration - PyLevitate.LevitateSeconds) < 0.01f);
 		yield return new WaitForSeconds(PyLevitate.LevitateSeconds + 0.5f);
 		Check("공중 부양: 시간이 다 되면 내려옴", !movement.IsRiding);
+
+		// 7. 슬롯 구슬: 담아 둔 구슬을 비우고(메모리 자리) 구슬 생성을 바로 시전한다
+		executor.SetGlobalVariablesFile(new GlobalVariablesData());
+		executor.RestartProcess();
+		yield return null;
+		Check("슬롯 구슬: 시작 전 구슬 0개", orbs.TotalCount == 0, $"실제 {orbs.TotalCount}");
+		FunctionTask create = Cast(PredefinedFunctionIds.PyOrbCreate);
+		yield return WaitEnded(create, 3f);
+		yield return null;
+		yield return null;
+		Check("슬롯 구슬: 구슬 생성 Completed", create != null && create.EndReason == FunctionTaskEndReason.Completed, $"실제 {create?.EndReason}");
+		Check("슬롯 구슬: 담지 않아도 구슬이 남음 (쓸 수 있는 구슬 1개)", orbs.Count == 1 && orbs.TotalCount == 1, $"실제 쓸 수 있음 {orbs.Count}, 전체 {orbs.TotalCount}");
+		yield return null;
+		Check("슬롯 구슬: 머리 위 구슬 그림 1개", orbView.ShownCount == 1, $"실제 {orbView.ShownCount}");
+		FunctionTask slotShield = Cast(PredefinedFunctionIds.PyOrbShield);
+		yield return WaitEnded(slotShield, 3f);
+		yield return null;
+		Check("슬롯 구슬: 구슬 보호막이 그 구슬을 씀", slotShield != null && slotShield.EndReason == FunctionTaskEndReason.Completed && shield.IsActive,
+			$"실제 {slotShield?.EndReason}, {slotShield?.Error?.GetType().Name}");
+		Check("슬롯 구슬: 쓴 구슬은 다 쓴 구슬로 남지 않고 해제됨 (전체 0개)", orbs.TotalCount == 0 && orbs.SpentCount == 0,
+			$"실제 전체 {orbs.TotalCount}, 다 씀 {orbs.SpentCount}");
+		health.TakeDamage(1);
+		health.RestoreFullHp();
 
 		// 정리: 담아 둔 구슬과 전역 리스트를 비운다
 		executor.SetGlobalVariablesFile(new GlobalVariablesData());

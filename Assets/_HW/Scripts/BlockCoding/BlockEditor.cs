@@ -2586,6 +2586,8 @@ public class BlockEditor : MonoBehaviour
 			{
 				string id = function?.Id;
 				if (id == null || !PaletteFunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// dash·double_jump는 키 입력 이동기라 함수 탭에 보이지 않게 한다 (#598)
+				if (HiddenBlocks.IsHidden(id)) continue;
 				// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
 				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
@@ -2626,11 +2628,12 @@ public class BlockEditor : MonoBehaviour
 		AddFunctionSection("내가 만든 함수", mine);
 
 		// 함수처럼 보이는 블록(malloc, free, wait): 그 블록 종류를 해금했을 때만 넣는다
+		// malloc·free는 숨기는 블록이라 해금해도 넣지 않는다 (#598). 그래서 지금은 메모리 구역이 비어 머리글도 없다
 		void AddBuiltin(List<FunctionTabItem> items, Func<BlockData> factory)
 		{
 			BlockKind kind = factory().Kind;
 			var builtin = BlockReference.BuiltinOf(kind);
-			if (!Unlocked(kind) || builtin == null) return;
+			if (!Unlocked(kind) || builtin == null || HiddenBlocks.IsHidden(kind)) return;
 			items.Add(new FunctionTabItem(builtin.Value.Name, builtin.Value.KoreanName, builtin.Value.Prototype, factory));
 		}
 	}

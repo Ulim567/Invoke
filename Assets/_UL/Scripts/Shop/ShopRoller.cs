@@ -5,7 +5,8 @@ using System.Collections.Generic;
 /// 상점 칸에 올릴 상품을 뽑는다 (#534). 서버(PlayerProgress)가 부르고, 네트워크와 DB를 모르는 일반 C# 함수라 테스트에서 바로 부를 수 있다.
 /// <para>
 /// - 문법 블록 칸: 해금한 문법 블록 가운데 그 캐릭터 언어에서 쓸 수 있는 것을 상점 무게(ShopRules.SyntaxWeights)로 뽑는다.<br/>
-/// - 함수 칸: 해금한 함수(스킬, get_bug, is_valid_target, wait, malloc, free)를 희귀도 무게로 뽑는다. 대시·더블점프(common.)와 테스트 함수는 뺀다.<br/>
+/// - 함수 칸: 해금한 함수(스킬, get_bug, is_valid_target, wait)를 희귀도 무게로 뽑는다. 대시·더블점프(common.)와 테스트 함수는 뺀다.<br/>
+/// - 숨기는 블록·함수(HiddenBlocks: malloc, free, 대시, 더블점프)는 뽑지 않는다 (#598).<br/>
 /// - 이미 ItemCountRules.MaxCount(99)개 가진 항목은 뽑지 않는다. 같은 항목이 여러 칸에 올라와도 된다. 후보가 없으면 빈 칸.<br/>
 /// - unlocked가 null이면 모든 노드를 해금한 것으로 본다 (「로그인 건너뛰기」 임시 계정은 편집 화면도 해금을 보지 않는다).<br/>
 /// - 몬스터 드롭(RollDrop)도 같은 후보와 무게로 뽑는다.
@@ -105,7 +106,7 @@ public static class ShopRoller
 			foreach (PredefinedFunction function in PredefinedFunctionRegistry.All)
 			{
 				string id = function?.Id;
-				if (id == null || !HasFunctionPrefix(id)) continue;
+				if (id == null || !HasFunctionPrefix(id) || HiddenBlocks.IsHidden(id)) continue;
 				if (!PlayerCharacter.CanUse(language, id)) continue;
 				if (unlocked != null && SkillTree.TryGet(id, out _) && !unlocked.Contains(id)) continue;
 				Add(id);
@@ -113,8 +114,10 @@ public static class ShopRoller
 		}
 
 		// wait, malloc, free: 각자의 블록 종류를 해금해야 한다. malloc·free는 C만 (BlockData.IsUsableIn)
+		// malloc·free는 화면에서 숨기는 블록이라 상점·드롭에도 올리지 않는다 (#598). 보이지 않는 블록을 받으면 쓸 곳이 없기 때문
 		foreach (BlockKind kind in BuiltinFunctionKinds)
 		{
+			if (HiddenBlocks.IsHidden(kind)) continue;
 			if (BlockData.IsUsableIn(kind, family) && IsBlockUnlocked(kind, unlocked)) Add(kind.ToString());
 		}
 		return candidates;

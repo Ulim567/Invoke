@@ -251,6 +251,30 @@ public static partial class ItemDescriptions
 			Summary = "적은 초만큼 기다립니다.",
 			Slots = new[] { "seconds : 기다릴 시간(초) | 숫자" },
 		},
+		// get_bug, is_valid_target은 C와 같은 함수지만, C 표의 설명은 C 예시 코드와 Target variable 선언을 써서 Python용으로 따로 둔다
+		[PredefinedFunctionIds.GetBug] = new ItemDescription
+		{
+			Format = "get_bug()",
+			Summary = "플레이어가 고른 몬스터 한 명을 대상으로 돌려줍니다.",
+			Returns = "플레이어가 고른 몬스터입니다. 고를 몬스터가 없으면 \"대상 없음\"입니다.",
+			Purpose = "대상을 받는 스킬(magic_missile, hex 등)에 대상을 넘겨야 할 때 씁니다. 스킬의 target에 바로 넣거나, variable에 담아 두고 넣습니다.",
+			Example = "예를 들면, 고른 몬스터에게 매직 미사일을 쏠 수 있습니다.",
+			ExampleCode = "magic_missile(get_bug())",
+			ExampleResult = "슬롯 키를 누른 채 좌우 화살표 키로 몬스터를 고르고 키를 떼면, 그 몬스터에게 매직 미사일을 쏩니다.",
+			Caution = "부를 때마다 새로 고르므로, 같은 몬스터를 여러 번 쓰려면 variable에 담아 둡니다. 슬롯 키를 이미 뗀 뒤에 실행되면 가장 가까운 몬스터를 고릅니다. 고를 몬스터가 없으면 \"대상 없음\"이 되고, 그 값을 스킬에 넘기면 오류가 발생합니다.",
+		},
+		[PredefinedFunctionIds.IsValidTarget] = new ItemDescription
+		{
+			Format = "is_valid_target(target)",
+			Summary = "대상이 valid한지 알려 줍니다. valid는 대상 몬스터가 존재하고 살아 있어서, 스킬에 넘겨도 된다는 뜻입니다.",
+			Returns = "스킬에 넘길 수 있으면 True, \"대상 없음\"이거나 죽었거나 없어진 몬스터면 False입니다.",
+			Purpose = "variable에 담아 둔 몬스터를 스킬에 넘기기 전에, 그 몬스터가 아직 살아 있는지 확인할 때 씁니다.",
+			Example = "예를 들면, 담아 둔 몬스터가 죽었으면 새 몬스터를 고르도록 만들 수 있습니다.",
+			ExampleCode = "b = get_bug()\nmagic_missile(b)\nif not is_valid_target(b):\n    b = get_bug()\nmagic_missile(b)",
+			ExampleResult = "처음 고른 몬스터가 매직 미사일로 죽었으면 새 몬스터를 골라 쏘고, 살아 있으면 같은 몬스터에게 한 번 더 쏩니다.",
+			Slots = new[] { "target : 확인할 대상 | 대상" },
+			Caution = "True이면 그 대상을 스킬에 넘겨도 대상 때문에 오류가 발생하지 않습니다. 죽은 몬스터도 variable에는 그대로 남으므로, 살아 있는지는 이 함수로 확인합니다.",
+		},
 		[PredefinedFunctionIds.PyIsValidOrb] = new ItemDescription
 		{
 			Format = "is_valid_orb(orb)",

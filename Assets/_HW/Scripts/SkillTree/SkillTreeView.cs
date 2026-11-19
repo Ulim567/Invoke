@@ -600,7 +600,9 @@ public class SkillTreeView : MonoBehaviour
 		}
 		var together = SkillTree.Instance.Nodes.Where(n => n.AutoUnlock && n.Prerequisites.Contains(node.Id)).Select(n => n.DisplayName).ToList();
 		lines.Add(Row("같이 열리는 노드", together.Count > 0 ? string.Join(", ", together) : "없음"));
-		if (node.UnlocksBlocks.Count > 0) lines.Add(Row("여는 블록", string.Join(", ", node.UnlocksBlocks.Select(BlockName))));
+		// 숨기는 블록(malloc·free, #598)은 「여는 블록」에 적지 않는다. 남는 블록이 없으면 줄도 없다
+		List<BlockKind> shownBlocks = node.UnlocksBlocks.Where(kind => !HiddenBlocks.IsHidden(kind)).ToList();
+		if (shownBlocks.Count > 0) lines.Add(Row("여는 블록", string.Join(", ", shownBlocks.Select(BlockName))));
 		if (failedId == node.Id && !isUnlocked) lines.Add($"<color={Bad}>해금하지 못했어요. {FailText(failedResult)}</color>");
 		// 설명은 이름 바로 아래 (캔버스 9-1). 설명 표(ItemDescriptions)의 하는 일·용도·주의할 점 가운데 적힌 것. noparse: 설명의 < > 를 태그로 읽지 않게
 		// #544 때 이 칸에 설명 카드를 넣었다가, 칸이 좁아 긴 글이 튀어나가서(이우림 피드백) 다시 글로 되돌리고, 카드는 해금한 노드를 누르면 가운데에 띄운다

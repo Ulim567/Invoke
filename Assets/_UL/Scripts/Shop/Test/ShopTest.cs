@@ -68,8 +68,9 @@ public class ShopTest : MonoBehaviour
 			allSyntaxC.Contains("If") && allSyntaxC.Contains("ElseIf") && allSyntaxC.Contains("Else") && allSyntaxC.Contains("Declare")
 			&& !allSyntaxC.Contains("Global") && !allSyntaxC.Contains("Wait") && !allSyntaxC.Contains("Conditional"));
 		HashSet<string> allFunctionsC = Ids(ShopRoller.FunctionCandidates(null, noItems, CharacterLanguages.C));
-		Check("모두 해금한 C의 함수: Malloc·Free·검 소환 있음, Python 스킬·테스트 함수 없음",
-			allFunctionsC.Contains("Malloc") && allFunctionsC.Contains("Free") && allFunctionsC.Contains(PredefinedFunctionIds.SummonSword)
+		Check("모두 해금한 C의 함수: 검 소환·Wait 있음, 숨기는 Malloc·Free(#598)·Python 스킬·테스트 함수 없음",
+			!allFunctionsC.Contains("Malloc") && !allFunctionsC.Contains("Free") && allFunctionsC.Contains("Wait")
+			&& allFunctionsC.Contains(PredefinedFunctionIds.SummonSword)
 			&& !allFunctionsC.Contains(PredefinedFunctionIds.PyFireball) && !allFunctionsC.Any(id => id.StartsWith("test.")));
 
 		HashSet<string> allSyntaxPy = Ids(ShopRoller.SyntaxCandidates(null, noItems, CharacterLanguages.Python));

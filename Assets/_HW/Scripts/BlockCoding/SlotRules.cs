@@ -197,7 +197,8 @@ public static class SlotRules
 			case Expect.Integer: return "정수";
 			case Expect.ArrayLength: return "직접 적은 1 이상의 정수";
 			case Expect.Comparable: return "숫자, 문자, 참 또는 거짓, 포인터 (string은 비교할 수 없음)";
-			case Expect.Pointer: return "포인터(NULL, malloc, summon_sword() 등)";
+			// malloc은 숨기는 블록이라 안내 글에도 적지 않는다 (#598)
+			case Expect.Pointer: return "포인터(NULL, summon_sword() 등)";
 			case Expect.Typed:
 				if (rule.Type == null) return "값";
 				if (rule.Type.Kind == VariableTypeKind.Void) return "아무것도 (void 함수의 return은 비워 둠)";
@@ -205,7 +206,7 @@ public static class SlotRules
 				{
 					VariableTypeKind.Int or VariableTypeKind.Float or VariableTypeKind.Char => $"{BlockLabels.TypeName(rule.Type)}(숫자)",
 					VariableTypeKind.Bool => "bool(true, false, 비교, 논리)",
-					VariableTypeKind.Pointer => $"{BlockLabels.TypeName(rule.Type)}(NULL, malloc, summon_sword() 등)",
+					VariableTypeKind.Pointer => $"{BlockLabels.TypeName(rule.Type)}(NULL, summon_sword() 등)",
 					VariableTypeKind.Target => "대상(get_bug(), Target 변수. NULL은 안 됨)",
 					_ => BlockLabels.TypeName(rule.Type),
 				};

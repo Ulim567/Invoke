@@ -244,6 +244,8 @@ public static class BlockReference
 		foreach ((string name, string category, Func<BlockData> sample) in SyntaxRowsOf(BlockLabels.Family))
 		{
 			BlockData block = sample();
+			// malloc·free는 숨기는 블록이라 카드를 만들지 않는다 (#598). 스킬 트리 노드 카드(EntriesUnlockedBy)도 이 목록에서 고르므로 같이 빠진다
+			if (HiddenBlocks.IsHidden(block.Kind)) continue;
 			// 접힌 카드는 형식, 펼치면 해금 설명 카드와 같은 순서의 칸 (설명 표 ItemDescriptions)
 			ItemDescription description = ItemDescriptions.Of(block);
 			var entry = new BlockReferenceEntry
@@ -284,6 +286,8 @@ public static class BlockReference
 			{
 				string id = function?.Id;
 				if (id == null || !FunctionPrefixes.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal))) continue;
+				// dash·double_jump는 키 입력 이동기라 카드를 만들지 않는다 (#598). 대시·더블 점프 노드를 해금해도 카드가 뜨지 않는다
+				if (HiddenBlocks.IsHidden(id)) continue;
 				// 내 캐릭터 언어가 쓸 수 없는 스킬(C 캐릭터의 py.*, 파이썬 캐릭터의 c.*)은 빼고 보여 준다
 				if (!PlayerCharacter.CanUse(PlayerCharacter.LocalLanguage, id)) continue;
 				BlockReferenceEntry entry = FunctionEntry(function);
@@ -327,7 +331,7 @@ public static class BlockReference
 	/// <summary>
 	/// 스킬 트리 노드를 해금하면 쓸 수 있게 되는 것들의 카드 (#544). 해금 직후 카드와 스킬 트리 설명 칸이 보인다.
 	/// <para>
-	/// - 스킬 노드: 그 스킬 함수. 검 소환처럼 블록도 여는 노드는 그 블록(malloc, free)도 뒤에 붙인다.<br/>
+	/// - 스킬 노드: 그 스킬 함수. 블록도 여는 노드는 그 블록도 뒤에 붙인다. 숨기는 블록·함수(HiddenBlocks: 검 소환이 여는 malloc·free, 대시·더블 점프)는 카드가 없어 빠진다 (#598).<br/>
 	/// - 문법 노드: 여는 블록 종류(UnlocksBlocks)의 카드. 조건문은 If·Else If·Else 셋. 함수 블록 종류(Function)는 스킬마다 따로 열리므로 빼고, return만.<br/>
 	/// - 자세 규칙 노드 (#545): 그 규칙의 카드 한 장. revealed가 false(해금 전)이면 이름·기능이 「???」인 카드.<br/>
 	/// - 순서는 참고 탭과 같다. 내 캐릭터 언어에 없는 블록은 빠진다 (Python의 선언 등).
